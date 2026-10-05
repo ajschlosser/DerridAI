@@ -28,6 +28,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from ..structured_completion import StructuredAttemptContext
 from .graph_execution import GraphExecutor, StageHandler, StageResult
 from .metadata_candidate_collection import (
     COLLECTORS,
@@ -50,6 +51,11 @@ from .metadata_candidate_routing import (
 from .models import PipelineDefinition, PipelineStageDefinition, PipelineStageTrace
 from .purposes import PipelinePurposeSpec, RunInputSpec
 from .registry import StrategyRegistry
+
+
+class _RoutingContextFailure(ValueError):
+    # A live authority failure must never spend a structured retry budget.
+    retryable = False
 
 
 class ReviewerProposal(BaseModel):
@@ -145,17 +151,70 @@ class CandidateRoutingSession:
             collector, verify=self._evaluator(verify), infer=self._evaluator(infer),
         )
 
+    @classmethod
+    def with_structured_provider(
+        cls,
+        collector: CandidateCollector,
+        *,
+        read_current: Callable[[], CandidateBinding],
+        candidate_visible: Callable[[MetadataCandidate], bool],
+        request_factory: Callable[
+            [InferenceRequest], Callable[[StructuredAttemptContext], str]
+        ],
+        blind_fields: Sequence[str] = (),
+    ) -> "CandidateRoutingSession":
+        """Use shared structured validation with live gates around every attempt.
+
+        The server-owned factory supplies an admitted, cancellable single-turn
+        transport. Provider capacity/health remain that transport's responsibility.
+        Access changes must stop retries as well as later graph stages.
+        """
+
+        def factory(
+            task: InferenceRequest,
+        ) -> Callable[[StructuredAttemptContext], str]:
+            instance._guard()
+            request_once = request_factory(task)
+            instance._guard()
+
+            def attempt(context: StructuredAttemptContext) -> str:
+                instance._guard()
+                try:
+                    answer = request_once(context)
+                except InterruptedError:
+                    raise
+                except Exception:
+                    instance._guard()
+                    raise
+                instance._guard()
+                return answer
+
+            return attempt
+
+        def evaluate(task: InferenceRequest) -> FieldEvaluation:
+            return instance.adapter.structured_evaluator(factory)(task)
+
+        instance = cls(
+            collector,
+            read_current=read_current,
+            candidate_visible=candidate_visible,
+            verify=evaluate,
+            infer=evaluate,
+            blind_fields=blind_fields,
+        )
+        return instance
+
     def _guard(self) -> None:
         try:
             current = CandidateBinding.model_validate(self.read_current())
         except InterruptedError:
             raise InterruptedError("Routing cancelled.") from None
         except Exception:
-            raise ValueError("Routing access/context check failed.") from None
+            raise _RoutingContextFailure("Routing access/context check failed.") from None
         if (current != self.collector.binding or candidate_binding(
             self.collector.record, self.collector.schema, context=self.collector.context,
         ) != self.collector.binding):
-            raise ValueError("Routing canonical context changed.")
+            raise _RoutingContextFailure("Routing canonical context changed.")
 
     def _evaluator(self, evaluate: Evaluator) -> Evaluator:
         def run(task: InferenceRequest) -> FieldEvaluation:

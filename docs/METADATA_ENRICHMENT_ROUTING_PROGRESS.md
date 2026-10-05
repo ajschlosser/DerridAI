@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Metadata enrichment routing progress
 
-Updated: 2026-10-04. Branch: `task/metadata-routing-continuation`.
+Updated: 2026-10-04. Branch: `codex/metadata-routing-policy-adapter`.
 
 This is the authoritative resume point for the revised Pipeline Studio candidate-routing implementation plan. Historical metadata enrichment now executes through the generic graph engine. Adaptive routing is not enabled; no latency improvement is claimed.
 
@@ -204,3 +204,13 @@ Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/
 ## PR preparation refresh (2026-10-04)
 
 - Merged current master `ea68ca29` cleanly at `ec193a85` before PR creation. Full preflight formatting, backend lint, mypy and syntax passed. Refreshed full regression: 2478 passed, 28 skipped, 5 failed. Four are the documented failures above; the additional `test_publication_lifecycle.py::test_build_warnings_are_provenance_and_travel_with_the_corpus` also fails on an isolated archive of master `ea68ca29` using the same validation environment because a derived-index projection warning is appended. No unrelated fix was included. Full preflight remains red; checkpoint push uses the documented bypass after this completed run. The PR is draft, with all five failures disclosed.
+
+## Canonical policy and build-provider shadow integration (2026-10-04)
+
+- Added an explicit server-only `run_canonical_candidate_shadow` boundary. It resolves current administrator access before canonical/source/memory reads, requires an authenticated reviewer identity, and explicitly sets/restores the existing reviewer context. Callers must resolve live session revocation/roles in `read_access`; a saved access object is not a revocation check.
+- Inputs identify the current Record and a bounded set of precedent Record references. Precedent values/evidence are rederived with the existing canonical exemplar builder, including its evidence/authority and blind-review rules, rather than accepted from clients or a vector projection. Schema validation and current Record identity are checked before exact-memory reads. Blind fields are derived from canonical second-opinion/status state and excluded from exact-memory acquisition and precedent proposals.
+- Live bindings include canonical text/revision/assertions, current exact memory, rehydrated precedent content, reviewer principal/scope, blind policy and hashed build/provider configuration. Changes reject further provider work or delivery. Only advisory reviewer proposals are returned; no Records, review decisions, public strategy registrations or production assignments are written.
+- `run_build_candidate_shadow` connects this boundary to the existing manager's structured metadata invoker with a single primary provider turn per outer attempt. Existing capacity, health, cancellation and private metrics/traces stay with the manager. The candidate adapter owns shared structured retries and exact current-evidence validation. Active runtime provider switches invalidate the binding; credential values are only hashed for binding and excluded from returned review packets/graph traces.
+- `CandidateRoutingSession.with_structured_provider` checks live access/context before and after each provider attempt, including failed/malformed attempts. A context failure is nonretryable; cancellation still bypasses retries/fallbacks. Transports retain responsibility for cancellation during in-flight I/O and quota waits. No latency or reviewer-quality improvement is claimed.
+- Baseline collection/routing/session suites passed 93 tests before edits. The new policy/provider suite passes 20 tests, including actual SQLite repository rehydration, unchanged canonical payloads, sealed-origin exclusion, authorization-before-read, dependency invalidation, active provider switches, structured retry budgets and cancellation. Full validation and refreshed-master results follow below.
+- No dead code was found in touched implementation; no unrelated behavior or UI changes are included. Remaining work: controlled shadow/reviewer benchmarking, routing calibration, remaining retrieval consolidation, reviewer-visible production proposal reconciliation and an explicit activation gate. Shadow live guards deliberately re-read canonical dependencies; they are not a performance-optimized production path.
