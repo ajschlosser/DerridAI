@@ -534,6 +534,18 @@ CURRENT REVIEWED RECORD TEXT:
         source_block_ids. That distinction allows two legitimate fragments of one
         extraction block without reporting a false duplicate or fidelity error.
         """
+        if source_units is None:
+            candidate_units = profile.get("_validation_source_units")
+            source_units = (
+                candidate_units
+                if isinstance(candidate_units, list)
+                else None
+            )
+        if "_check_corpus_conservation" in profile:
+            check_corpus_conservation = bool(
+                profile.get("_check_corpus_conservation")
+            )
+
         block_map = {
             str(block["block_id"]): block
             for block in blocks
