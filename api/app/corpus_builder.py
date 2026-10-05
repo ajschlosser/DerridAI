@@ -4408,11 +4408,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             else:
                 self._update(build_id, status="cancelled", stage="cancelled", finished_at=iso_now(), error=str(exc), resumable=True, paused=False, retrying_segmentation=False)
         except Exception as exc:
-            # Checkpoints intentionally survive a failed stage. SQLite writer
-            # contention is operational/transient, so do not turn it into a
+            # Checkpoints intentionally survive a failed stage. Transient storage
+            # contention is operational, so do not turn it into a
             # terminal scholarly build failure after the bounded automatic retry.
             stage = str(self.repo.get_build(build_id).get("stage") or "unknown")
-            if _is_sqlite_lock_error(exc):
+            if isinstance(exc, PersistenceBusyError):
                 self._update(
                     build_id,
                     status="interrupted",
@@ -5162,7 +5162,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
 
         if pending:
             # Records share the bounded family pool. Family checkpoints and
-            # completed results persist through targeted SQLite writes; JSONL
+            # completed results persist through targeted canonical-store writes; JSONL
             # remains a dirty-tracked projection until explicit refresh/export.
             with (
                 ThreadPoolExecutor(
