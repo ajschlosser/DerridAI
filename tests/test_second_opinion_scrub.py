@@ -179,6 +179,24 @@ def test_precedents_do_not_show_a_second_reviewer_the_first_answer(tmp_path):
     assert "assertion" in mine and "assertion" not in theirs
 
 
+def test_unfinished_export_hides_sealed_second_opinion_values(tmp_path):
+    import zipfile
+
+    m, repo, bid = _manager(tmp_path)
+    repo.save_records(bid, [record(review_disposition="pending")])
+    token = current_reviewer.set("user-2")
+    try:
+        artifact = m.create_unfinished_export(bid)
+    finally:
+        current_reviewer.reset(token)
+
+    with zipfile.ZipFile(artifact["path"]) as archive:
+        exported = archive.read("records.jsonl").decode("utf-8")
+        manifest = json.loads(archive.read("export_manifest.json"))
+    assert "assertion" not in exported
+    assert manifest["reviewer_filter_applied"] is True
+
+
 def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
     from app.enrichment_ledger import EnrichmentLedger
 
@@ -198,6 +216,9 @@ def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
 # hides a pending second opinion in any record it finds, and the channels tested above cover what it cannot see.
 CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
+    # Binary inspection export is scrubbed explicitly before the ZIP is written,
+    # because FileResponse cannot be rewritten by the JSON response middleware.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/download-unfinished"),
     # Semantic graph nodes/edges may project reviewer-visible metadata values.
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph/view"),
