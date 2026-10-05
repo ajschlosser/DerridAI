@@ -1597,7 +1597,7 @@ def run_rag_pipeline(
     filter_plan = request.filter_plan
     metadata_filter = filter_plan.metadata_filter if filter_plan else None
     document_filter = filter_plan.document_filter if filter_plan else None
-    filter_detail = {
+    filter_detail: dict[str, Any] = {
         "source": filter_plan.source if filter_plan else None,
         "metadata_filter": metadata_filter,
         "document_filter": document_filter,

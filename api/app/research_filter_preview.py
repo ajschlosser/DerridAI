@@ -26,7 +26,7 @@ Diagnostics carry stable codes and parameters so the browser can localize them.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -69,7 +69,7 @@ def preview_filter_plan(
     *,
     metadata_filter: Any,
     document_filter: Any,
-    source: str,
+    source: Literal["explicit", "deterministic_natural_language", "model_assisted"],
     collection_filter_fields: list[str],
 ) -> dict[str, Any]:
     """Validate a proposed plan and describe it without executing retrieval."""
