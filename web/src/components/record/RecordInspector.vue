@@ -32,6 +32,7 @@ import UiLoadingState from "../ui/UiLoadingState.vue";
 import { corpusBuildsApi } from "../../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
 import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
+import type { MetadataSchema } from "../../api/metadataSchemas";
 import {
   loadInspectorLayout,
   saveInspectorLayout,
@@ -47,6 +48,7 @@ const props = defineProps<{
   normativeModel?: DerridaiNormativeModel | null;
   graphLoading?: boolean;
   graphError?: string;
+  schema?: MetadataSchema | null;
 }>();
 const emit = defineEmits<{
   search: [field: string, value: string, contains?: boolean];
@@ -63,7 +65,9 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const tab = ref("overview");
-const layout = ref<InspectorLayout>(loadInspectorLayout(props.snapshot.record || {}));
+const layout = ref<InspectorLayout>(
+  loadInspectorLayout(props.snapshot.record || {}, props.schema || null),
+);
 const layoutEditor = ref<{ open: () => void } | null>(null);
 const record = computed(() => props.snapshot.record || {});
 const tabs = computed(() => [
@@ -89,12 +93,12 @@ const provenanceFields = computed(() =>
 );
 function applyLayout(next: InspectorLayout) {
   layout.value = next;
-  saveInspectorLayout(next, record.value);
+  saveInspectorLayout(next, record.value, props.schema || null);
 }
 function resetLayout() {
-  const next = defaultInspectorLayout(record.value);
+  const next = defaultInspectorLayout(record.value, props.schema || null);
   layout.value = next;
-  saveInspectorLayout(next, record.value);
+  saveInspectorLayout(next, record.value, props.schema || null);
 }
 function headingText(label: string) {
   if (label === "Record context") return i18n.t("record.record_context");
@@ -175,6 +179,13 @@ async function resolveSemanticBuild(recordId: string) {
     semanticLoading.value = false;
   }
 }
+watch(
+  () => [props.snapshot.record_id, props.schema?.id],
+  () => {
+    layout.value = loadInspectorLayout(record.value, props.schema || null);
+  },
+);
+
 watch(
   () => [tab.value, props.snapshot.record_id],
   ([activeTab, recordId]) => {
