@@ -5733,14 +5733,24 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             blocks = json.loads(
                 json.dumps(self.repo.load_blocks(str(build["asset_id"])))
             )
-            source_units = self.repo.source_units_for_validation(build_id)
-            if not source_units:
-                source_units = normalize_source_units(
-                    [],
-                    blocks,
-                    source_document_id=str(build["asset_id"]),
-                )
+            source_unit_path = self.repo.build_source_units_path(build_id)
+            persisted_source_units: list[dict[str, Any]] = []
+            if source_unit_path.exists():
+                with source_unit_path.open("r", encoding="utf-8") as handle:
+                    persisted_source_units = [
+                        json.loads(line)
+                        for line in handle
+                        if line.strip()
+                    ]
+            source_units = normalize_source_units(
+                persisted_source_units,
+                blocks,
+                source_document_id=str(build["asset_id"]),
+            )
             source_units = json.loads(json.dumps(source_units))
+            persisted_source_units = json.loads(
+                json.dumps(persisted_source_units)
+            )
             retired_records = self.repo.load_checkpoint(
                 build_id,
                 "retired_records",
@@ -5771,6 +5781,8 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "record_count": len(records),
             "source_block_count": len(blocks),
             "source_unit_count": len(source_units),
+            "persisted_source_unit_count": len(persisted_source_units),
+            "source_unit_store_present": source_unit_path.exists(),
             "build_status": build.get("status"),
             "build_stage": build.get("stage"),
             "validation": build.get("validation") or {},
@@ -5788,7 +5800,8 @@ Contents:
 - export_manifest.json: artifact identity, counts, and validation state
 - build.json: current build/workflow state
 - records.jsonl: every current Record, including pending/rejected/internal audit data
-- source_units.jsonl: current SourceUnit topology, including active/retired lineage rows
+- source_units.jsonl: normalized validation view of the current SourceUnit topology
+- source_units_persisted.jsonl: exact persisted SourceUnit rows (empty for legacy builds with no store)
 - source_blocks.jsonl: immutable extraction blocks used by the build
 - retired_records.json: structural-edit tombstones, when present
 - evidence_remap_pending.json: unresolved structural evidence remaps, when present
@@ -5820,6 +5833,10 @@ by the act of downloading it.
                 )
                 archive.writestr("records.jsonl", jsonl(records))
                 archive.writestr("source_units.jsonl", jsonl(source_units))
+                archive.writestr(
+                    "source_units_persisted.jsonl",
+                    jsonl(persisted_source_units),
+                )
                 archive.writestr("source_blocks.jsonl", jsonl(blocks))
                 archive.writestr(
                     "retired_records.json",
