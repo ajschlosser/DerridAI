@@ -319,7 +319,7 @@ def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
     assert authors == {"Jacques Derrida", "Emmanuel Levinas"}
     assert result["retrieval"]["explicit_scope_seed_count"] == 2
     assert {
-        item["document_author"]
+        item["source_document_author"]
         for item in result["retrieval"]["explicit_scope_groups"]
         if item["matched"]
     } == {"Jacques Derrida", "Emmanuel Levinas"}
