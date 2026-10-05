@@ -1077,10 +1077,30 @@ class _HtmlText(HTMLParser):
                 self._chrome_depth += 1
             return
         classes = set((attr.get("class") or "").lower().split())
-        if "pagenum" in classes or "page-number" in classes or attr.get("data-page") or attr.get("data-page-number"):
+        # Wikisource currently emits both historical `pagenum` and
+        # ProofreadPage `pagenumber` variants. Treat provider-native page
+        # markers as authoritative before generic chrome suppression so
+        # classes such as `ws-noexport` do not discard the printed folio.
+        is_page_number = bool(
+            classes & {"pagenum", "pagenumber", "page-number", "ws-pagenumber"}
+        )
+        has_page_data = bool(
+            attr.get("data-page")
+            or attr.get("data-page-number")
+            or attr.get("data-page-name")
+        )
+        if is_page_number or has_page_data:
             anchor = attr.get("id") or attr.get("name") or ""
             page_anchor = re.fullmatch(r"(?:page|pg|p)[_\-]?(\d{1,5})", anchor, re.I)
-            self._pagenum_attr = attr.get("data-page") or attr.get("data-page-number") or (page_anchor.group(1) if page_anchor else "")
+            # `data-page-name` identifies the ProofreadPage scan (for example
+            # Page:Book.djvu/27), not necessarily the printed folio. Prefer
+            # visible marker text and explicit numeric page attributes; only
+            # use the anchor as a deterministic fallback.
+            self._pagenum_attr = (
+                attr.get("data-page")
+                or attr.get("data-page-number")
+                or (page_anchor.group(1) if page_anchor else "")
+            )
             self._pagenum_buf = []
             if tag in _VOID_TAGS:
                 self._emit_pagenum()
