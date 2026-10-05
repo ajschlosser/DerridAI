@@ -200,3 +200,7 @@ Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/
 - Full preflight remains red solely on those four regression failures. No green regression/merge-readiness claim is made. Implementation checkpoint: `52089413`; checkpoint push uses the documented preflight bypass after this completed preflight. Next remains canonical policy/provider integration and controlled shadow/reviewer benchmarking; adaptive production routing stays disabled.
 
 - Final provenance completion: the session result carries pipeline ID/version/hash alongside bounded stage traces. Focused session tests and full typechecking were rechecked after adding those identity fields; no execution behavior changed.
+
+## PR preparation refresh (2026-10-04)
+
+- Merged current master `ea68ca29` cleanly at `ec193a85` before PR creation. Full preflight formatting, backend lint, mypy and syntax passed. Refreshed full regression: 2478 passed, 28 skipped, 5 failed. Four are the documented failures above; the additional `test_publication_lifecycle.py::test_build_warnings_are_provenance_and_travel_with_the_corpus` also fails on an isolated archive of master `ea68ca29` using the same validation environment because a derived-index projection warning is appended. No unrelated fix was included. Full preflight remains red; checkpoint push uses the documented bypass after this completed run. The PR is draft, with all five failures disclosed.
