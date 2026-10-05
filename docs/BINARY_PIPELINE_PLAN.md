@@ -94,12 +94,12 @@ FastAPI and the CLI are transport adapters. Neither owns the corpus algorithm.
 
 The first release target matrix is:
 
-| Target | Artifact key | Executable |
-| --- | --- | --- |
-| Ubuntu x86_64 | `linux-x86_64` | `derridai` |
-| Windows x86_64 | `windows-x86_64` | `derridai.exe` |
-| macOS Apple Silicon | `macos-arm64` | `derridai` |
-| macOS Intel | `macos-x86_64` | `derridai` |
+| Target              | Artifact key     | Executable     |
+| ------------------- | ---------------- | -------------- |
+| Ubuntu x86_64       | `linux-x86_64`   | `derridai`     |
+| Windows x86_64      | `windows-x86_64` | `derridai.exe` |
+| macOS Apple Silicon | `macos-arm64`    | `derridai`     |
+| macOS Intel         | `macos-x86_64`   | `derridai`     |
 
 The build is target-native. We do not treat Linux-to-Windows or Linux-to-macOS
 cross-compilation as a release path.
@@ -358,17 +358,17 @@ Example final result:
 
 ### Exit codes
 
-| Code | Category |
-| ---: | --- |
-| 0 | success |
-| 2 | command/configuration error |
-| 3 | unsupported/unsafe source |
-| 4 | missing runtime capability |
-| 5 | extraction/segmentation/pipeline failure |
-| 6 | provider/enrichment failure |
-| 7 | validation/publication failure |
-| 8 | output I/O failure |
-| 130 | user cancellation on POSIX-compatible shells |
+| Code | Category                                     |
+| ---: | -------------------------------------------- |
+|    0 | success                                      |
+|    2 | command/configuration error                  |
+|    3 | unsupported/unsafe source                    |
+|    4 | missing runtime capability                   |
+|    5 | extraction/segmentation/pipeline failure     |
+|    6 | provider/enrichment failure                  |
+|    7 | validation/publication failure               |
+|    8 | output I/O failure                           |
+|  130 | user cancellation on POSIX-compatible shells |
 
 The implementation may map platform-specific interruption mechanisms into the same
 semantic cancellation result even where the shell does not expose 130 literally.
@@ -659,22 +659,22 @@ resulting publication is validated.
 
 Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 
-| Milestone | Status | Deliverable |
-| --- | --- | --- |
-| B0. Architecture | DONE | Python shared-engine + Nuitka native-binary direction; standalone-first policy; four target keys; release-vs-repo binary gate. |
-| B1. Versioned CLI config | IN PROGRESS | Strict YAML contract, config validation command, stable exit categories, and secret-by-environment resolution are implemented; full corpus-build command wiring remains. |
-| B2. Binary build spine | IN PROGRESS | Target identity helpers, Nuitka entry point/build script, artifact naming, manifest/checksum generation, compiled-binary smoke harness, and four-target standalone CI are implemented; onefile/release publication remains. |
-| B3. Installer spine | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned/latest release resolution are implemented; they become end-to-end testable once release assets exist. |
-| B4. Headless runner | TODO | Synchronous source-to-canonical-build application service with no HTTP dependency. |
-| B5. Automatic settlement | TODO | Headless autonomous/unreviewed publication policy that never grants human authority. |
-| B6. Research output | TODO | Explicit allow-list research projection and atomic `.jsonl.zst` publication. |
-| B7. cELF output | TODO | Existing publication/conformance path exposed through the binary and machine-readable result. |
-| B8. Capability doctor | TODO | Source-kind-aware helper/model/provider diagnostics. |
-| B9. Native standalone acceptance | TODO | Full deterministic compiled-artifact fixture suite on all four target keys. |
-| B10. Onefile acceptance | TODO | Onefile artifacts pass the same suite; size report determines release/repo distribution. |
-| B11. Signing/release | TODO | Checksums, manifests, signing/notarization, immutable release assets, installer release resolution. |
-| B12. Repo-binary decision | TODO | Use measured onefile sizes to decide whether `bin/` artifacts are committed. |
-| B13. Documentation/release integration | TODO | README/USER_GUIDE/ARCHITECTURE/CONTRIBUTING and release process updated after behavior is implemented. |
+| Milestone                              | Status      | Deliverable                                                                                                                                                                                                                 |
+| -------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B0. Architecture                       | DONE        | Python shared-engine + Nuitka native-binary direction; standalone-first policy; four target keys; release-vs-repo binary gate.                                                                                              |
+| B1. Versioned CLI config               | IN PROGRESS | Strict YAML contract, config validation command, stable exit categories, and secret-by-environment resolution are implemented; full corpus-build command wiring remains.                                                    |
+| B2. Binary build spine                 | IN PROGRESS | Target identity helpers, Nuitka entry point/build script, artifact naming, manifest/checksum generation, compiled-binary smoke harness, and four-target standalone CI are implemented; onefile/release publication remains. |
+| B3. Installer spine                    | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned/latest release resolution are implemented; they become end-to-end testable once release assets exist.                      |
+| B4. Headless runner                    | TODO        | Synchronous source-to-canonical-build application service with no HTTP dependency.                                                                                                                                          |
+| B5. Automatic settlement               | TODO        | Headless autonomous/unreviewed publication policy that never grants human authority.                                                                                                                                        |
+| B6. Research output                    | TODO        | Explicit allow-list research projection and atomic `.jsonl.zst` publication.                                                                                                                                                |
+| B7. cELF output                        | TODO        | Existing publication/conformance path exposed through the binary and machine-readable result.                                                                                                                               |
+| B8. Capability doctor                  | TODO        | Source-kind-aware helper/model/provider diagnostics.                                                                                                                                                                        |
+| B9. Native standalone acceptance       | TODO        | Full deterministic compiled-artifact fixture suite on all four target keys.                                                                                                                                                 |
+| B10. Onefile acceptance                | TODO        | Onefile artifacts pass the same suite; size report determines release/repo distribution.                                                                                                                                    |
+| B11. Signing/release                   | TODO        | Checksums, manifests, signing/notarization, immutable release assets, installer release resolution.                                                                                                                         |
+| B12. Repo-binary decision              | TODO        | Use measured onefile sizes to decide whether `bin/` artifacts are committed.                                                                                                                                                |
+| B13. Documentation/release integration | TODO        | README/USER_GUIDE/ARCHITECTURE/CONTRIBUTING and release process updated after behavior is implemented.                                                                                                                      |
 
 ## Definition of done
 
