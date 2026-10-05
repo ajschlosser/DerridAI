@@ -424,7 +424,7 @@ class ReviewActionsMixin:
             target["review_reason"] = str(reason or target.get("review_reason") or "Pending human review.")
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
-        self._rewrite_targeted_record(build_id, target, previous_record)
+        self._rewrite_targeted_record(build_id, target, previous_record, validate_record=False)
         if promoted_fields:
             self._persist_review_audit_bindings(
                 build_id,
@@ -486,7 +486,7 @@ class ReviewActionsMixin:
         target["review_reason"] = "" if disposition == "accepted" else str(reason or "Rejected during human review.")
         _mark_human_touch(target, ["__review__"])
         target["record_revision"] = current_revision + 1
-        build = self._rewrite_targeted_record(build_id, target, previous_record)
+        build = self._rewrite_targeted_record(build_id, target, previous_record, validate_record=False)
         if promoted_fields:
             self._persist_review_audit_bindings(
                 build_id,
