@@ -521,6 +521,18 @@ describe("publish workspace", () => {
     expect(confirm).toContain("create a human-review claim");
   });
 
+  it("downloads an unfinished corpus without requiring publication readiness", async () => {
+    const wrapper = mount(CorpusPublishWorkspace, {
+      props: { build: publishBuild(), canPublishUnreviewed: true },
+    });
+    const download = wrapper
+      .findAll("button")
+      .find((node) => node.text().includes("Download unfinished corpus"));
+    expect(download).toBeTruthy();
+    await download!.trigger("click");
+    expect(wrapper.emitted("downloadUnfinished")).toEqual([[]]);
+  });
+
   it("sends blocker actions to the parent, which switches to Review", async () => {
     const wrapper = mount(CorpusPublishWorkspace, { props: { build: publishBuild() } });
     const go = wrapper.findAll("button").find((node) => node.text().includes("Fix"));
