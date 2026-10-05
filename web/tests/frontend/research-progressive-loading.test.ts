@@ -105,6 +105,12 @@ const Composer = defineComponent({
   template:
     '<input class="composer" :value="prompt" @input="$emit(\'update:prompt\', $event.target.value)" /><button class="run" :disabled="!canRun" @click="$emit(\'run\')">Run</button>',
 });
+const ThreadBrowser = defineComponent({
+  name: "ResearchThreadBrowser",
+  props: ["threadId", "jobId", "retryDisabled", "refreshKey"],
+  emits: ["retryTurn"],
+  template: '<div class="thread-browser" />',
+});
 const Result = defineComponent({
   props: ["job", "result"],
   template: '<div class="answer">{{ job?.id }} {{ result?.answer }}</div>',
@@ -116,7 +122,7 @@ function render() {
       stubs: {
         UiPageHeader: { template: '<header><h1 id="research-page-title">Research</h1></header>' },
         UiLoadingState: { props: ["label"], template: '<div role="status">{{ label }}</div>' },
-        ResearchThreadBrowser: true,
+        ResearchThreadBrowser: ThreadBrowser,
         ResearchComposer: Composer,
         ResearchResultPresentation: Result,
         ResearchPipelineBar: true,
@@ -147,6 +153,76 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
+  it("retries the original turn without enabling follow-ups or duplicating a click", async () => {
+    reactive(mocks.route).query = { thread: "t" };
+    const pending = deferred<any>();
+    mocks.start.mockReturnValue(pending.promise);
+    const w = render();
+    await flushPromises();
+    await w.get(".composer").setValue("Unrelated draft");
+    const browser = w.findComponent(ThreadBrowser);
+    const turn = {
+      thread_id: "t",
+      turn_id: "turn",
+      status: "failed",
+      user_question: "Original question",
+      user_instructions: "Original instructions",
+    };
+    browser.vm.$emit("retryTurn", turn);
+    browser.vm.$emit("retryTurn", turn);
+    await flushPromises();
+    expect(mocks.start).toHaveBeenCalledOnce();
+    expect(mocks.start.mock.calls[0][0]).toMatchObject({
+      prompt: "Original question",
+      instructions: "Original instructions",
+      retry_thread_id: "t",
+      retry_turn_id: "turn",
+    });
+    expect(browser.props("retryDisabled")).toBe(true);
+    expect(w.get(".run").attributes("disabled")).toBeDefined();
+    pending.resolve({ id: "retried", status: "running", thread_id: "t", turn_id: "turn" });
+    await flushPromises();
+    expect(mocks.push).toHaveBeenCalledWith({
+      path: "/rag",
+      query: { thread: "t", job: "retried" },
+    });
+  });
+  it("discards a late retry submission after an account switch", async () => {
+    reactive(mocks.route).query = { thread: "t" };
+    const pending = deferred<any>();
+    mocks.start.mockReturnValue(pending.promise);
+    const w = render();
+    await flushPromises();
+    w.findComponent(ThreadBrowser).vm.$emit("retryTurn", {
+      thread_id: "t",
+      turn_id: "turn",
+      status: "cancelled",
+      user_question: "Original",
+    });
+    await flushPromises();
+    reactive(mocks.auth).user = { id: 2, role: "researcher" };
+    await flushPromises();
+    pending.resolve({ id: "old-account-job", status: "running", thread_id: "t", turn_id: "turn" });
+    await flushPromises();
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(w.text()).not.toContain("old-account-job");
+  });
+  it("refreshes authoritative thread state after an uncertain retry without repeating it", async () => {
+    reactive(mocks.route).query = { thread: "t" };
+    mocks.start.mockRejectedValue(new Error("Connection interrupted"));
+    const w = render();
+    await flushPromises();
+    const browser = w.findComponent(ThreadBrowser);
+    browser.vm.$emit("retryTurn", {
+      thread_id: "t",
+      turn_id: "turn",
+      status: "failed",
+      user_question: "Original",
+    });
+    await flushPromises();
+    expect(browser.props("refreshKey")).toBe(1);
+    expect(mocks.start).toHaveBeenCalledOnce();
+  });
   it("links a newly submitted run to the server-created thread", async () => {
     mocks.start.mockResolvedValue({
       id: "new-job",

@@ -28,12 +28,19 @@ import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
 import { ApiError } from "../../api/http";
 
-const props = defineProps<{ threadId: string; jobId: string }>();
+const props = defineProps<{
+  threadId: string;
+  jobId: string;
+  retryDisabled?: boolean;
+  retryBusy?: boolean;
+  refreshKey?: number;
+}>();
 const emit = defineEmits<{
   select: [id: string];
   open: [turn: ResearchTurn];
   new: [];
   removed: [error?: string];
+  retryTurn: [turn: ResearchTurn];
 }>();
 const auth = useAuthStore();
 const offset = ref(0);
@@ -70,6 +77,31 @@ const detail = useDataQuery("research_threads", () => researchThreadsApi.get(pro
   enabled: () => allowed.value && Boolean(props.threadId),
 });
 watch(() => [props.threadId, ...scope.value], resetMutation);
+watch(
+  () => [props.refreshKey, props.jobId],
+  () => {
+    if (allowed.value) retry();
+  },
+);
+function retryTurn(turn: ResearchTurn) {
+  const thread = detail.data.value;
+  if (
+    !allowed.value ||
+    busy.value ||
+    props.retryDisabled ||
+    detail.isFetching.value ||
+    error.value ||
+    !thread ||
+    thread.archived_at ||
+    turn.thread_id !== props.threadId ||
+    !thread.turns.some(
+      (item) => item.turn_id === turn.turn_id && ["failed", "cancelled"].includes(item.status),
+    ) ||
+    thread.turns.some((item) => ["queued", "running"].includes(item.status))
+  )
+    return;
+  emit("retryTurn", turn);
+}
 watch(includeArchived, () => {
   offset.value = 0;
 });
@@ -171,8 +203,10 @@ function retry() {
     :loading="list.isFetching.value || (Boolean(threadId) && detail.isFetching.value)"
     :error="error || (!dialog ? mutationError : '')"
     :include-archived="includeArchived"
-    :busy="busy"
+    :busy="busy || retryBusy"
     :notice="notice"
+    :retry-disabled="retryDisabled || Boolean(error)"
+    @retry-turn="retryTurn"
     @select="emit('select', $event)"
     @open="emit('open', $event)"
     @new="emit('new')"

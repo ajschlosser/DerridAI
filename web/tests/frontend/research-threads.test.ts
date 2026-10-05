@@ -87,6 +87,7 @@ beforeEach(() => {
     "research.thread_new": "New question",
     "research.thread_open_run": "Open answer",
     "ui.retry": "Retry",
+    "research.thread_retry": "Retry turn",
   };
   jobs.read.mockImplementation(async (path: string) => ({
     id: path.split("/").pop(),
@@ -117,6 +118,46 @@ function browser(id = "a") {
   return wrapper;
 }
 describe("Research thread shell", () => {
+  it("offers in-place retry for failed/cancelled turns and blocks archived or active threads", async () => {
+    const detail = thread("a");
+    detail.turns[0].status = "failed";
+    api.get.mockResolvedValue(detail);
+    const wrapper = browser();
+    await flushPromises();
+    const retryButton = () =>
+      wrapper.findAll("article button").find((item) => item.text() === "Retry turn")!;
+    await retryButton().trigger("click");
+    expect(wrapper.emitted("retryTurn")?.[0]).toEqual([detail.turns[0]]);
+    await wrapper.setProps({ retryDisabled: true });
+    expect(retryButton().attributes("disabled")).toBeDefined();
+    await wrapper.setProps({ retryDisabled: false });
+    detail.turns.push({ ...thread("b").turns[0], thread_id: "a", status: "running" });
+    await client.invalidateQueries();
+    await flushPromises();
+    expect(retryButton().attributes("disabled")).toBeDefined();
+    detail.turns.pop();
+    detail.archived_at = "now";
+    await client.invalidateQueries();
+    await flushPromises();
+    expect(retryButton().attributes("disabled")).toBeDefined();
+  });
+  it("refreshes after a retry outcome and hides retry after the turn becomes active", async () => {
+    const detail = thread("a");
+    detail.turns[0].status = "cancelled";
+    api.get.mockResolvedValue(detail);
+    const wrapper = browser();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Retry turn");
+    api.get.mockResolvedValue({
+      ...detail,
+      turns: [{ ...detail.turns[0], status: "running", attempt: 2 }],
+    });
+    api.get.mockClear();
+    await wrapper.setProps({ refreshKey: 1 });
+    await flushPromises();
+    expect(api.get).toHaveBeenCalledOnce();
+    expect(wrapper.text()).not.toContain("Retry turn");
+  });
   it("keeps each inline answer and citation bound to its own turn", async () => {
     const detail = thread("a");
     detail.turns.push({ ...thread("b").turns[0], thread_id: "a", ordinal: 2 });
@@ -221,7 +262,9 @@ describe("Research thread shell", () => {
       "Question a",
       "Second question",
     ]);
-    expect(wrapper.findAll("article button")).toHaveLength(1);
+    expect(
+      wrapper.findAll("article button").filter((item) => item.text() === "Open answer"),
+    ).toHaveLength(1);
     expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
     expect(wrapper.emitted("page")).toEqual([[50]]);
