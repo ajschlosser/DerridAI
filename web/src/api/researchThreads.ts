@@ -37,6 +37,10 @@ export const researchThreadsApi = {
   },
   get: (id: string) => apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),
   patch: (id: string, patch: { title?: string; archived?: boolean }) =>
-    apiRequest<ResearchThread>(`${THREADS_PATH}/${encodeURIComponent(id)}`, {\n      method: "PATCH",\n      body: JSON.stringify(patch),\n    }),
-  remove: (id: string) =>\n    apiRequest<void>(`${THREADS_PATH}/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    apiRequest<ResearchThread>(`${THREADS_PATH}/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  remove: (id: string) =>
+    apiRequest<void>(`${THREADS_PATH}/${encodeURIComponent(id)}`, { method: "DELETE" }),
 };
