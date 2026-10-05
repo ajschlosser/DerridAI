@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 
 import zstandard as zstd
-
 from app.corpus_output_profiles import (
     project_research_record,
     write_research_jsonl_zst,
