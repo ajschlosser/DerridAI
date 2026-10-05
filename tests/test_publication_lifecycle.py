@@ -407,6 +407,87 @@ def test_accept_unreviewed_repairs_retired_sourceunit_reference_with_audit_histo
     assert persisted_units["u-current"]["active"] is True
 
 
+def test_accept_unreviewed_retires_exact_redundant_root_before_validation(tmp_path:Path):
+    """An exact compatibility root plus replacement child is migrated, not double-counted."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    root=units[0]
+    # Reproduce an older store that left the compatibility root active while
+    # persisting an exact active replacement. The Record already owns the child,
+    # so the active root otherwise appears as a false uncovered SourceUnit.
+    units.append({
+        **root,
+        "source_unit_id":"u-current",
+        "unit_id":"u-current",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "text":"Record text",
+        "active":True,
+        "transaction_id":"legacy-structural-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["u-current"]
+    rows[0]["source_extracted_text"]="Record text"
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    persisted={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted["b1"]["active"] is False
+    assert persisted["u-current"]["active"] is True
+    [event]=persisted["b1"]["topology_reconciliation_history"]
+    assert event["method"]=="retire_redundant_compatibility_root"
+    assert event["successor_unit_ids"]==["u-current"]
+    validation=repo.get_build(build_id)["validation"]
+    assert validation["source_valid"] is True
+    assert validation["missing_source_unit_ids"]==[]
+
+
+def test_accept_unreviewed_does_not_retire_nonconserving_redundant_root(tmp_path:Path):
+    """A child that does not reconstruct its root remains a real publication blocker."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    root=units[0]
+    units.append({
+        **root,
+        "source_unit_id":"u-lossy",
+        "unit_id":"u-lossy",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "text":"Record",
+        "active":True,
+        "transaction_id":"legacy-lossy-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["u-lossy"]
+    rows[0]["source_extracted_text"]="Record"
+    rows[0]["text"]="Record"
+    rows[0]["text_length"]=6
+    repo.save_records(build_id,rows)
+
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        message=str(exc)
+        assert "source coverage and text-fidelity" in message
+        assert "unfinished corpus archive" in message
+    else:
+        raise AssertionError("lossy replacement topology must remain blocked")
+
+    persisted={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted["b1"]["active"] is True
+    assert "topology_reconciliation_history" not in persisted["b1"]
+
+
 def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_path:Path):
     """Researchers can inspect a blocked/draft corpus without changing its authority."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
