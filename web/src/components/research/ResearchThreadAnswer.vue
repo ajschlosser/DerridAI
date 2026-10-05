@@ -100,7 +100,7 @@ const answer = useQuery({
       Boolean(props.turn.job_id || props.turn.response_record_id),
   ),
   staleTime: Number.POSITIVE_INFINITY,
-  refetchOnWindowFocus: "always",
+  refetchOnWindowFocus: false,
   retry: 1,
 });
 const denied = computed(
