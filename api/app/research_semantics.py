@@ -26,6 +26,10 @@ SOURCE_AUTHOR_ID = "derridai.document.document_author"
 QUOTED_AUTHOR_ID = "derridai.quotation.author"
 QUOTED_WORK_ID = "derridai.quotation.work"
 POSITION_HOLDER_ID = "derridai.position_holder"
+SPEAKER_ID = "derridai.speaker"
+TOPICS_ID = "derridai.indexing.topics"
+CONCEPTS_ID = "derridai.indexing.concepts"
+PERSONS_ID = "derridai.indexing.persons"
 
 
 def _projection_names(semantic_id: str) -> tuple[str, ...]:
@@ -68,8 +72,15 @@ def semantic_value(record: Mapping[str, Any], semantic_id: str) -> Any:
     return None
 
 
+def semantic_text(record: Mapping[str, Any], semantic_id: str) -> str:
+    value = semantic_value(record, semantic_id)
+    if isinstance(value, (list, tuple, set)):
+        return " ".join(str(item) for item in value if item not in (None, ""))
+    return str(value or "").strip()
+
+
 def source_author(record: Mapping[str, Any]) -> str:
-    return str(semantic_value(record, SOURCE_AUTHOR_ID) or "").strip()
+    return semantic_text(record, SOURCE_AUTHOR_ID)
 
 
 def source_work_label(record: Mapping[str, Any]) -> str:
