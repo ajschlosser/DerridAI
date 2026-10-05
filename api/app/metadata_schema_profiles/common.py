@@ -35,6 +35,7 @@ PROFILE_FOOTER = (
     "Return one field_assessments entry for every one of {assessed_fields}, even "
     "when the corresponding metadata value is null or empty. Each assessment "
     "must contain confidence (0..1 or null), needs_review, reason, and outcome. "
+    "Boolean assessments must also contain assessed_value exactly matching the metadata value. "
     "Use outcome=\"supported_value\" for a supported value, "
     "outcome=\"no_supported_value\" when the source supports that no value applies, "
     "and outcome=\"uncertain\" when the field cannot be determined. Preserve "
