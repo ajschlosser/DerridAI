@@ -462,10 +462,7 @@ jobs:
           name: frontend-production-${{ github.run_id }}
           path: web/dist
       - name: Legacy DOM regression tests
-        run: |
-          npm run test:e2e:legacy -- --shard=${{ matrix.shard }} --update-snapshots
-          git diff -- tests/e2e/legacy-dom-baseline.spec.ts-snapshots
-          exit 1
+        run: npm run test:e2e:legacy -- --shard=${{ matrix.shard }}
 
   frontend-e2e:
     needs: [changes, frontend-build, frontend-storybook]
