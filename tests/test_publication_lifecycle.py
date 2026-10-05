@@ -529,6 +529,7 @@ def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_
             "build.json",
             "records.jsonl",
             "source_units.jsonl",
+            "source_units_persisted.jsonl",
             "source_blocks.jsonl",
             "retired_records.json",
             "evidence_remap_pending.json",
@@ -537,6 +538,9 @@ def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_
         assert manifest["artifact_kind"]=="unfinished_corpus_export"
         assert manifest["celf_publication"] is False
         assert manifest["publication_ready"] is False
+        assert manifest["source_unit_store_present"] is False
+        assert manifest["persisted_source_unit_count"]==0
+        assert archive.read("source_units_persisted.jsonl")==b""
         exported_records=[
             json.loads(line)
             for line in archive.read("records.jsonl").decode().splitlines()
