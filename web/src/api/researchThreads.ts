@@ -35,7 +35,8 @@ export const researchThreadsApi = {
     });
     return apiRequest<{ threads: ResearchThreadSummary[] }>(`${THREADS_PATH}?${query}`);
   },
-  get: (id: string) => apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),
+  get: (id: string) =>
+    apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),
   patch: (id: string, patch: { title?: string; archived?: boolean }) =>
     apiRequest<ResearchThread>(`${THREADS_PATH}/${encodeURIComponent(id)}`, {
       method: "PATCH",
