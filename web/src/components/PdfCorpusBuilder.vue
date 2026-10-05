@@ -483,7 +483,7 @@ async function reconcileAndOpenPublish() {
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
-    if (currentBuild.value?.build_id === buildId) busy.value = "";
+    if (busy.value === "reconcile") busy.value = "";
   }
 }
 const textCleanupOpen = ref(false);
