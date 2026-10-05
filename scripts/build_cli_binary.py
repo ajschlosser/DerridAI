@@ -175,6 +175,7 @@ def main() -> int:
         f"--output-dir={output_dir}",
         "--output-filename=derridai",
         "--python-flag=isolated",
+        "--assume-yes-for-downloads",
         str(API_ROOT / "derridai_cli.py"),
     ]
     completed = subprocess.run(command, cwd=API_ROOT, check=False)
