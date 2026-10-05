@@ -233,44 +233,42 @@ No migration that destroys retired SourceUnits or retired Records is required. E
 
 ## Progress tracker
 
-Legend: [x] implemented on the feature branch, [ ] not yet complete, [~] partially complete or awaiting validation.
+Legend: checked means implemented on the feature branch; unchecked means still pending final verification or merge.
 
-| Work item | Status | Notes |
-| --- | --- | --- |
-| Create implementation branch from current master | [x] | `fix/unreviewed-topology-finalization` |
-| Add active SourceUnit lookup helper | [x] | Canonical ID -> active unit |
-| Add Record SourceUnit-ID resolution with legacy fallback | [x] | Older builds remain readable |
-| Add recursive SourceUnit -> immutable extraction-root resolution | [x] | Supports replacement lineage |
-| Add deterministic `source_extracted_text` reconstruction | [x] | Does not change reviewed Record text |
-| Make source validation SourceUnit-aware | [x] | Ownership/fidelity use current topology |
-| Allow adjacent fragments sharing one immutable root | [x] | Removes legacy duplicate/order false positives |
-| Add missing/duplicate/reference SourceUnit findings | [x] | Structured validation payload |
-| Add whole-corpus source-conservation check | [x] | Genuine source loss remains blocking |
-| Disable corpus-wide conservation during Record-local validation | [x] | Keeps local review mutation validation scoped |
-| Reconcile derived source projection before full validation | [x] | Uses repository reconciliation path |
-| Finalize topology server-side for `accept_unreviewed=True` | [x] | Direct API callers get same semantics |
-| Extend publication blocker keys | [x] | SourceUnit failures participate in 409 gate |
-| Extend cELF conformance source-integrity keys | [x] | Conformance cannot hide SourceUnit blockers |
-| Extend publication-readiness blocker counts | [x] | New issue classes represented |
-| Update autonomous-publication English copy | [x] | Explains finalization rather than bypass |
-| Update autonomous-publication French copy | [x] | Translation parity retained |
-| Regression: split SourceUnits sharing one legacy block | [x] | Added |
-| Regression: autonomous publication repairs stale source projection | [x] | Added |
-| Regression: real missing coverage still blocks | [x] | Updated existing gate test |
-| Remove lint regression introduced by implementation | [x] | Unused import fixed |
-| Full backend lint/type/test CI | [~] | New CI run triggered after lint fix |
-| Frontend/static/build CI | [~] | New CI run triggered after latest commit |
-| Add explicit nested-lineage regression | [ ] | Required before declaring topology layer complete |
-| Add duplicate active SourceUnit ownership regression | [ ] | Required |
-| Add inactive/missing SourceUnit reference regression | [ ] | Required |
-| Add reordered SourceUnit regression | [ ] | Required |
-| Add timed-media SourceUnit locator regression | [ ] | Required |
-| Verify evidence survives block -> SourceUnit partition | [ ] | Must prove evidence coordinate remains immutable |
-| Verify strict reviewed-publication path is unchanged | [ ] | Focused lifecycle regression |
-| Exercise a previously failing real Corpus Builder build | [ ] | Final product-level acceptance |
-| Update USER_GUIDE publication section after behavior is green | [ ] | Document released behavior, not provisional behavior |
-| Rebase/merge latest master if PR base moves materially | [ ] | Do before final merge if needed |
-| Merge PR #532 | [ ] | Only after required CI and acceptance scenarios pass |
+- [x] Create `fix/unreviewed-topology-finalization` from current `master`.
+- [x] Add active SourceUnit lookup.
+- [x] Add Record SourceUnit-ID resolution with legacy fallback.
+- [x] Resolve SourceUnit lineage recursively through retired replacement generations to immutable extraction roots.
+- [x] Rebuild `source_extracted_text` deterministically from authoritative SourceUnits without changing reviewed Record text.
+- [x] Keep optimistic validation side-effect free for legacy builds by normalizing SourceUnits in memory instead of persisting migration state inside validation callbacks.
+- [x] Make source validation SourceUnit-aware.
+- [x] Allow adjacent SourceUnit fragments that share one immutable extraction root.
+- [x] Report missing, duplicate, inactive/missing-reference, fidelity, order, locator, and corpus-conservation failures as structured validation findings.
+- [x] Disable corpus-wide conservation checks during Record-local validation.
+- [x] Reconcile derived source projections before full publication-readiness validation.
+- [x] Finalize topology server-side for `accept_unreviewed=True`.
+- [x] Extend publication blocker keys to SourceUnit integrity failures.
+- [x] Extend cELF conformance source-integrity keys.
+- [x] Extend publication-readiness blocker counts.
+- [x] Update English and French autonomous-publication copy.
+- [x] Add regression coverage for one extraction block partitioned into multiple active SourceUnits.
+- [x] Add nested replacement-lineage regression coverage.
+- [x] Add duplicate active SourceUnit ownership regression coverage.
+- [x] Add inactive SourceUnit reference regression coverage.
+- [x] Add reordered SourceUnit regression coverage.
+- [x] Add timed-media locator regression coverage.
+- [x] Verify immutable-block evidence remains valid after SourceUnit partition.
+- [x] Add autonomous-publication regression coverage for stale derived extraction projections.
+- [x] Verify genuine missing source coverage still blocks autonomous publication.
+- [x] Preserve the existing three-argument `validate_records` seam used by coordination/integration wrappers.
+- [x] Update the user guide with the released behavior contract.
+- [ ] Full backend lint, type, and test CI is green on the final head.
+- [ ] Frontend/static/build CI is green on the final head.
+- [ ] Format check is green on the final head.
+- [ ] Exercise a previously failing real Corpus Builder build, when a reproducible local build is available.
+- [ ] Rebase or merge latest `master` if the PR base moves materially before merge.
+- [ ] Merge PR #532.
+
 
 ## Completion definition
 
