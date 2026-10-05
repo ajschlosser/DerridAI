@@ -925,3 +925,72 @@ def test_resume_reuses_current_document_intelligence(monkeypatch, tmp_path: Path
         },
     )
     assert changed is None
+
+
+def test_cancel_persists_intent_and_exposes_cancelling_stage(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(
+        status="running",
+        stage="enriching",
+        metadata_operation={"state": "running", "operation_id": "op-1"},
+    )
+    repo.save_build(build)
+    try:
+        cancelled = manager.cancel(build["build_id"])
+        assert cancelled["status"] == "running"
+        assert cancelled["stage"] == "cancelling"
+        assert cancelled["stage_before_cancel"] == "enriching"
+        assert cancelled["cancel_requested"] is True
+        assert cancelled["cancel_requested_at"]
+        assert cancelled["metadata_operation"]["state"] == "cancelling"
+
+        persisted = repo.get_build(build["build_id"])
+        assert persisted["cancel_requested"] is True
+        assert persisted["stage"] == "cancelling"
+        assert manager._cancelled(build["build_id"]) is True
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_durable_cancel_flag_is_honoured_without_live_token(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="running", stage="enriching", cancel_requested=True)
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    try:
+        manager._cancel.discard(build["build_id"])
+        assert manager._cancelled(build["build_id"]) is True
+        assert build["build_id"] in manager._cancel
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_worker_progress_cannot_erase_cancelling_stage(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(status="running", stage="enriching")
+    repo.save_build(build)
+    try:
+        manager.cancel(build["build_id"])
+        updated = manager._update(
+            build["build_id"],
+            status="running",
+            stage="metadata_family",
+            progress=0.75,
+        )
+        assert updated["stage"] == "cancelling"
+
+        terminal = manager._update(
+            build["build_id"],
+            status="cancelled",
+            stage="cancelled",
+            resumable=True,
+        )
+        assert terminal["status"] == "cancelled"
+        assert terminal["stage"] == "cancelled"
+    finally:
+        manager._executor.shutdown(wait=True)
