@@ -21,7 +21,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .research_semantics import SPEAKER_ID, semantic_text, source_author, source_work_label
+from .research_semantics import (
+    SPEAKER_ID,
+    semantic_text,
+    source_author,
+    source_work_label,
+)
 
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
