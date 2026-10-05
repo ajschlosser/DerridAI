@@ -40,6 +40,7 @@ from .pipelines.research import (
     resolve_research_runtime_settings,
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .research_filters import combine_metadata_filters, metadata_filter_fields
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .research_semantics import (
     CONCEPTS_ID,
@@ -1510,6 +1511,16 @@ def run_rag_pipeline(
     if not request.skip_retrieval and not effective_search_types:
         raise ValueError("The selected Research pipeline has no usable retrieval route.")
 
+    filter_plan = request.filter_plan
+    metadata_filter = filter_plan.metadata_filter if filter_plan else None
+    document_filter = filter_plan.document_filter if filter_plan else None
+    filter_detail = {
+        "source": filter_plan.source if filter_plan else None,
+        "metadata_filter": metadata_filter,
+        "document_filter": document_filter,
+        "metadata_fields": sorted(metadata_filter_fields(metadata_filter)),
+    }
+
     selected_candidates = _selected_evidence_candidates(request, store)
     if request.skip_retrieval and not selected_candidates:
         raise ValueError("Selected-evidence-only RAG requires at least one selected evidence record.")
@@ -1613,11 +1624,17 @@ def run_rag_pipeline(
         semantic_candidates: list[dict[str, Any]] = []
         if {"similarity", "mmr"} & set(effective_search_types):
             try:
+                semantic_kwargs: dict[str, Any] = {}
+                if metadata_filter:
+                    semantic_kwargs["where"] = metadata_filter
+                if document_filter:
+                    semantic_kwargs["where_document"] = document_filter
                 semantic_candidates = _scope_rag_candidates(
                     store.semantic_candidates(
                         collection["name"],
                         query,
                         min(collection_semantic_fetch_k, max(1, collection["count"])),
+                        **semantic_kwargs,
                     ),
                     collection,
                     locale_codes,
@@ -1659,11 +1676,17 @@ def run_rag_pipeline(
                 total_units,
                 f"Lexical · {collection['name']} · {collection.get('_rag_route', '')}",
             )
+            lexical_kwargs: dict[str, Any] = {}
+            if metadata_filter:
+                lexical_kwargs["where"] = metadata_filter
+            if document_filter:
+                lexical_kwargs["where_document"] = document_filter
             lexical_candidates = _scope_rag_candidates(
                 store.lexical_search(
                     collection["name"],
                     query,
                     min(collection_lexical_fetch_k, max(1, collection["count"])),
+                    **lexical_kwargs,
                 ),
                 collection,
                 locale_codes,
@@ -1740,12 +1763,21 @@ def run_rag_pipeline(
         if seed is None:
             for collection in collections:
                 try:
+                    scope_metadata_filter = combine_metadata_filters(
+                        metadata_filter,
+                        {"work": {"$in": works}},
+                    )
+                    scope_kwargs: dict[str, Any] = {}
+                    if scope_metadata_filter:
+                        scope_kwargs["where"] = scope_metadata_filter
+                    if document_filter:
+                        scope_kwargs["where_document"] = document_filter
                     scoped_rows = _scope_rag_candidates(
                         store.lexical_search(
                             collection["name"],
                             scoped_query,
                             min(4, max(1, int(collection.get("count") or 1))),
-                            {"work": {"$in": works}},
+                            **scope_kwargs,
                         ),
                         collection,
                         set(
@@ -1887,6 +1919,7 @@ def run_rag_pipeline(
         )),
             "retrieval_skipped": bool(request.skip_retrieval),
             "selected_evidence_count": len(selected_candidates),
+            "filter_plan": filter_detail,
             "routes": [
                 {
                     "collection": item["name"],
@@ -2303,6 +2336,7 @@ def run_rag_pipeline(
         "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
         "skip_retrieval": request.skip_retrieval,
         "selected_evidence_count": len(selected_candidates),
+        "filter_plan": filter_detail,
         "explicit_scope_groups": explicit_scope_seed_detail,
         "explicit_scope_seed_count": len(explicit_scope_seed_ids),
         "response_language": request.response_language,
