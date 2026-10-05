@@ -28,6 +28,7 @@ import {
 import { decompressUrlState } from "./urlState";
 import { toast } from "../composables/notifications";
 import { createUpdateSearchQuery } from "./searchQuery";
+import { filterOpsForKind, type FilterFieldKind } from "./searchFilterSchema";
 
 // The Search workspace: building the results, facets and columns the Search view shows, and the commands it sends
 // (scope, query, filters, sort, paging, selection, running a search). Moved verbatim from the legacy runtime; the
@@ -53,7 +54,6 @@ type Helper =
   | "dbSearchFilterDescriptors"
   | "dbSearchWhere"
   | "evidenceIsSelected"
-  | "filterOpsForField"
   | "getTableColumns"
   | "hasCapability"
   | "isResearcher"
@@ -107,7 +107,6 @@ export function createSearchWorkspace(deps: Deps) {
     dbSearchFilterDescriptors,
     dbSearchWhere,
     evidenceIsSelected,
-    filterOpsForField,
     getTableColumns,
     hasCapability,
     isResearcher,
@@ -539,7 +538,14 @@ export function createSearchWorkspace(deps: Deps) {
     persistPrefs();
     syncUrl({ replace: true });
   }
-  function addSearchAdvancedFilter({ field = "", op = "eq", value = "" } = {}) {
+  function addSearchAdvancedFilter(
+    { field = "", op = "eq", value = "", kind = "text" }: {
+      field?: string;
+      op?: string;
+      value?: string;
+      kind?: FilterFieldKind;
+    } = {},
+  ) {
     field = String(field || "");
     value = String(value ?? "").trim();
     if (!field) return;
@@ -552,9 +558,7 @@ export function createSearchWorkspace(deps: Deps) {
       state.searchDatabaseRan = false;
       state.storeSearchError = "";
     } else {
-      const nextOp = filterOpsForField(field).some(([candidate]: Any) => candidate === op)
-        ? op
-        : "eq";
+      const nextOp = filterOpsForKind(kind).some(([candidate]) => candidate === op) ? op : "eq";
       if (!["empty", "notempty"].includes(nextOp) && !value) return;
       state.globalFilters = [
         ...(state.globalFilters || []),
