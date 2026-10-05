@@ -22,6 +22,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import ResearchThreadBrowser from "../components/research/ResearchThreadBrowser.vue";
+import type { ResearchTurn } from "../types/researchThreads";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
@@ -48,6 +50,32 @@ import { followResource } from "../realtime/follow";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 
 const route = useRoute();
+const threadBrowserOpen = ref(false);
+const newQuestionRequested = ref(false);
+const currentThreadId = computed(() => String(route.query.thread || ""));
+watch(
+  currentThreadId,
+  (id) => {
+    if (id) threadBrowserOpen.value = true;
+  },
+  { immediate: true },
+);
+async function selectThread(id: string) {
+  await router.push({ path: "/rag", query: { thread: id } });
+}
+async function openThreadTurn(turn: ResearchTurn) {
+  if (turn.job_id)
+    await router.push({ path: "/rag", query: { thread: turn.thread_id, job: turn.job_id } });
+}
+async function newThread() {
+  newQuestionRequested.value = true;
+  await router.push({ path: "/rag" });
+  activeJob.value = null;
+  prompt.value = "";
+  instructions.value = "";
+  await nextTick();
+  document.getElementById("researchQuestion")?.focus();
+}
 function evidenceTarget(index: number) {
   const item = activeResult.value?.evidence?.[index];
   const recordId = String(item?.record?.record_id || "").trim();
@@ -195,6 +223,7 @@ const canConfigureResearch = computed(() =>
 );
 const canGrade = computed(() => auth.isAdmin);
 const runDisabledReason = computed(() => {
+  if (currentThreadId.value) return i18n.t("research.thread_context_pending");
   if (!workspace.value?.can_run || !auth.can("rag.run")) return i18n.t("permissions.rag_denied");
   if (!prompt.value.trim()) return i18n.t("research.prompt_required");
   if (!profiles.value.length) return i18n.t("research.no_profile_configured");
@@ -442,6 +471,7 @@ async function runResearch() {
   answerLoading.value = false;
   answerError.value = "";
   starting.value = true;
+  newQuestionRequested.value = false;
   try {
     persistDraft();
     const job = (await researchActions.startResearchRun({
@@ -576,7 +606,7 @@ async function refreshRuns() {
     const refreshed = (await researchActions.refreshResearchJobs()) as ResearchJob[];
     if (disposed || request !== runsRequest || !isNativeResearch.value) return;
     jobs.value = refreshed;
-    if (!activeJob.value) {
+    if (!activeJob.value && !currentThreadId.value && !newQuestionRequested.value) {
       const candidate =
         refreshed.find((job) => ["queued", "running", "cancelling"].includes(job.status)) ||
         refreshed.find((job) => job.status === "completed");
@@ -679,7 +709,8 @@ async function gradeAnswer() {
 }
 function prepareRerun() {
   if (!activeJob.value) return;
-  if (route.query.job) void router.replace({ path: "/rag" });
+  newQuestionRequested.value = true;
+  if (route.query.job || currentThreadId.value) void router.replace({ path: "/rag" });
   const next = researchActions.prepareResearchRerun(activeJob.value) as ResearchConfig;
   config.value = { ...next };
   runPipelineOverrides.value = next.run_pipeline_overrides || null;
@@ -741,10 +772,36 @@ watch(
   { immediate: true },
 );
 watch(
-  () => [route.name, route.query.job],
+  () => [route.name, route.query.job, route.query.thread],
   ([name]) => {
+    ++answerRequest;
+    activeJob.value = null;
+    answerLoading.value = false;
+    answerError.value = "";
     stopJobFollowers();
     if (name === "rag") void loadWorkspace(true);
+  },
+);
+// Account/capability changes invalidate every pending read and visible research artifact.
+watch(
+  () => [auth.user?.id, auth.user?.role, auth.can("rag.run")],
+  () => {
+    ++workspaceRequest;
+    ++answerRequest;
+    ++runsRequest;
+    ++pipelinesRequest;
+    activeJob.value = null;
+    jobs.value = [];
+    sessionJobIds.value = new Set();
+    workspace.value = null;
+    config.value = null;
+    prompt.value = "";
+    instructions.value = "";
+    answerError.value = "";
+    answerLoading.value = false;
+    stopJobFollowers();
+    researchDraft.clear();
+    if (auth.user && auth.can("rag.run") && isNativeResearch.value) void loadWorkspace(true);
   },
 );
 onMounted(() => {
@@ -819,6 +876,25 @@ onBeforeUnmount(() => {
       @action="openDatabaseCreationFromResearch()"
     />
     <template v-else>
+      <button
+        v-if="auth.can('rag.run')"
+        type="button"
+        class="btn"
+        :aria-expanded="threadBrowserOpen"
+        aria-controls="research-thread-browser"
+        @click="threadBrowserOpen = !threadBrowserOpen"
+      >
+        {{ i18n.t("research.threads_title") }}
+      </button>
+      <div v-if="auth.can('rag.run') && threadBrowserOpen" id="research-thread-browser">
+        <ResearchThreadBrowser
+          :thread-id="currentThreadId"
+          :job-id="String(route.query.job || '')"
+          @select="selectThread"
+          @open="openThreadTurn"
+          @new="newThread"
+        />
+      </div>
       <ResearchComposer
         v-model:prompt="prompt"
         v-model:instructions="instructions"

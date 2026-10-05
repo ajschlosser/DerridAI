@@ -9597,5 +9597,19 @@
   "schemas.linguistic_guidance": "Linguistic guidance",
   "schemas.linguistic_guidance_help": "Optional POS and named-entity hints narrow which spans DerridAI should consider for this field.",
   "schemas.new_group_name": "Group {number}",
-  "schemas.preview_sample_text": "In this passage the document author distinguishes an institutional practice from simple memory while qualifying the claim: the practice is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored."
+  "schemas.preview_sample_text": "In this passage the document author distinguishes an institutional practice from simple memory while qualifying the claim: the practice is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored.",
+  "research.threads_title": "Research threads",
+  "research.thread_new": "New question",
+  "research.thread_turn_count": "Questions: {count}",
+  "research.threads_empty": "No research threads on this page. Saved responses remain available in the Response Library.",
+  "research.threads_previous": "Previous threads",
+  "research.threads_next": "Next threads",
+  "research.thread_open_run": "Open answer and evidence",
+  "research.thread_run_unavailable": "The run is unavailable. This question remains in thread history.",
+  "research.thread_context_pending": "Follow-up questions will be available when thread context is implemented. Start a new question to run independent research.",
+  "research.thread_status_queued": "Queued",
+  "research.thread_status_running": "Running",
+  "research.thread_status_completed": "Completed",
+  "research.thread_status_failed": "Failed",
+  "research.thread_status_cancelled": "Cancelled"
 }

@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   runs: vi.fn(),
   pipelines: vi.fn(),
   job: vi.fn(),
+  auth: { user: { id: 1, role: "researcher" }, allowed: true },
   route: { name: "rag", query: {} as Record<string, string> },
 }));
 vi.mock("vue-router", () => ({
@@ -32,7 +33,16 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 vi.mock("../../src/stores/auth", () => ({
-  useAuthStore: () => ({ can: () => true, isAdmin: false }),
+  useAuthStore: () => {
+    const state = reactive(mocks.auth);
+    return {
+      get user() {
+        return state.user;
+      },
+      can: () => state.allowed,
+      isAdmin: false,
+    };
+  },
 }));
 vi.mock("../../src/stores/i18n", () => ({
   useI18nStore: () => ({ t: (key: string) => key, tf: (key: string) => key, locale: "en-US" }),
@@ -103,6 +113,7 @@ function render() {
       stubs: {
         UiPageHeader: { template: '<header><h1 id="research-page-title">Research</h1></header>' },
         UiLoadingState: { props: ["label"], template: '<div role="status">{{ label }}</div>' },
+        ResearchThreadBrowser: true,
         ResearchComposer: Composer,
         ResearchResultPresentation: Result,
         ResearchPipelineBar: true,
@@ -117,6 +128,8 @@ function render() {
 }
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.auth.allowed = true;
+  mocks.auth.user = { id: 1, role: "researcher" };
   reactive(mocks.route).name = "rag";
   reactive(mocks.route).query = {};
   mocks.snapshot.mockResolvedValue(snapshot());
@@ -272,4 +285,45 @@ describe("Research progressive reads", () => {
     expect(w.get(".answer").text()).toContain("Answer B");
     expect(w.get(".answer").text()).not.toContain("Answer A");
   });
+});
+
+describe("Research thread URL state", () => {
+  it("blocks follow-up submission until advisory context exists", async () => {
+    mocks.route.query = { thread: "thread-a" };
+    const w = render();
+    await flushPromises();
+    expect(w.get(".run").attributes("disabled")).toBeDefined();
+    expect(w.findComponent({ name: "ResearchThreadBrowser" }).exists()).toBe(true);
+    expect(mocks.job).not.toHaveBeenCalled();
+  });
+  it("restores the URL's run and discards a late answer from the previous thread", async () => {
+    mocks.route.query = { thread: "thread-a", job: "a" };
+    const pending = deferred<any>();
+    mocks.job
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValue({ id: "b", status: "completed", result: { answer: "Answer B" } });
+    const w = render();
+    await flushPromises();
+    reactive(mocks.route).query = { thread: "thread-b", job: "b" };
+    await flushPromises();
+    pending.resolve({ id: "a", status: "completed", result: { answer: "Answer A" } });
+    await flushPromises();
+    expect(w.get(".answer").text()).toContain("Answer B");
+    expect(w.get(".answer").text()).not.toContain("Answer A");
+  });
+});
+
+it("clears the selected thread answer when Research access is revoked", async () => {
+  mocks.route.query = { thread: "thread-a", job: "a" };
+  mocks.job.mockResolvedValue({
+    id: "a",
+    status: "completed",
+    result: { answer: "Private answer" },
+  });
+  const w = render();
+  await flushPromises();
+  expect(w.get(".answer").text()).toContain("Private answer");
+  reactive(mocks.auth).allowed = false;
+  await flushPromises();
+  expect(w.text()).not.toContain("Private answer");
 });

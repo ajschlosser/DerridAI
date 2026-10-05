@@ -204,3 +204,7 @@ System Data exposes administrative inspection of application/system datasets, in
 - The realtime broker and its replay ring are in-memory in that one process; a restart forgets events and clients resynchronize from REST.
 - `chroma_store.py`, `corpus_builder.py`, and some frontend compatibility/style surfaces remain large; refactor them only along verified domain seams with regression coverage.
 - Historical versioned design documents describe the release that created them, not the current architecture.
+
+## Research thread navigation checkpoint
+
+`research_thread_store.py` persists owner-scoped thread and turn identity in system SQLite; response-cache artifacts and process-local jobs remain separate. The frontend `ResearchThreadBrowser` reads bounded summaries and ordered turn shells through `researchThreadsApi` and `useDataQuery("research_threads")`. The existing generic data bridge invalidates these reads on thread events; no thread-specific polling loop is added. `ResearchView` owns URL selection and opens the authorized job through its existing result/evidence path. A missing job leaves its turn shell visible. Contextual follow-up submission and response-cache migration are not implemented by this navigation checkpoint.
