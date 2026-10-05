@@ -73,7 +73,7 @@ from .metadata_schema import (
     response_model_for,
 )
 from .metadata_schema_store import SchemaNotFound
-from .rag import _citation_strings
+from .corpus_citations import _citation_strings
 
 
 def _validated_work_metadata(schema: MetadataSchema, raw: Any) -> dict[str, Any]:
