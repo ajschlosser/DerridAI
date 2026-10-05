@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Metadata enrichment routing progress
 
-Updated: 2026-10-04. Branch: `task/metadata-candidate-routing`.
+Updated: 2026-10-04. Branch: `task/metadata-routing-continuation`.
 
 This is the authoritative resume point for the revised Pipeline Studio candidate-routing implementation plan. Historical metadata enrichment now executes through the generic graph engine. Adaptive routing is not enabled; no latency improvement is claimed.
 
@@ -171,3 +171,12 @@ Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/
 - Integrated concurrent remote commit `da71a8ad`, preserving its researcher text-policy wiring repair and UTF-8 copyright cleanup alongside the routing checkpoint. Resolved the append-only progress conflict by retaining both checkpoint sections. Post-integration validation: 261 focused tests passed, including the researcher text-policy repair; full backend Ruff and touched-test lint passed. Earlier full backend mypy remains applicable because the integrated Python changes only restore copyright text. Full preflight/regression limitations above remain unresolved.
 
 - PR #520 merged the earlier observation checkpoint before this routing checkpoint was pushed. Refreshed and merged master `a6020e9c`, including metadata failure recovery and the next runtime-retirement step. Post-refresh validation: 277 focused tests passed (including failure recovery/provider health), full backend mypy passed for 272 files, and full backend Ruff passed. The follow-up diff remains limited to routing/collection context, routing tests and this progress document. Draft follow-up PR #524 tracks this unmerged routing checkpoint: https://github.com/ajschlosser/DerridAI/pull/524. Refreshed fail-fast preflight again passed backend lint/typechecking/syntax and remained blocked at the documented chromadb collection error and formatting/artifact gates.
+
+## Exact-memory lookup consolidation checkpoint (2026-10-04)
+
+- PR #524 is merged; continuation starts from master `8d572f7d` in an isolated worktree. Experimental routing remains server-only and unregistered. Adaptive production routing is still disabled.
+- Historical task preparation now snapshots each exact adjudication key once per call. Keys retain field, cardinality and schema-version distinctions; Record identity and prompt text are fixed within the call. Cached misses avoid repeated reads, values are copied at acquisition and delivery, and subsequent preparation reads fresh memory. Prefill and advisory prompt consumers use the same snapshot without transferring historical evidence or authority.
+- Existing lookup counters now measure actual storage reads; matching schema-version preparation drops from two reads per field to one, with zero duplicate reads. Distinct schema versions still require separate reads. No provider, end-to-end latency, calibrated resolution or reviewer-quality improvement is claimed.
+- Baseline benchmark suite passed 3 tests before edits. Updated suite passed 4 tests, including prompt/prefill parity, miss caching, value isolation, fresh reads and version-key separation. Expanded validation: 241 passed, 1 failed in the concurrent JSONL write test with Windows access denial. Isolated reruns of that test passed on both merged baseline and this branch; the expanded run is not reported as green. Targeted Ruff and mypy passed. Broader checks and preflight are recorded below.
+- No dead code was found in touched files. No unrelated bug fix or public API change is included.
+- Next: integrate the candidate-routing adapter with explicit server-owned reviewer/semantic-support gates and consolidate remaining retrieval sources; select a researcher-approved private case/provider before real-provider benchmarking. Exact mention occurrence alone must not enable adaptive production routing.
