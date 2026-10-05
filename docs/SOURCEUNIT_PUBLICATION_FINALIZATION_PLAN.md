@@ -269,7 +269,6 @@ Legend: checked means implemented on the feature branch; unchecked means still p
 - [ ] Rebase or merge latest `master` if the PR base moves materially before merge.
 - [ ] Merge PR #532.
 
-
 ## Completion definition
 
 This work is complete when **Use suggestions as-is** can publish a source-conserving corpus whose current topology is expressed through SourceUnits without forcing the reviewer to manually clear stale legacy topology/text-fidelity errors, while the same path still refuses a corpus with genuine missing, duplicated, invented, or reordered source material.
