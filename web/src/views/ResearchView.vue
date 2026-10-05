@@ -632,7 +632,15 @@ function schedulePoll(force = false) {
     if (jobFollowers.has(id)) continue;
     jobFollowers.set(
       id,
-      followResource({ topic: `job:${id}`, refresh: refreshLiveJobs, minIntervalMs: 1000 }),
+      followResource({
+        topic: `job:${id}`,
+        refresh: refreshLiveJobs,
+        // Token events are consumed by useResearchDraft. Refreshing the entire
+        // job snapshot for each token burst adds REST and reactive churn without
+        // making the authoritative job state any fresher.
+        onEvent: (event) => event.type !== "llm.token",
+        minIntervalMs: 1000,
+      }),
     );
   }
 }
