@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { esc } from "./html";
 import { allRows } from "./corpusCache";
 import { jobsState } from "../state/jobsState";
 import { getNavItems } from "./navItems";
@@ -35,24 +36,41 @@ const { selectedEvidenceEntries } = evidenceSelection;
 
 export function systemCardHtml() {
   const health = state.health;
+  const row = (name: string, dot: string, label: string) =>
+    `<div class="system-row"><span>${name}</span><span class="system-value"><i class="status-dot${dot ? ` ${dot}` : ""}"></i>${esc(label)}</span></div>`;
   if (!health) {
-    return `<div class="system-row"><span>API</span><span class="system-value"><i class="status-dot warn"></i>Checking</span></div>
-      <div class="system-row"><span>Chroma</span><span class="system-value"><i class="status-dot"></i>Unknown</span></div>
-      <div class="system-row"><span>Ollama</span><span class="system-value"><i class="status-dot"></i>Unknown</span></div>`;
+    const unknown = tr("runtime.unknown");
+    return [
+      row("API", "warn", tr("runtime.checking")),
+      row("Chroma", "", unknown),
+      row("Ollama", "", unknown),
+    ].join("\n      ");
   }
   const apiOk = health?.ok === true;
   const chromaOk = health?.chroma?.available === true;
   const ollamaOk = (state.llmStatus || health?.ollama)?.available === true;
-  return `<div class="system-row"><span>API</span><span class="system-value"><i class="status-dot ${apiOk ? "ok" : "bad"}"></i>${apiOk ? "Online" : "Offline"}</span></div>
-    <div class="system-row"><span>Chroma</span><span class="system-value"><i class="status-dot ${chromaOk ? "ok" : apiOk ? "warn" : "bad"}"></i>${chromaOk ? "Ready" : apiOk ? "Unavailable" : "Unknown"}</span></div>
-    <div class="system-row"><span>Ollama</span><span class="system-value"><i class="status-dot ${ollamaOk ? "ok" : apiOk ? "warn" : "bad"}"></i>${ollamaOk ? "Ready" : apiOk ? "Unavailable" : "Unknown"}</span></div>`;
+  const service = (ok: boolean) => ({
+    dot: ok ? "ok" : apiOk ? "warn" : "bad",
+    label: tr(ok ? "runtime.ready" : apiOk ? "runtime.unavailable" : "runtime.unknown"),
+  });
+  const chroma = service(chromaOk);
+  const ollama = service(ollamaOk);
+  return [
+    row("API", apiOk ? "ok" : "bad", tr(apiOk ? "runtime.online" : "runtime.offline")),
+    row("Chroma", chroma.dot, chroma.label),
+    row("Ollama", ollama.dot, ollama.label),
+  ].join("\n    ");
 }
 
 function currentContext() {
   const f = activeFile(),
     r = selectedRecord();
   if (state.view === "record" && r)
-    return { kicker: r.record_id || "Record", title: r.work || "Record", meta: f?.name || "" };
+    return {
+      kicker: r.record_id || tr("runtime.record"),
+      title: r.work || tr("runtime.record"),
+      meta: f?.name || "",
+    };
   const map: Record<string, string[]> = {
     home: [
       "Overview",
@@ -62,7 +80,9 @@ function currentContext() {
     list: [
       "Corpora",
       f?.name || "Records",
-      f ? `${f.records.length.toLocaleString()} ${tr("dynamic.records")}` : "Open a JSONL file",
+      f
+        ? `${f.records.length.toLocaleString()} ${tr("dynamic.records")}`
+        : tr("runtime.open_jsonl"),
     ],
     works: ["Corpora", "Works", "Cross-file work overview"],
     global: ["Corpora", "Global Search", "Search and filter every loaded record"],
@@ -76,7 +96,7 @@ function currentContext() {
       "Corpus Management",
       state.pdf.title || "Corpus Builder",
       state.pdf.name
-        ? `${state.pdf.name} · page ${state.pdf.page}`
+        ? `${state.pdf.name} · ${tr("record.pdf_page").replace("{page}", String(state.pdf.page))}`
         : "Build, monitor, and review auditable corpus records",
     ],
     compare: ["Corpora", "Record Comparison", "Inspect field and text differences"],

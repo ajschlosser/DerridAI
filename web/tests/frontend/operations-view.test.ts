@@ -28,7 +28,7 @@ vi.mock("../../src/domain/jobsActions", () => ({ refreshJobs: calls.refreshJobs 
 vi.mock("../../src/domain/operationsPanelHooks", () => ({
   mountOperationsPanelHost: calls.mountOperationsPanelHost,
 }));
-vi.mock("../../src/runtime/operationsPanelHost", () => ({
+vi.mock("../../src/domain/operationsPanelHost", () => ({
   unmountOperationsPanel: calls.unmountOperationsPanel,
 }));
 

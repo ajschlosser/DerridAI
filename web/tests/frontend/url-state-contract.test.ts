@@ -19,7 +19,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNavigation } from "../../src/domain/navigation";
 import { compressUrlState } from "../../src/domain/urlState";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // Shareable links outlive the builds that made them, so these pin the URL shapes the runtime reads and writes. They are
 // the safety net for replacing urlFromState/applyUrlState with route-query handling.

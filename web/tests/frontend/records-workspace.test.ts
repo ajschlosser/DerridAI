@@ -19,7 +19,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRecordsWorkspace } from "../../src/domain/recordsWorkspace";
 import { TABLE_DEFAULTS } from "../../src/domain/runtimeConstants";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { createListState, listState } from "../../src/state/workspaceState";
 
 // The Records workspace commands set per-file fields on the runtime state, save preferences and sync the URL. The

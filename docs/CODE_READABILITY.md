@@ -80,7 +80,7 @@ Readability refactors are behavior-preserving unless the change explicitly inclu
 ## Known traps
 
 - `api/app/corpus_builder.py`, `api/app/chroma_store.py`, and several compatibility/frontend surfaces are still large. Add new logic to an established focused module when one exists; decompose large files only along tested domain seams.
-- `web/src/runtime/registrations.js` and `domain/appBootstrap.ts` are the compatibility boundary, not the preferred home for new frontend behavior.
+- `domain/appBootstrap.ts` (with `domain/jobsUiComposition.ts`) is the compatibility boundary, not the preferred home for new frontend behavior.
 - Chroma collections, embeddings, Document Intelligence output, semantic-content projections, and caches are rebuildable projections. Reviewed Records, revisions, assertions, decisions, evidence, and publication state are not.
 - `FieldAssertion` and related provenance structures carry authority that ordinary dictionary fields do not. Do not replace them with hard-coded field-specific shortcuts.
 - GraphQL is read-only. REST owns commands/mutations; WebSocket messages are invalidation/progress signals, not canonical state.

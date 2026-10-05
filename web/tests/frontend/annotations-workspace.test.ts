@@ -18,7 +18,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { createAnnotationsWorkspace } from "../../src/domain/annotationsWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { annotationsState, createAnnotationsState } from "../../src/state/workspaceState";
 
 vi.mock("../../src/composables/notifications", () => ({ toast: vi.fn() }));

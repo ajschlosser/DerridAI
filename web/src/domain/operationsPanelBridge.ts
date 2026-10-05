@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { mountOperationsPanel } from "../runtime/operationsPanelHost";
+import { mountOperationsPanel } from "./operationsPanelHost";
 import { subscribeToJobChanges, touchJobs } from "../state/jobsState";
 import { esc, icon } from "./html";
 import { openMessageDialog } from "../composables/messageDialog";
