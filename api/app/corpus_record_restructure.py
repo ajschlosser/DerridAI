@@ -237,6 +237,219 @@ def source_unit_root_block_ids(
     return roots
 
 
+def _active_descendant_source_unit_ids(
+    unit_id: str,
+    units: list[dict[str, Any]],
+) -> list[str]:
+    """Return active descendants of a retired unit in persisted topology order."""
+    by_id = {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+    children: dict[str, list[str]] = {}
+    for unit in units:
+        child_id = str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+        if not child_id:
+            continue
+        for parent in unit.get("parent_unit_ids") or []:
+            children.setdefault(str(parent), []).append(child_id)
+
+    active = active_source_unit_map(units)
+    seen: set[str] = set()
+    resolved: list[str] = []
+
+    def visit(current: str) -> None:
+        if current in seen:
+            return
+        seen.add(current)
+        if current in active:
+            resolved.append(current)
+            return
+        unit = by_id.get(current) or {}
+        successors = [
+            str(value)
+            for value in unit.get("successor_unit_ids") or []
+            if str(value)
+        ]
+        candidates = successors or children.get(current, [])
+        for candidate in candidates:
+            visit(candidate)
+
+    visit(str(unit_id))
+    return list(dict.fromkeys(resolved))
+
+
+def _unique_contiguous_source_unit_match(
+    unit_ids: list[str],
+    active: dict[str, dict[str, Any]],
+    target_text: str,
+) -> list[str]:
+    """Return one exact contiguous SourceUnit span matching target text, or none.
+
+    Matching is whitespace-insensitive only. No fuzzy or semantic matching is
+    permitted because autonomous publication finalization must not invent source
+    ownership.
+    """
+    target = _squash(target_text)
+    if not target:
+        return []
+    matches: list[list[str]] = []
+    for start in range(len(unit_ids)):
+        combined = ""
+        for end in range(start, len(unit_ids)):
+            combined += str((active.get(unit_ids[end]) or {}).get("text") or "")
+            squashed = _squash(combined)
+            if squashed == target:
+                matches.append(unit_ids[start : end + 1])
+                break
+            if len(squashed) > len(target):
+                break
+    return matches[0] if len(matches) == 1 else []
+
+
+def reconcile_recoverable_source_unit_references(
+    records: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+    *,
+    transaction_id: str,
+) -> int:
+    """Repair stale SourceUnit references only when lineage proves the replacement.
+
+    Retired SourceUnits are never deleted or flattened. A Record may move from a
+    retired unit to its active descendants when the descendant text either matches
+    the Record's preserved extraction exactly, matches its reviewed text exactly,
+    or conserves the retired unit text exactly. Every repair is appended to the
+    Record as an auditable topology-reconciliation event.
+
+    Ambiguous mappings are intentionally left untouched so publication validation
+    can surface them instead of guessing.
+    """
+    active = active_source_unit_map(units)
+    by_id = {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+    proposals: dict[str, list[str]] = {}
+    bases: dict[str, str] = {}
+
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        prior = [
+            str(value)
+            for value in record.get("source_unit_ids") or []
+            if str(value)
+        ]
+        if not record_id or not prior:
+            continue
+        replacement: list[str] = []
+        changed = False
+        basis = "active_lineage"
+        for unit_id in prior:
+            if unit_id in active:
+                replacement.append(unit_id)
+                continue
+            if unit_id not in by_id:
+                replacement.append(unit_id)
+                continue
+            descendants = _active_descendant_source_unit_ids(unit_id, units)
+            if not descendants:
+                replacement.append(unit_id)
+                continue
+
+            extracted_match = _unique_contiguous_source_unit_match(
+                descendants,
+                active,
+                str(record.get("source_extracted_text") or ""),
+            )
+            reviewed_match = _unique_contiguous_source_unit_match(
+                descendants,
+                active,
+                str(record.get("text") or ""),
+            )
+            if extracted_match:
+                selected = extracted_match
+                basis = "preserved_extraction_exact"
+            elif reviewed_match:
+                selected = reviewed_match
+                basis = "reviewed_text_exact"
+            else:
+                before = str((by_id.get(unit_id) or {}).get("text") or "")
+                after = JOIN.join(
+                    str((active.get(value) or {}).get("text") or "")
+                    for value in descendants
+                )
+                if _squash(before) != _squash(after):
+                    replacement.append(unit_id)
+                    continue
+                selected = descendants
+                basis = "lineage_text_conservation"
+            replacement.extend(selected)
+            changed = True
+
+        replacement = list(dict.fromkeys(replacement))
+        if changed and replacement != prior:
+            proposals[record_id] = replacement
+            bases[record_id] = basis
+
+    if not proposals:
+        return 0
+
+    # Do not create or preserve duplicate ownership through an automatic repair.
+    final_owners: dict[str, list[str]] = {}
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        ids = proposals.get(
+            record_id,
+            [
+                str(value)
+                for value in record.get("source_unit_ids") or []
+                if str(value)
+            ],
+        )
+        for unit_id in ids:
+            final_owners.setdefault(unit_id, []).append(record_id)
+    conflicts = {
+        record_id
+        for owners in final_owners.values()
+        if len(set(owners)) > 1
+        for record_id in owners
+    }
+
+    changed_records = 0
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        replacement = proposals.get(record_id)
+        if not replacement or record_id in conflicts:
+            continue
+        prior = [str(value) for value in record.get("source_unit_ids") or [] if str(value)]
+        history = list(record.get("source_topology_reconciliation_history") or [])
+        if history and str(history[-1].get("transaction_id") or "") == transaction_id:
+            continue
+        history.append(
+            {
+                "transaction_id": transaction_id,
+                "at": iso_now(),
+                "method": "deterministic_active_descendant_reconciliation",
+                "basis": bases.get(record_id, "active_lineage"),
+                "prior_source_unit_ids": prior,
+                "source_unit_ids": replacement,
+                "prior_source_text_hash": source_unit_text_hash(
+                    JOIN.join(str((by_id.get(value) or {}).get("text") or "") for value in prior)
+                ),
+                "reconciled_source_text_hash": source_unit_text_hash(
+                    JOIN.join(str((active.get(value) or {}).get("text") or "") for value in replacement)
+                ),
+            }
+        )
+        record["source_topology_reconciliation_history"] = history[-50:]
+        record["source_unit_ids"] = replacement
+        changed_records += 1
+
+    return changed_records
+
+
 def synchronize_record_source_projection(
     records: list[dict[str, Any]],
     units: list[dict[str, Any]],
