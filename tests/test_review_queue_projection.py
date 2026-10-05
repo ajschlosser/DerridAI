@@ -1221,3 +1221,20 @@ def _selected_read_benchmark(tmp_path, monkeypatch, count, build_count, concurre
     }
     with Path(os.environ["CORPUS_READ_BENCHMARK"]).open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(result) + "\n")
+
+
+def test_review_facets_discover_custom_metadata_without_legacy_whitelist():
+    records = [
+        {
+            "record_id": "r-custom-facet",
+            "record_revision": 1,
+            "text": "A passage.",
+            "conceptual_tension": "presence / absence",
+            "motifs": ["trace", "difference"],
+        }
+    ]
+
+    facets = queue.observed_metadata_values(records)
+
+    assert facets["conceptual_tension"] == ["presence / absence"]
+    assert facets["motifs"] == ["difference", "trace"]

@@ -559,6 +559,21 @@ class MetadataSchema(BaseModel):
         field = next((item for item in self.fields if item.name == name), None)
         return field.semantic_compatibility_id if field else None
 
+    def fields_for_semantic_compatibility_id(self, semantic_id: str) -> list[str]:
+        """Return storage names carrying one stable scholarly semantic role.
+
+        Callers that need specialized behavior should resolve through this method
+        instead of assuming the built-in schema's mutable field names.
+        """
+        semantic_id = str(semantic_id or "").strip()
+        if not semantic_id:
+            return []
+        return [
+            name
+            for name in self.field_names()
+            if self.semantic_compatibility_id(name) == semantic_id
+        ]
+
     def field_identity_map(self) -> dict[str, str]:
         return {name: self.field_id(name) for name in self.field_names()}
 
