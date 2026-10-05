@@ -52,6 +52,42 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("research workspace commands", () => {
+  it("characterizes first-turn submission without history, retries, or settings changes", async () => {
+    const api = vi.fn(async (_path: string, _options: unknown) => ({
+      id: "first-job",
+      status: "queued",
+      thread_id: "new-thread",
+      turn_id: "new-turn",
+    }));
+    const { workspace, state } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "pinned", record_id: "r1" }],
+      selectedEvidencePayload: () => [{ record_id: "r1", collection: "corpus" }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+    const job = await workspace.startResearchRun({
+      prompt: "What is NOT asserted?",
+      instructions: "Retain qualification",
+    });
+    expect(api).toHaveBeenCalledOnce();
+    expect(api.mock.calls[0][0]).toBe("/api/jobs/rag");
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body).toMatchObject({
+      prompt: "What is NOT asserted?",
+      instructions: "Retain qualification",
+      skip_retrieval: true,
+      selected_evidence: [{ record_id: "r1", collection: "corpus" }],
+    });
+    expect(body).not.toHaveProperty("thread_context");
+    expect(body).not.toHaveProperty("prior_answers");
+    expect(body).not.toHaveProperty("retry_turn_id");
+    expect(job).toMatchObject({ thread_id: "new-thread", turn_id: "new-turn" });
+    expect(state.ragConfig.k).toBe(64);
+  });
+
   it("retries through the existing run validation and narrow turn endpoint", async () => {
     const api = vi.fn(async (_path: string, _options: unknown) => ({
       id: "new-job",

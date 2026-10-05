@@ -86,6 +86,7 @@ beforeEach(() => {
   };
   useI18nStore().dictionary = {
     "research.threads_title": "Research threads",
+    "research.thread_inspect_result": "Inspect this answer and its evidence",
     "research.thread_new": "New question",
     "research.thread_open_run": "Open answer",
     "ui.retry": "Retry",
@@ -121,6 +122,79 @@ function browser(id = "a") {
   return wrapper;
 }
 describe("Research thread shell", () => {
+  it("keeps per-turn evidence inspection local and emits the exact source target", async () => {
+    const detail = thread("a");
+    detail.turns.push({ ...thread("b").turns[0], thread_id: "a", ordinal: 2 });
+    api.get.mockResolvedValue(detail);
+    jobs.read.mockImplementation(async (path: string) => ({
+      id: path.split("/").pop(),
+      status: "completed",
+      result: {
+        answer: "Supported [[E0]]",
+        evidence: [0, 1].map((index) => ({
+          evidence_id: `E${index}`,
+          collection: "corpus",
+          inline_citation: `Citation ${path} ${index}`,
+          record: {
+            record_id: `${path}-${index}`,
+            text: `Exact passage ${path} ${index}`,
+            speaker: "Author",
+          },
+        })),
+      },
+    }));
+    const wrapper = browser();
+    await flushPromises();
+    const turns = wrapper.findAll("article.research-thread-turn");
+    const articles = turns.length
+      ? turns
+      : wrapper
+          .findAll("article[aria-labelledby]")
+          .filter((item) => item.find(".thread-answer-text").exists());
+    const first = articles[0],
+      second = articles[1];
+    await first.findAll(".research-evidence-index button")[1].trigger("click");
+    expect(first.find(".research-evidence-inspector").text()).toContain(
+      "Exact passage /api/jobs/job-a 1",
+    );
+    expect(second.find(".research-evidence-inspector").text()).toContain(
+      "Exact passage /api/jobs/job-b 0",
+    );
+    expect(first.find(".research-answer-actions").exists()).toBe(false);
+    expect(first.find("h5").exists()).toBe(true);
+    expect(first.find("aside").attributes("id")).not.toBe(second.find("aside").attributes("id"));
+    expect(first.find("aside").attributes("aria-label")).not.toBe(
+      second.find("aside").attributes("aria-label"),
+    );
+    await first.find(".research-evidence-links button").trigger("click");
+    expect(wrapper.emitted("openRecord")?.[0]?.[0]).toMatchObject({
+      collection: "corpus",
+      record: { record_id: "/api/jobs/job-a-1" },
+    });
+    expect(wrapper.emitted("selectEvidence")).toBeUndefined();
+  });
+  it("recovers a missing job through its exact turn result endpoint", async () => {
+    jobs.read.mockImplementation(async (path: string) => {
+      if (path.startsWith("/api/jobs/")) throw new ApiError("Unavailable", 404);
+      return {
+        id: "job-a",
+        status: "completed",
+        result: { answer: "Saved owned answer", evidence: [] },
+      };
+    });
+    const wrapper = browser();
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledWith("/api/research/threads/a/turns/a-1/result");
+    expect(wrapper.text()).toContain("Saved owned answer");
+  });
+  it("does not attempt saved-answer recovery after access revocation", async () => {
+    jobs.read.mockRejectedValue(new ApiError("Denied", 403));
+    const wrapper = browser();
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledOnce();
+    expect(wrapper.find(".thread-answer-text").exists()).toBe(false);
+  });
+
   it("offers in-place retry for failed/cancelled turns and blocks archived or active threads", async () => {
     const detail = thread("a");
     detail.turns[0].status = "failed";
@@ -167,7 +241,7 @@ describe("Research thread shell", () => {
     api.get.mockResolvedValue(detail);
     const wrapper = browser();
     await flushPromises();
-    const turns = wrapper.findAll("article");
+    const turns = wrapper.findAll("article[aria-labelledby]");
     expect(turns[0].text()).toContain("Answer /api/jobs/job-a");
     expect(turns[0].text()).toContain("Citation /api/jobs/job-a");
     expect(turns[0].text()).not.toContain("job-b");
@@ -208,9 +282,11 @@ describe("Research thread shell", () => {
     } as const;
     oldHandler(event);
     await flushPromises();
-    expect(wrapper.findAll("article")[0].text()).not.toContain("Unverified preview");
-    expect(wrapper.findAll("article")[1].text()).toContain("Unverified preview");
-    expect(wrapper.findAll("article")[1].text()).not.toContain("Citation");
+    expect(wrapper.findAll("article[aria-labelledby]")[0].text()).not.toContain(
+      "Unverified preview",
+    );
+    expect(wrapper.findAll("article[aria-labelledby]")[1].text()).toContain("Unverified preview");
+    expect(wrapper.findAll("article[aria-labelledby]")[1].text()).not.toContain("Citation");
     api.get.mockResolvedValue({
       ...detail,
       turns: detail.turns.map((turn) => ({ ...turn, status: "completed" })),
@@ -219,7 +295,9 @@ describe("Research thread shell", () => {
     await flushPromises();
     expect(stop).toHaveBeenCalled();
     expect(wrapper.text()).not.toContain("Unverified preview");
-    expect(wrapper.findAll("article")[1].text()).toContain("Answer /api/jobs/job-b");
+    expect(wrapper.findAll("article[aria-labelledby]")[1].text()).toContain(
+      "Answer /api/jobs/job-b",
+    );
     oldHandler(event);
     await flushPromises();
     expect(wrapper.text()).not.toContain("Unverified preview");
@@ -244,7 +322,10 @@ describe("Research thread shell", () => {
   it("opens the correct run without submitting historical answer content", async () => {
     const wrapper = browser();
     await flushPromises();
-    await wrapper.get("article button").trigger("click");
+    await wrapper
+      .findAll("article[aria-labelledby] button")
+      .find((item) => item.text() === "Open answer")!
+      .trigger("click");
     expect(wrapper.emitted("open")?.[0]).toEqual([thread("a").turns[0]]);
     expect(api.get).toHaveBeenCalledWith("a");
     expect(wrapper.find('[aria-current="true"]')).toBeTruthy();

@@ -282,3 +282,14 @@ def test_single_previous_policy_does_not_rank_or_read_older_artifacts(history):
         policy=ThreadContextPolicy(max_turns=1), rank_older=forbidden)
     assert calls == [turns[-1]["job_id"]]
     assert len(packet.items) == 2
+
+
+
+def test_first_question_never_reads_saved_history_or_ranks(tmp_path):
+    store = ResearchThreadStore(tmp_path / "first.sqlite3")
+    current, _ = store.append_turn(store.create_thread("alice")["thread_id"], "alice", "Original first question")
+    def forbidden(*_):
+        raise AssertionError("First question must not need historical artifacts or ranking")
+    packet = select_thread_context(store, current["turn_id"], "alice", forbidden,
+        read_saved=forbidden, rank_older=forbidden)
+    assert not packet.items and not packet.warnings

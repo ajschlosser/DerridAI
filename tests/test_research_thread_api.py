@@ -410,5 +410,5 @@ def test_first_turn_keeps_original_request_and_no_context_artifact_reads(store):
     assert turn["ordinal"] == 1 and turn["parent_turn_id"] is None
     def forbidden(*_):
         raise AssertionError("First question must not read/rank history")
-    packet = select_thread_context(store, turn["turn_id"], "alice", forbidden, read_saved=forbidden, rank_older=forbidden)
+    packet = select_thread_context(store, turn["turn_id"], "alice", forbidden)
     assert packet.snapshot()["items"] == [] and packet.snapshot()["character_count"] == 0

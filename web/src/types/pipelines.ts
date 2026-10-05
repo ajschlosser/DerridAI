@@ -274,6 +274,16 @@ export type PipelineRunTrace = {
   pipeline_version: number;
   resolved_pipeline: Record<string, unknown>;
   resolved_hash: string;
+  research_thread?: {
+    thread_id: string;
+    turn_id: string;
+    attempt: number;
+    context_version?: string | null;
+    context_strategy?: string | null;
+    ranking_model?: string | null;
+    selected_turn_ids: string[];
+    context_consumed: boolean;
+  } | null;
   owner?: string | null;
   status: string;
   started_at: string;

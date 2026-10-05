@@ -34,8 +34,18 @@ const props = withDefaults(
     provenance?: ResearchClaimProvenance | null;
     evidence?: ResearchResultEvidence[];
     refreshAuthoritative?: boolean;
+    nested?: boolean;
+    headingId?: string;
+    contextLabel?: string;
   }>(),
-  { provenance: null, evidence: () => [], refreshAuthoritative: true },
+  {
+    provenance: null,
+    evidence: () => [],
+    refreshAuthoritative: true,
+    nested: false,
+    headingId: "research-claim-review-title",
+    contextLabel: "",
+  },
 );
 const emit = defineEmits<{ evidence: [index: number] }>();
 const i18n = useI18nStore();
@@ -195,14 +205,17 @@ watch(
   <section
     v-if="claims.length"
     class="research-claim-review"
-    aria-labelledby="research-claim-review-title"
+    :aria-labelledby="nested ? undefined : headingId"
+    :aria-label="nested ? `${i18n.t('research.claim_review_title')} ${contextLabel}` : undefined"
   >
     <header class="research-claim-review-heading">
       <div>
         <span class="research-claim-review-kicker">{{
           i18n.t("research.claim_review_kicker")
         }}</span>
-        <h3 id="research-claim-review-title">{{ i18n.t("research.claim_review_title") }}</h3>
+        <component :is="nested ? 'h6' : 'h3'" :id="headingId">{{
+          i18n.t("research.claim_review_title")
+        }}</component>
         <p>{{ i18n.t("research.claim_review_help") }}</p>
       </div>
       <UiStatusBadge
@@ -326,11 +339,11 @@ watch(
   gap: 18px;
   margin-bottom: 16px;
 }
-.research-claim-review-heading h3,
+.research-claim-review-heading :is(h3, h6),
 .research-claim-review-heading p {
   margin: 0;
 }
-.research-claim-review-heading h3 {
+.research-claim-review-heading :is(h3, h6) {
   margin-top: 2px;
   font-size: 1rem;
 }

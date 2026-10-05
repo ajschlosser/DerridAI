@@ -33,6 +33,8 @@ const props = withDefaults(
     activeIndex?: number;
     canRemove?: boolean;
     researcher?: boolean;
+    panelId?: string;
+    contextLabel?: string;
   }>(),
   {
     selectedEvidence: () => [],
@@ -40,6 +42,8 @@ const props = withDefaults(
     activeIndex: 0,
     canRemove: false,
     researcher: false,
+    panelId: "researchEvidencePanel",
+    contextLabel: "",
   },
 );
 const emit = defineEmits<{
@@ -171,9 +175,13 @@ function selectedRows(item: ResearchEvidenceSelection) {
 
 <template>
   <aside
-    id="researchEvidencePanel"
+    :id="panelId"
     class="research-evidence-panel card"
-    :aria-label="i18n.t('research.evidence_panel')"
+    :aria-label="
+      contextLabel
+        ? `${i18n.t('research.evidence_panel')} ${contextLabel}`
+        : i18n.t('research.evidence_panel')
+    "
   >
     <header class="research-panel-heading">
       <div>

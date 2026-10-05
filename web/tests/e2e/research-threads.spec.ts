@@ -73,7 +73,9 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await expect(page.locator(".research-run-button")).toBeDisabled();
   await navigation.getByRole("button", { name: "Open answer and evidence" }).click();
   await expect(page).toHaveURL(/job=job-a/);
-  await expect(page.locator(".research-answer-workspace")).toContainText("Answer A");
+  await expect(page.locator("#research-selected-run .research-answer-workspace")).toContainText(
+    "Answer A",
+  );
   const next = navigation.getByRole("button", { name: "Inquiry b" });
   await next.focus();
   await page.keyboard.press("Enter");
@@ -298,7 +300,7 @@ test("retry preserves a cancelled turn and opens its new attempt with keyboard f
   await expect(nav.locator("article")).toHaveCount(1);
   await expect(nav.getByRole("heading", { name: "Question b" })).toBeVisible();
   await expect(retry).toHaveCount(0);
-  await expect(page.locator(".research-result-presentation")).toBeFocused();
+  await expect(page.locator("#research-selected-run")).toBeFocused();
   await expect(page.locator(".research-run-button")).toBeDisabled();
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({
@@ -331,4 +333,140 @@ test("active thread previews are labelled and accessible in both themes", async 
       (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
     ).toEqual([]);
   }
+});
+
+test("each turn inspects its own evidence, including a recovered saved answer, with keyboard and axe", async ({
+  page,
+}) => {
+  const a = detail("a");
+  const b = {
+    ...a.turns[0],
+    turn_id: "a-2",
+    ordinal: 2,
+    job_id: "job-b",
+    research_run_id: "job-b",
+    response_record_id: "saved-b",
+    user_question: "Question b",
+  };
+  const result = (label: string) => ({
+    prompt: `Question ${label}`,
+    answer: `Answer ${label} [[E0]].`,
+    evidence: [0, 1].map((index) => ({
+      evidence_id: `E${index}`,
+      collection: "corpus",
+      inline_citation: `Author ${label}: ${index + 1}`,
+      full_citation: `Source ${label} ${index + 1}`,
+      record: {
+        record_id: `${label}-${index}`,
+        work: `Work ${label}`,
+        text: `Exact passage ${label} ${index}`,
+        speaker: "Author",
+        position_holder: "Other Thinker",
+        stance: "questions",
+      },
+    })),
+  });
+  await mockBackend(page, {
+    fixtures: {
+      "/api/research/threads": { threads: [summary("a")] },
+      "/api/research/threads/a": { ...a, turns: [a.turns[0], b] },
+      "/api/jobs/job-a": { id: "job-a", status: "completed", result: result("a") },
+      "/api/research/threads/a/turns/a-2/result": {
+        id: "job-b",
+        status: "completed",
+        result: result("b"),
+      },
+    },
+  });
+  await page.route("**/api/jobs/job-b", (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Unavailable" }),
+    }),
+  );
+  await page.goto(APP + "/rag?thread=a");
+  const navigation = page.locator(".research-thread-navigation");
+  const turns = navigation.locator("article[aria-labelledby]");
+  await expect(turns.nth(1).locator(".thread-answer-text")).toContainText("Answer b");
+  for (const turn of [turns.nth(0), turns.nth(1)]) {
+    const inspect = turn.getByText("Inspect this answer and its evidence", { exact: true });
+    await inspect.focus();
+    await page.keyboard.press("Enter");
+  }
+  const firstEvidence = turns.nth(0).locator(".research-evidence-index button").nth(1);
+  await firstEvidence.focus();
+  await page.keyboard.press("Enter");
+  await expect(turns.nth(0).locator(".research-evidence-inspector")).toContainText(
+    "Exact passage a 1",
+  );
+  await expect(turns.nth(1).locator(".research-evidence-inspector")).toContainText(
+    "Exact passage b 0",
+  );
+  await expect(turns.nth(0).locator(".research-evidence-inspector")).toContainText("Other Thinker");
+  await expect(navigation.getByRole("button", { name: "Re-run with parameters" })).toHaveCount(0);
+  await expect(page.locator(".research-run-button")).toBeDisabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(
+      (value) => document.documentElement.setAttribute("data-color-scheme", value),
+      theme,
+    );
+    expect(
+      (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
+    ).toEqual([]);
+  }
+});
+
+test("first question keeps the existing composer and submits one history-free run", async ({
+  page,
+}) => {
+  const job = {
+    id: "first-job",
+    type: "rag",
+    status: "queued",
+    thread_id: "first-thread",
+    turn_id: "first-turn",
+  };
+  const requests: Record<string, unknown>[] = [];
+  await mockBackend(page, {
+    fixtures: {
+      "/api/jobs/first-job": job,
+      "/api/research/threads/first-thread": {
+        ...summary("first-thread"),
+        turns: [
+          {
+            turn_id: "first-turn",
+            thread_id: "first-thread",
+            ordinal: 1,
+            user_question: "What is not asserted?",
+            status: "queued",
+            job_id: "first-job",
+            attempt: 1,
+          },
+        ],
+      },
+    },
+  });
+  await page.route("**/api/jobs/rag", async (route) => {
+    requests.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(job),
+    });
+  });
+  await page.goto(APP + "/rag");
+  const composer = page.locator("#researchQuestion");
+  await expect(composer).toBeVisible();
+  await composer.fill("What is not asserted?");
+  await expect(page.locator(".research-run-button")).toBeEnabled();
+  await page.locator(".research-run-button").click();
+  await expect(page).toHaveURL(/thread=first-thread&job=first-job/);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].prompt).toBe("What is not asserted?");
+  expect(requests[0]).not.toHaveProperty("thread_context");
+  expect(requests[0]).not.toHaveProperty("prior_answers");
+  expect(requests[0]).not.toHaveProperty("retry_turn_id");
+  await expect(composer).toBeVisible();
 });
