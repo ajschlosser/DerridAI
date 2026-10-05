@@ -328,7 +328,8 @@ from .operation_events import (
 from .page_markers import DETECTOR_VERSION as PAGE_DETECTOR_VERSION
 from .pipelines.corpus_document_manifest import DocumentManifestSession
 from .pipelines.corpus_text_touchup import TextTouchupSession
-from .rag import _citation_strings, chat_complete
+from .corpus_citations import _citation_strings
+from .llm_transport import chat_complete
 from .record_semantic_map import build_semantic_map_projections
 from .reviewer_context import current_reviewer
 from .run_guidance import find_guidance_matches
