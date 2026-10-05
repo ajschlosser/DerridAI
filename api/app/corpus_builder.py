@@ -1887,7 +1887,7 @@ class PdfCorpusRepository:
             with connection:
                 yield connection
         except sqlite3.OperationalError as exc:
-            if isinstance(exc, PersistenceBusyError):
+            if _is_sqlite_lock_error(exc):
                 raise PersistenceBusyError("Canonical Record storage is temporarily busy.") from exc
             raise
         finally:
