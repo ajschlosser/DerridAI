@@ -550,7 +550,7 @@
 .research-answer-heading > div:first-child {
   min-width: 0;
 }
-.research-answer-heading h2 {
+.research-answer-heading :is(h2, h5) {
   max-width: 880px;
   margin: 0;
   font:

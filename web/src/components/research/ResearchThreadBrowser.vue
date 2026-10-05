@@ -23,6 +23,7 @@ import ResearchThreadManageDialog from "./ResearchThreadManageDialog.vue";
 import { useAuthStore } from "../../stores/auth";
 import { researchThreadsApi } from "../../api/researchThreads";
 import { useDataQuery } from "../../realtime/dataQuery";
+import type { ResearchResultEvidence } from "../../types/research";
 import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
@@ -41,6 +42,8 @@ const emit = defineEmits<{
   new: [];
   removed: [error?: string];
   retryTurn: [turn: ResearchTurn];
+  openRecord: [item: ResearchResultEvidence];
+  openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
 }>();
 const auth = useAuthStore();
 const offset = ref(0);
@@ -218,7 +221,12 @@ function retry() {
     @remove="manage('delete')"
   >
     <template #answer="{ turn }">
-      <ResearchThreadAnswer :key="turn.turn_id" :turn="turn" />
+      <ResearchThreadAnswer
+        :key="turn.turn_id"
+        :turn="turn"
+        @open-record="emit('openRecord', $event)"
+        @open-relationships="(item, mode) => emit('openRelationships', item, mode)"
+      />
     </template>
   </ResearchThreadNavigation>
   <ResearchThreadManageDialog

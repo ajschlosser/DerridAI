@@ -32,6 +32,9 @@ withDefaults(
     activeEvidenceIndex?: number;
     busy?: boolean;
     canGrade?: boolean;
+    readOnly?: boolean;
+    instanceId?: string;
+    instanceLabel?: string;
     canRemoveSelected?: boolean;
     researcher?: boolean;
   }>(),
@@ -43,6 +46,9 @@ withDefaults(
     activeEvidenceIndex: 0,
     busy: false,
     canGrade: true,
+    readOnly: false,
+    instanceId: "",
+    instanceLabel: "",
     canRemoveSelected: false,
     researcher: false,
   },
@@ -70,6 +76,9 @@ const emit = defineEmits<{
       :draft="draft"
       :busy="busy"
       :can-grade="canGrade"
+      :read-only="readOnly"
+      :instance-id="instanceId"
+      :context-label="instanceLabel"
       @copy="emit('copy')"
       @grade="emit('grade')"
       @rerun="emit('rerun')"
@@ -77,6 +86,8 @@ const emit = defineEmits<{
       @evidence="emit('evidence', $event)"
     />
     <ResearchEvidencePanel
+      :panel-id="instanceId ? `${instanceId}-evidence` : 'researchEvidencePanel'"
+      :context-label="instanceLabel"
       :selected-evidence="selectedEvidence"
       :result-evidence="result?.evidence || []"
       :active-index="activeEvidenceIndex"

@@ -86,6 +86,26 @@ function evidenceTarget(index: number) {
   const store = String(item?.collection || "").trim();
   return recordId ? { recordId, store } : null;
 }
+function openThreadEvidenceRecord(item: { record?: Record<string, unknown>; collection?: string }) {
+  const recordId = String(item.record?.record_id || "");
+  if (recordId)
+    annotationsWorkspace.openAnnotationsWorkspaceRecord({
+      server: true,
+      source: item.collection || "",
+      record_id: recordId,
+    });
+}
+function openThreadEvidenceRelationships(
+  item: { record?: Record<string, unknown>; collection?: string },
+  mode: "trace" | "model",
+) {
+  const recordId = String(item.record?.record_id || "");
+  if (recordId)
+    void router.push({
+      name: "relationships",
+      query: { record: recordId, store: item.collection || "", mode },
+    });
+}
 function openEvidenceRecord(index: number) {
   const target = evidenceTarget(index);
   if (!target) return;
@@ -513,7 +533,7 @@ async function runResearch(turn?: ResearchTurn) {
     }
     await nextTick();
     document
-      .querySelector(".research-answer-workspace")
+      .querySelector("#research-selected-run .research-answer-workspace")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     if (request === submissionRequest)
@@ -822,7 +842,7 @@ watch(
       answerError.value
     )
       return;
-    const region = document.querySelector<HTMLElement>(".research-result-presentation");
+    const region = document.getElementById("research-selected-run");
     if (region) {
       region.focus();
       retryFocusJob.value = "";
@@ -940,6 +960,8 @@ onBeforeUnmount(() => {
       </button>
       <div v-if="auth.can('rag.run') && threadBrowserOpen" id="research-thread-browser">
         <ResearchThreadBrowser
+          @open-record="openThreadEvidenceRecord"
+          @open-relationships="openThreadEvidenceRelationships"
           :thread-id="currentThreadId"
           :job-id="String(route.query.job || '')"
           :retry-disabled="
@@ -1029,6 +1051,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <ResearchResultPresentation
+        id="research-selected-run"
         tabindex="-1"
         role="region"
         :aria-label="i18n.t('research.answer')"

@@ -34,6 +34,9 @@ const props = withDefaults(
     draft?: ResearchDraftState | null;
     busy?: boolean;
     canGrade?: boolean;
+    readOnly?: boolean;
+    instanceId?: string;
+    contextLabel?: string;
   }>(),
   { job: null, result: null, draft: null, busy: false, canGrade: true },
 );
@@ -73,7 +76,9 @@ const statusLabel = computed(() => {
       <header class="research-answer-heading">
         <div>
           <span class="research-answer-kicker">{{ i18n.t("research.answer") }}</span>
-          <h2>{{ result.prompt || job?.prompt || i18n.t("research.answer") }}</h2>
+          <component :is="readOnly ? 'h5' : 'h2'">{{
+            result.prompt || job?.prompt || i18n.t("research.answer")
+          }}</component>
           <p>
             {{ result.provider || job?.provider }} · {{ result.model || job?.model
             }}<template v-if="result.elapsed_seconds">
@@ -81,7 +86,7 @@ const statusLabel = computed(() => {
             >
           </p>
         </div>
-        <div class="research-answer-actions">
+        <div v-if="!readOnly" class="research-answer-actions">
           <button class="btn" type="button" @click="emit('copy')">
             <AppIcon name="copy" />{{ i18n.t("research.copy_answer") }}
           </button>
@@ -98,7 +103,9 @@ const statusLabel = computed(() => {
       </div>
       <article class="research-answer-prose">
         <template v-for="(block, index) in answerBlocks" :key="index">
-          <h3 v-if="block.kind === 'heading'">{{ block.text }}</h3>
+          <component :is="readOnly ? 'h6' : 'h3'" v-if="block.kind === 'heading'">{{
+            block.text
+          }}</component>
           <ol v-else-if="block.kind === 'ordered'">
             <li v-for="(item, itemIndex) in block.items" :key="itemIndex">
               <template v-for="(segment, segmentIndex) in citedSegments(item)" :key="segmentIndex"
@@ -152,13 +159,16 @@ const statusLabel = computed(() => {
       <ResearchClaimReviewPanel
         v-if="result.claim_provenance?.claims?.length"
         :provenance="result.claim_provenance"
+        :nested="readOnly"
+        :heading-id="instanceId ? `${instanceId}-claims` : 'research-claim-review-title'"
+        :context-label="contextLabel"
         :evidence="result.evidence || []"
         @evidence="emit('evidence', $event)"
       />
       <footer class="research-answer-footer">
         <span>{{ result.evidence?.length || 0 }} {{ i18n.t("research.evidence_records") }}</span>
         <span v-if="result.response_cache?.record_id">{{ i18n.t("research.cached") }}</span>
-        <button class="research-text-action" type="button" @click="emit('rerun')">
+        <button v-if="!readOnly" class="research-text-action" type="button" @click="emit('rerun')">
           {{ i18n.t("research.rerun") }}
         </button>
       </footer>
@@ -231,7 +241,7 @@ const statusLabel = computed(() => {
   line-height: inherit;
   font-weight: var(--fw-bold);
 }
-.research-answer-prose h3 {
+.research-answer-prose :is(h3, h6) {
   margin: 1.8em 0 0.55em;
   font:
     700 15px/1.3 system-ui,

@@ -85,6 +85,8 @@ def non_admin_route_allowed(role: str, path: str, method: str) -> bool:
         return role_has_capability(role, "rag.run")
     if path == "/api/research/threads" and method in {"GET", "POST"}:
         return role_has_capability(role, "rag.run")
+    if method == "GET" and re.fullmatch(r"/api/research/threads/[^/]+/turns/[^/]+/result", path):
+        return role_has_capability(role, "rag.run")
     if re.fullmatch(r"/api/research/threads/[^/]+(/turns(/[^/]+(/retry)?)?)?", path):
         # Ownership is enforced per owner in the store: non-owners see 404.
         if method in {"GET", "PATCH", "DELETE"} and not path.endswith(("/turns", "/retry")):

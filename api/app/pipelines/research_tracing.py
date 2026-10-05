@@ -600,6 +600,21 @@ def build_research_trace(
             f"pipeline: {', '.join(extras)}"
         )
 
+    thread_audit = result.get("research_thread")
+    thread_trace = None
+    if isinstance(thread_audit, dict):
+        selection = thread_audit.get("context_selection") or {}
+        thread_trace = {
+            "thread_id": thread_audit["thread_id"],
+            "turn_id": thread_audit["turn_id"],
+            "attempt": thread_audit["attempt"],
+            "context_version": selection.get("version"),
+            "context_strategy": selection.get("strategy"),
+            "ranking_model": selection.get("ranking_model"),
+            "selected_turn_ids": selection.get("selected_turn_ids", []),
+            "context_consumed": thread_audit.get("context_consumed", False),
+        }
+
     finished = parse_trace_datetime(finished_at)
     started = parse_trace_datetime(started_at)
     total_elapsed = result.get("elapsed_seconds")
@@ -611,6 +626,7 @@ def build_research_trace(
         "resolved_pipeline": sanitize_trace_value(resolved_pipeline),
         "resolved_hash": resolved_hash,
         "owner": owner,
+        "research_thread": thread_trace,
         "status": status,
         "started_at": started,
         "finished_at": finished,

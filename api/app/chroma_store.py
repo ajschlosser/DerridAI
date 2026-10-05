@@ -2202,6 +2202,7 @@ class ChromaStore:
         request: dict[str, Any],
         result: dict[str, Any],
         created_at: str,
+        owner: str | None = None,
     ) -> dict[str, Any]:
         self.ensure_response_cache()
         record_id = f"rag-response::{job_id}"
@@ -2222,6 +2223,8 @@ class ChromaStore:
             "record_id": record_id,
             "response_id": job_id,
             "response_type": "rag",
+            "owner": owner,
+            "research_thread": result.get("research_thread"),
             "question": result.get("prompt") or request.get("prompt") or "",
             "instructions": request.get("instructions") or "",
             "text": result.get("answer") or "",

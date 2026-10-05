@@ -216,3 +216,80 @@ def test_snapshot_is_immutable_per_attempt_and_survives_restart(history):
 def test_invalid_policy_rejected(kwargs):
     with pytest.raises(ValueError):
         ThreadContextPolicy(**kwargs)
+
+
+
+def test_semantic_selection_pins_previous_then_selects_relevant_older_turn(history):
+    store, jobs, turns, current = history
+    seen = []
+    def rank(query, texts):
+        seen.append((query, texts))
+        return [0.1, 0.9], "local/test-model"
+    packet = select_thread_context(store, current["turn_id"], "alice", jobs.__getitem__,
+        policy=ThreadContextPolicy(max_turns=2), rank_older=rank)
+    assert packet.snapshot()["selected_turn_ids"] == [turns[0]["turn_id"], turns[2]["turn_id"]]
+    assert packet.items[0].source == "semantic"
+    assert packet.items[-1].source == "immediate_previous"
+    assert packet.snapshot()["strategy"] == "previous_and_semantic"
+    assert packet.snapshot()["ranking_model"] == "local/test-model"
+    assert not packet.warnings
+    assert seen[0][0] == "What about him?"
+    assert "Levinas?" in seen[0][1][0]
+
+
+@pytest.mark.parametrize("scores", [None, [float("nan"), 1], [1], [True, False]])
+def test_semantic_unavailable_or_invalid_scores_use_declared_recent_fallback(history, scores):
+    store, jobs, turns, current = history
+    packet = select_thread_context(store, current["turn_id"], "alice", jobs.__getitem__,
+        policy=ThreadContextPolicy(max_turns=2), rank_older=lambda *_: (scores, "local/test"))
+    assert packet.snapshot()["selected_turn_ids"] == [turns[1]["turn_id"], turns[2]["turn_id"]]
+    assert packet.snapshot()["strategy"] == "previous_and_recent_fallback"
+    assert any("using_recent_turns" in warning for warning in packet.warnings)
+
+
+def test_missing_job_recovers_only_verified_owned_saved_answer(history):
+    from app.research_turn_results import saved_turn_result
+    store, jobs, turns, current = history
+    prior = turns[-1]
+    record = {"record_id": prior["response_record_id"], "response_id": prior["research_run_id"],
+        "owner": "alice", "question": prior["user_question"], "text": "Saved not evidence [[E99]]",
+        "research_thread": {"thread_id": prior["thread_id"], "turn_id": prior["turn_id"], "attempt": 1}}
+    class Cache:
+        def get_record(self, collection, record_id):
+            assert collection == "_response_cache" and record_id == record["record_id"]
+            return record
+    del jobs[prior["job_id"]]
+    read = lambda turn, owner: saved_turn_result(turn, owner, Cache())
+    packet = select_thread_context(store, current["turn_id"], "alice", jobs.__getitem__, read_saved=read)
+    assert packet.items[-1].text == record["text"]
+    assert f"prior_answer_recovered:{prior['turn_id']}" in packet.warnings
+    assert not packet.snapshot()["evidentiary"]
+    record["owner"] = "bob"
+    denied = select_thread_context(store, current["turn_id"], "alice", jobs.__getitem__, read_saved=read)
+    assert denied.items[-1].role == "user"
+    assert f"prior_answer_unavailable:{prior['turn_id']}" in denied.warnings
+
+
+def test_single_previous_policy_does_not_rank_or_read_older_artifacts(history):
+    store, jobs, turns, current = history
+    calls = []
+    def read(job_id):
+        calls.append(job_id)
+        return jobs[job_id]
+    def forbidden(*_):
+        raise AssertionError("No older ranking allowed")
+    packet = select_thread_context(store, current["turn_id"], "alice", read,
+        policy=ThreadContextPolicy(max_turns=1), rank_older=forbidden)
+    assert calls == [turns[-1]["job_id"]]
+    assert len(packet.items) == 2
+
+
+
+def test_first_question_never_reads_saved_history_or_ranks(tmp_path):
+    store = ResearchThreadStore(tmp_path / "first.sqlite3")
+    current, _ = store.append_turn(store.create_thread("alice")["thread_id"], "alice", "Original first question")
+    def forbidden(*_):
+        raise AssertionError("First question must not need historical artifacts or ranking")
+    packet = select_thread_context(store, current["turn_id"], "alice", forbidden,
+        read_saved=forbidden, rank_older=forbidden)
+    assert not packet.items and not packet.warnings

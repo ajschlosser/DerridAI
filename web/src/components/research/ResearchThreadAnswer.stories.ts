@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import type { Meta, StoryObj } from "@storybook/vue3";
+import ResearchResultPresentation from "./ResearchResultPresentation.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import { OrderedTurns } from "./ResearchThreadNavigation.stories";
 const meta = {
@@ -32,9 +33,27 @@ export const InlineAnswers: Story = {
     offset: OrderedTurns.args?.offset || 0,
   },
   render: (args) => ({
-    components: { ResearchThreadNavigation },
-    setup: () => ({ args }),
+    components: { ResearchThreadNavigation, ResearchResultPresentation },
+    setup: () => ({
+      args,
+      result: {
+        answer: "The source does not assert presence [[E0]].",
+        evidence: [
+          {
+            evidence_id: "E0",
+            inline_citation: "Author 1997: 97",
+            collection: "corpus",
+            record: {
+              record_id: "r1",
+              text: "The source does not assert presence.",
+              speaker: "Author",
+              position_holder: "Other Thinker",
+            },
+          },
+        ],
+      },
+    }),
     template: `<ResearchThreadNavigation v-bind="args"><template #answer="{ turn }"><p style="white-space: pre-wrap">An illustrative answer to {{ turn.user_question }}.
-Each turn retains its own citations and audit link.</p></template></ResearchThreadNavigation>`,
+Each turn retains its own citations and audit link.</p><details open><summary>Inspect this answer and its evidence</summary><ResearchResultPresentation :result="result" :instance-id="args.selectedThreadId + turn.turn_id" :instance-label="turn.user_question + turn.ordinal" read-only /></details></template></ResearchThreadNavigation>`,
   }),
 };

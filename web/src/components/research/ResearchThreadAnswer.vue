@@ -16,16 +16,22 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useResearchDraft } from "../../features/research/useResearchDraft";
 import { apiRequest, ApiError } from "../../api/http";
 import { useDataQuery } from "../../realtime/dataQuery";
 import { useAuthStore } from "../../stores/auth";
 import { useI18nStore } from "../../stores/i18n";
-import type { ResearchJob } from "../../types/research";
+import ResearchResultPresentation from "./ResearchResultPresentation.vue";
+import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
 const props = defineProps<{ turn: ResearchTurn }>();
+const emit = defineEmits<{
+  openRecord: [item: ResearchResultEvidence];
+  openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
+}>();
+const activeEvidenceIndex = ref(0);
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
@@ -50,6 +56,7 @@ watch(
   ],
   () => {
     stream.clear();
+    activeEvidenceIndex.value = 0;
     if (live.value) stream.follow(props.turn.job_id!);
   },
   { immediate: true, flush: "sync" },
@@ -57,7 +64,19 @@ watch(
 onBeforeUnmount(stream.clear);
 const answer = useDataQuery(
   "research_threads",
-  () => apiRequest<ResearchJob>(`/api/jobs/${encodeURIComponent(props.turn.job_id || "")}`),
+  async () => {
+    const turn = { ...props.turn };
+    if (turn.job_id) {
+      try {
+        return await apiRequest<ResearchJob>(`/api/jobs/${encodeURIComponent(turn.job_id)}`);
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      }
+    }
+    return apiRequest<ResearchJob>(
+      `/api/research/threads/${encodeURIComponent(turn.thread_id)}/turns/${encodeURIComponent(turn.turn_id)}/result`,
+    );
+  },
   {
     detail: () => [
       auth.user?.id,
@@ -69,7 +88,10 @@ const answer = useDataQuery(
       props.turn.job_id,
       props.turn.attempt,
     ],
-    enabled: () => allowed.value && props.turn.status === "completed" && Boolean(props.turn.job_id),
+    enabled: () =>
+      allowed.value &&
+      props.turn.status === "completed" &&
+      Boolean(props.turn.job_id || props.turn.response_record_id),
   },
 );
 const denied = computed(
@@ -77,15 +99,27 @@ const denied = computed(
     answer.error.value instanceof ApiError && [401, 403, 404].includes(answer.error.value.status),
 );
 const result = computed(() =>
-  allowed.value && !denied.value && answer.data.value?.id === props.turn.job_id
+  allowed.value &&
+  !denied.value &&
+  answer.data.value?.id === (props.turn.research_run_id || props.turn.job_id)
     ? answer.data.value?.result
     : null,
 );
+function openRecord(index: number) {
+  const item = result.value?.evidence?.[index];
+  if (item) emit("openRecord", item);
+}
+function openRelationships(index: number, mode: "trace" | "model") {
+  const item = result.value?.evidence?.[index];
+  if (item) emit("openRelationships", item, mode);
+}
 </script>
 <template>
   <section
-    v-if="allowed && turn.job_id && (live || turn.status === 'completed')"
-    :aria-label="i18n.t('research.answer')"
+    v-if="
+      allowed && (turn.job_id || turn.response_record_id) && (live || turn.status === 'completed')
+    "
+    :aria-label="`${i18n.t('research.answer')} ${turn.ordinal}: ${turn.user_question}`"
   >
     <template v-if="live">
       <p role="status">{{ i18n.t("research.draft_heading") }}</p>
@@ -109,6 +143,22 @@ const result = computed(() =>
               {{ item.full_citation || item.inline_citation || item.evidence_id }}
             </li>
           </ul>
+        </details>
+        <details>
+          <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
+          <ResearchResultPresentation
+            :instance-id="`thread-answer-${turn.turn_id}`"
+            :instance-label="`${turn.ordinal}: ${turn.user_question}`"
+            :job="answer.data.value"
+            :result="result"
+            :active-evidence-index="activeEvidenceIndex"
+            :researcher="!auth.isAdmin"
+            read-only
+            @evidence="activeEvidenceIndex = $event"
+            @select-evidence="activeEvidenceIndex = $event"
+            @open-record="openRecord"
+            @open-relationships="openRelationships"
+          />
         </details>
       </template>
       <p v-else-if="!answer.isFetching.value && !answer.error.value">

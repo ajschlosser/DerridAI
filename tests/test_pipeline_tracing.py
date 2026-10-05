@@ -344,3 +344,30 @@ def test_research_retrievers_omit_unknown_or_empty_scope_size() -> None:
         trace = _research_trace(extra)
         for stage in trace.stages:
             assert "scope_size" not in (stage.parameters or {})
+
+
+
+def test_research_trace_preserves_thread_lineage_without_history_text():
+    result = _result()
+    result["research_thread"] = {
+        "thread_id": "thread-1", "turn_id": "turn-2", "attempt": 2,
+        "original_question": "PRIVATE QUESTION", "context_consumed": False,
+        "context_selection": {
+            "version": "research-thread-context-v1", "strategy": "previous_and_recent_fallback",
+            "selected_turn_ids": ["turn-1"],
+            "items": [{"role": "assistant", "text": "PRIVATE ANSWER [[E99]]"}],
+        },
+    }
+    trace = build_research_trace(
+        run_id="run-2", owner="alice",
+        request=RAGRunRequest(prompt="PRIVATE QUESTION", source_collection="corpus"),
+        result=result, started_at="2026-10-05T20:00:00+00:00", finished_at="2026-10-05T20:00:04+00:00",
+    )
+    audit = trace.research_thread
+    assert audit.thread_id == "thread-1" and audit.turn_id == "turn-2"
+    assert audit.attempt == 2 and audit.selected_turn_ids == ["turn-1"]
+    assert audit.context_strategy == "previous_and_recent_fallback"
+    assert not audit.context_consumed
+    assert "PRIVATE" not in trace.model_dump_json()
+    assert "E99" not in trace.model_dump_json()
+    assert all(stage.stage_id != "thread_context" for stage in trace.stages)
