@@ -197,12 +197,9 @@ jobs:
             exit 0
           fi
 
-          # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
-          git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
-            '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
-            '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
-            | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
-              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+          ./web/node_modules/.bin/prettier --write --config web/.prettierrc web/src/components/PdfCorpusBuilder.vue
+          git diff -- web/src/components/PdfCorpusBuilder.vue
+          exit 1
 
   backend-lint:
     needs: changes
