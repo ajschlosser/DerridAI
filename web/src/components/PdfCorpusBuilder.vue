@@ -1811,13 +1811,18 @@ async function reviewValidationFromPublish() {
   if (first) {
     const code = String(first.code || "");
     if (code.startsWith("source_")) {
-      await reviewFromPublish(() => openValidationIssueQueue(String(first.record_id)), "source_validation");
+      await reviewFromPublish(
+        () => openValidationIssueQueue(String(first.record_id)),
+        "source_validation",
+      );
       return;
     }
     await reviewFromPublish(() => fixValidationIssue(first));
     return;
   }
-  if (fixIssues.value.some((item) => String(item?.code || "").startsWith("source_"))) {
+  if (
+    fixIssues.value.some((item) => String(item?.code || "").startsWith("source_"))
+  ) {
     await reviewFromPublish(() => openSourceIssueQueue(), "source_validation");
     return;
   }
