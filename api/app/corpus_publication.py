@@ -257,6 +257,55 @@ def publishable_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _source_validation_blocker_message(validation: dict[str, Any]) -> str:
+    """Explain the remaining source blocker instead of collapsing it to one 409."""
+    issues = [
+        item
+        for item in validation.get("validation_issues") or []
+        if isinstance(item, dict)
+        and str(item.get("code") or "").startswith("source_")
+    ]
+    if issues:
+        counts: dict[str, int] = {}
+        for item in issues:
+            code = str(item.get("code") or "source_validation")
+            counts[code] = counts.get(code, 0) + 1
+        summary = ", ".join(
+            f"{code}: {count}"
+            for code, count in sorted(counts.items())
+        )
+        examples: list[str] = []
+        for item in issues[:3]:
+            parts = [
+                str(item.get("record_id") or "").strip(),
+                str(item.get("field") or "").strip(),
+            ]
+            subject = " / ".join(value for value in parts if value)
+            reason = str(item.get("reason") or "").strip()
+            examples.append(
+                f"{subject}: {reason}" if subject and reason else reason or subject
+            )
+        detail = "; ".join(value for value in examples if value)
+        suffix = f" Examples: {detail}." if detail else ""
+        return (
+            "Publication is blocked by unresolved source validation "
+            f"({summary}).{suffix}"
+        )
+
+    remaining = [
+        key
+        for key in TEXT_CONSERVATION_ERROR_KEYS
+        if validation.get(key)
+    ]
+    if remaining:
+        return (
+            "Publication is blocked by unresolved source validation: "
+            + ", ".join(remaining)
+            + "."
+        )
+    return "Publication is blocked until source coverage and text-fidelity validation pass."
+
+
 def publication_blocker(
     build: dict[str, Any],
     publishable: list[dict[str, Any]],
@@ -279,8 +328,10 @@ def publication_blocker(
     if accept_unreviewed:
         if str(build.get("status") or "") not in UNREVIEWED_PUBLISHABLE_STATUSES:
             return "Publication is unavailable until the build has finished processing."
-        if not validation or any(validation.get(key) for key in TEXT_CONSERVATION_ERROR_KEYS):
-            return "Publication is blocked until source coverage and text-fidelity validation pass."
+        if not validation:
+            return "Publication is blocked because source validation has not completed."
+        if any(validation.get(key) for key in TEXT_CONSERVATION_ERROR_KEYS):
+            return _source_validation_blocker_message(validation)
         if not publishable:
             return "Publication is unavailable because every record is rejected. Restore at least one record or discard this build."
         return None
@@ -301,7 +352,9 @@ def publication_blocker(
         suffix = f" Unresolved fields — {detail}." if detail else ""
         return f"Publication is blocked: metadata is complete for {metadata_completed} of {metadata_total} record(s).{suffix} Resolve the metadata issue queue before publishing."
     if not validation.get("valid"):
-        return "Publication is blocked until source coverage and text-fidelity validation pass."
+        if not validation.get("source_valid", True):
+            return _source_validation_blocker_message(validation)
+        return "Publication is blocked by unresolved validation findings."
     if not publishable:
         return "Publication is unavailable because every record is rejected. Restore at least one record or discard this build."
     unresolved = [record for record in publishable if record.get("needs_review")]
