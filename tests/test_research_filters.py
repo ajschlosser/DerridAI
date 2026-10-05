@@ -282,3 +282,51 @@ def test_preview_route_is_available_to_researchers_with_run_capability() -> None
 
     assert non_admin_route_allowed("researcher", "/api/research/filters/preview", "POST")
     assert not non_admin_route_allowed("researcher", "/api/research/filters/preview", "GET")
+
+
+# --- Phase 4: work/author inventory for natural-language scope ---------------
+
+
+class _InventoryStore(_PreviewStore):
+    def work_stats(self, name):
+        assert name == "corpus"
+        return [
+            {"work": "Of Grammatology", "document_author": "Jacques Derrida"},
+            {"work": "Being and Time", "document_author": "Martin Heidegger"},
+            {"work": ""},
+        ]
+
+
+def test_inventory_lists_names_only_and_is_bounded(monkeypatch) -> None:
+    from app.routers import research_filters as routes
+
+    monkeypatch.setattr(routes, "store", _InventoryStore(_CORPUS))
+    result = routes.research_filter_inventory(
+        routes.ResearchFilterInventoryRequest(collection="corpus")
+    )
+    assert result == {
+        "works": [
+            {"work": "Being and Time", "authors": ["Martin Heidegger"]},
+            {"work": "Of Grammatology", "authors": ["Jacques Derrida"]},
+        ],
+        "truncated": False,
+    }
+    monkeypatch.setattr(routes, "INVENTORY_MAX_WORKS", 1)
+    capped = routes.research_filter_inventory(
+        routes.ResearchFilterInventoryRequest(collection="corpus")
+    )
+    assert len(capped["works"]) == 1 and capped["truncated"] is True
+
+
+def test_inventory_rejects_hidden_collections_and_is_researcher_post_only(monkeypatch) -> None:
+    from app.route_policy import non_admin_route_allowed
+    from app.routers import research_filters as routes
+    from fastapi import HTTPException
+
+    hidden = [{"name": "corpus", "metadata": {"derridai_system_collection": "response_cache"}}]
+    monkeypatch.setattr(routes, "store", _InventoryStore(hidden))
+    with pytest.raises(HTTPException) as exc:
+        routes.research_filter_inventory(routes.ResearchFilterInventoryRequest(collection="corpus"))
+    assert exc.value.status_code == 404
+    assert non_admin_route_allowed("researcher", "/api/research/filters/inventory", "POST")
+    assert not non_admin_route_allowed("researcher", "/api/research/filters/inventory", "GET")

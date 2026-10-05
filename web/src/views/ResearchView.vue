@@ -152,6 +152,11 @@ const runPipelineOverrides = ref<PipelineConfigOverrideSet | null>(null);
 const prompt = ref("");
 const instructions = ref("");
 const filterExpression = ref("");
+// True once the researcher confirmed a phrase interpreted from the instructions.
+const filterFromInstructions = ref(false);
+watch(filterExpression, (value) => {
+  if (!value.trim()) filterFromInstructions.value = false;
+});
 const filterState = ref<ResearchFilterChange>({ plan: null, valid: true });
 const preset = ref("balanced");
 const model = ref("");
@@ -499,7 +504,14 @@ function changeProfile(id: string) {
 }
 function filterPlanForRun() {
   const plan = filterState.value.plan;
-  return plan ? { ...plan, source: "explicit", original_text: filterExpression.value } : null;
+  if (!plan) return null;
+  return filterFromInstructions.value
+    ? {
+        ...plan,
+        source: "deterministic_natural_language",
+        original_text: instructions.value,
+      }
+    : { ...plan, source: "explicit", original_text: filterExpression.value };
 }
 async function runResearch(turn?: ResearchTurn) {
   if (!config.value || starting.value || !workspace.value?.can_run || !auth.can("rag.run")) return;
@@ -1010,6 +1022,7 @@ onBeforeUnmount(() => {
         v-model:prompt="prompt"
         v-model:instructions="instructions"
         v-model:filter-expression="filterExpression"
+        @scope-accepted="filterFromInstructions = true"
         @filter-change="filterState = $event"
         :source-collection="config?.source_collection || ''"
         :provider-profile-id="config?.provider_profile_id || ''"

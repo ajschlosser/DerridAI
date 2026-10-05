@@ -83,7 +83,10 @@ def non_admin_route_allowed(role: str, path: str, method: str) -> bool:
         return role_has_capability(role, "rag.jobs.own")
     if path == "/api/jobs/rag" and method == "POST":
         return role_has_capability(role, "rag.run")
-    if path == "/api/research/filters/preview" and method == "POST":
+    if (
+        path in {"/api/research/filters/preview", "/api/research/filters/inventory"}
+        and method == "POST"
+    ):
         return role_has_capability(role, "rag.run")
     if path == "/api/research/threads/import-legacy" and method == "POST":
         return role_has_capability(role, "rag.run")
