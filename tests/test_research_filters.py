@@ -9,8 +9,6 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
-
 from app.chroma_store import ChromaStore
 from app.models import RAGRunRequest, ResearchFilterPlan
 from app.research_filters import (
@@ -19,6 +17,7 @@ from app.research_filters import (
     normalize_document_filter,
     normalize_metadata_filter,
 )
+from pydantic import ValidationError
 
 
 def test_metadata_filter_accepts_nested_chroma_subset() -> None:
