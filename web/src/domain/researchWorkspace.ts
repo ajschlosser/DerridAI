@@ -352,7 +352,9 @@ export function createResearchWorkspace(deps: Deps) {
       throw new Error(tr("research.thread_retry_invalid"));
     const endpoint = retryTurnId
       ? `/api/research/threads/${encodeURIComponent(retryThreadId)}/turns/${encodeURIComponent(retryTurnId)}/retry`
-      : "/api/jobs/rag";
+      : input.thread_id
+        ? `/api/research/threads/${encodeURIComponent(String(input.thread_id))}/turns`
+        : "/api/jobs/rag";
     // Research composes a one-run draft over the saved Settings configuration.
     // Do not write the draft back into ragConfig: the Research modal is the
     // highest-precedence layer for this run only.

@@ -30,6 +30,7 @@
       "output_key": "pipelines.purpose.research.output",
       "authority_key": "pipelines.purpose.research.authority",
       "strategy_fit": {
+        "context.research_thread": "supported",
         "fallback.metadata_precedents_lexical": "inspect_only",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -47,6 +48,7 @@
         "pack.metadata_precedents": "inspect_only",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "supported",
+        "query.research_contextualize": "supported",
         "query.research_decompose": "supported",
         "rerank.cross_encoder": "supported",
         "rerank.lexical_fallback": "supported",
@@ -102,6 +104,7 @@
       "output_key": "pipelines.purpose.evidence_suggestion.output",
       "authority_key": "pipelines.purpose.evidence_suggestion.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -119,6 +122,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "supported",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "supported",
         "rerank.lexical_fallback": "inspect_only",
@@ -173,6 +177,7 @@
       "output_key": "pipelines.purpose.evidence_recovery.output",
       "authority_key": "pipelines.purpose.evidence_recovery.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -190,6 +195,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "supported",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "supported",
         "rerank.lexical_fallback": "inspect_only",
@@ -244,6 +250,7 @@
       "output_key": "pipelines.purpose.precedent_evidence_remap.output",
       "authority_key": "pipelines.purpose.precedent_evidence_remap.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -261,6 +268,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "inspect_only",
         "rerank.lexical_fallback": "inspect_only",
@@ -316,6 +324,7 @@
       "output_key": "pipelines.purpose.corpus_reviewer_evidence_choice.output",
       "authority_key": "pipelines.purpose.corpus_reviewer_evidence_choice.authority",
       "strategy_fit": {
+        "context.research_thread": "output_contract",
         "fallback.metadata_precedents_lexical": "inspect_only",
         "filter.metadata_scope": "output_contract",
         "fusion.metadata_hybrid": "output_contract",
@@ -333,6 +342,7 @@
         "pack.metadata_precedents": "inspect_only",
         "query.evidence_field": "output_contract",
         "query.passthrough": "output_contract",
+        "query.research_contextualize": "output_contract",
         "query.research_decompose": "output_contract",
         "rerank.cross_encoder": "output_contract",
         "rerank.lexical_fallback": "output_contract",
@@ -386,6 +396,7 @@
       "output_key": "pipelines.purpose.vector_store_search.output",
       "authority_key": "pipelines.purpose.vector_store_search.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -403,6 +414,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "supported",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "inspect_only",
         "rerank.lexical_fallback": "inspect_only",
@@ -456,6 +468,7 @@
       "output_key": "pipelines.purpose.metadata_precedents.output",
       "authority_key": "pipelines.purpose.metadata_precedents.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "supported",
         "filter.metadata_scope": "supported",
         "fusion.metadata_hybrid": "supported",
@@ -473,6 +486,7 @@
         "pack.metadata_precedents": "supported",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "supported",
         "rerank.lexical_fallback": "inspect_only",
@@ -526,6 +540,7 @@
       "output_key": "pipelines.purpose.metadata_prefill.output",
       "authority_key": "pipelines.purpose.metadata_prefill.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -543,6 +558,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "inspect_only",
         "rerank.lexical_fallback": "inspect_only",
@@ -597,6 +613,7 @@
       "output_key": "pipelines.purpose.corpus_metadata_enrichment.output",
       "authority_key": "pipelines.purpose.corpus_metadata_enrichment.authority",
       "strategy_fit": {
+        "context.research_thread": "output_contract",
         "fallback.metadata_precedents_lexical": "inspect_only",
         "filter.metadata_scope": "output_contract",
         "fusion.metadata_hybrid": "output_contract",
@@ -614,6 +631,7 @@
         "pack.metadata_precedents": "inspect_only",
         "query.evidence_field": "output_contract",
         "query.passthrough": "output_contract",
+        "query.research_contextualize": "output_contract",
         "query.research_decompose": "output_contract",
         "rerank.cross_encoder": "output_contract",
         "rerank.lexical_fallback": "output_contract",
@@ -667,6 +685,7 @@
       "output_key": "pipelines.purpose.claim_memory.output",
       "authority_key": "pipelines.purpose.claim_memory.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -684,6 +703,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "inspect_only",
         "rerank.lexical_fallback": "inspect_only",
@@ -737,6 +757,7 @@
       "output_key": "pipelines.purpose.response_memory.output",
       "authority_key": "pipelines.purpose.response_memory.authority",
       "strategy_fit": {
+        "context.research_thread": "inspect_only",
         "fallback.metadata_precedents_lexical": "output_contract",
         "filter.metadata_scope": "inspect_only",
         "fusion.metadata_hybrid": "inspect_only",
@@ -754,6 +775,7 @@
         "pack.metadata_precedents": "output_contract",
         "query.evidence_field": "inspect_only",
         "query.passthrough": "inspect_only",
+        "query.research_contextualize": "inspect_only",
         "query.research_decompose": "inspect_only",
         "rerank.cross_encoder": "inspect_only",
         "rerank.lexical_fallback": "inspect_only",
@@ -807,6 +829,7 @@
       "output_key": "pipelines.purpose.corpus_document_manifest.output",
       "authority_key": "pipelines.purpose.corpus_document_manifest.authority",
       "strategy_fit": {
+        "context.research_thread": "output_contract",
         "fallback.metadata_precedents_lexical": "inspect_only",
         "filter.metadata_scope": "output_contract",
         "fusion.metadata_hybrid": "output_contract",
@@ -824,6 +847,7 @@
         "pack.metadata_precedents": "inspect_only",
         "query.evidence_field": "output_contract",
         "query.passthrough": "output_contract",
+        "query.research_contextualize": "output_contract",
         "query.research_decompose": "output_contract",
         "rerank.cross_encoder": "output_contract",
         "rerank.lexical_fallback": "output_contract",
@@ -878,6 +902,7 @@
       "output_key": "pipelines.purpose.corpus_segmentation.output",
       "authority_key": "pipelines.purpose.corpus_segmentation.authority",
       "strategy_fit": {
+        "context.research_thread": "output_contract",
         "fallback.metadata_precedents_lexical": "inspect_only",
         "filter.metadata_scope": "output_contract",
         "fusion.metadata_hybrid": "output_contract",
@@ -895,6 +920,7 @@
         "pack.metadata_precedents": "inspect_only",
         "query.evidence_field": "output_contract",
         "query.passthrough": "output_contract",
+        "query.research_contextualize": "output_contract",
         "query.research_decompose": "output_contract",
         "rerank.cross_encoder": "output_contract",
         "rerank.lexical_fallback": "output_contract",
@@ -949,6 +975,7 @@
       "output_key": "pipelines.purpose.corpus_text_touchup.output",
       "authority_key": "pipelines.purpose.corpus_text_touchup.authority",
       "strategy_fit": {
+        "context.research_thread": "output_contract",
         "fallback.metadata_precedents_lexical": "inspect_only",
         "filter.metadata_scope": "output_contract",
         "fusion.metadata_hybrid": "output_contract",
@@ -966,6 +993,7 @@
         "pack.metadata_precedents": "inspect_only",
         "query.evidence_field": "output_contract",
         "query.passthrough": "output_contract",
+        "query.research_contextualize": "output_contract",
         "query.research_decompose": "output_contract",
         "rerank.cross_encoder": "output_contract",
         "rerank.lexical_fallback": "output_contract",
@@ -1451,6 +1479,96 @@
     ]
   },
   "strategies": [
+    {
+      "strategy_id": "context.research_thread",
+      "version": 1,
+      "family": "query_transform",
+      "scholarly_effect": "advisory",
+      "label": "Research thread context",
+      "description": "Select owner-scoped completed turns within a bounded immutable advisory snapshot; historical answers never become evidence.",
+      "input_type": "query",
+      "output_type": "query",
+      "deterministic": true,
+      "invokes_llm": false,
+      "capabilities": [],
+      "config_schema": {
+        "type": "object",
+        "properties": {
+          "max_turns": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16
+          },
+          "max_characters": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 128000
+          },
+          "max_answer_characters": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64000
+          },
+          "include_answers": {
+            "type": "boolean"
+          },
+          "semantic": {
+            "type": "boolean"
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "name": "thread_context",
+          "data_type": "thread_context",
+          "required": true,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        }
+      ],
+      "complexity": {
+        "time": "O(P)",
+        "space": "O(P)",
+        "variables": [
+          "P"
+        ],
+        "driver": "storage",
+        "model_calls": "0",
+        "scales_with_scope": false,
+        "order": 2,
+        "cardinality": {
+          "rule": "same",
+          "config_key": null,
+          "default": null
+        }
+      },
+      "label_key": "pipelines.strategy.context_research_thread.label",
+      "description_key": "pipelines.strategy.context_research_thread.description",
+      "phase": "prepare",
+      "effect_note": "transformation"
+    },
     {
       "strategy_id": "fallback.metadata_precedents_lexical",
       "version": 1,
@@ -1988,6 +2106,15 @@
           "name": "query",
           "data_type": "query",
           "required": true,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "name": "thread_context",
+          "data_type": "thread_context",
+          "required": false,
           "multiple": false,
           "accepts_constant": false,
           "minimum": null,
@@ -2638,6 +2765,83 @@
       "description_key": "pipelines.strategy.query_passthrough.description",
       "phase": "prepare",
       "effect_note": "no_effect"
+    },
+    {
+      "strategy_id": "query.research_contextualize",
+      "version": 1,
+      "family": "query_transform",
+      "scholarly_effect": "transformation",
+      "label": "Bilingual follow-up contextualization",
+      "description": "Resolve follow-up references using advisory history in the existing bilingual query call; preserve the original question and visibly fall back on failure.",
+      "input_type": "query",
+      "output_type": "query",
+      "deterministic": false,
+      "invokes_llm": true,
+      "capabilities": [
+        "chat_model"
+      ],
+      "config_schema": {
+        "type": "object",
+        "properties": {
+          "num_predict": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 8192
+          }
+        }
+      },
+      "inputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        },
+        {
+          "name": "thread_context",
+          "data_type": "thread_context",
+          "required": false,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "query",
+          "data_type": "query",
+          "required": true,
+          "multiple": false,
+          "accepts_constant": false,
+          "minimum": null,
+          "maximum": null
+        }
+      ],
+      "complexity": {
+        "time": "O(P + g)",
+        "space": "O(P + g)",
+        "variables": [
+          "P",
+          "g"
+        ],
+        "driver": "llm_generation",
+        "model_calls": "0 or 1",
+        "scales_with_scope": false,
+        "order": 7,
+        "cardinality": {
+          "rule": "fixed",
+          "config_key": null,
+          "default": 1
+        }
+      },
+      "label_key": "pipelines.strategy.query_research_contextualize.label",
+      "description_key": "pipelines.strategy.query_research_contextualize.description",
+      "phase": "prepare",
+      "effect_note": "transformation"
     },
     {
       "strategy_id": "query.research_decompose",

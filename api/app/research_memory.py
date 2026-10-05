@@ -613,6 +613,7 @@ def memory_guidance(
     response_index_factory: Callable[[], ResponseMemoryIndex],
     claim_index_factory: Callable[[], ClaimMemoryIndex],
     pipeline_resolver: Callable[[str], dict[str, Any]] | None = None,
+    excluded_response_ids: Sequence[str] = (),
 ) -> tuple[str, str, dict[str, Any]]:
     """Prompt blocks for selected memory channels plus a reproducibility record."""
 
@@ -677,8 +678,11 @@ def memory_guidance(
     else:
         claims = off
 
+    excluded = set(excluded_response_ids)
+    responses["items"] = [item for item in responses["items"] if item["response_id"] not in excluded]
     detail = {
         "owner_scope": owner,
+        "thread_response_ids_excluded": list(excluded_response_ids),
         # Response eligibility remains an application quality rule, not a tunable
         # retrieval-pipeline parameter.
         "min_grade": settings.research_memory_min_grade,

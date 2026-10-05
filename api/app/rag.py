@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import re
@@ -41,6 +42,13 @@ from .pipelines.research import (
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_filters import combine_metadata_filters, metadata_filter_fields
+from .research_followup import (
+    GENERATION_CONTRACT,
+    QUERY_CONTRACT,
+    advisory_context,
+    contextual_query_prompt,
+    validate_contextual_query,
+)
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .research_semantics import (
     CONCEPTS_ID,
@@ -136,6 +144,58 @@ Guidelines:
 - Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
 - Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
 - Use the supplied EVIDENCE as the sole basis for substantive claims.
+- Prior memory is advisory workflow context, not current evidence. Never cite it
+  or repeat an unsupported claim from it.
+- Do not flatten quotation provenance.
+- Preserve modality and negation.
+- If evidence is insufficient, say so rather than inventing support.
+- Respond in cohesive scholarly prose unless the user's instructions explicitly require another form.
+
+Citation rules:
+- Tag every substantive claim with one or more evidence IDs using double square
+  brackets by default, such as [[E0]] or [[E0, E3]].
+- Do not cite an evidence ID that does not support the claim.
+""".strip()
+
+THREAD_FOCUSED_PROMPT = """
+You are DerridAI, an evidence-grounded scholarly research assistant.
+
+<CURRENT_QUESTION>
+{prompt_query}
+</CURRENT_QUESTION>
+
+<THREAD_CONTEXT advisory="true" evidentiary="false">
+{thread_context}
+</THREAD_CONTEXT>
+
+<MASTER INSTRUCTIONS>
+{prompt_instructions}
+</MASTER INSTRUCTIONS>
+
+<RESPONSE LANGUAGE>
+{response_language}
+</RESPONSE LANGUAGE>
+
+<PRIOR_RESEARCH_MEMORY>
+{prior_response_memory}
+</PRIOR_RESEARCH_MEMORY>
+
+<PRIOR_CLAIM_PROVENANCE>
+{prior_claim_memory}
+</PRIOR_CLAIM_PROVENANCE>
+
+<EVIDENCE>
+{context}
+</EVIDENCE>
+
+Guidelines:
+- Preserve all supplied source-identity, attribution, quotation, stance, target, discourse-role, and proposition-status metadata.
+- Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
+- Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
+- Use the supplied EVIDENCE as the sole basis for substantive claims.
+- Thread context and prior memory are advisory, non-evidentiary context.
+  Current evidence governs any conflict with previous generated claims.
+  Never cite thread context or reuse its historical evidence markers.
 - Prior memory is advisory workflow context, not current evidence. Never cite it
   or repeat an unsupported claim from it.
 - Do not flatten quotation provenance.
@@ -1362,10 +1422,13 @@ def run_rag_pipeline(
     owner: str | None = None,
     on_generation_delta: Callable[[str], None] | None = None,
     stop_after_context: bool = False,
+    thread_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
     warnings: list[str] = []
+    thread_audit = copy.deepcopy(thread_audit)
+    thread_context = advisory_context(thread_audit, request.prompt)
 
     if request.pipeline_id:
         pipeline = pipeline_manager.get_definition(
@@ -1428,7 +1491,7 @@ def run_rag_pipeline(
         )
     )
     effective_query_decomposition = (
-        request.query_decomposition and pipeline_plan.query_decomposition_available
+        (request.query_decomposition or bool(thread_context)) and pipeline_plan.query_decomposition_available
     )
     if not model and (effective_query_decomposition or not stop_after_context):
         raise ValueError("No generation model selected.")
@@ -1438,9 +1501,11 @@ def run_rag_pipeline(
     update("query_metadata", 0, 1, "Decomposing the research prompt")
     parsed_query: dict[str, Any] = {}
     if effective_query_decomposition:
-        decomposition_prompt = QUERY_TEMPLATE.format(
-            prompt=request.prompt,
-            instructions=request.instructions or "",
+        decomposition_prompt = (
+            contextual_query_prompt(request.prompt, request.instructions or "", thread_context)
+            if thread_context else QUERY_TEMPLATE.format(
+                prompt=request.prompt, instructions=request.instructions or "",
+            )
         )
         try:
             parsed_query = structured_chat_complete(
@@ -1451,9 +1516,12 @@ def run_rag_pipeline(
                 prompt=decomposition_prompt,
                 options=request.generation,
                 max_tokens=runtime_settings.query_decomposition_num_predict,
+                validate=validate_contextual_query if thread_context else None,
                 attempts=2,
                 cancelled=cancelled,
             )
+        except InterruptedError:
+            raise
         except Exception as exc:
             warnings.append(
                 f"Query decomposition failed ({exc}); using the original prompt."
@@ -1469,7 +1537,7 @@ def run_rag_pipeline(
             or request.prompt
         ).strip(),
         "prompt_instructions": str(
-            parsed_query.get("prompt_instructions")
+            (None if thread_context else parsed_query.get("prompt_instructions"))
             or request.instructions
             or ""
         ).strip(),
@@ -1485,6 +1553,21 @@ def run_rag_pipeline(
         ),
         "document_languages": [str(code) for code in request.locales],
     }
+    if thread_audit is not None:
+        thread_audit.update({
+            "version": "research-thread-run-v2",
+            "context_consumed": bool(thread_context) and not stop_after_context,
+            "contextualization": {
+                "contract": QUERY_CONTRACT,
+                "attempted": bool(thread_context) and effective_query_decomposition,
+                "fallback": bool(thread_context) and effective_query_decomposition and not bool(parsed_query),
+                "provider": provider if thread_context and effective_query_decomposition else None,
+                "model": model if thread_context and effective_query_decomposition else None,
+                "original_question": request.prompt,
+                "derived_query": query_metadata["prompt_query"],
+                "derived_query_fr": query_metadata["prompt_query_fr"],
+            },
+        })
     stages.append({
         "name": "query_metadata",
         "seconds": time.perf_counter() - stage_start,
@@ -2348,6 +2431,9 @@ def run_rag_pipeline(
     if stop_after_context:
         return {
             "prompt": request.prompt,
+            "research_thread": thread_audit,
+            "prompt_contract": GENERATION_CONTRACT,
+            "query_contract": QUERY_CONTRACT,
             "query_metadata": query_metadata,
             "answer": "",
             "raw_answer": "",
@@ -2377,6 +2463,13 @@ def run_rag_pipeline(
 
     # Advisory memory is chosen after the evidence packet exists so validated-claim
     # support can be checked against the Records this answer may actually cite.
+    excluded_thread_response_ids: list[str] = []
+    if thread_audit:
+        excluded_thread_response_ids = [
+            str(item["response_id"])
+            for item in (thread_audit.get("context_selection") or {}).get("items", [])
+            if item.get("role") == "assistant" and item.get("response_id")
+        ]
     prior_response_memory, prior_claim_memory, memory_detail = memory_guidance(
         query_metadata["prompt_query"],
         use_responses=request.use_prior_response_memory,
@@ -2386,14 +2479,16 @@ def run_rag_pipeline(
         system_store=system_store,
         response_index_factory=lambda: ResponseMemoryIndex(store),
         claim_index_factory=lambda: ClaimMemoryIndex(store),
+        excluded_response_ids=excluded_thread_response_ids,
     )
     warnings.extend(memory_detail["warnings"])
 
     # Step 6: generate answer.
     stage_start = time.perf_counter()
     update("generation", 0, 1, f"Invoking {provider} · {model}")
-    generation_prompt = FOCUSED_PROMPT.format(
-        prompt_query=query_metadata["prompt_query"],
+    generation_prompt = (THREAD_FOCUSED_PROMPT if thread_context else FOCUSED_PROMPT).format(
+        prompt_query=request.prompt,
+        thread_context=thread_context or "(none selected)",
         prompt_instructions=query_metadata["prompt_instructions"],
         response_language=("French" if query_metadata.get("response_language") == "fr" else "English"),
         prior_response_memory=prior_response_memory or "(none selected)",
@@ -2451,6 +2546,9 @@ def run_rag_pipeline(
 
     return {
         "prompt": request.prompt,
+        "research_thread": thread_audit,
+        "prompt_contract": GENERATION_CONTRACT,
+        "query_contract": QUERY_CONTRACT,
         "query_metadata": query_metadata,
         "answer": answer,
         "raw_answer": raw_answer,

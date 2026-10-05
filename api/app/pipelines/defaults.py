@@ -1128,6 +1128,28 @@ BUILT_IN_PIPELINES: tuple[PipelineDefinition, ...] = (
     ),
 )
 
+def _threaded_research(pipeline: PipelineDefinition) -> PipelineDefinition:
+    # Preserve immutable v1 definitions and persisted override/version identities.
+    data = pipeline.model_dump(mode="json")
+    data.update(version=2, entry_stage_ids=["thread_context"])
+    data["stages"].insert(0, {
+        "id": "thread_context", "strategy": "context.research_thread",
+        "config": {"max_turns": 4, "max_characters": 24000,
+                   "max_answer_characters": 12000, "include_answers": True, "semantic": True},
+        "next": ["query"],
+    })
+    for stage in data["stages"]:
+        if stage["id"] == "query":
+            stage["strategy"] = "query.research_contextualize"
+    return PipelineDefinition.model_validate(data)
+
+
+BUILT_IN_PIPELINES += tuple(
+    _threaded_research(pipeline) for pipeline in BUILT_IN_PIPELINES
+    if pipeline.purpose == "research" and pipeline.version == 1
+)
+
+
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="corpus_metadata_enrichment",
@@ -1167,7 +1189,7 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="research",
         pipeline_id="research.current",
-        pipeline_version=1,
+        pipeline_version=2,
         source="built_in",
         override_allowed=True,
     ),

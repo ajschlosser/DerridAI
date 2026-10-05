@@ -36,17 +36,31 @@ def saved_turn_result(turn: dict[str, Any], owner: str, cache: Any) -> dict[str,
     if not isinstance(record, dict):
         raise KeyError("Saved answer artifact is unavailable")
     audit = record.get("research_thread")
-    # Old unowned cache entries cannot establish authorization or attempt identity.
+    # A legacy singleton is authorized by its SQLite materialization link,
+    # exact owner/run/question and first attempt, never by a client-provided ID.
+    legacy = False
+    if audit is None:
+        from .research_threads import thread_store
+        thread = thread_store().get_thread(turn["thread_id"], owner)
+        legacy = (thread.get("originating_response_record_id") == record_id
+                  and turn["ordinal"] == 1 and turn["attempt"] == 1)
+    # Unowned entries remain in the administrative archive; never invent ownership.
     if (
         record.get("record_id") != record_id
         or record.get("owner") != owner
         or record.get("response_id") != turn.get("research_run_id")
-        or not isinstance(audit, dict)
-        or audit.get("thread_id") != turn["thread_id"]
-        or audit.get("turn_id") != turn["turn_id"]
-        or audit.get("attempt") != turn["attempt"]
+        or (not legacy and (
+            not isinstance(audit, dict)
+            or audit.get("thread_id") != turn["thread_id"]
+            or audit.get("turn_id") != turn["turn_id"]
+            or audit.get("attempt") != turn["attempt"]
+        ))
         or record.get("question") != turn["user_question"]
     ):
+        raise ThreadNotFound(turn["turn_id"])
+    from .pipelines.store import pipeline_store
+    trace = pipeline_store.get_run(str(turn["research_run_id"]))
+    if trace is not None and trace.owner != owner:
         raise ThreadNotFound(turn["turn_id"])
     return {
         "id": turn["research_run_id"], "owner": owner, "turn_id": turn["turn_id"],
@@ -58,7 +72,12 @@ def saved_turn_result(turn: dict[str, Any], owner: str, cache: Any) -> dict[str,
             "query_metadata": record.get("query_metadata") or {},
             "retrieval": record.get("retrieval") or {}, "stages": record.get("pipeline_stages") or [],
             "warnings": record.get("warnings") or [], "elapsed_seconds": record.get("elapsed_seconds"),
-            "research_thread": audit, "response_cache": {"record_id": record_id},
+            "research_thread": audit,
+            "pipeline": record.get("pipeline") or {},
+            "prompt_contract": record.get("prompt_contract"),
+            "query_contract": record.get("query_contract"),
+            "pipeline_trace": trace.model_dump(mode="json") if trace else None,
+            "auto_grade": record.get("grade"), "response_cache": {"record_id": record_id},
         }),
         "result_source": "saved_response",
     }

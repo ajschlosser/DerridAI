@@ -59,7 +59,8 @@ def test_research_resolution_uses_system_assignment_without_override(tmp_path) -
     )
 
     assert resolved.pipeline_id == "research.current"
-    assert resolved.version == 1
+    assert resolved.version == 2
+    assert manager.get_definition("research.current", 1) is not None
 
 
 def test_researcher_can_select_active_pipeline_when_assignment_allows_overrides(tmp_path) -> None:

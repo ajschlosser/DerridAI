@@ -596,6 +596,8 @@ class RAGJobManager(PersistentJobStateMixin):
                 # Live draft only: never stored on the job, never persisted token by token.
                 operation_events.note_generation_delta(job_id, text, owner=job_owner)
 
+            with self._lock:
+                thread_audit = copy.deepcopy(self._jobs[job_id].get("research_thread"))
             try:
                 result = run_rag_pipeline(
                     body,
@@ -604,14 +606,13 @@ class RAGJobManager(PersistentJobStateMixin):
                     cancelled=cancelled,
                     owner=job_owner,
                     on_generation_delta=generation_delta,
+                    **({"thread_audit": thread_audit} if thread_audit is not None else {}),
                 )
                 operation_events.note_generation_finished(job_id, owner=job_owner)
                 # Audit metadata stays outside prompt/evidence and is cached with
                 # the result. It survives later workspace deletion and retries.
-                with self._lock:
-                    thread_audit = copy.deepcopy(self._jobs[job_id].get("research_thread"))
                 if thread_audit is not None:
-                    result["research_thread"] = thread_audit
+                    result.setdefault("research_thread", thread_audit)
                     result.setdefault("warnings", []).extend(thread_audit["warnings"])
                 cache_info = None
                 cache_error = None

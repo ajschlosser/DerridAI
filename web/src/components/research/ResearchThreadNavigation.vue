@@ -29,6 +29,8 @@ defineProps<{
   selectedThreadId: string;
   selectedJobId?: string;
   offset: number;
+  search?: string;
+  showPreview?: boolean;
   loading?: boolean;
   error?: string;
   includeArchived?: boolean;
@@ -41,6 +43,7 @@ const emit = defineEmits<{
   open: [turn: ResearchTurn];
   new: [];
   page: [offset: number];
+  search: [value: string];
   retry: [];
   retryTurn: [turn: ResearchTurn];
   rename: [];
@@ -57,6 +60,15 @@ const i18n = useI18nStore();
     <button type="button" class="btn" @click="emit('new')">
       {{ i18n.t("research.thread_new") }}
     </button>
+    <label>
+      {{ i18n.t("research.threads_search") }}
+      <input
+        type="search"
+        :value="search"
+        maxlength="200"
+        @input="emit('search', ($event.target as HTMLInputElement).value)"
+      />
+    </label>
     <label class="research-thread-archive-filter">
       <input
         type="checkbox"
@@ -83,6 +95,10 @@ const i18n = useI18nStore();
             {{ item.title }}
             <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
             <span>{{ i18n.tf("research.thread_turn_count", { count: item.turn_count }) }}</span>
+            <span v-if="showPreview">{{ item.last_question }}</span>
+            <time :datetime="item.updated_at">{{
+              new Date(item.updated_at).toLocaleDateString(i18n.locale)
+            }}</time>
           </button>
         </li>
       </ul>
@@ -161,7 +177,6 @@ const i18n = useI18nStore();
           </article>
         </li>
       </ol>
-      <p>{{ i18n.t("research.thread_context_pending") }}</p>
     </section>
   </section>
 </template>

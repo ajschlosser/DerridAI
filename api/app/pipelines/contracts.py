@@ -180,6 +180,14 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
             model_calls="1",
         ),
     ),
+    "context.research_thread": (
+        [QUERY_IN], [_in("query", "query"), _in("thread_context", "thread_context")],
+        _complexity("O(P)", "O(P)", order=2, variables=("P",), driver="storage"),
+    ),
+    "query.research_contextualize": (
+        [QUERY_IN, _in("thread_context", "thread_context", required=False)],
+        [_in("query", "query")], _llm_call("0 or 1"),
+    ),
     "query.evidence_field": (
         [QUERY_IN],
         [_in("query", "query")],
@@ -395,7 +403,7 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
         ),
     ),
     "llm.generate_answer": (
-        [CONTEXT_IN, QUERY_IN],
+        [CONTEXT_IN, QUERY_IN, _in("thread_context", "thread_context", required=False)],
         [_in("answer", "model_output")],
         _llm_call("1"),
     ),
