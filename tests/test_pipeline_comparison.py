@@ -385,5 +385,5 @@ def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeyp
     assert warning is None
     assert ranked is not None
     candidate_text = captured["pairs"][0][1]
-    assert "Document author: Jacques Derrida" in candidate_text
+    assert "Source document author: Jacques Derrida" in candidate_text
     assert "Quoted author: Emmanuel Levinas" in candidate_text
