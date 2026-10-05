@@ -875,6 +875,7 @@ def test_record_review_state_prefers_explicit_schema_over_stale_profile():
         record,
         "mood",
         schema=schema,
+        method="test",
         reason="Needs a reviewer decision.",
     )
 
