@@ -268,9 +268,7 @@ describe("works workspace commands", () => {
           corpus_theme: "hospitality",
           passage_theme: "gift",
           field_assertions: {
-            "field-corpus-theme": [
-              assertion("field-corpus-theme", "corpus_theme", "hospitality"),
-            ],
+            "field-corpus-theme": [assertion("field-corpus-theme", "corpus_theme", "hospitality")],
             "field-passage-theme": [assertion("field-passage-theme", "passage_theme", "gift")],
           },
           current_field_assertions: {
