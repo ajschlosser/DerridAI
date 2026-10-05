@@ -986,7 +986,6 @@ At this stage, a follow-up may still run as an isolated question if context work
 
 Done when the server can deterministically produce a bounded advisory context packet for a follow-up.
 
-
 ### Phase F — contextualized retrieval query
 
 1. Evolve query decomposition or add contextualization stage.
@@ -1009,7 +1008,6 @@ Done when “What about Levinas?” can retrieve as a meaningful standalone quer
 6. Add adversarial tests where thread context contains fake citations or unsupported claims.
 
 Done when prior generated content cannot become support merely through prompt inclusion.
-
 
 ### Phase H — Pipeline Studio integration
 
