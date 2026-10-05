@@ -136,7 +136,7 @@ def _write_manifest(
 
 
 def _promote_onefile(primary: Path, output_dir: Path, target: str) -> Path:
-    release_name = release_artifact_name(APP_VERSION, target)  # type: ignore[arg-type]
+    release_name = release_artifact_name(target)  # type: ignore[arg-type]
     promoted = output_dir / release_name
     if primary.resolve() != promoted.resolve():
         promoted.unlink(missing_ok=True)
