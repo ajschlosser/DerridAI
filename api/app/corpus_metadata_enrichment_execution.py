@@ -38,7 +38,7 @@ from pydantic import BaseModel, ValidationError
 from . import experiment, operation_events
 from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
-from .concurrency import provider_limit
+from .concurrency import provider_capacity_key, provider_limit
 from .config import APP_VERSION, settings
 from .corpus_llm_helpers import (
     StructuredOutputError,
@@ -89,13 +89,16 @@ from .field_assertions import (
     migrate_record_assertions,
     reopen_assertion,
 )
+from .llm_failures import failure_disposition
 from .metadata_adjudication_cache import suggestions as adjudication_suggestions
 from .metadata_candidates import (
     apply_indexing_nlp_candidates,
     is_direct_nlp_indexing_candidate,
 )
+from .metadata_failure_recovery import plan_metadata_recovery
 from .metadata_precedents_cache import CACHE_KEY as PRECEDENTS_CACHE_KEY
 from .metadata_precedents_cache import build_precedents_cache
+from .metadata_provider_health import metadata_provider_health
 from .metadata_request_coalescer import MetadataRequestCoalescer
 from .metadata_schema import (
     CORE_FIELDS,
@@ -1231,7 +1234,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             # A fully materialized family no longer needs its bulky raw response.
             # Tracked normalized outputs must match both dependencies and output
             # state below. Historical untracked families retain resume semantics.
-            # Failed/user-skipped families remain terminal until an explicit retry.
+            # Terminal failures/user skips stay settled. A retry-pending family is
+            # owned by outer recovery orchestration and runs only after it is
+            # explicitly promoted back to queued.
             prior_ledger = stage_ledger.get(task_name)
             materialized = prior_state == "complete" and task_name not in persisted_stage_results
             if materialized and (
@@ -1243,6 +1248,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 continue
             if prior_state in {"failed", "needs_review", "skipped"}:
                 prior_error = RuntimeError(f"{task_name} metadata previously settled as {prior_state}.")
+                stage_results.append((task_name, None, prior_error))
+                continue
+            if prior_state == "retry_pending":
+                prior_error = RuntimeError(
+                    f"{task_name} metadata is waiting for bounded automatic provider recovery."
+                )
                 stage_results.append((task_name, None, prior_error))
                 continue
             if build_id:
@@ -1337,6 +1348,16 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 str(name)
                 for name in getattr(metadata_contract, "model_fields", {})
             )
+            prior_recovery_attempts = (
+                int(prior_ledger.get("automatic_recovery_attempts") or 0)
+                if isinstance(prior_ledger, dict)
+                else 0
+            )
+            recovery_inflight_attempt = (
+                int(prior_ledger.get("automatic_recovery_inflight_attempt") or 0)
+                if isinstance(prior_ledger, dict)
+                else 0
+            )
             ledger_context = {
                 "provider_profile_id": active_request.get("provider_profile_id"),
                 "provider": active_request.get("provider"),
@@ -1347,6 +1368,8 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 "max_output_tokens": max_tokens,
                 "timeout_seconds": _stage_timeouts(active_request).get(task_name),
                 "checkpoint_invalidation_reason": invalidation_reason,
+                "automatic_recovery_attempts": prior_recovery_attempts,
+                "automatic_recovery_inflight_attempt": recovery_inflight_attempt or None,
             }
             stage_status[task_name] = "running"
             stage_ledger[task_name] = {**ledger_context, "state": "running", "started_at": started_at, "finished_at": None, "error": None}
@@ -1471,6 +1494,12 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                 persisted_stage_results[task_name] = result
                 stage_status[task_name] = "complete"
                 model_invocations = int(model_call_counter.get("attempts") or 0)
+                completed_recovery_attempts = prior_recovery_attempts
+                if recovery_inflight_attempt > 0 and model_invocations > 0:
+                    completed_recovery_attempts = max(
+                        completed_recovery_attempts,
+                        recovery_inflight_attempt,
+                    )
                 stage_ledger[task_name] = {
                     **ledger_context,
                     "pipeline": session.identity(),
@@ -1486,6 +1515,9 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     "residual_contradiction_fields": residual_contradictions,
                     "model_invocations": model_invocations,
                     "inflight_coalesced_calls": int(model_call_counter.get("coalesced") or 0),
+                    "automatic_recovery_attempts": completed_recovery_attempts,
+                    "automatic_recovery_inflight_attempt": None,
+                    "recovered_after_retry": completed_recovery_attempts > 0,
                 }
                 if not residual_contradictions:
                     stage_ledger[task_name]["dependency_fingerprint"] = dependency_fingerprint
@@ -1532,21 +1564,45 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             except InterruptedError:
                 raise
             except Exception as exc:
-                stage_status[task_name] = "failed"
                 model_invocations = int(model_call_counter.get("attempts") or 0)
+                completed_recovery_attempts = prior_recovery_attempts
+                if recovery_inflight_attempt > 0 and model_invocations > 0:
+                    completed_recovery_attempts = max(
+                        completed_recovery_attempts,
+                        recovery_inflight_attempt,
+                    )
+                recovery_decision = plan_metadata_recovery(
+                    exc,
+                    {"automatic_recovery_attempts": completed_recovery_attempts},
+                )
+                settled_state = "retry_pending" if recovery_decision.schedule else "failed"
+                stage_status[task_name] = settled_state
                 stage_ledger[task_name] = {
                     **ledger_context,
                     **({"pipeline": session.identity()} if session else {}),
-                    "state": "failed",
+                    "state": settled_state,
                     "started_at": started_at,
                     "finished_at": iso_now(),
                     "elapsed_ms": int((time.monotonic() - started_clock) * 1000),
                     "error": str(exc)[:1200],
+                    "failure_code": recovery_decision.disposition.code,
+                    "failure_class": recovery_decision.disposition.failure_class,
+                    "retryable": recovery_decision.disposition.retryable,
+                    "provider_http_status": recovery_decision.disposition.http_status,
+                    "provider_error_code": recovery_decision.disposition.provider_code,
+                    "capability_mismatch": recovery_decision.disposition.capability_mismatch,
                     "recovery_kind": recovery_kind,
                     "recovery_fields": recovery_fields,
                     "recovery_calls": recovery_calls,
                     "recovery_max_output_tokens": recovery_max_tokens,
                     "model_invocations": model_invocations,
+                    "recovery_dependency_fingerprint": dependency_fingerprint,
+                    "automatic_recovery_attempts": recovery_decision.completed_attempts,
+                    "automatic_recovery_inflight_attempt": None,
+                    "next_automatic_recovery_attempt": recovery_decision.next_attempt,
+                    "retry_delay_seconds": recovery_decision.delay_seconds,
+                    "retry_not_before": recovery_decision.not_before,
+                    "automatic_recovery_terminal_reason": recovery_decision.terminal_reason,
                 }
                 stage_results.append((task_name, None, exc))
                 self._ledger.append(
@@ -1569,6 +1625,10 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     recovery_max_output_tokens=recovery_max_tokens,
                     residual_contradiction_fields=residual_contradictions,
                     model_invocations=model_invocations,
+                    failure_code=recovery_decision.disposition.code,
+                    failure_class=recovery_decision.disposition.failure_class,
+                    automatic_recovery_scheduled=recovery_decision.schedule,
+                    automatic_recovery_attempts=recovery_decision.completed_attempts,
                     provider_input_chars=int(model_call_counter.get("provider_input_chars") or 0),
                     provider_output_chars=int(model_call_counter.get("provider_output_chars") or 0),
                     provider_responses=int(model_call_counter.get("provider_responses") or 0),
@@ -1581,9 +1641,18 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     ),
                 )
                 if stage_callback:
-                    stage_callback(record, task_name, "failed", str(exc))
-                if build_id:
-                    self._append_warning(build_id, f"{record.get('record_id')}: {task_name} metadata requires review ({exc})")
+                    stage_callback(record, task_name, settled_state, str(exc))
+                if build_id and not recovery_decision.schedule:
+                    recovery_note = (
+                        "automatic recovery exhausted"
+                        if recovery_decision.terminal_reason == "automatic_recovery_exhausted"
+                        else "review required"
+                    )
+                    self._append_warning(
+                        build_id,
+                        f"{record.get('record_id')}: {task_name} metadata failed "
+                        f"({recovery_decision.disposition.code}); {recovery_note}.",
+                    )
 
         return stage_results
 
@@ -1596,21 +1665,59 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
         def invoke(role: str, attempts: int, escalated: bool) -> dict[str, Any]:
             if role not in _provider_roles(active_request):
                 raise LookupError("No review provider is configured for this build.")
+            configuration = (
+                active_request.get("_review_provider")
+                if role == "review"
+                else active_request
+            )
+            if not isinstance(configuration, dict):
+                raise LookupError("No review provider is configured for this build.")
+            provider, model, endpoint, secret, generation = _llm_config(configuration)
+            health_key = provider_capacity_key(
+                provider_profile_id=(
+                    str(configuration.get("provider_profile_id") or "") or None
+                ),
+                provider=provider,
+                base_url=endpoint,
+                model=model,
+            )
+            foreground = active_request.get("_capacity_priority") == "foreground"
+
             def generate() -> dict[str, Any]:
-                return self._chat_json(
-                    active_request, prompt, response_model=response_model,
-                    max_tokens=max_tokens, schema_name=schema_name, build_id=build_id,
-                    attempts=attempts, roles=(role,), escalated=escalated,
-                )
+                # Circuit admission happens outside complete_structured_json, so a
+                # deferred call does not consume a model-attempt budget. Direct
+                # unit/benchmark calls without a durable build are intentionally
+                # excluded from process health state.
+                if build_id:
+                    metadata_provider_health.before_call(
+                        health_key,
+                        foreground=foreground,
+                    )
+                try:
+                    answer = self._chat_json(
+                        active_request, prompt, response_model=response_model,
+                        max_tokens=max_tokens, schema_name=schema_name, build_id=build_id,
+                        attempts=attempts, roles=(role,), escalated=escalated,
+                    )
+                except InterruptedError:
+                    if build_id:
+                        metadata_provider_health.note_cancelled(health_key)
+                    raise
+                except Exception as exc:
+                    if build_id:
+                        metadata_provider_health.note_failure(
+                            health_key,
+                            failure_disposition(exc),
+                        )
+                    raise
+                if build_id:
+                    metadata_provider_health.note_success(health_key)
+                return answer
 
             fingerprint = active_request.get("_metadata_dependency_fingerprint")
             if not build_id or not fingerprint:
                 return generate()
-            configuration = active_request.get("_review_provider") if role == "review" else active_request
-            if not isinstance(configuration, dict):
-                raise LookupError("No review provider is configured for this build.")
             # Credentials scope sharing but this key never leaves process memory.
-            provider, model, endpoint, secret, generation = _llm_config(configuration)
             key = hashlib.sha256(json.dumps({
                 "build": build_id, "dependencies": fingerprint, "role": role,
                 "provider": provider, "model": model, "endpoint": endpoint,
@@ -1809,7 +1916,13 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
 
         for task_name, result, failure in stage_results:
             if failure is not None or not isinstance(result, dict):
-                review_reasons.append(f"{task_name} metadata extraction could not be validated: {failure}")
+                # A transient provider failure that is already scheduled for
+                # automatic recovery is operationally unresolved, not yet a
+                # scholarly review conclusion.
+                if str(stage_status.get(task_name) or "") != "retry_pending":
+                    review_reasons.append(
+                        f"{task_name} metadata extraction could not be validated: {failure}"
+                    )
                 continue
             successful_tasks += 1
             metadata = result.get("metadata") if isinstance(result.get("metadata"), dict) else {}

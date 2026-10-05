@@ -1023,3 +1023,80 @@ def test_rerun_completion_uses_one_current_row_without_full_reads(tmp_path, monk
     else:
         assert totals["records_skipped"] == 1
         assert current["speaker"] == "Existing"
+
+
+
+def test_initial_scheduler_recovers_only_due_failed_family(prepared, monkeypatch):
+    repo, bid, manager = prepared
+    record = repo.get_record(bid, "r1")
+    record["metadata_enrichment_state"] = "complete"
+    record["metadata_stage_status"] = {
+        "discourse": "complete",
+        "quotation": "retry_pending",
+        "indexing": "complete",
+    }
+    record["metadata_execution_ledger"] = {
+        "discourse": {"state": "complete", "sentinel": "keep-discourse"},
+        "quotation": {
+            "state": "retry_pending",
+            "failure_code": "provider_upstream_failure",
+            "automatic_recovery_attempts": 0,
+            "next_automatic_recovery_attempt": 1,
+            "retry_not_before": "2000-01-01T00:00:00+00:00",
+        },
+        "indexing": {"state": "complete", "sentinel": "keep-indexing"},
+    }
+    repo.update_record(bid, record)
+
+    seen = []
+
+    def enrich(current, *_args, **_kwargs):
+        seen.append(copy.deepcopy(current["metadata_stage_status"]))
+        assert current["metadata_stage_status"]["discourse"] == "complete"
+        assert current["metadata_stage_status"]["quotation"] == "queued"
+        assert current["metadata_stage_status"]["indexing"] == "complete"
+        updated = copy.deepcopy(current)
+        updated["metadata_stage_status"]["quotation"] = "complete"
+        recovery_entry = updated["metadata_execution_ledger"]["quotation"]
+        recovery_attempt = int(
+            recovery_entry.get("automatic_recovery_inflight_attempt") or 0
+        )
+        updated["metadata_execution_ledger"]["quotation"] = {
+            **recovery_entry,
+            "state": "complete",
+            "automatic_recovery_attempts": recovery_attempt,
+            "automatic_recovery_inflight_attempt": None,
+            "recovered_after_retry": True,
+        }
+        return updated
+
+    monkeypatch.setattr(manager, "_enrich_record", enrich)
+    rows = manager._schedule_build_enrichment(
+        bid,
+        {},
+        {},
+        repo.load_records(bid),
+    )
+
+    assert len(seen) == 1
+    recovered = next(row for row in rows if row["record_id"] == "r1")
+    assert recovered["metadata_stage_status"] == {
+        "discourse": "complete",
+        "quotation": "complete",
+        "indexing": "complete",
+    }
+    assert (
+        recovered["metadata_execution_ledger"]["quotation"][
+            "automatic_recovery_attempts"
+        ]
+        == 1
+    )
+    assert recovered["metadata_execution_ledger"]["quotation"]["recovered_after_retry"]
+    assert (
+        recovered["metadata_execution_ledger"]["discourse"]["sentinel"]
+        == "keep-discourse"
+    )
+    assert (
+        recovered["metadata_execution_ledger"]["indexing"]["sentinel"]
+        == "keep-indexing"
+    )
