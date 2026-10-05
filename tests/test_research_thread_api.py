@@ -256,3 +256,87 @@ def test_context_budget_failure_marks_new_turn_failed_without_starting_job(store
     assert turns[-1]["status"] == "failed" and turns[-1]["job_id"] is None
     assert "context answer budget" in turns[-1]["error"]
     assert len(jobs.created) == 1
+
+
+@pytest.mark.parametrize("retry", [False, True])
+def test_run_audit_survives_workspace_deletion_and_is_not_evidence(store, monkeypatch, retry):
+    from app import job_rag
+
+    first, _ = store.append_turn(store.create_thread("alice")["thread_id"], "alice", "Earlier?")
+    store.bind_job(first["turn_id"], "alice", job_id="old-job")
+    store.complete_turn(first["turn_id"], "alice", research_run_id="old-job", response_record_id="old-response")
+    turn, _ = store.append_turn(first["thread_id"], "alice", "What about him?")
+    if retry:
+        store.end_turn(turn["turn_id"], "alice", status="failed")
+        turn = store.retry_turn(turn["turn_id"], "alice")
+    snapshot = {
+        "version": "research-thread-context-v1", "strategy": "previous_and_recent_fallback",
+        "advisory": True, "evidentiary": False,
+        "selected_turn_ids": [first["turn_id"]],
+        "items": [{"role": "assistant", "text": "Prior answer [[E99]]"}], "warnings": [],
+    }
+    store.save_context_selection(turn["turn_id"], "alice", snapshot)
+    captured = {}
+
+    class Cache:
+        def cache_rag_response(self, **kwargs):
+            captured["cached"] = kwargs["result"]["research_thread"]
+            return {"record_id": "new-response"}
+
+    class DeferredThread:
+        def __init__(self, **kwargs):
+            pass
+        def start(self):
+            pass
+
+    def pipeline(body, *args, **kwargs):
+        captured["prompt"] = body.prompt
+        assert "thread_context" not in kwargs
+        return {"answer": "Current answer", "evidence": [], "prompt": body.prompt}
+
+    monkeypatch.setattr(job_rag.threading, "Thread", DeferredThread)
+    monkeypatch.setattr(job_rag, "run_rag_pipeline", pipeline)
+    manager = job_rag.RAGJobManager(Cache())
+    monkeypatch.setattr(manager, "_persist_job", lambda _: None)
+    monkeypatch.setattr(manager, "_persist_response_provenance", lambda *args, **kwargs: {})
+    body = _body("What about him?", thread_id=first["thread_id"], provider="openai", model="m")
+    job = manager.create(body, owner="alice", turn_id=turn["turn_id"])
+    job["research_thread"]["context_selection"]["items"][0]["text"] = "Tampered"
+    store.delete_thread(first["thread_id"], "alice")
+    manager._run(job["id"], body)
+    finished = manager.get(job["id"])
+    assert finished["status"] == "completed"
+    audit = finished["result"]["research_thread"]
+    assert audit == captured["cached"]
+    assert audit["attempt"] == (2 if retry else 1)
+    assert audit["original_question"] == captured["prompt"] == "What about him?"
+    assert audit["context_selection"]["items"][0]["text"] == "Prior answer [[E99]]"
+    assert not audit["context_consumed"]
+    assert finished["result"]["evidence"] == []
+    # Persistent job snapshots carry lineage even when thread storage is gone.
+    restored = job_rag.RAGJobManager(Cache())
+    restored.restore_snapshot(manager.snapshot())
+    assert restored.get(job["id"])["research_thread"] == audit
+
+
+def test_run_audit_rejects_cross_owner_and_stale_attempt(store):
+    thread = store.create_thread("alice")
+    turn, _ = store.append_turn(thread["thread_id"], "alice", "Question")
+    with pytest.raises(ThreadNotFound):
+        research_threads.run_thread_audit(turn["turn_id"], "bob")
+    store.save_context_selection(turn["turn_id"], "alice", {"items": []})
+    store.end_turn(turn["turn_id"], "alice", status="failed")
+    store.retry_turn(turn["turn_id"], "alice")
+    with pytest.raises(ValueError, match="another attempt"):
+        research_threads.run_thread_audit(turn["turn_id"], "alice")
+
+
+@pytest.mark.parametrize("change", [{"prompt": "Changed"}, {"thread_id": "other-thread"}])
+def test_manager_rejects_mismatched_turn_before_binding(store, change):
+    from app.job_rag import RAGJobManager
+
+    turn, _ = store.append_turn(store.create_thread("alice")["thread_id"], "alice", "Question")
+    manager = RAGJobManager(SimpleNamespace())
+    with pytest.raises(ValueError, match="does not match"):
+        manager.create(_body("Question").model_copy(update=change), owner="alice", turn_id=turn["turn_id"])
+    assert store.get_turn(turn["turn_id"], "alice")["job_id"] is None

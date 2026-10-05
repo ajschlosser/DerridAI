@@ -23,6 +23,7 @@ server-owned advisory context selections before starting a job.
 """
 from __future__ import annotations
 
+import copy
 import logging
 from typing import Any
 
@@ -94,6 +95,26 @@ def start_run(
 
 def _with_thread(job: dict[str, Any], turn: dict[str, Any]) -> dict[str, Any]:
     return {**job, "thread_id": turn["thread_id"], "turn_id": turn["turn_id"]}
+
+
+def run_thread_audit(turn_id: str, owner: str) -> dict[str, Any]:
+    """Copy the exact attempt snapshot before binding; never select history again."""
+    turn = thread_store().get_turn(turn_id, owner)
+    selection = turn.get("context_selection")
+    if selection is not None and selection.get("attempt") != turn["attempt"]:
+        raise ValueError("Thread context snapshot belongs to another attempt")
+    return {
+        "version": "research-thread-run-v1",
+        "thread_id": turn["thread_id"],
+        "turn_id": turn["turn_id"],
+        "turn_ordinal": turn["ordinal"],
+        "parent_turn_id": turn.get("parent_turn_id"),
+        "attempt": turn["attempt"],
+        "original_question": turn["user_question"],
+        "context_selection": copy.deepcopy(selection),
+        "context_consumed": False,
+        "warnings": [] if selection is not None else ["thread_context_snapshot_unavailable"],
+    }
 
 
 def bind_job(turn_id: str, owner: str, job_id: str) -> None:

@@ -395,6 +395,18 @@ class PipelineStageTrace(BaseModel):
     score_summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class ResearchThreadRunTrace(BaseModel):
+    """Text-free lineage; selection is not an executed generation stage."""
+
+    thread_id: str
+    turn_id: str
+    attempt: int = Field(ge=1)
+    context_version: str | None = None
+    context_strategy: str | None = None
+    selected_turn_ids: list[str] = Field(default_factory=list)
+    context_consumed: bool = False
+
+
 class PipelineRunTrace(BaseModel):
     run_id: str
     feature: str
@@ -402,6 +414,7 @@ class PipelineRunTrace(BaseModel):
     pipeline_version: int
     resolved_pipeline: dict[str, Any]
     resolved_hash: str
+    research_thread: ResearchThreadRunTrace | None = None
     owner: str | None = None
     status: Literal["running", "completed", "failed", "cancelled"]
     started_at: datetime

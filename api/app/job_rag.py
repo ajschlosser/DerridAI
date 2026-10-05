@@ -131,6 +131,15 @@ class RAGJobManager(PersistentJobStateMixin):
         turn_id: str | None = None,
     ) -> dict[str, Any]:
         job_id = str(uuid.uuid4())
+        thread_audit = (
+            research_threads.run_thread_audit(turn_id, str(owner or ""))
+            if turn_id else None
+        )
+        if thread_audit and (
+            body.thread_id not in (None, thread_audit["thread_id"])
+            or body.prompt.strip() != thread_audit["original_question"]
+        ):
+            raise ValueError("Research request does not match its owned turn")
         if turn_id:
             # Bind before the worker can finish so completion always finds the turn.
             research_threads.bind_job(turn_id, str(owner or ""), job_id)
@@ -183,6 +192,7 @@ class RAGJobManager(PersistentJobStateMixin):
                 "prompt": body.prompt,
                 "owner": owner,
                 "turn_id": turn_id,
+                **({"research_thread": thread_audit} if thread_audit else {}),
                 "status": "queued",
                 "created_at": iso_now(),
                 "started_at": None,
@@ -596,6 +606,13 @@ class RAGJobManager(PersistentJobStateMixin):
                     on_generation_delta=generation_delta,
                 )
                 operation_events.note_generation_finished(job_id, owner=job_owner)
+                # Audit metadata stays outside prompt/evidence and is cached with
+                # the result. It survives later workspace deletion and retries.
+                with self._lock:
+                    thread_audit = copy.deepcopy(self._jobs[job_id].get("research_thread"))
+                if thread_audit is not None:
+                    result["research_thread"] = thread_audit
+                    result.setdefault("warnings", []).extend(thread_audit["warnings"])
                 cache_info = None
                 cache_error = None
                 if not cancelled():
@@ -1019,6 +1036,8 @@ class RAGJobManager(PersistentJobStateMixin):
             for key, value in job.items()
             if key != "result"
         }
+        if "research_thread" in out:
+            out["research_thread"] = copy.deepcopy(out["research_thread"])
         if include_result:
             out["result"] = job["result"]
         elif "events" in out:
