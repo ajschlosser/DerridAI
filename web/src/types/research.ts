@@ -172,6 +172,8 @@ export type ResearchResult = {
 
 export type ResearchJob = {
   id: string;
+  thread_id?: string;
+  turn_id?: string;
   type?: string;
   status: string;
   stage?: string;

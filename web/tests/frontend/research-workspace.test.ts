@@ -52,6 +52,12 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("research workspace commands", () => {
+  it("preserves thread linkage through the job presentation adapter", async () => {
+    const { researchJobForUi } = await import("../../src/domain/researchPayloads");
+    expect(
+      researchJobForUi({ id: "j", thread_id: "t", turn_id: "u", status: "running" }),
+    ).toMatchObject({ id: "j", thread_id: "t", turn_id: "u" });
+  });
   it("accepts only known configuration keys and saves", () => {
     const { state, calls, spies, workspace } = setup({ selectedEvidenceEntries: () => [{}] });
     const config = workspace.updateResearchConfig({
