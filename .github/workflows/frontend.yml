@@ -197,12 +197,14 @@ jobs:
             exit 0
           fi
 
-          # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
+          # Temporary formatter diagnostic: print the exact Prettier rewrite for the remaining failing file.
           git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
-              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+              --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+          git diff -- web/src/domain/searchWorkspace.ts
+          exit 1
 
   backend-lint:
     needs: changes
