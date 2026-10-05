@@ -143,11 +143,27 @@ class OperationsMixin:
 
 
     def cancel(self, build_id: str) -> dict[str, Any]:
+        """Request cooperative cancellation and persist that intent immediately.
+
+        The in-memory flag gives same-process workers a fast cancellation path.
+        The durable flag is equally authoritative so a worker that observes the
+        build through persisted state cannot miss a request that already received
+        HTTP 200. While work unwinds, expose an explicit cancelling stage instead
+        of leaving the UI apparently frozen on the previous stage.
+        """
         build = self.repo.get_build(build_id)
         with self._lock:
             self._cancel.add(build_id)
         if build.get("status") in {"queued", "running"}:
             build["cancel_requested"] = True
+            build["cancel_requested_at"] = build.get("cancel_requested_at") or iso_now()
+            build["stage_before_cancel"] = build.get("stage")
+            build["stage"] = "cancelling"
+            operation = build.get("metadata_operation")
+            if isinstance(operation, dict) and operation.get("state") in {"queued", "running"}:
+                operation = dict(operation)
+                operation["state"] = "cancelling"
+                build["metadata_operation"] = operation
             self.repo.save_build(build)
         return build
 
@@ -170,6 +186,21 @@ class OperationsMixin:
 
 
     def _cancelled(self, build_id: str) -> bool:
+        """Return cancellation from either the live token or durable build state.
+
+        Most checks hit the in-memory set. The persisted fallback closes the gap
+        between a successful cancel request and a worker whose live token was
+        lost or was not shared, while retaining the existing low-latency path.
+        """
         with self._lock:
-            return build_id in self._cancel
+            if build_id in self._cancel:
+                return True
+        try:
+            cancelled = bool(self.repo.get_build(build_id).get("cancel_requested"))
+        except KeyError:
+            return False
+        if cancelled:
+            with self._lock:
+                self._cancel.add(build_id)
+        return cancelled
 
