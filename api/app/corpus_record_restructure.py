@@ -269,6 +269,8 @@ def _source_unit_descends_from(
 def repair_record_source_topology(
     records: list[dict[str, Any]],
     units: list[dict[str, Any]],
+    *,
+    source_block_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Repair only provably equivalent stale Record-to-SourceUnit bindings.
 
@@ -295,12 +297,14 @@ def repair_record_source_topology(
     if not active_order:
         return []
 
-    immutable_roots = {
-        str(value)
-        for unit in units
-        for value in unit.get("source_block_ids") or []
-        if str(value)
-    }
+    immutable_roots = set(source_block_ids or ())
+    if not immutable_roots:
+        immutable_roots = {
+            str(unit.get("block_id") or "")
+            for unit in units
+            if not (unit.get("parent_unit_ids") or [])
+            and str(unit.get("block_id") or "")
+        }
 
     def active_descendants(unit_id: str) -> list[str]:
         return [
@@ -366,7 +370,7 @@ def repair_record_source_topology(
         target = _squash(str(record.get("source_extracted_text") or ""))
         if not roots or not target:
             continue
-        candidates = [
+        eligible = {
             unit_id
             for unit_id in active_order
             if (
@@ -379,15 +383,21 @@ def repair_record_source_topology(
                 )
                 & roots
             )
-        ]
+        }
         matches: list[list[str]] = []
-        for start in range(len(candidates)):
+        for start, first in enumerate(active_order):
+            if first not in eligible:
+                continue
             parts: list[str] = []
-            for end in range(start, len(candidates)):
-                parts.append(str(active[candidates[end]].get("text") or "").strip())
+            candidate_window: list[str] = []
+            for unit_id in active_order[start:]:
+                if unit_id not in eligible:
+                    break
+                candidate_window.append(unit_id)
+                parts.append(str(active[unit_id].get("text") or "").strip())
                 joined = _squash(JOIN.join(part for part in parts if part))
                 if joined == target:
-                    matches.append(candidates[start : end + 1])
+                    matches.append(list(candidate_window))
                 if len(joined) > len(target):
                     break
         if len(matches) == 1:
