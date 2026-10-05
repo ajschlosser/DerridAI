@@ -1002,6 +1002,8 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
+        author_tokens = _tokenize(str(record.get("document_author") or ""))
+        source_author_overlap = len(q & author_tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
         similarity = float(
             item.get("relevance")
@@ -1009,7 +1011,14 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
             else _distance_similarity(item.get("distance"))
         )
         row = dict(item)
-        row["rerank_score"] = overlap * 2.0 + similarity + retrieval_bonus
+        # Explicit source-author agreement is stronger evidence of source scope
+        # than merely mentioning the same author in passage text/metadata.
+        row["rerank_score"] = (
+            overlap * 2.0
+            + source_author_overlap
+            + similarity
+            + retrieval_bonus
+        )
         scored.append(row)
     return sorted(
         scored,
@@ -1684,7 +1693,7 @@ def run_rag_pipeline(
 
     # Explicitly named authors/works are corpus-scope constraints, not merely
     # generation instructions. Query decomposition may correctly move wording
-    # such as "cite Levinas" into prompt_instructions; if retrieval used only the
+    # such as "cite the named author" into prompt_instructions; if retrieval used only the
     # cleaned research question, that target could disappear before evidence
     # selection. Reserve one relevant Record for each named in-corpus scope.
     explicit_scope_text = "\n".join(
