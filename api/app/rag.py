@@ -23,13 +23,12 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-
 from .chroma_store import ChromaStore
 from .claim_memory import ClaimMemoryIndex
 from .config import settings
 from .corpus_citations import _citation_strings
-from .llm_transport import chat_complete, structured_chat_complete
 from .cross_encoder import predict_scores
+from .llm_transport import chat_complete, structured_chat_complete
 from .models import RAGPromptMetadataPolicy, RAGRunRequest
 from .pipelines.manager import pipeline_manager
 from .pipelines.models import PipelineDefinition
