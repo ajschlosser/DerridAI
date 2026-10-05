@@ -138,6 +138,88 @@ def test_stale_revision_is_refused(tmp_path):
         manager.split(bid, "r2", offset=10, expected_revision=9)
 
 
+def test_sourceunit_topology_does_not_duplicate_a_split_legacy_block():
+    """Two active SourceUnit fragments may share one immutable extraction root."""
+    blocks = [
+        {
+            "block_id": "b1",
+            "page": 1,
+            "bbox": [0, 0, 1, 1],
+            "type": "paragraph",
+            "text": "Alpha Beta",
+        }
+    ]
+    units = [
+        {
+            **blocks[0],
+            "source_unit_id": "b1",
+            "unit_id": "b1",
+            "source_block_ids": ["b1"],
+            "text": "Alpha Beta",
+            "active": False,
+        },
+        {
+            **blocks[0],
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["b1"],
+            "consumed_ranges": [{"unit_id": "b1", "start": 0, "end": 5}],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            **blocks[0],
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["b1"],
+            "consumed_ranges": [{"unit_id": "b1", "start": 6, "end": 10}],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [
+        {
+            "record_id": "r-left",
+            "text": "Alpha",
+            "source_extracted_text": "Alpha",
+            "source_unit_ids": ["u-left"],
+            "source_block_ids": ["b1"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+        {
+            "record_id": "r-right",
+            "text": "Beta",
+            "source_extracted_text": "Beta",
+            "source_unit_ids": ["u-right"],
+            "source_block_ids": ["b1"],
+            "pdf_pages": [1],
+            "page_start": None,
+            "page_end": None,
+            "review_disposition": "rejected",
+        },
+    ]
+
+    validation = cb.PdfCorpusBuildManager.validate_records(
+        blocks,
+        records,
+        {},
+        source_units=units,
+    )
+
+    assert validation["source_valid"] is True
+    assert validation["missing_block_ids"] == []
+    assert validation["missing_source_unit_ids"] == []
+    assert validation["duplicate_block_ids"] == []
+    assert validation["text_fidelity_errors"] == []
+    assert validation["source_order_errors"] == []
+    assert validation["source_conservation_errors"] == []
+
+
 def test_text_conservation_guard_refuses_lost_or_invented_text():
     from app.corpus_record_restructure import assert_text_conserved
 
