@@ -105,6 +105,7 @@ function setup(beforeDecision?: () => Promise<boolean>) {
   const refreshBuild = vi.fn(async () => undefined);
   const refreshRecords = vi.fn(async () => undefined);
   const reconcileRecords = vi.fn(async () => undefined);
+  const focusSourceBlocker = vi.fn(async () => undefined);
   const focusFirstMetadataBlocker = vi.fn();
   const setMessage = vi.fn();
 
@@ -139,6 +140,7 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     refreshBuild,
     refreshRecords,
     reconcileRecords,
+    focusSourceBlocker,
     focusFirstMetadataBlocker,
     setMessage,
     t: (key) => key,
@@ -165,6 +167,7 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     advanceFrom,
     refreshBuild,
     reconcileRecords,
+    focusSourceBlocker,
     setMessage,
     focusFirstMetadataBlocker,
   };
@@ -231,6 +234,7 @@ describe("Corpus Builder review decisions", () => {
 
     expect(state.reviewInspectorTab.value).toBe("source");
     expect(state.reviewQueue.value).toBe("source");
+    expect(state.focusSourceBlocker).toHaveBeenCalledTimes(1);
     expect(state.setMessage).toHaveBeenCalledWith("pdf_corpus.accept_blocked_source", "error");
   });
 

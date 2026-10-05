@@ -2510,7 +2510,9 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'pdf_corpus.accept_all': 'Accept all',
  'pdf_corpus.accept_all_queue': 'Accept queue',
  'pdf_corpus.accept_blocked_metadata': 'Confirm the required metadata before accepting this record: {fields}.',
- 'pdf_corpus.accept_blocked_source': 'Resolve or reject this source-extraction problem before accepting the record.',
+ 'pdf_corpus.accept_blocked_source': 'This record has a source-extraction problem. Inspect the source, correct or '
+                                     'confirm the reviewed text, then save with “Mark this record-level source issue '
+                                     'resolved” selected; or reject the record.',
  'pdf_corpus.record_save_failed': 'Record {record} — {fields} could not be saved: {error}',
  'pdf_corpus.accept_clean': 'Accept clean ({count})',
  'pdf_corpus.accept_clean_confirm': 'Accept {count} clean record(s)? Records with metadata, topology, or source '

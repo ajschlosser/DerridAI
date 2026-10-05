@@ -2693,8 +2693,9 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.accept_all': 'Tout accepter',
  'pdf_corpus.accept_all_queue': 'Accepter la file',
  'pdf_corpus.accept_blocked_metadata': 'Confirmez les métadonnées requises avant d’accepter cette fiche : {fields}.',
- 'pdf_corpus.accept_blocked_source': 'Résolvez ou rejetez ce problème d’extraction de la source avant d’accepter la '
-                                     'fiche.',
+ 'pdf_corpus.accept_blocked_source': 'Cette fiche comporte un problème d’extraction de la source. Inspectez la source, '
+                                     'corrigez ou confirmez le texte révisé, puis enregistrez avec « Marquer ce problème '
+                                     'de source au niveau de la fiche comme résolu » sélectionné; sinon, rejetez la fiche.',
  'pdf_corpus.record_save_failed': 'La fiche {record} — {fields} n’a pas pu être enregistrée : {error}',
  'pdf_corpus.accept_clean': 'Accepter les fiches nettes ({count})',
  'pdf_corpus.accept_clean_confirm': 'Accepter {count} fiche(s) sans problème? Les fiches ayant des problèmes de '
