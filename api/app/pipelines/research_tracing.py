@@ -610,6 +610,7 @@ def build_research_trace(
             "attempt": thread_audit["attempt"],
             "context_version": selection.get("version"),
             "context_strategy": selection.get("strategy"),
+            "ranking_model": selection.get("ranking_model"),
             "selected_turn_ids": selection.get("selected_turn_ids", []),
             "context_consumed": thread_audit.get("context_consumed", False),
         }

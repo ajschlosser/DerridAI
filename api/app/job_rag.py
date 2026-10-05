@@ -625,6 +625,7 @@ class RAGJobManager(PersistentJobStateMixin):
                     try:
                         cache_info = self._store.cache_rag_response(
                             job_id=job_id,
+                            owner=job_owner,
                             request=body.model_dump(exclude={"api_key", "auto_grade_api_key"}),
                             result=result,
                             created_at=iso_now(),

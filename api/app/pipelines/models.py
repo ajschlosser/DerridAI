@@ -403,6 +403,7 @@ class ResearchThreadRunTrace(BaseModel):
     attempt: int = Field(ge=1)
     context_version: str | None = None
     context_strategy: str | None = None
+    ranking_model: str | None = None
     selected_turn_ids: list[str] = Field(default_factory=list)
     context_consumed: bool = False
 

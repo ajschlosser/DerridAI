@@ -51,3 +51,15 @@ def test_cross_encoder_uses_cache_folder_and_single_flight_loading(monkeypatch, 
     _model_name, kwargs = calls[0]
     assert kwargs["cache_folder"] == str(tmp_path)
     assert "cache_dir" not in kwargs
+
+
+
+def test_cached_only_context_ranking_never_loads_or_downloads_a_model(monkeypatch):
+    from app import cross_encoder
+    monkeypatch.setattr(cross_encoder, "_MODEL_CACHE", {})
+    def forbidden(*_):
+        raise AssertionError("No model load/download allowed")
+    monkeypatch.setattr(cross_encoder, "_load_model", forbidden)
+    scores, telemetry = cross_encoder.predict_scores([("question", "older turn")],
+        model_name="local/test", cached_only=True, timeout_seconds=2)
+    assert scores is None and telemetry["fallback_reason"] == "model_not_loaded"

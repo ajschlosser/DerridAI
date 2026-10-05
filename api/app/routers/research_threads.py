@@ -28,10 +28,15 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from .. import research_threads
+from ..config import settings
 from ..content_filter import enforce_researcher_text
 from ..http_auth import request_user
 from ..models import RAGRunRequest
 from ..research_thread_store import ThreadNotFound
+from ..research_turn_results import owned_turn_result
+from ..researcher_view import sanitize_rag_job
+from ..services import rag_jobs
+from ..services import store as response_store
 from .jobs import start_research_run
 
 router = APIRouter(tags=["research-threads"])
@@ -141,3 +146,18 @@ def retry_turn(thread_id: str, turn_id: str, body: RAGRunRequest, request: Reque
     if turn["thread_id"] != thread_id:
         raise _not_found()
     return start_research_run(body, request, thread_id=thread_id, retry_turn_id=turn_id)
+
+
+@router.get("/api/research/threads/{thread_id}/turns/{turn_id}/result")
+def get_turn_result(thread_id: str, turn_id: str, request: Request) -> dict[str, Any]:
+    user = request_user(request)
+    try:
+        turn = research_threads.thread_store().get_turn(turn_id, user.username)
+        if turn["thread_id"] != thread_id:
+            raise ThreadNotFound(turn_id)
+        job = owned_turn_result(turn, user.username, rag_jobs, response_store)
+    except (ThreadNotFound, KeyError) as exc:
+        raise _not_found() from exc
+    return job if user.role == "admin" else sanitize_rag_job(
+        job, max_chars=settings.researcher_text_max_chars
+    )

@@ -29,8 +29,9 @@ from typing import Any
 
 from . import operation_events
 from .models import RAGRunRequest
-from .research_context import select_thread_context
+from .research_context import rank_cached_thread_context, select_thread_context
 from .research_thread_store import ResearchThreadStore, ThreadNotFound, get_thread_store
+from .research_turn_results import saved_turn_result
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,12 @@ def start_run(
     try:
         # Stored for audit only in this checkpoint; generation still receives
         # no historical content until the separate prompt contract lands.
-        context = select_thread_context(store, turn["turn_id"], owner, jobs.get)
+        cache = getattr(jobs, "_store", None)
+        context = select_thread_context(
+            store, turn["turn_id"], owner, jobs.get,
+            read_saved=(lambda prior, username: saved_turn_result(prior, username, cache)) if cache else None,
+            rank_older=lambda query, texts: rank_cached_thread_context(query, texts, body.cross_encoder_model),
+        )
         store.save_context_selection(turn["turn_id"], owner, context.snapshot())
         job = jobs.create(body, owner=owner, turn_id=turn["turn_id"])
     except Exception as exc:
@@ -113,7 +119,7 @@ def run_thread_audit(turn_id: str, owner: str) -> dict[str, Any]:
         "original_question": turn["user_question"],
         "context_selection": copy.deepcopy(selection),
         "context_consumed": False,
-        "warnings": [] if selection is not None else ["thread_context_snapshot_unavailable"],
+        "warnings": list(selection.get("warnings", [])) if selection is not None else ["thread_context_snapshot_unavailable"],
     }
 
 

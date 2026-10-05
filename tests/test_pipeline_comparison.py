@@ -387,3 +387,31 @@ def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeyp
     candidate_text = captured["pairs"][0][1]
     assert "Source document author: Jacques Derrida" in candidate_text
     assert "Quoted author: Emmanuel Levinas" in candidate_text
+
+
+
+@pytest.mark.parametrize("decompose", [False, True])
+def test_first_turn_characterization_preserves_query_generation_and_citation_contract(monkeypatch, decompose):
+    captured = []
+    def query(**kwargs):
+        captured.append(("query", kwargs["prompt"]))
+        return {"prompt_query": "What is the trace?", "prompt_query_fr": "Qu’est-ce que la trace?"}
+    def generate(**kwargs):
+        captured.append(("generation", kwargs["prompt"]))
+        return "The trace is not a presence [[E0]]."
+    monkeypatch.setattr("app.rag.structured_chat_complete", query)
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(prompt="What is the trace?", instructions="Preserve negation", model="test-model",
+        pipeline_id="research.current", pipeline_version=1, source_collection="corpus", locales=["en"],
+        search_types=["lexical"], k=1, fetch_k=1, reranker="none", query_decomposition=decompose,
+        use_prior_response_memory=False, use_prior_claim_memory=False)
+    before = request.model_dump()
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+    assert request.model_dump() == before
+    assert result["prompt"] == "What is the trace?"
+    assert [kind for kind, _ in captured] == (["query", "generation"] if decompose else ["generation"])
+    assert "<EVIDENCE>" in captured[-1][1] and "The trace is not a presence." in captured[-1][1]
+    assert "THREAD_CONTEXT" not in captured[-1][1]
+    assert len(result["evidence"]) == 1 and result["evidence"][0]["record"]["record_id"] == "r1"
+    assert "[[E0]]" not in result["answer"] and "1976" in result["answer"]
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."

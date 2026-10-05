@@ -59,6 +59,7 @@ def predict_scores(
     *,
     model_name: str,
     timeout_seconds: float | None = None,
+    cached_only: bool = False,
 ) -> tuple[list[float] | None, dict[str, Any]]:
     """Predict a bounded batch of pair scores, failing open with diagnostics."""
 
@@ -76,6 +77,11 @@ def predict_scores(
         return [], telemetry
     if not model_name:
         telemetry["fallback_reason"] = "cross_encoder_model_not_configured"
+        telemetry["timing_ms"] = _elapsed_ms(started)
+        return None, telemetry
+
+    if cached_only and model_name not in _MODEL_CACHE:
+        telemetry["fallback_reason"] = "model_not_loaded"
         telemetry["timing_ms"] = _elapsed_ms(started)
         return None, telemetry
 
