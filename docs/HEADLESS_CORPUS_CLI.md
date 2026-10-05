@@ -283,33 +283,33 @@ Operational rules:
 
 Initial exit-code categories:
 
-| Code | Meaning |
-| ---: | --- |
-| 0 | success |
-| 2 | command/configuration error |
-| 3 | unsupported or unsafe source |
-| 4 | missing runtime capability |
-| 5 | extraction/segmentation failure |
-| 6 | provider/enrichment failure |
-| 7 | validation/publication failure |
-| 8 | output I/O failure |
+| Code | Meaning                         |
+| ---: | ------------------------------- |
+|    0 | success                         |
+|    2 | command/configuration error     |
+|    3 | unsupported or unsafe source    |
+|    4 | missing runtime capability      |
+|    5 | extraction/segmentation failure |
+|    6 | provider/enrichment failure     |
+|    7 | validation/publication failure  |
+|    8 | output I/O failure              |
 
 ## Implementation phases and progress
 
 Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 
-| Phase | Status | Work |
-| --- | --- | --- |
-| 0. Architecture | DONE | Establish native-binary/Nuitka direction, shared-engine boundary, output profiles, automatic-authority rules, and versioned YAML contract. |
-| 1. CLI/config spine | IN PROGRESS | Add typed YAML configuration, `derridai` argparse entry point, config validation, exit-code contract, and focused backend tests. |
-| 2. Headless runner | TODO | Add synchronous `HeadlessCorpusRunner` that owns a private repository workspace, ingests the source directly, invokes shared build stages, waits/propagates failures, and returns a typed result. |
-| 3. Automatic settlement | TODO | Map headless review policy to autonomous/unreviewed publication semantics without granting human authority. |
-| 4. Research projection | TODO | Implement schema-driven compact research serializer and `.jsonl.zst` writer with atomic output and integrity sidecar. |
-| 5. cELF projection | TODO | Route the cELF profile through existing publication/conformance machinery and retain run/config identity. |
-| 6. Runtime diagnostics | TODO | Add `derridai doctor` capability checks for Tesseract, FFmpeg, NLP resources, provider endpoints, writable workspace, and output path. |
-| 7. Native packaging | IN PROGRESS | Add Nuitka build configuration and target-OS CI matrix; prove standalone artifacts first, then evaluate onefile. |
-| 8. Cross-platform acceptance | TODO | Run the same deterministic fixture corpus on Ubuntu, Windows 11-compatible runner, macOS x86_64, and macOS arm64; compare semantic output/integrity expectations. |
-| 9. Documentation/release integration | TODO | Update README, USER_GUIDE, ARCHITECTURE, CONTRIBUTING, release gates, artifact signing/checksums, and installation instructions. |
+| Phase                                | Status      | Work                                                                                                                                                                                              |
+| ------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Architecture                      | DONE        | Establish native-binary/Nuitka direction, shared-engine boundary, output profiles, automatic-authority rules, and versioned YAML contract.                                                        |
+| 1. CLI/config spine                  | IN PROGRESS | Add typed YAML configuration, `derridai` argparse entry point, config validation, exit-code contract, and focused backend tests.                                                                  |
+| 2. Headless runner                   | TODO        | Add synchronous `HeadlessCorpusRunner` that owns a private repository workspace, ingests the source directly, invokes shared build stages, waits/propagates failures, and returns a typed result. |
+| 3. Automatic settlement              | TODO        | Map headless review policy to autonomous/unreviewed publication semantics without granting human authority.                                                                                       |
+| 4. Research projection               | TODO        | Implement schema-driven compact research serializer and `.jsonl.zst` writer with atomic output and integrity sidecar.                                                                             |
+| 5. cELF projection                   | TODO        | Route the cELF profile through existing publication/conformance machinery and retain run/config identity.                                                                                         |
+| 6. Runtime diagnostics               | TODO        | Add `derridai doctor` capability checks for Tesseract, FFmpeg, NLP resources, provider endpoints, writable workspace, and output path.                                                            |
+| 7. Native packaging                  | IN PROGRESS | Add Nuitka build configuration and target-OS CI matrix; prove standalone artifacts first, then evaluate onefile.                                                                                  |
+| 8. Cross-platform acceptance         | TODO        | Run the same deterministic fixture corpus on Ubuntu, Windows 11-compatible runner, macOS x86_64, and macOS arm64; compare semantic output/integrity expectations.                                 |
+| 9. Documentation/release integration | TODO        | Update README, USER_GUIDE, ARCHITECTURE, CONTRIBUTING, release gates, artifact signing/checksums, and installation instructions.                                                                  |
 
 ## Acceptance criteria
 
