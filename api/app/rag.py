@@ -814,8 +814,8 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
             field
             for field, value in {
                 "record_id": record.get("record_id"),
-                "work": source_work_label(record),
-                "document_author": semantic_value(record, SOURCE_AUTHOR_ID),
+                "scope_label": source_work_label(record),
+                "source_document_author": semantic_value(record, SOURCE_AUTHOR_ID),
                 "exact_text": record.get("text"),
                 "inline_citation": item.get("inline_citation"),
                 "full_citation": item.get("full_citation"),
@@ -1253,16 +1253,16 @@ def _mentioned_work_groups(
     groups: list[list[str]] = []
     author_works: dict[str, set[str]] = {}
     for summary in work_summaries:
-        work = str(summary.get("work") or "").strip()
+        work = str(summary.get("scope_label") or "").strip()
         if not work:
             continue
         normalized_work = _normalized_scope_text(work)
         if normalized_work and normalized_work in query:
             groups.append([work])
 
-        author_values = summary.get("authors")
+        author_values = summary.get("source_authors")
         if not isinstance(author_values, (list, tuple, set)):
-            author_values = [summary.get("document_author")]
+            author_values = []
         for raw_author in author_values:
             author = str(raw_author or "").strip()
             if not author or not _mentions_scope_author(question, author):
@@ -1313,13 +1313,19 @@ def _explicit_scope_work_groups(
             work = source_work_label(row)
             if not work:
                 continue
-            summary = work_summaries.setdefault(work, {"work": work, "authors": set()})
+            summary = work_summaries.setdefault(
+                work,
+                {"scope_label": work, "source_authors": set()},
+            )
             author = source_author(row)
             if author:
-                summary["authors"].add(author)
+                summary["source_authors"].add(author)
 
     normalized = [
-        {"work": item["work"], "authors": sorted(item["authors"])}
+        {
+            "scope_label": item["scope_label"],
+            "source_authors": sorted(item["source_authors"]),
+        }
         for item in work_summaries.values()
     ]
     return _mentioned_work_groups(normalized, question)
