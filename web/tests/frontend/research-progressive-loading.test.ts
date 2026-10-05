@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   runs: vi.fn(),
   pipelines: vi.fn(),
   job: vi.fn(),
+  follow: vi.fn(() => vi.fn()),
   auth: { user: { id: 1, role: "researcher" }, allowed: true },
   route: { name: "rag", query: {} as Record<string, string> },
 }));
@@ -57,7 +58,7 @@ vi.mock("../../src/domain/researchActions", () => ({
 }));
 vi.mock("../../src/domain/sharedAnnotations", () => ({ annotationsWorkspace: {} }));
 vi.mock("../../src/domain/sharedResearchJobs", () => ({ getResearchJob: mocks.job }));
-vi.mock("../../src/realtime/follow", () => ({ followResource: () => vi.fn() }));
+vi.mock("../../src/realtime/follow", () => ({ followResource: mocks.follow }));
 vi.mock("../../src/features/research/useResearchDraft", () => ({
   useResearchDraft: () => ({ draft: ref(null), follow: vi.fn(), clear: vi.fn() }),
 }));
@@ -153,6 +154,20 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
+  it("does not turn streamed token events into REST job refreshes", async () => {
+    const liveJob = { id: "live", status: "running" };
+    mocks.snapshot.mockResolvedValue({ ...snapshot(), jobs: [liveJob] });
+    mocks.runs.mockResolvedValue([liveJob]);
+    render();
+    await flushPromises();
+    const options = mocks.follow.mock.calls
+      .map((call) => call[0])
+      .find((item) => item.topic === "job:live");
+    expect(options).toBeTruthy();
+    expect(options.onEvent({ type: "llm.token" })).toBe(false);
+    expect(options.onEvent({ type: "job.updated" })).toBe(true);
+  });
+
   it("retries the original turn without enabling follow-ups or duplicating a click", async () => {
     reactive(mocks.route).query = { thread: "t" };
     const pending = deferred<any>();
