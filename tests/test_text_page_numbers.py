@@ -114,6 +114,42 @@ def test_wikisource_and_gutenberg_page_markup_becomes_printed_pages():
     assert "20" not in " ".join(block["text"] for block in detection_blocks if block["type"] == "paragraph")
 
 
+def test_wikisource_proofreadpage_pagenumber_markup_becomes_printed_pages():
+    page = ("A transcribed proofread page continues here. " * 12).strip()
+    html = "".join(
+        (
+            '<span class="pagenumber ws-noexport" '
+            f'data-page-name="Page:De_la_grammatologie.djvu/{scan}" '
+            'style="position:absolute;left:123px;top:456px">'
+            f'<a href="/wiki/Page:De_la_grammatologie.djvu/{scan}">{folio}</a>'
+            "</span>"
+            f"<p>{page}</p>"
+        )
+        for scan, folio in ((27, 19), (28, 20), (29, 21), (30, 22))
+    )
+
+    text, _ = st.html_to_text(f"<html><body>{html}</body></html>")
+    blocks, pages = st.prose_to_blocks(
+        text,
+        extraction_method="html",
+        detection_out=(summary := {}),
+    )
+
+    assert summary["status"] == "detected"
+    assert [page["printed_page_label"] for page in pages[:4]] == ["19", "20", "21", "22"]
+    assert [
+        block["printed_page_label"]
+        for block in blocks
+        if block["type"] == "paragraph"
+    ][:4] == ["19", "20", "21", "22"]
+    # Scan ordinals from data-page-name must not be mistaken for printed folios.
+    assert "27" not in {
+        page["printed_page_label"]
+        for page in pages
+        if page.get("printed_page_label")
+    }
+
+
 def test_wikisource_scan_targets_are_saved_as_jpeg_pages(tmp_path):
     titles = ["Page:Grammatology.djvu/2", "Page:Grammatology.djvu/2", "Page:Grammatology.djvu/3"]
     targets = ws.scan_targets_from_titles(titles)
