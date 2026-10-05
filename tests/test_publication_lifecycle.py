@@ -27,6 +27,7 @@ import hashlib
 import json
 import sys
 import types
+import zipfile
 from pathlib import Path
 
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
@@ -364,6 +365,111 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
     stored={row["record_id"]:row for row in repo.load_records(build_id)}
     assert stored["r-left"]["source_extracted_text"]=="Record"
     assert stored["r-right"]["source_extracted_text"]=="text"
+
+
+def test_accept_unreviewed_repairs_retired_sourceunit_reference_with_audit_history(tmp_path:Path):
+    """Autonomous finalization may follow proven lineage without flattening it."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    units[0]["successor_unit_ids"]=["u-current"]
+    units.append({
+        **units[0],
+        "source_unit_id":"u-current",
+        "unit_id":"u-current",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "successor_unit_ids":[],
+        "text":"Record text",
+        "active":True,
+        "transaction_id":"structural-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["b1"]
+    rows[0]["source_extracted_text"]="Record text"
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    stored=repo.load_records(build_id)[0]
+    assert stored["source_unit_ids"]==["u-current"]
+    [event]=stored["source_topology_reconciliation_history"]
+    assert event["method"]=="deterministic_active_descendant_reconciliation"
+    assert event["prior_source_unit_ids"]==["b1"]
+    assert event["source_unit_ids"]==["u-current"]
+    persisted_units={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted_units["b1"]["active"] is False
+    assert persisted_units["u-current"]["active"] is True
+
+
+def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_path:Path):
+    """Researchers can inspect a blocked/draft corpus without changing its authority."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    rows=repo.load_records(build_id)
+    rows[0].update({
+        "accepted":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_extracted_text":"Record text",
+    })
+    repo.save_records(build_id,rows)
+    current=repo.get_build(build_id)
+    current["status"]="awaiting_review"
+    current["stage"]="review"
+    current["validation"]={
+        "valid":False,
+        "source_valid":False,
+        "validation_issues":[{
+            "code":"source_fidelity",
+            "record_id":"r1",
+            "field":"",
+            "reason":"inspection fixture",
+        }],
+    }
+    repo.save_build(current)
+
+    artifact=manager.create_unfinished_export(build_id)
+
+    assert artifact["filename"]=="test.unfinished-corpus.zip"
+    assert not repo.get_build(build_id).get("publication")
+    with zipfile.ZipFile(artifact["path"]) as archive:
+        names=set(archive.namelist())
+        assert {
+            "README.txt",
+            "export_manifest.json",
+            "build.json",
+            "records.jsonl",
+            "source_units.jsonl",
+            "source_blocks.jsonl",
+            "retired_records.json",
+            "evidence_remap_pending.json",
+        } <= names
+        manifest=json.loads(archive.read("export_manifest.json"))
+        assert manifest["artifact_kind"]=="unfinished_corpus_export"
+        assert manifest["celf_publication"] is False
+        assert manifest["publication_ready"] is False
+        exported_records=[
+            json.loads(line)
+            for line in archive.read("records.jsonl").decode().splitlines()
+            if line
+        ]
+        assert exported_records[0]["review_disposition"]=="pending"
+        assert exported_records[0]["source_extracted_text"]=="Record text"
+        source_units=[
+            json.loads(line)
+            for line in archive.read("source_units.jsonl").decode().splitlines()
+            if line
+        ]
+        assert source_units
+        assert all("source_unit_id" in row for row in source_units)
 
 
 def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
