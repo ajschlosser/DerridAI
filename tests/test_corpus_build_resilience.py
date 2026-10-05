@@ -533,7 +533,7 @@ def test_resume_submission_failure_is_visible_and_recoverable(monkeypatch, tmp_p
     assert "Executor unavailable" in failed["error"]
 
 
-def test_enrichment_retries_transient_sqlite_writer_contention(monkeypatch, tmp_path):
+def test_enrichment_retries_transient_storage_contention(monkeypatch, tmp_path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     build = _build(repo)
@@ -558,7 +558,7 @@ def test_enrichment_retries_transient_sqlite_writer_contention(monkeypatch, tmp_
     manager._executor.shutdown(wait=True)
 
 
-def test_exhausted_sqlite_contention_interrupts_instead_of_borking_build(monkeypatch, tmp_path):
+def test_exhausted_storage_contention_interrupts_instead_of_borking_build(monkeypatch, tmp_path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     build = _build(repo)
@@ -584,7 +584,7 @@ def test_exhausted_sqlite_contention_interrupts_instead_of_borking_build(monkeyp
     assert interrupted["stage"] == "interrupted"
     assert interrupted["interrupted_stage"] == "enriching"
     assert interrupted["resumable"] is True
-    assert "saved checkpoints" in interrupted["error"]
+    assert "checkpoints were preserved" in interrupted["error"]
     manager._executor.shutdown(wait=True)
 
 
