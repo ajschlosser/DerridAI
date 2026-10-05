@@ -40,6 +40,7 @@ from .autofill import decide as decide_autofill
 from .autofill import in_audit_sample
 from .concurrency import provider_capacity_key, provider_limit
 from .config import APP_VERSION, settings
+from .corpus_citations import _citation_strings
 from .corpus_llm_helpers import (
     StructuredOutputError,
     _context_window,
@@ -119,7 +120,6 @@ from .pipelines.evidence_recovery import (
     ClosedChoiceAnswer,
     execute_evidence_recovery,
 )
-from .corpus_citations import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
 from .source_embeddings import SourceEmbeddingProjection
 
