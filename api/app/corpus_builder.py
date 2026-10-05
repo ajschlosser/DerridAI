@@ -5395,7 +5395,15 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # judged against stale legacy block projections. Legacy builds without an
         # explicit SourceUnit topology stay mutation-free during validation.
         if source_units:
-            repair_events = repair_record_source_topology(records, source_units)
+            repair_events = repair_record_source_topology(
+                records,
+                source_units,
+                source_block_ids={
+                    str(block.get("block_id") or "")
+                    for block in blocks
+                    if str(block.get("block_id") or "")
+                },
+            )
             synchronize_record_source_projection(records, source_units)
             if repair_events:
                 prior_events = [
