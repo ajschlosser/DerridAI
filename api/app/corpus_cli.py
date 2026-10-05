@@ -24,6 +24,7 @@ import sys
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
 
@@ -40,6 +41,7 @@ class ExitCode(IntEnum):
     PROVIDER = 6
     VALIDATION = 7
     OUTPUT_IO = 8
+    CANCELLED = 130
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -51,14 +53,53 @@ def _parser() -> argparse.ArgumentParser:
 
     commands = parser.add_subparsers(dest="command", required=True)
 
-    config = commands.add_parser("config", help="Validate and inspect processing configuration.")
+    config = commands.add_parser(
+        "config",
+        help="Validate and inspect processing configuration.",
+    )
     config_commands = config.add_subparsers(dest="config_command", required=True)
-    validate = config_commands.add_parser("validate", help="Validate a corpus-processing YAML file.")
+    validate = config_commands.add_parser(
+        "validate",
+        help="Validate a corpus-processing YAML file.",
+    )
     validate.add_argument("--config", required=True, type=Path)
     validate.add_argument(
         "--json",
         action="store_true",
         help="Write the validated, secret-free configuration as JSON.",
+    )
+
+    corpus = commands.add_parser(
+        "corpus",
+        help="Build scholarly corpus artifacts.",
+    )
+    corpus_commands = corpus.add_subparsers(dest="corpus_command", required=True)
+    build = corpus_commands.add_parser(
+        "build",
+        help="Build one source into a research or cELF .jsonl.zst corpus.",
+    )
+    build.add_argument("--source", required=True, type=Path)
+    build.add_argument("--config", required=True, type=Path)
+    build.add_argument("--output", type=Path)
+    build.add_argument(
+        "--workspace",
+        type=Path,
+        help="Retain build state in this workspace instead of a generated user-data run.",
+    )
+    build.add_argument(
+        "--celf",
+        action="store_true",
+        help="Override publication.profile and emit the cELF publication artifact.",
+    )
+    build.add_argument(
+        "--json",
+        action="store_true",
+        help="Write only the final machine-readable run result to stdout.",
+    )
+    build.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress human-readable progress on stderr.",
     )
 
     return parser
@@ -78,6 +119,66 @@ def _validate_config(path: Path, *, as_json: bool) -> int:
     return int(ExitCode.OK)
 
 
+def _progress_printer(build: dict[str, Any]) -> None:
+    progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
+    stage = str(build.get("stage") or build.get("status") or "working")
+    completed = build.get("metadata_completed")
+    total = build.get("metadata_total")
+    metadata = (
+        f" · metadata {completed}/{total}"
+        if completed is not None and total is not None
+        else ""
+    )
+    print(f"[{progress * 100:5.1f}%] {stage}{metadata}", file=sys.stderr)
+
+
+def _error_code(category: str) -> ExitCode:
+    return {
+        "source": ExitCode.UNSUPPORTED_SOURCE,
+        "capability": ExitCode.MISSING_CAPABILITY,
+        "pipeline": ExitCode.PIPELINE,
+        "provider": ExitCode.PROVIDER,
+        "validation": ExitCode.VALIDATION,
+        "output": ExitCode.OUTPUT_IO,
+    }.get(category, ExitCode.PIPELINE)
+
+
+def _build_corpus(args: argparse.Namespace) -> int:
+    try:
+        config = load_processing_config(args.config)
+        # Resolve required secret environment variables before reading/extracting
+        # a potentially large source file.
+        config.build_request()
+    except (ValueError, ValidationError) as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    from .headless_corpus_runner import HeadlessCorpusError, HeadlessCorpusRunner
+
+    runner = HeadlessCorpusRunner(workspace=args.workspace)
+    try:
+        result = runner.run(
+            args.source,
+            config,
+            output=args.output,
+            force_profile="celf" if args.celf else None,
+            progress=None if args.quiet else _progress_printer,
+        )
+    except KeyboardInterrupt:
+        print("Corpus build cancelled.", file=sys.stderr)
+        return int(ExitCode.CANCELLED)
+    except HeadlessCorpusError as exc:
+        print(f"Corpus build failed: {exc}", file=sys.stderr)
+        return int(_error_code(exc.category))
+
+    payload = result.as_dict()
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    else:
+        print(result.output)
+    return int(ExitCode.OK)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a stable process exit code."""
     parser = _parser()
@@ -85,6 +186,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "config" and args.config_command == "validate":
         return _validate_config(args.config, as_json=args.json)
+    if args.command == "corpus" and args.corpus_command == "build":
+        return _build_corpus(args)
 
     parser.error("Unsupported command")
     return int(ExitCode.USAGE_OR_CONFIG)
