@@ -214,6 +214,7 @@ from .corpus_record_quality import (
     _trash_quality_report,
     iso_now,
 )
+from .corpus_record_restructure import synchronize_record_source_projection
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_aggregates import record_review_aggregate
 from .corpus_review_queue import (
@@ -1763,6 +1764,32 @@ class PdfCorpusRepository:
         if normalized != rows:
             self.save_source_units(build_id, normalized)
         return normalized
+
+    def source_units_for_validation(self, build_id: str) -> list[dict[str, Any]]:
+        """Read an existing SourceUnit topology without migrating legacy builds.
+
+        Validation callbacks may run optimistically while review writes commit.
+        Creating an in-memory SourceUnit migration for a legacy build changes the
+        candidate Record payload by adding source_unit_ids/source_extracted_text,
+        which creates artificial reconciliation conflicts and can overwrite a
+        concurrent review candidate. Only builds with an explicit SourceUnit store
+        use SourceUnit-aware validation; older builds stay on source_block_ids until
+        an explicit structural/migration operation creates that store.
+        """
+        build = self.get_build(build_id)
+        path = self.build_source_units_path(build_id)
+        if not path.exists():
+            return []
+        with path.open("r", encoding="utf-8") as handle:
+            rows = [json.loads(line) for line in handle if line.strip()]
+        blocks = self.load_blocks(str(build["asset_id"]))
+        from .corpus_record_restructure import normalize_source_units
+
+        return normalize_source_units(
+            rows,
+            blocks,
+            source_document_id=str(build["asset_id"]),
+        )
 
     def normalize_source_units(self, build_id: str) -> list[dict[str, Any]]:
         """Public migration helper for builds created before source units existed."""
@@ -5359,7 +5386,22 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
-        validation = self.validate_records(blocks, records, profile)
+        source_units = self.repo.source_units_for_validation(str(build["build_id"]))
+        # source_extracted_text is a deterministic projection of the authoritative
+        # SourceUnits. Reconcile it before validation so structural edits are not
+        # judged against stale legacy block projections. Legacy builds without an
+        # explicit SourceUnit topology stay mutation-free during validation.
+        if source_units:
+            synchronize_record_source_projection(records, source_units)
+        validation_profile = {
+            **profile,
+            "_validation_source_units": source_units,
+            "_check_corpus_conservation": True,
+        }
+        # Keep the public three-argument validate_records call shape. Several
+        # coordination tests and integrations wrap this method to observe/retry
+        # validation, and topology support must not bypass that seam.
+        validation = self.validate_records(blocks, records, validation_profile)
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
@@ -5541,15 +5583,21 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 build.get("manifest") or {},
                 bounds_confirmed=bool(build.get("manifest_confirmed_at")),
             )
-            local = self.validate_records(blocks, [record], profile)
+            local_profile = {
+                **profile,
+                "_validation_source_units": self.repo.source_units_for_validation(build_id),
+                "_check_corpus_conservation": False,
+            }
+            local = self.validate_records(blocks, [record], local_profile)
             existing = dict(build.get("validation") or {})
             record_id = str(record.get("record_id") or "")
             list_fields = (
-                "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
+                "source_reference_errors", "text_fidelity_errors",
+                "source_order_errors", "page_mapping_errors",
                 "printed_page_label_errors", "metadata_schema_errors",
-                "relationship_errors", "human_ownership_errors", "record_content_errors",
-                "citation_errors", "suspicious_record_sizes",
-                "metadata_evidence_errors",
+                "relationship_errors", "human_ownership_errors",
+                "record_content_errors", "citation_errors",
+                "suspicious_record_sizes", "metadata_evidence_errors",
             )
             for field in list_fields:
                 prior = existing.get(field)
@@ -5805,6 +5853,16 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
             self.repo.refresh_records_projection(build_id)
+        # "Use suggestions as-is" owns a final authoritative reconciliation.
+        # The web client normally requests it first, but direct API callers and
+        # stale readiness state must not evaluate autonomous publication against
+        # obsolete legacy topology. Strict reviewed publication keeps its existing
+        # lifecycle and relies on the normal readiness reconciliation.
+        if (
+            accept_unreviewed
+            and str(build.get("status") or "") not in {"queued", "running"}
+        ):
+            build = self._reconcile_and_validate(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)

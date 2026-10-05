@@ -25,7 +25,11 @@ from .field_assertions import current_assertions
 
 _SOURCE_INTEGRITY_KEYS = (
     "missing_block_ids",
+    "missing_source_unit_ids",
     "duplicate_block_ids",
+    "unknown_source_unit_ids",
+    "source_reference_errors",
+    "source_conservation_errors",
     "text_fidelity_errors",
     "source_order_errors",
 )
