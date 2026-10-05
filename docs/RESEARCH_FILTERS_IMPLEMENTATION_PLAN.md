@@ -128,10 +128,7 @@ Expert users may enter an explicit filter expression, for example:
 
 ```json
 {
-  "$and": [
-    { "work": { "$eq": "Of Grammatology" } },
-    { "page_start": { "$gte": 100 } }
-  ]
+  "$and": [{ "work": { "$eq": "Of Grammatology" } }, { "page_start": { "$gte": 100 } }]
 }
 ```
 
@@ -334,10 +331,10 @@ Place framework-independent parsing/compilation in `web/src/domain/`, not in the
 Suggested API:
 
 ```ts
-parseResearchFilterExpression(text, fieldCatalog)
-interpretResearchInstructionFilters(text, corpusInventory, fieldCatalog)
-compileResearchFilterPlan(ast)
-explainResearchFilterPlan(plan, fieldCatalog)
+parseResearchFilterExpression(text, fieldCatalog);
+interpretResearchInstructionFilters(text, corpusInventory, fieldCatalog);
+compileResearchFilterPlan(ast);
+explainResearchFilterPlan(plan, fieldCatalog);
 ```
 
 Keep Vue responsible for lifecycle, debouncing, focus, rendering, and API calls.
