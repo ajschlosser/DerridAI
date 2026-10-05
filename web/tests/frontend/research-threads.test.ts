@@ -269,6 +269,47 @@ describe("Research thread shell", () => {
     expect(wrapper.text()).toContain("Answer /api/jobs/job-a");
   });
 
+  it("keeps long threads bounded until evidence inspection is opened", async () => {
+    const detail = thread("a");
+    detail.turns = Array.from({ length: 20 }, (_, index) => ({
+      ...thread(String(index)).turns[0],
+      turn_id: `a-${index + 1}`,
+      thread_id: "a",
+      ordinal: index + 1,
+      user_question: `Question ${index + 1}`,
+    }));
+    api.get.mockResolvedValue(detail);
+    jobs.read.mockImplementation(async (path: string) => ({
+      id: path.split("/").pop(),
+      status: "completed",
+      result: {
+        answer: `Answer ${path}`,
+        evidence: Array.from({ length: 24 }, (_, index) => ({
+          evidence_id: `E${index}`,
+          inline_citation: `Citation ${index}`,
+          record: { record_id: `${path}-${index}`, text: `Evidence ${index}` },
+        })),
+      },
+    }));
+
+    const wrapper = browser();
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledTimes(20);
+    expect(wrapper.findAll(".research-result-presentation")).toHaveLength(0);
+
+    await client.invalidateQueries({ queryKey: ["data", "research_threads"] });
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledTimes(20);
+
+    const firstTurn = wrapper.findAll("article[aria-labelledby]")[0];
+    const inspect = firstTurn
+      .findAll("details")
+      .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
+    (inspect.element as HTMLDetailsElement).open = true;
+    await inspect.trigger("toggle");
+    expect(wrapper.findAll(".research-result-presentation")).toHaveLength(1);
+  });
+
   it("clears a revoked inline answer while preserving its durable question", async () => {
     const wrapper = browser();
     await flushPromises();
