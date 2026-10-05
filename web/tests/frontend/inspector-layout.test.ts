@@ -110,6 +110,121 @@ describe("inspector layout", () => {
     ).toBe(true);
   });
 
+  it("derives schema-backed inspector tabs and headings without built-in scholarly names", () => {
+    const schema = {
+      id: "custom",
+      groups: [
+        { key: "analysis", label: "Analysis" },
+        { key: "references", label: "References" },
+      ],
+      fields: [
+        {
+          field_id: "field-tension",
+          name: "conceptual_tension",
+          semantic_compatibility_id: null,
+          label: "Conceptual tension",
+          type: "text",
+          group: "analysis",
+          role: "scholarly",
+          scope: "record",
+          review: true,
+          evidence: false,
+          assess: false,
+          values: [],
+          strict: false,
+          instruction: "",
+          definitions_heading: "",
+          retrieval_profile: {
+            enabled: true,
+            max_items: 6,
+            min_similarity: 0,
+            include_corrections: true,
+            include_confirmed_absence: true,
+          },
+          pos_tags: [],
+          ner_tags: [],
+        },
+        {
+          field_id: "field-people",
+          name: "people_index",
+          semantic_compatibility_id: "derridai.indexing.persons",
+          label: "People",
+          type: "list",
+          group: "references",
+          role: "scholarly",
+          scope: "record",
+          review: false,
+          evidence: false,
+          assess: false,
+          values: [],
+          strict: false,
+          instruction: "",
+          definitions_heading: "",
+          retrieval_profile: {
+            enabled: true,
+            max_items: 6,
+            min_similarity: 0,
+            include_corrections: true,
+            include_confirmed_absence: true,
+          },
+          pos_tags: [],
+          ner_tags: [],
+        },
+        {
+          field_id: "field-corpus-note",
+          name: "corpus_note",
+          semantic_compatibility_id: null,
+          label: "Corpus note",
+          type: "text",
+          group: "analysis",
+          role: "scholarly",
+          scope: "corpus",
+          review: false,
+          evidence: false,
+          assess: false,
+          values: [],
+          strict: false,
+          instruction: "",
+          definitions_heading: "",
+          retrieval_profile: {
+            enabled: true,
+            max_items: 6,
+            min_similarity: 0,
+            include_corrections: true,
+            include_confirmed_absence: true,
+          },
+          pos_tags: [],
+          ner_tags: [],
+        },
+      ],
+    };
+
+    const layout = defaultInspectorLayout({}, schema as never);
+    expect(
+      layout.provenance.some(
+        (row) => row.kind === "field" && row.field === "conceptual_tension",
+      ),
+    ).toBe(true);
+    expect(
+      layout.indexing.some((row) => row.kind === "field" && row.field === "people_index"),
+    ).toBe(true);
+    expect(
+      Object.values(layout)
+        .flat()
+        .some((row) => row.kind === "field" && row.field === "corpus_note"),
+    ).toBe(false);
+    expect(
+      Object.values(layout)
+        .flat()
+        .some((row) => row.kind === "field" && row.field === "speaker"),
+    ).toBe(false);
+    expect(
+      layout.provenance
+        .filter((row) => row.kind === "heading")
+        .map((row) => row.kind === "heading" && row.label),
+    ).toContain("Analysis");
+  });
+
   it("groups stacked headings and the fields under them", () => {
     const grouped = groupInspectorRows(defaultInspectorLayout().overview);
     expect(grouped[0]?.heading).toBe("Record context");
