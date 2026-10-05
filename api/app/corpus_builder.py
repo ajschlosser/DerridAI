@@ -219,6 +219,7 @@ from .corpus_record_restructure import (
     normalize_source_units,
     reconcile_recoverable_source_unit_references,
     reconcile_redundant_active_source_roots,
+    repair_record_source_topology,
     synchronize_record_source_projection,
 )
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
@@ -5381,6 +5382,18 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 source_units = self.repo.source_units_for_validation(build_id)
                 if source_units:
                     reconcile_recoverable_source_unit_references(
+                        records,
+                        source_units,
+                        transaction_id=reconciliation_id,
+                    )
+                    # Older/edited builds can also contain duplicated active
+                    # bindings or stale IDs with no direct retired-unit pointer.
+                    # Repair those only when immutable-root lineage plus the
+                    # retained extraction projection identify one exact,
+                    # contiguous active SourceUnit window. The helper records
+                    # before/after bindings and hashes; ambiguous cases remain
+                    # validation blockers.
+                    repair_record_source_topology(
                         records,
                         source_units,
                         transaction_id=reconciliation_id,
