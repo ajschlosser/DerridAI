@@ -23,7 +23,12 @@ import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataRe
 import MetadataSchemaEditor from "../../src/components/MetadataSchemaEditor.vue";
 import MetadataEnrichmentDialog from "../../src/components/MetadataEnrichmentDialog.vue";
 import { metadataSchemasApi, type MetadataSchema } from "../../src/api/metadataSchemas";
-import { metadataFieldSpec, schemaFieldSpec } from "../../src/domain/metadataFieldRegistry";
+import {
+  metadataFieldSpec,
+  metadataRegistryFields,
+  metadataRegistryGroups,
+  schemaFieldSpec,
+} from "../../src/domain/metadataFieldRegistry";
 
 const field = (over: Record<string, unknown>) => ({
   name: "x_field",
@@ -121,6 +126,73 @@ describe("the review panel follows the build's schema", () => {
     expect(all).not.toContain("quoted_speaker");
     expect(all).toContain("mood");
     wrapper.unmount();
+  });
+});
+
+describe("schema-derived frontend metadata registry", () => {
+  it("keeps group order, stable identity, field type and control policy in one projection", () => {
+    const configured = schema();
+    configured.fields = [
+      {
+        ...field({
+          field_id: "field-mood",
+          name: "mood",
+          label: "Mood",
+          type: "choice",
+          strict: true,
+          values: [
+            { value: "calm", definition: "" },
+            { value: "angry", definition: "" },
+          ],
+          review: true,
+          semantic_compatibility_id: "example.mood",
+        }),
+      },
+      {
+        ...field({
+          field_id: "field-ideas",
+          name: "ideas",
+          label: "Ideas",
+          type: "list",
+          group: "ideas",
+          scope: "corpus",
+        }),
+      },
+    ] as never;
+
+    const fields = metadataRegistryFields(configured, ["main_text"], ["analysis"]);
+    const mood = fields.find((item) => item.name === "mood")!;
+    const ideas = fields.find((item) => item.name === "ideas")!;
+
+    expect(fields.slice(0, 3).map((item) => item.name)).toEqual([
+      "region_type",
+      "primary_text",
+      "discourse_role",
+    ]);
+    expect(mood).toMatchObject({
+      fieldId: "field-mood",
+      semanticCompatibilityId: "example.mood",
+      group: "discourse",
+      scope: "record",
+      control: "enum",
+      allowedValues: ["calm", "angry"],
+      review: true,
+    });
+    expect(ideas).toMatchObject({
+      fieldId: "field-ideas",
+      group: "ideas",
+      scope: "corpus",
+      control: "multi-combobox",
+    });
+    expect(
+      metadataRegistryGroups(configured, ["main_text"], ["analysis"]).map((item) => [
+        item.key,
+        item.fields.map((field) => field.name),
+      ]),
+    ).toEqual([
+      ["discourse", ["region_type", "primary_text", "discourse_role", "mood"]],
+      ["ideas", ["ideas"]],
+    ]);
   });
 });
 
