@@ -15,6 +15,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
 import type {

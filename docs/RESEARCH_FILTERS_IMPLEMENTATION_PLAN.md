@@ -9,8 +9,11 @@ License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 # Research filters and instruction interpretation
@@ -405,7 +408,7 @@ Status: complete in this document.
 
 ### Phase 1 — explicit backend filters
 
-Status: in progress on `task/research-filter-planning`.
+Status: complete on master. Run diagnostics label pinned evidence that bypasses the filter (`selected_evidence_exempt_count`).
 
 Deliverables:
 
@@ -420,6 +423,8 @@ No new frontend UI is required to complete Phase 1.
 
 ### Phase 2 — preview API
 
+Status: implemented as `POST /api/research/filters/preview` (`routers/research_filters.py`, `research_filter_preview.py`). Diagnostics are structured codes plus parameters for the browser to localize. Field checking uses the collection's declared `filter_fields`; no collection scan, so no counts yet.
+
 Deliverables:
 
 - authenticated non-mutating Research filter-preview endpoint;
@@ -431,6 +436,8 @@ Deliverables:
 Tests cover valid/invalid filters, unknown fields, hidden/system collection isolation, researcher authorization, no mutation, and structured diagnostics.
 
 ### Phase 3 — explicit frontend editor
+
+Status: implemented (`web/src/domain/researchFilters.ts`, `ResearchFilterEditor.vue`, `api/researchFilters.ts`; wired into `ResearchComposer`/`ResearchView`). Deviations and gaps: the grammar adds `document contains` / `document not contains` for the document filter; autocomplete covers fields, operators and connectives but not values (the preview does not return a value inventory); field types are `any` until the catalog carries types; a failed-turn retry sends no composer filter and does not yet reuse the turn's original plan; the expression is not persisted in the draft.
 
 Deliverables:
 

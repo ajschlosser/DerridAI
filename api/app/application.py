@@ -42,6 +42,7 @@ from .routers.i18n import router as i18n_router
 from .routers.jobs import router as jobs_router
 from .routers.llm import router as llm_router
 from .routers.pipelines import router as pipelines_router
+from .routers.research_filters import router as research_filters_router
 from .routers.research_threads import router as research_threads_router
 from .routers.sites import router as sites_router
 from .routers.sources import router as sources_router
@@ -55,6 +56,7 @@ ROUTERS = (
     annotations_router,
     system_router,
     research_threads_router,
+    research_filters_router,
     system_data_router,
     i18n_router,
     health_router,

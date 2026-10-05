@@ -395,6 +395,46 @@ def test_research_filter_wins_over_explicit_named_work_seed() -> None:
     assert levinas_scope["matched"] is False
 
 
+def test_filtered_run_labels_pinned_evidence_exemption() -> None:
+    base = dict(
+        prompt="Explain the trace.",
+        pipeline_id="research.balanced",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+        selected_evidence=[
+            {
+                "record": {
+                    "record_id": "l1",
+                    "work": "Totality and Infinity",
+                    "text": "The face resists possession.",
+                }
+            }
+        ],
+    )
+    plan = {"metadata_filter": {"work": {"$ne": "Totality and Infinity"}}}
+    filtered = run_rag_pipeline(
+        RAGRunRequest(**base, filter_plan=plan),
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+    assert filtered["retrieval"]["filter_plan"]["selected_evidence_exempt_count"] == 1
+
+    unfiltered = run_rag_pipeline(
+        RAGRunRequest(**base),
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+    assert "selected_evidence_exempt_count" not in unfiltered["retrieval"]["filter_plan"]
+
+
 
 def test_lexical_rerank_distinguishes_source_author_from_mentioned_author() -> None:
     docs = [

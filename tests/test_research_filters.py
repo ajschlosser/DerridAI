@@ -5,6 +5,14 @@
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
 # License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from __future__ import annotations
 
@@ -102,6 +110,19 @@ def test_rag_filter_plan_validates_before_job_execution() -> None:
         )
 
 
+def test_filter_plan_survives_request_roundtrip_and_defaults_to_none() -> None:
+    request = RAGRunRequest(
+        prompt="q",
+        source_collection="corpus",
+        filter_plan={"metadata_filter": {"work": "A"}, "source": "explicit"},
+    )
+    restored = RAGRunRequest(**request.model_dump())
+    assert restored.filter_plan == request.filter_plan
+    legacy = request.model_dump()
+    legacy.pop("filter_plan")
+    assert RAGRunRequest(**legacy).filter_plan is None
+
+
 class _CaptureCollection:
     def __init__(self) -> None:
         self.metadata = {"hnsw:space": "cosine"}
@@ -172,3 +193,92 @@ def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
     assert [item["record"]["record_id"] for item in lexical] == ["r1"]
     assert collection.last_get["where"] == where
     assert collection.last_get["where_document"] == where_document
+
+
+# --- Phase 2: preview endpoint -------------------------------------------------
+
+
+class _PreviewStore:
+    def __init__(self, stores):
+        self._stores = stores
+        self.writes = 0
+
+    def list_stores(self):
+        return self._stores
+
+
+def _preview(monkeypatch, stores, **body):
+    from app.routers import research_filters as routes
+
+    fake = _PreviewStore(stores)
+    monkeypatch.setattr(routes, "store", fake)
+    request = routes.ResearchFilterPreviewRequest(collection="corpus", **body)
+    return routes.preview_research_filter(request), fake
+
+
+_CORPUS = [{"name": "corpus", "filter_fields": ["work", "page_start"]}]
+
+
+def test_preview_explains_valid_plan_and_reports_fields(monkeypatch) -> None:
+    result, _ = _preview(
+        monkeypatch,
+        _CORPUS,
+        metadata_filter={
+            "$and": [{"work": "Of Grammatology"}, {"page_start": {"$gte": 100}}]
+        },
+        document_filter={"$contains": "trace"},
+    )
+    assert result["valid"] is True
+    assert result["fields_referenced"] == ["page_start", "work"]
+    assert result["collection_filter_fields"] == ["page_start", "work"]
+    group = result["explanation"]["metadata"]
+    assert group["operator"] == "and" and len(group["children"]) == 2
+    assert result["explanation"]["document"]["operator"] == "$contains"
+
+
+def test_preview_reports_unknown_fields_and_malformed_filters(monkeypatch) -> None:
+    unknown, _ = _preview(monkeypatch, _CORPUS, metadata_filter={"speaker": "Derrida"})
+    assert unknown["valid"] is False
+    assert unknown["unsupported_fields"] == ["speaker"]
+    assert unknown["errors"][0]["code"] == "unknown_field"
+
+    malformed, _ = _preview(
+        monkeypatch, _CORPUS, metadata_filter={"page_start": {"$gte": "late"}}
+    )
+    assert malformed["valid"] is False
+    assert malformed["errors"][0]["code"] == "invalid_filter"
+    assert "numeric" in malformed["errors"][0]["params"]["message"]
+
+
+def test_preview_warns_when_collection_declares_no_filter_fields(monkeypatch) -> None:
+    result, _ = _preview(
+        monkeypatch, [{"name": "corpus"}], metadata_filter={"work": "A"}
+    )
+    assert result["valid"] is True
+    assert result["warnings"][0]["code"] == "collection_declares_no_filter_fields"
+
+
+def test_preview_rejects_missing_and_system_collections(monkeypatch) -> None:
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as missing:
+        _preview(monkeypatch, [], metadata_filter={"work": "A"})
+    assert missing.value.status_code == 404
+
+    system = [
+        {
+            "name": "corpus",
+            "metadata": {"derridai_system_collection": "response_cache"},
+            "filter_fields": ["work"],
+        }
+    ]
+    with pytest.raises(HTTPException) as hidden:
+        _preview(monkeypatch, system, metadata_filter={"work": "A"})
+    assert hidden.value.status_code == 404
+
+
+def test_preview_route_is_available_to_researchers_with_run_capability() -> None:
+    from app.route_policy import non_admin_route_allowed
+
+    assert non_admin_route_allowed("researcher", "/api/research/filters/preview", "POST")
+    assert not non_admin_route_allowed("researcher", "/api/research/filters/preview", "GET")

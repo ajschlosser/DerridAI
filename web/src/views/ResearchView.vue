@@ -25,6 +25,7 @@ import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import ResearchThreadBrowser from "../components/research/ResearchThreadBrowser.vue";
 import type { ResearchTurn } from "../types/researchThreads";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
+import type { ResearchFilterChange } from "../components/research/ResearchFilterEditor.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
 import ResearchRunsDrawer from "../components/research/ResearchRunsDrawer.vue";
@@ -150,6 +151,8 @@ const config = ref<ResearchConfig | null>(null);
 const runPipelineOverrides = ref<PipelineConfigOverrideSet | null>(null);
 const prompt = ref("");
 const instructions = ref("");
+const filterExpression = ref("");
+const filterState = ref<ResearchFilterChange>({ plan: null, valid: true });
 const preset = ref("balanced");
 const model = ref("");
 const discoveredModels = ref<string[]>([]);
@@ -494,6 +497,10 @@ function changeProfile(id: string) {
   generation.value = profileGeneration(profile);
   discoveredModels.value = profile?.model ? [String(profile.model)] : [];
 }
+function filterPlanForRun() {
+  const plan = filterState.value.plan;
+  return plan ? { ...plan, source: "explicit", original_text: filterExpression.value } : null;
+}
 async function runResearch(turn?: ResearchTurn) {
   if (!config.value || starting.value || !workspace.value?.can_run || !auth.can("rag.run")) return;
   if (turn) {
@@ -501,6 +508,10 @@ async function runResearch(turn?: ResearchTurn) {
       return;
   } else {
     if (!canRun.value) return;
+    if (!filterState.value.valid) {
+      answerError.value = i18n.t("research.filters.blocked");
+      return;
+    }
     if (route.query.job)
       await router.replace({
         path: "/rag",
@@ -518,6 +529,7 @@ async function runResearch(turn?: ResearchTurn) {
     const job = (await researchActions.startResearchRun({
       prompt: turn?.user_question ?? prompt.value,
       instructions: turn ? turn.user_instructions || "" : instructions.value,
+      filter_plan: turn ? null : filterPlanForRun(),
       thread_id: turn ? undefined : currentThreadId.value || undefined,
       retry_thread_id: turn?.thread_id,
       retry_turn_id: turn?.turn_id,
@@ -997,6 +1009,8 @@ onBeforeUnmount(() => {
       <ResearchComposer
         v-model:prompt="prompt"
         v-model:instructions="instructions"
+        v-model:filter-expression="filterExpression"
+        @filter-change="filterState = $event"
         :source-collection="config?.source_collection || ''"
         :provider-profile-id="config?.provider_profile_id || ''"
         :response-language="config?.response_language || ''"

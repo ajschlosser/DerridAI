@@ -447,6 +447,7 @@ export function createResearchWorkspace(deps: Deps) {
       body: JSON.stringify({
         prompt,
         instructions: instructions || null,
+        filter_plan: input.filter_plan ?? null,
         pipeline_id: cfg.pipeline_id || null,
         pipeline_version: cfg.pipeline_version || null,
         settings_pipeline_overrides:
