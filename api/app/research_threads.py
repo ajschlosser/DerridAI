@@ -18,7 +18,8 @@
 
 A thread is conversational continuity only. Every turn still produces its own
 independently auditable ResearchRun (the job), so this module never touches the
-prompt, the evidence packet, or response memory; it only links identities.
+prompt, the evidence packet, or response memory. It links identities and freezes
+server-owned advisory context selections before starting a job.
 """
 from __future__ import annotations
 
@@ -27,6 +28,7 @@ from typing import Any
 
 from . import operation_events
 from .models import RAGRunRequest
+from .research_context import select_thread_context
 from .research_thread_store import ResearchThreadStore, ThreadNotFound, get_thread_store
 
 logger = logging.getLogger(__name__)
@@ -77,6 +79,10 @@ def start_run(
             return _with_thread(jobs.get(turn["job_id"]), turn)
     body = body.model_copy(update={"thread_id": turn["thread_id"]})
     try:
+        # Stored for audit only in this checkpoint; generation still receives
+        # no historical content until the separate prompt contract lands.
+        context = select_thread_context(store, turn["turn_id"], owner, jobs.get)
+        store.save_context_selection(turn["turn_id"], owner, context.snapshot())
         job = jobs.create(body, owner=owner, turn_id=turn["turn_id"])
     except Exception as exc:
         store.end_turn(turn["turn_id"], owner, status="failed", error=str(exc))

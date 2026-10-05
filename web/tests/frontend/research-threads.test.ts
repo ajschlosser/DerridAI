@@ -20,6 +20,8 @@ import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
+import { realtime } from "../../src/realtime";
+import type { EventHandler } from "../../src/realtime/client";
 import { ApiError } from "../../src/api/http";
 import ResearchThreadBrowser from "../../src/components/research/ResearchThreadBrowser.vue";
 import ResearchThreadNavigation from "../../src/components/research/ResearchThreadNavigation.vue";
@@ -105,6 +107,7 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   client.clear();
+  vi.restoreAllMocks();
 });
 function browser(id = "a") {
   const wrapper = mount(ResearchThreadBrowser, {
@@ -180,6 +183,54 @@ describe("Research thread shell", () => {
     await flushPromises();
     expect(wrapper.text()).not.toContain("Answer /api/jobs/job-a");
     expect(wrapper.text()).toContain("Question a");
+  });
+  it("binds previews to the active turn, clears on switches, and replaces with the completed answer", async () => {
+    const handlers = new Map<string, EventHandler>();
+    const stop = vi.fn();
+    vi.spyOn(realtime, "subscribe").mockImplementation((topic, handler) => {
+      handlers.set(topic, handler);
+      return stop;
+    });
+    const detail = thread("a");
+    detail.turns.push({ ...thread("b").turns[0], thread_id: "a", ordinal: 2, status: "running" });
+    api.get.mockResolvedValue(detail);
+    const wrapper = browser();
+    await flushPromises();
+    const oldHandler = handlers.get("job:job-b")!;
+    const event = {
+      type: "llm.token",
+      event_id: 1,
+      resource_type: "job",
+      resource_id: "job-b",
+      revision: 1,
+      timestamp: "now",
+      payload: { generation: { seq: 1, delta: "Unverified preview", gap: false, final: false } },
+    } as const;
+    oldHandler(event);
+    await flushPromises();
+    expect(wrapper.findAll("article")[0].text()).not.toContain("Unverified preview");
+    expect(wrapper.findAll("article")[1].text()).toContain("Unverified preview");
+    expect(wrapper.findAll("article")[1].text()).not.toContain("Citation");
+    api.get.mockResolvedValue({
+      ...detail,
+      turns: detail.turns.map((turn) => ({ ...turn, status: "completed" })),
+    });
+    await client.invalidateQueries();
+    await flushPromises();
+    expect(stop).toHaveBeenCalled();
+    expect(wrapper.text()).not.toContain("Unverified preview");
+    expect(wrapper.findAll("article")[1].text()).toContain("Answer /api/jobs/job-b");
+    oldHandler(event);
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Unverified preview");
+    api.get.mockResolvedValue(thread("c"));
+    await wrapper.setProps({ threadId: "c" });
+    await flushPromises();
+    oldHandler(event);
+    expect(wrapper.text()).not.toContain("Unverified preview");
+    useAuthStore().user = null;
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Answer /api/jobs/job-c");
   });
   it("does not read answers for incomplete turns", async () => {
     const detail = thread("a");

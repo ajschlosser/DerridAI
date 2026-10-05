@@ -1120,6 +1120,8 @@ Each active/recent RAG card shows:
 - Details/timeline
 - Open result
 
+Active turns in the Research thread browser also show their own unverified live previews. Switching threads or accounts clears the preview; completed answers and citations load independently for each turn.
+
 While a run is generating its answer, the workspace streams a live draft of the text as the model produces it, clearly labelled as an unverified preview whose citations are not yet bound. The draft is replaced by the final, source-bound answer as soon as the run completes; if the stream is interrupted the draft simply stops updating and the final answer still arrives normally.
 
 ### Research configuration and overrides

@@ -361,6 +361,25 @@ class ResearchThreadStore(PipelineDatabase):
             ).fetchone()
         return _turn_row(row) if row else None
 
+    def save_context_selection(
+        self, turn_id: str, owner: str, selection: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Freeze one advisory context snapshot per attempt, before job binding."""
+        with self.lock, self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            turn = self._owned_turn(conn, turn_id, owner)
+            if turn["status"] != "queued" or turn["job_id"]:
+                raise ThreadBusy(turn_id)
+            existing = load_json(turn["context_selection_json"], None)
+            if isinstance(existing, dict) and existing.get("attempt") == turn["attempt"]:
+                return _turn_row(turn)
+            snapshot = {**selection, "attempt": turn["attempt"]}
+            conn.execute(
+                "UPDATE research_turns SET context_selection_json=? WHERE turn_id=?",
+                (dump_json(snapshot), turn_id),
+            )
+            return _turn_row(self._owned_turn(conn, turn_id, owner))
+
     def bind_job(
         self,
         turn_id: str,
