@@ -19,6 +19,7 @@ uvicorn[standard]>=0.34,<1
 chromadb>=1.0,<2
 httpx>=0.28,<1
 pydantic>=2.10,<3
+PyYAML>=6.0,<7
 json-repair>=0.63,<1
 python-multipart>=0.0.20,<1
 # Read-only cELF GraphQL façade (docs/GRAPHQL.md). Pinned to a minor series:
