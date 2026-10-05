@@ -17,7 +17,10 @@
  */
 
 import { assertionFieldsByTab } from "./fieldAssertions";
-import { metadataRegistryGroups, type MetadataRegistryField } from "./metadataFieldRegistry";
+import {
+  metadataRegistryGroups,
+  type MetadataRegistryField,
+} from "./metadataFieldRegistry";
 import type { MetadataSchema } from "../api/metadataSchemas";
 
 const STORAGE_KEY = "derridai.record.inspectorLayout.v1";
@@ -155,10 +158,7 @@ function field(name: string): InspectorLayoutRow {
 
 function schemaInspectorLayout(schema: MetadataSchema): InspectorLayout {
   const layout: InspectorLayout = {
-    overview: [
-      heading("Record context"),
-      ...SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS.map(field),
-    ],
+    overview: [heading("Record context"), ...SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS.map(field)],
     provenance: [],
     indexing: [],
   };
