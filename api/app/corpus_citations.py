@@ -21,10 +21,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .research_semantics import SPEAKER_ID, semantic_text, source_author, source_work_label
+
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
-    author = str(record.get("document_author") or record.get("speaker") or "")
-    work = str(record.get("work") or "")
+    author = source_author(record) or semantic_text(record, SPEAKER_ID)
+    work = source_work_label(record)
     edition = str(record.get("edition") or "")
     year = record.get("year") or ""
     page_start = record.get("page_start")
