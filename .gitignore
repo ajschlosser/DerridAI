@@ -70,3 +70,6 @@ data/.home/*
 .test-data/
 web/test-results/
 web/sdk/dist/
+
+# Native CLI build artifacts; release/repo binaries are promoted intentionally.
+dist/
