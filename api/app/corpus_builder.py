@@ -5762,6 +5762,20 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 {},
             )
 
+        reviewer_filter_applied = False
+        if current_reviewer.get():
+            # FileResponse bodies bypass the ordinary JSON response scrubber.
+            # Apply the same blind-second-opinion presentation rule explicitly
+            # before writing an inspection archive for the current reviewer.
+            from .response_filters import scrub_second_opinions
+
+            reviewer_filter_applied = scrub_second_opinions(
+                {
+                    "records": records,
+                    "retired_records": retired_records,
+                }
+            )
+
         export_id = f"unfinished-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
         created_at = iso_now()
         directory = self.repo.build_path(build_id).parent / "exports"
@@ -5783,6 +5797,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "source_unit_count": len(source_units),
             "persisted_source_unit_count": len(persisted_source_units),
             "source_unit_store_present": source_unit_path.exists(),
+            "reviewer_filter_applied": reviewer_filter_applied,
             "build_status": build.get("status"),
             "build_stage": build.get("stage"),
             "validation": build.get("validation") or {},
@@ -5807,7 +5822,8 @@ Contents:
 - evidence_remap_pending.json: unresolved structural evidence remaps, when present
 
 Nothing in this archive is promoted, accepted, flattened, or marked cELF-conformant
-by the act of downloading it.
+by the act of downloading it. Blind second-opinion values that the current reviewer
+is not permitted to see are filtered exactly as they are in the interactive review UI.
 """
 
         def jsonl(rows: list[dict[str, Any]]) -> str:
