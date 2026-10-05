@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { applyAppearance as applyAppearanceCompat } from "./legacyCompat";
-import { state } from "./sharedUrlState";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import PdfWorker from "pdfjs-dist/legacy/build/pdf.worker.mjs?worker";
 
-// Appearance preferences live in the shared `appConfig` slice, so applying them needs no legacy runtime. The runtime
-// delegates to this same function.
-export const applyAppearance = (patch: object = {}) => applyAppearanceCompat(state, patch);
+// Registers the pdf.js worker once; imported for its side effect during app bootstrap.
+pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();

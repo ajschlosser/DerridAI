@@ -23,7 +23,25 @@ const UI_COLOR_SCHEMES = new Set(["system", "light", "dark"]);
 const UI_CONTRAST_PREFS = new Set(["system", "more"]);
 let appearanceMediaWired = false;
 
-function mediaMatches(query) {
+interface TranslationSlice {
+  locale?: string;
+  dictionary?: Record<string, unknown>;
+  base?: Record<string, unknown>;
+  reverse?: Map<string, string>;
+  info?: Record<string, unknown>;
+}
+
+/** The slice of the shared workspace state these helpers read and write. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type CompatState = Record<string, any>;
+
+export interface AppearancePatch {
+  ui_color_theme?: unknown;
+  ui_color_scheme?: unknown;
+  ui_contrast?: unknown;
+}
+
+function mediaMatches(query: string): boolean {
   try {
     return Boolean(window.matchMedia?.(query)?.matches);
   } catch {
@@ -31,7 +49,7 @@ function mediaMatches(query) {
   }
 }
 
-export function syncColorScheme(state) {
+export function syncColorScheme(state: CompatState) {
   const pref = UI_COLOR_SCHEMES.has(String(state.appConfig.ui_color_scheme || ""))
     ? String(state.appConfig.ui_color_scheme)
     : "system";
@@ -60,7 +78,7 @@ export function syncColorScheme(state) {
   return { scheme, contrast };
 }
 
-export function wireAppearanceMedia(state) {
+export function wireAppearanceMedia(state: CompatState): void {
   if (appearanceMediaWired || typeof window === "undefined" || !window.matchMedia) return;
   appearanceMediaWired = true;
   const sync = () => syncColorScheme(state);
@@ -72,7 +90,7 @@ export function wireAppearanceMedia(state) {
   }
 }
 
-export function applyUiTheme(state, theme) {
+export function applyUiTheme(state: CompatState, theme: unknown): string {
   const next = UI_COLOR_THEMES.has(String(theme || "")) ? String(theme) : "green";
   state.appConfig.ui_color_theme = next;
   try {
@@ -89,7 +107,7 @@ export function applyUiTheme(state, theme) {
   return next;
 }
 
-export function applyAppearance(state, patch = {}) {
+export function applyAppearance(state: CompatState, patch: AppearancePatch = {}) {
   if (patch.ui_color_theme != null) applyUiTheme(state, patch.ui_color_theme);
   if (patch.ui_color_scheme != null) {
     const next = UI_COLOR_SCHEMES.has(String(patch.ui_color_scheme))
@@ -117,9 +135,15 @@ export function applyAppearance(state, patch = {}) {
   return syncColorScheme(state);
 }
 
-export function setTranslationDictionary(state, locale, dictionary = {}, base = {}, info = {}) {
+export function setTranslationDictionary(
+  state: CompatState,
+  locale: unknown,
+  dictionary: Record<string, unknown> = {},
+  base: Record<string, unknown> = {},
+  info: Record<string, unknown> = {},
+): void {
   const canonical = base || {};
-  const reverse = new Map();
+  const reverse = new Map<string, string>();
   for (const [key, value] of Object.entries(canonical)) {
     const text = String(value ?? "").trim();
     if (text && !reverse.has(text)) reverse.set(text, key);
@@ -133,28 +157,33 @@ export function setTranslationDictionary(state, locale, dictionary = {}, base = 
   };
 }
 
-export function tr(state, key, fallback = "") {
-  return (
-    state.translations?.dictionary?.[key] ||
-    state.translations?.base?.[key] ||
-    fallback ||
-    englishDefault(key) ||
-    key
+export function tr(state: CompatState, key: string, fallback = ""): string {
+  const translations: TranslationSlice | undefined = state.translations;
+  return String(
+    translations?.dictionary?.[key] ||
+      translations?.base?.[key] ||
+      fallback ||
+      englishDefault(key) ||
+      key,
   );
 }
 
-export function trf(state, key, fallback, values = {}) {
-  if (fallback && typeof fallback === "object") {
-    values = fallback;
-    fallback = "";
-  }
-  let text = String(tr(state, key, fallback));
+export function trf(
+  state: CompatState,
+  key: string,
+  fallback?: string | Record<string, unknown>,
+  values: Record<string, unknown> = {},
+): string {
+  let fallbackText = "";
+  if (fallback && typeof fallback === "object") values = fallback;
+  else fallbackText = fallback || "";
+  let text = String(tr(state, key, fallbackText));
   for (const [name, value] of Object.entries(values))
     text = text.replaceAll(`{${name}}`, String(value));
   return text;
 }
 
-export function translateExactUiValue(state, value) {
+export function translateExactUiValue(state: CompatState, value: unknown): string {
   const raw = String(value ?? "");
   if (state.translations?.locale === "en-US") return raw;
   const trimmed = raw.trim();
@@ -166,21 +195,27 @@ export function translateExactUiValue(state, value) {
   return `${prefix}${translated}${suffix}`;
 }
 
-export function translateDynamicUiValue(state, value) {
+export function translateDynamicUiValue(state: CompatState, value: unknown): string {
   const raw = String(value ?? "");
   const exact = translateExactUiValue(state, raw);
   if (exact !== raw || state.translations?.locale === "en-US") return exact;
   const prefix = raw.match(/^\s*/)?.[0] || "";
   const suffix = raw.match(/\s*$/)?.[0] || "";
   const text = raw.trim();
-  const numericCount = (input) => Number(String(input).replace(/[^0-9.-]/g, ""));
-  const noun = (oneKey, manyKey, oneFallback, manyFallback, count) =>
+  const numericCount = (input: unknown) => Number(String(input).replace(/[^0-9.-]/g, ""));
+  const noun = (
+    oneKey: string,
+    manyKey: string,
+    oneFallback: string,
+    manyFallback: string,
+    count: unknown,
+  ) =>
     tr(
       state,
       numericCount(count) === 1 ? oneKey : manyKey,
       numericCount(count) === 1 ? oneFallback : manyFallback,
     );
-  let match;
+  let match: RegExpMatchArray | null;
   if ((match = text.match(/^([0-9][0-9., \u00a0]*) records$/i)))
     return `${prefix}${match[1]} ${noun("dynamic.record_one", "dynamic.records", "record", "records", match[1])}${suffix}`;
   if ((match = text.match(/^([0-9][0-9., \u00a0]*) works$/i)))
@@ -277,7 +312,10 @@ export function translateDynamicUiValue(state, value) {
  * Corpus passages, record text, source evidence, code and user input are blocked
  * from this bridge. New Vue-native components should call the i18n store directly.
  */
-export function translateLegacyDom(state, root = document.querySelector("#main")) {
+export function translateLegacyDom(
+  state: CompatState,
+  root: Element | null = document.querySelector("#main"),
+): void {
   if (!root || state.translations?.locale === "en-US") return;
   const selectors = [
     "button",
@@ -321,8 +359,8 @@ export function translateLegacyDom(state, root = document.querySelector("#main")
   const blocked =
     ".textcell,.recordtext,.pdftext,.researcher-summary-text,[data-annotatable-field],pre,code,svg,script,style,textarea,input";
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  let node;
+  const nodes: Node[] = [];
+  let node: Node | null;
   while ((node = walker.nextNode())) nodes.push(node);
   for (const textNode of nodes) {
     const parent = textNode.parentElement;
