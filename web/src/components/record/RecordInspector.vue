@@ -404,6 +404,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
       ref="layoutEditor"
       :layout="layout"
       :record="record"
+      :schema="schema"
       @apply="applyLayout"
       @reset="resetLayout"
     />
