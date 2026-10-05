@@ -273,7 +273,9 @@ def _source_validation_blocker_message(validation: dict[str, Any]) -> str:
     )
     if issues:
         details: list[str] = []
-        for item in issues[:4]:
+        for index, item in enumerate(issues):
+            if index >= 4:
+                break
             code = str(item.get("code") or "source_validation")
             location = " / ".join(
                 value
