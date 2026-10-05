@@ -41,7 +41,7 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
     route = next(
         node
         for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "create_rag_job"
+        if isinstance(node, ast.FunctionDef) and node.name == "start_research_run"
     )
     route.decorator_list = []
 
@@ -63,6 +63,13 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
             researcher_profile=lambda profile_id: profile,
         ),
         "rag_jobs": jobs,
+        # Thread persistence is covered by the Research thread tests; here the
+        # shared start helper just forwards to the job manager.
+        "research_threads": SimpleNamespace(
+            start_run=lambda manager, body, *, owner, **kwargs: manager.create(body, owner=owner)
+        ),
+        "ThreadNotFound": LookupError,
+        "ThreadBusy": RuntimeError,
         "RAGRunRequest": RAGRunRequest,
         "HTTPException": HTTPException,
         "profile_generation_options": profile_generation_options,
@@ -97,7 +104,7 @@ def test_researcher_rag_uses_approved_model_and_not_browser_overrides():
         generation={"temperature": 1.5},
     )
 
-    assert scope["create_rag_job"](body, None) == {"id": "job"}
+    assert scope["start_research_run"](body, None) == {"id": "job"}
     submitted = jobs.create.call_args.args[0]
     assert submitted.model == "approved-model"
     assert submitted.base_url == "http://approved:11434"

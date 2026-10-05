@@ -876,6 +876,15 @@ Events should allow the frontend to refresh:
 
 Do not stream full evidence packets through broad list events. Continue using REST for authoritative final results.
 
+## 22.0 Implementation status
+
+Update this section as phases land; it is the single place that records progress.
+
+- **Phase B (persistence): done on `feature/research-threads`.** `api/app/research_thread_store.py` owns the `research_threads` / `research_turns` tables on the system SQLite database (owner-scoped CRUD, atomic ordinals, idempotent append via `(thread_id, idempotency_key)`, one active turn per thread, job/run/response linkage, failed/cancelled turns, in-place retry that increments `attempt` rather than duplicating the visible question, tombstone deletion that drops turns and keeps the legacy-materialization key, and idempotent legacy singleton materialization from caller-supplied response summaries). Covered by `tests/test_research_thread_store.py`.
+- **Decisions made in Phase B:** non-owners (including administrators) get `ThreadNotFound`; no admin widening. Retry reuses the same turn identity with a new attempt. Deleting a thread never touches the response cache or canonical provenance.
+- **Phase C (API and job linkage): done on `feature/research-threads`, without prompt changes.** `api/app/research_threads.py` starts every Research run as a turn (`start_run`: create/reuse thread, idempotent append, `RAGJobManager.create(turn_id=)` binds the job before the worker starts, failed starts mark the turn failed) and `sync_turn_from_job` mirrors completed/failed/cancelled outcomes onto the turn from the job's `finally`. `POST /api/jobs/rag` and `POST /api/research/threads/{id}/turns` share `routers/jobs.py:start_research_run`, so validation and researcher-profile enforcement are identical; `routers/research_threads.py` adds list/create/get/patch/delete, turn get, and `.../turns/{id}/retry` (the retry must resubmit the turn's original question). `RAGRunRequest` gained `thread_id` and `idempotency_key` only (no prior answer text). The realtime key `research_threads` (capability `rag.run`, no ids or text) is noted after every thread/turn change. Covered by `tests/test_research_thread_api.py`.
+- **Not started:** Phase A requirements/spec entries and first-turn characterization tests, and Phases D through J. Next is Phase D (frontend thread shell). Legacy materialization still needs a caller that lists completed responses from the response cache, and the `research_threads` frontend invalidation mapping is not wired yet.
+
 ## 22. Detailed implementation sequence
 
 The agent should implement in small reviewable commits. Do not combine architectural storage, prompt changes, and large UI changes in one commit.
