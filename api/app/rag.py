@@ -41,6 +41,13 @@ from .pipelines.research import (
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
+from .research_semantics import (
+    SOURCE_AUTHOR_ID,
+    rerank_attribution_context,
+    semantic_value,
+    source_author,
+    source_work_label,
+)
 from .research_sizing import (
     automatic_collection_sizing,
     collapse_adjacent_candidates,
@@ -802,8 +809,8 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
             field
             for field, value in {
                 "record_id": record.get("record_id"),
-                "work": record.get("work"),
-                "document_author": record.get("document_author"),
+                "work": source_work_label(record),
+                "document_author": semantic_value(record, SOURCE_AUTHOR_ID),
                 "exact_text": record.get("text"),
                 "inline_citation": item.get("inline_citation"),
                 "full_citation": item.get("full_citation"),
@@ -967,20 +974,11 @@ def _tokenize(text: str) -> set[str]:
 
 
 def _rerank_candidate_text(item: Mapping[str, Any]) -> str:
-    """Expose source identity to rerankers without confusing mention with authorship."""
+    """Expose semantic attribution roles to rerankers."""
 
     record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
     passage = str(item.get("_rerank_text") or record.get("text") or "")
-    return "\n".join(
-        [
-            f"Document author: {record.get('document_author') or ''}",
-            f"Work: {record.get('work') or ''}",
-            f"Quoted author: {record.get('quoted_author') or ''}",
-            f"Quoted work: {record.get('quoted_work') or ''}",
-            f"Position holder: {record.get('position_holder') or ''}",
-            f"Passage: {passage}",
-        ]
-    )
+    return rerank_attribution_context(record, passage)
 
 
 def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
@@ -989,12 +987,9 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
     for index, item in enumerate(docs):
         record = item["record"]
         text = " ".join([
-            str(record.get("document_author") or ""),
-            str(record.get("work") or ""),
+            source_author(record),
+            source_work_label(record),
             str(record.get("speaker") or ""),
-            str(record.get("quoted_author") or ""),
-            str(record.get("quoted_work") or ""),
-            str(record.get("position_holder") or ""),
             str(record.get("topics") or ""),
             str(record.get("concepts") or ""),
             str(record.get("persons") or ""),
@@ -1002,7 +997,7 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
-        author_tokens = _tokenize(str(record.get("document_author") or ""))
+        author_tokens = _tokenize(source_author(record))
         source_author_overlap = len(q & author_tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
         similarity = float(
@@ -1310,11 +1305,11 @@ def _explicit_scope_work_groups(
         for row in rows:
             if not isinstance(row, Mapping):
                 continue
-            work = str(row.get("work") or "").strip()
+            work = source_work_label(row)
             if not work:
                 continue
             summary = work_summaries.setdefault(work, {"work": work, "authors": set()})
-            author = str(row.get("document_author") or "").strip()
+            author = source_author(row)
             if author:
                 summary["authors"].add(author)
 
@@ -1726,7 +1721,7 @@ def run_rag_pipeline(
             (
                 item
                 for item in raw_results
-                if str((item.get("record") or {}).get("work") or "") in works
+                if source_work_label(item.get("record") or {}) in works
             ),
             None,
         )
