@@ -1522,6 +1522,10 @@ def run_rag_pipeline(
     }
 
     selected_candidates = _selected_evidence_candidates(request, store)
+    if metadata_filter or document_filter:
+        # Pinned evidence is user-curated and is not removed by the retrieval
+        # filter; record the exception so audit views can label it.
+        filter_detail["selected_evidence_exempt_count"] = len(selected_candidates)
     if request.skip_retrieval and not selected_candidates:
         raise ValueError("Selected-evidence-only RAG requires at least one selected evidence record.")
     if not request.skip_retrieval and not str(request.source_collection or "").strip():

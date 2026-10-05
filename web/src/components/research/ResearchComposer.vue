@@ -19,6 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
+import ResearchFilterEditor from "./ResearchFilterEditor.vue";
+import type { ResearchFilterChange } from "./ResearchFilterEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   ResearchProfile,
@@ -30,6 +32,7 @@ const props = withDefaults(
   defineProps<{
     prompt: string;
     instructions: string;
+    filterExpression?: string;
     sourceCollection: string;
     providerProfileId: string;
     responseLanguage: string;
@@ -55,6 +58,7 @@ const props = withDefaults(
     canConfigure: true,
     canManageRuns: true,
     disabledReason: "",
+    filterExpression: "",
     pipelineName: "",
     pipelineVersion: null,
     pipelineOverride: false,
@@ -63,6 +67,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   "update:prompt": [value: string];
   "update:instructions": [value: string];
+  "update:filterExpression": [value: string];
+  filterChange: [value: ResearchFilterChange];
   "update:sourceCollection": [value: string];
   "update:providerProfileId": [value: string];
   "update:responseLanguage": [value: string];
@@ -206,6 +212,23 @@ function pickHistory(item: Record<string, unknown>) {
         :placeholder="i18n.t('research.instructions_placeholder')"
         @input="emit('update:instructions', ($event.target as HTMLTextAreaElement).value)"
       ></textarea>
+    </details>
+
+    <details class="research-instructions-disclosure">
+      <summary>
+        {{ i18n.t("research.filters.title")
+        }}<span>{{
+          filterExpression.trim() ? i18n.t("research.added") : i18n.t("research.optional")
+        }}</span>
+      </summary>
+      <ResearchFilterEditor
+        :model-value="filterExpression"
+        :collection="sourceCollection"
+        :fields="selectedStore?.filter_fields || []"
+        :disabled="!(canDraft ?? canConfigure)"
+        @update:model-value="emit('update:filterExpression', $event)"
+        @change="emit('filterChange', $event)"
+      />
     </details>
 
     <fieldset class="research-compose-context" :disabled="!canConfigure">
