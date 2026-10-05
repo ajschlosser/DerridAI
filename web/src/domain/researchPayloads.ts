@@ -95,6 +95,8 @@ export function researchJobForUi(job: Loose | null | undefined) {
   const result = job.result && typeof job.result === "object" ? job.result : null;
   return {
     id: job.id,
+    thread_id: job.thread_id,
+    turn_id: job.turn_id,
     type: job.type,
     status: job.status,
     stage: job.stage || "",

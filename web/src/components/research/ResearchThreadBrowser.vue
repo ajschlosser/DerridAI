@@ -23,6 +23,7 @@ import ResearchThreadManageDialog from "./ResearchThreadManageDialog.vue";
 import { useAuthStore } from "../../stores/auth";
 import { researchThreadsApi } from "../../api/researchThreads";
 import { useDataQuery } from "../../realtime/dataQuery";
+import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
 import { ApiError } from "../../api/http";
@@ -181,7 +182,11 @@ function retry() {
     @rename="manage('rename')"
     @archive="mutate('archive')"
     @remove="manage('delete')"
-  />
+  >
+    <template #answer="{ turn }">
+      <ResearchThreadAnswer :key="turn.turn_id" :turn="turn" />
+    </template>
+  </ResearchThreadNavigation>
   <ResearchThreadManageDialog
     v-if="
       allowed &&

@@ -494,6 +494,9 @@ async function runResearch() {
     activeEvidenceIndex.value = 0;
     jobs.value = [job, ...jobs.value.filter((item) => item.id !== job.id)];
     schedulePoll(true);
+    if (job.thread_id) {
+      await router.push({ path: "/rag", query: { thread: job.thread_id, job: job.id } });
+    }
     await nextTick();
     document
       .querySelector(".research-answer-workspace")

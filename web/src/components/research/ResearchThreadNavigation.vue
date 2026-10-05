@@ -127,6 +127,7 @@ const i18n = useI18nStore();
           <article :aria-labelledby="`heading-${turn.turn_id}`">
             <h4 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h4>
             <p>{{ i18n.t(`research.thread_status_${turn.status}`) }}</p>
+            <slot name="answer" :turn="turn" />
             <p v-if="turn.error" role="alert">{{ turn.error }}</p>
             <button
               v-if="turn.job_id"

@@ -25,6 +25,11 @@ import ResearchThreadBrowser from "../../src/components/research/ResearchThreadB
 import ResearchThreadNavigation from "../../src/components/research/ResearchThreadNavigation.vue";
 import type { ResearchThreadDetail, ResearchThreadSummary } from "../../src/types/researchThreads";
 
+const jobs = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock("../../src/api/http", async (original) => ({
+  ...(await original<typeof import("../../src/api/http")>()),
+  apiRequest: jobs.read,
+}));
 const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), patch: vi.fn(), remove: vi.fn() }));
 vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api }));
 const thread = (id: string): ResearchThreadDetail => ({
@@ -83,6 +88,14 @@ beforeEach(() => {
     "research.thread_open_run": "Open answer",
     "ui.retry": "Retry",
   };
+  jobs.read.mockImplementation(async (path: string) => ({
+    id: path.split("/").pop(),
+    status: "completed",
+    result: {
+      answer: `Answer ${path}`,
+      evidence: [{ evidence_id: "E0", full_citation: `Citation ${path}` }],
+    },
+  }));
   api.patch.mockResolvedValue(thread("a"));
   api.remove.mockResolvedValue(undefined);
   api.list.mockResolvedValue({ threads: [summary("a")] });
@@ -104,6 +117,38 @@ function browser(id = "a") {
   return wrapper;
 }
 describe("Research thread shell", () => {
+  it("keeps each inline answer and citation bound to its own turn", async () => {
+    const detail = thread("a");
+    detail.turns.push({ ...thread("b").turns[0], thread_id: "a", ordinal: 2 });
+    api.get.mockResolvedValue(detail);
+    const wrapper = browser();
+    await flushPromises();
+    const turns = wrapper.findAll("article");
+    expect(turns[0].text()).toContain("Answer /api/jobs/job-a");
+    expect(turns[0].text()).toContain("Citation /api/jobs/job-a");
+    expect(turns[0].text()).not.toContain("job-b");
+    expect(turns[1].text()).toContain("Answer /api/jobs/job-b");
+    expect(turns[1].text()).toContain("Citation /api/jobs/job-b");
+  });
+  it("clears a revoked inline answer while preserving its durable question", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Answer /api/jobs/job-a");
+    jobs.read.mockRejectedValue(new ApiError("Unavailable", 404));
+    await client.invalidateQueries();
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Answer /api/jobs/job-a");
+    expect(wrapper.text()).toContain("Question a");
+  });
+  it("does not read answers for incomplete turns", async () => {
+    const detail = thread("a");
+    detail.turns[0].status = "running";
+    api.get.mockResolvedValue(detail);
+    jobs.read.mockClear();
+    browser();
+    await flushPromises();
+    expect(jobs.read).not.toHaveBeenCalled();
+  });
   it("opens the correct run without submitting historical answer content", async () => {
     const wrapper = browser();
     await flushPromises();

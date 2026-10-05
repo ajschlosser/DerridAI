@@ -20,6 +20,8 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { defineComponent, reactive, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
+  start: vi.fn(),
+  push: vi.fn(),
   snapshot: vi.fn(),
   update: vi.fn(),
   runs: vi.fn(),
@@ -30,7 +32,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("vue-router", () => ({
   useRoute: () => reactive(mocks.route),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: mocks.push, replace: vi.fn() }),
 }));
 vi.mock("../../src/stores/auth", () => ({
   useAuthStore: () => {
@@ -48,6 +50,7 @@ vi.mock("../../src/stores/i18n", () => ({
   useI18nStore: () => ({ t: (key: string) => key, tf: (key: string) => key, locale: "en-US" }),
 }));
 vi.mock("../../src/domain/researchActions", () => ({
+  startResearchRun: mocks.start,
   getResearchWorkspaceSnapshot: mocks.snapshot,
   refreshResearchJobs: mocks.runs,
   updateResearchConfig: mocks.update,
@@ -100,7 +103,7 @@ const Composer = defineComponent({
     "history",
   ],
   template:
-    '<input class="composer" :value="prompt" @input="$emit(\'update:prompt\', $event.target.value)" /><button class="run" :disabled="!canRun">Run</button>',
+    '<input class="composer" :value="prompt" @input="$emit(\'update:prompt\', $event.target.value)" /><button class="run" :disabled="!canRun" @click="$emit(\'run\')">Run</button>',
 });
 const Result = defineComponent({
   props: ["job", "result"],
@@ -144,6 +147,25 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
+  it("links a newly submitted run to the server-created thread", async () => {
+    mocks.start.mockResolvedValue({
+      id: "new-job",
+      status: "running",
+      thread_id: "new-thread",
+      turn_id: "new-turn",
+    });
+    const w = render();
+    await flushPromises();
+    await w.get(".composer").setValue("A new inquiry");
+    await w.get(".run").trigger("click");
+    await flushPromises();
+    expect(mocks.start).toHaveBeenCalledOnce();
+    expect(mocks.start.mock.calls[0][0].prompt).toBe("A new inquiry");
+    expect(mocks.push).toHaveBeenCalledWith({
+      path: "/rag",
+      query: { thread: "new-thread", job: "new-job" },
+    });
+  });
   it("clears an unavailable pipeline override locally after visibility succeeds", async () => {
     mocks.snapshot.mockResolvedValue({
       ...snapshot(),

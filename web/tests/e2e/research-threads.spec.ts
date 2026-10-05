@@ -69,6 +69,7 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await page.goto(`${APP}/rag?thread=a`);
   const navigation = page.locator(".research-thread-navigation");
   await expect(navigation.getByRole("heading", { name: "Question a" })).toBeVisible();
+  await expect(navigation.locator(".thread-answer-text")).toHaveText("Answer A");
   await expect(page.locator(".research-run-button")).toBeDisabled();
   await navigation.getByRole("button", { name: "Open answer and evidence" }).click();
   await expect(page).toHaveURL(/job=job-a/);
@@ -83,6 +84,8 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await expect(navigation.getByRole("heading", { name: "Question a" })).toBeVisible();
   await page.goForward();
   await expect(navigation.getByRole("heading", { name: "Question b" })).toBeVisible();
+  await page.goBack();
+  await expect(navigation.locator(".thread-answer-text")).toHaveText("Answer A");
   for (const theme of ["light", "dark"]) {
     await page.evaluate(async (value) => {
       document.documentElement.setAttribute("data-color-scheme", value);
