@@ -398,6 +398,36 @@ def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp
         raise AssertionError("actual missing source coverage must still block publication")
 
 
+def test_publication_blocker_names_remaining_source_findings():
+    from app.corpus_publication import publication_blocker
+
+    validation = {
+        "source_valid": False,
+        "valid": False,
+        "missing_source_unit_ids": ["u-missing"],
+        "validation_issues": [
+            {
+                "code": "source_coverage",
+                "record_id": "",
+                "field": "u-missing",
+                "reason": "active source unit is not covered by any Record",
+            }
+        ],
+    }
+    message = publication_blocker(
+        {"status": "awaiting_review"},
+        [{"record_id": "r1"}],
+        validation,
+        require_acceptance=False,
+        accept_unreviewed=True,
+    )
+
+    assert message is not None
+    assert "source_coverage: 1" in message
+    assert "u-missing" in message
+    assert "active source unit is not covered" in message
+
+
 def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:Path):
     """If nothing was actually bypassed, the publication remains cELF-conformant."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
