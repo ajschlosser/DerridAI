@@ -42,8 +42,13 @@ from .pipelines.research import (
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .research_semantics import (
+    CONCEPTS_ID,
+    PERSONS_ID,
     SOURCE_AUTHOR_ID,
+    SPEAKER_ID,
+    TOPICS_ID,
     rerank_attribution_context,
+    semantic_text,
     semantic_value,
     source_author,
     source_work_label,
@@ -126,8 +131,8 @@ You are DerridAI, an evidence-grounded scholarly research assistant.
 </EVIDENCE>
 
 Guidelines:
-- Preserve speaker, quoted_speaker, quoted_author, quoted_work, position_holder, stance, target, discourse_role, and proposition_status.
-- Use document_author from each evidence record, when present, as the source-document author. Never substitute a default author when it is absent.
+- Preserve all supplied source-identity, attribution, quotation, stance, target, discourse-role, and proposition-status metadata.
+- Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
 - Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
 - Use the supplied EVIDENCE as the sole basis for substantive claims.
 - Prior memory is advisory workflow context, not current evidence. Never cite it
@@ -628,8 +633,8 @@ def structured_chat_complete(
 
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
-    author = str(record.get("document_author") or record.get("speaker") or "")
-    work = str(record.get("work") or "")
+    author = source_author(record) or semantic_text(record, SPEAKER_ID)
+    work = source_work_label(record)
     edition = str(record.get("edition") or "")
     year = record.get("year") or ""
     page_start = record.get("page_start")
@@ -757,8 +762,8 @@ def _context_string(
             f"<BEGIN EVIDENCE_TAG {tag}>",
             f"evidence_tag=[[{tag}]]",
             f"record_id={record.get('record_id', '')}",
-            f"work={record.get('work', '')}",
-            f"document_author={record.get('document_author', '')}",
+            f"source_work={source_work_label(record)}",
+            f"source_document_author={source_author(record)}",
             *metadata_lines,
             f"citation={inline}",
             f"text={compact_text}",
@@ -1773,8 +1778,8 @@ def run_rag_pipeline(
                 "works": works,
                 "matched": True,
                 "record_id": logical,
-                "work": record.get("work"),
-                "document_author": record.get("document_author"),
+                "work": source_work_label(record),
+                "document_author": source_author(record),
                 "group": group_index,
             }
         )
