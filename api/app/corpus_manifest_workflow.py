@@ -54,7 +54,6 @@ from .corpus_record_restructure import (
     active_source_unit_map,
     record_source_unit_ids,
     source_unit_root_block_ids,
-    synchronize_record_source_projection,
 )
 from .corpus_segmentation import (
     _apply_manifest_metadata,
