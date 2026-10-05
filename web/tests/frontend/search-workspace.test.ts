@@ -75,6 +75,39 @@ describe("search workspace commands", () => {
     expect(ctx.state.searchFacetFilters).toEqual({});
   });
 
+  it("validates custom advanced filters by schema field kind rather than field name", () => {
+    ctx.state.globalSearchMode = "traditional";
+
+    ctx.workspace.addSearchAdvancedFilter({
+      field: "conceptual_score",
+      op: "gte",
+      value: "0.7",
+      kind: "number",
+    });
+    ctx.workspace.addSearchAdvancedFilter({
+      field: "motifs",
+      op: "has",
+      value: "trace",
+      kind: "list",
+    });
+    ctx.workspace.addSearchAdvancedFilter({
+      field: "conceptual_score",
+      op: "has",
+      value: "invalid-for-number",
+      kind: "number",
+    });
+
+    expect(ctx.state.globalFilters.map((filter: Record<string, unknown>) => ({
+      field: filter.field,
+      op: filter.op,
+      value: filter.value,
+    }))).toEqual([
+      { field: "conceptual_score", op: "gte", value: "0.7" },
+      { field: "motifs", op: "has", value: "trace" },
+      { field: "conceptual_score", op: "eq", value: "invalid-for-number" },
+    ]);
+  });
+
   it("clears every filter and any database results", () => {
     ctx.state.searchFacetFilters = { topics: ["a"] };
     ctx.state.globalFilters = [{ id: "1" }];
