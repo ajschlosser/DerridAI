@@ -285,22 +285,114 @@ def test_accept_unreviewed_publishes_suggestions_and_preserves_prior_decisions(t
     assert stored["r3"]["review_disposition"]=="rejected"
 
 
-def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
-    """Bypassing review never bypasses text-conservation validation or an in-progress build."""
+def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_path:Path):
+    """Autonomous publication accepts current topology without legacy-block false positives."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     build=_install_publishable(repo)
-    for patch,expected in (({"status":"running"},"finished processing"),({"validation":{"valid":False,"missing_block_ids":["b1"]}},"text-fidelity")):
-        current=repo.get_build(build["build_id"])
-        current.update({"status":"ready","validation":{"valid":True},**patch})
-        repo.save_build(current)
-        manager._refresh_workflow_fields=lambda b:None
-        try:
-            manager.publish(build["build_id"],accept_unreviewed=True)
-        except ValueError as exc:
-            assert expected in str(exc)
-        else:
-            raise AssertionError(f"unreviewed publication should be blocked by {patch}")
+    build_id=build["build_id"]
+    base=repo.load_records(build_id)[0]
+
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    template=dict(units[0])
+    units.extend([
+        {
+            **template,
+            "source_unit_id":"u-left",
+            "unit_id":"u-left",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "consumed_ranges":[{"unit_id":"b1","start":0,"end":6}],
+            "text":"Record",
+            "active":True,
+        },
+        {
+            **template,
+            "source_unit_id":"u-right",
+            "unit_id":"u-right",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "consumed_ranges":[{"unit_id":"b1","start":7,"end":11}],
+            "text":"text",
+            "active":True,
+        },
+    ])
+    repo.save_source_units(build_id,units)
+
+    common={
+        **base,
+        "accepted":False,
+        "rejected":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_block_ids":["b1"],
+        "pdf_pages":[1],
+        "page_start":None,
+        "page_end":None,
+    }
+    left={
+        **common,
+        "record_id":"r-left",
+        "text":"Record",
+        "text_length":6,
+        "source_unit_ids":["u-left"],
+        # Reproduces the stale structural projection that used to trigger
+        # text_fidelity_errors during publication reconciliation.
+        "source_extracted_text":"Record text",
+    }
+    right={
+        **common,
+        "record_id":"r-right",
+        "text":"text",
+        "text_length":4,
+        "source_unit_ids":["u-right"],
+        "source_extracted_text":"Record text",
+    }
+    repo.save_records(build_id,[left,right])
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==2
+    refreshed=repo.get_build(build_id)
+    assert refreshed["validation"]["source_valid"] is True
+    assert refreshed["validation"]["duplicate_block_ids"]==[]
+    assert refreshed["validation"]["text_fidelity_errors"]==[]
+    stored={row["record_id"]:row for row in repo.load_records(build_id)}
+    assert stored["r-left"]["source_extracted_text"]=="Record"
+    assert stored["r-right"]["source_extracted_text"]=="text"
+
+
+def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
+    """Bypassing review never bypasses actual source loss or an in-progress build."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+
+    current=repo.get_build(build_id)
+    current["status"]="running"
+    repo.save_build(current)
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        assert "finished processing" in str(exc)
+    else:
+        raise AssertionError("an active build must not publish")
+
+    current=repo.get_build(build_id)
+    current.update({"status":"ready","stage":"ready","validation":{"valid":True}})
+    repo.save_build(current)
+    rows=repo.load_records(build_id)
+    rows[0]["source_block_ids"]=[]
+    rows[0]["source_unit_ids"]=[]
+    repo.save_records(build_id,rows)
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        assert "text-fidelity" in str(exc)
+    else:
+        raise AssertionError("actual missing source coverage must still block publication")
 
 
 def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:Path):
