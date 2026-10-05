@@ -662,9 +662,9 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | Milestone | Status | Deliverable |
 | --- | --- | --- |
 | B0. Architecture | DONE | Python shared-engine + Nuitka native-binary direction; standalone-first policy; four target keys; release-vs-repo binary gate. |
-| B1. Versioned CLI config | IN PROGRESS | Strict YAML contract, config validation command, stable exit categories, secret-by-environment resolution. |
-| B2. Binary build spine | IN PROGRESS | Nuitka entry point/build script, artifact naming, manifest/checksum generation, target-native CI smoke jobs. |
-| B3. Installer spine | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned versions. |
+| B1. Versioned CLI config | IN PROGRESS | Strict YAML contract, config validation command, stable exit categories, and secret-by-environment resolution are implemented; full corpus-build command wiring remains. |
+| B2. Binary build spine | IN PROGRESS | Target identity helpers, Nuitka entry point/build script, artifact naming, manifest/checksum generation, compiled-binary smoke harness, and four-target standalone CI are implemented; onefile/release publication remains. |
+| B3. Installer spine | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned/latest release resolution are implemented; they become end-to-end testable once release assets exist. |
 | B4. Headless runner | TODO | Synchronous source-to-canonical-build application service with no HTTP dependency. |
 | B5. Automatic settlement | TODO | Headless autonomous/unreviewed publication policy that never grants human authority. |
 | B6. Research output | TODO | Explicit allow-list research projection and atomic `.jsonl.zst` publication. |
