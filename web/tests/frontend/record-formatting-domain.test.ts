@@ -29,7 +29,9 @@ import {
   compactRecordHistory,
   normalizePdfLinkChanges,
   pdfLinks,
+  ragEvidenceRecordPayload,
   recordPayload,
+  touchupRecordPayload,
 } from "../../src/domain/recordPayloads";
 
 // These behaviors were checked against the original legacy runtime.js functions across a wide input matrix.
@@ -125,5 +127,40 @@ describe("record payloads", () => {
         { pdf_file: "g", pdf_page: 1 },
       ]),
     ).toThrow("multiple PDF files");
+  });
+  it("transports scholarly metadata without a built-in field whitelist", () => {
+    const scholarlyRecord = {
+      record_id: "r1",
+      work: "Of Grammatology",
+      text: "A passage.",
+      speaker: "Jacques Derrida",
+      renamed_position_holder: "Emmanuel Levinas",
+      conceptual_tension: ["presence", "absence"],
+      field_assertions: {
+        "field-renamed-position-holder": [
+          {
+            field_id: "field-renamed-position-holder",
+            field_name: "renamed_position_holder",
+            value: "Emmanuel Levinas",
+          },
+        ],
+      },
+      metadata_field_status: {
+        renamed_position_holder: { status: "human_confirmed" },
+      },
+      updates: [{ field_name: "speaker" }],
+    };
+
+    const touchup = touchupRecordPayload(scholarlyRecord);
+    const evidence = ragEvidenceRecordPayload(scholarlyRecord);
+
+    for (const payload of [touchup, evidence]) {
+      expect(payload.speaker).toBe("Jacques Derrida");
+      expect(payload.renamed_position_holder).toBe("Emmanuel Levinas");
+      expect(payload.conceptual_tension).toEqual(["presence", "absence"]);
+      expect(payload.field_assertions).toEqual(scholarlyRecord.field_assertions);
+      expect(payload).not.toHaveProperty("metadata_field_status");
+      expect(payload).not.toHaveProperty("updates");
+    }
   });
 });
