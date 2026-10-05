@@ -516,7 +516,10 @@ describe("publish workspace", () => {
     await unreviewed.trigger("click");
     expect(wrapper.emitted("publishUnreviewed")).toBeUndefined();
     const confirm = document.body.textContent || wrapper.text();
-    expect(confirm).toContain("Source coverage and text-fidelity validation are never skipped");
+    expect(confirm).toContain("rechecks source conservation");
+    expect(confirm).toContain(
+      "genuinely missing, duplicated, reordered, or altered source still blocks publication",
+    );
     expect(confirm).toContain("does not turn those assertions into human-confirmed values");
     expect(confirm).toContain("create a human-review claim");
   });
