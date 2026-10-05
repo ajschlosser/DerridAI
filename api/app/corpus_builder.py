@@ -1852,6 +1852,10 @@ class PdfCorpusRepository:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=30)
+        # Corpus Builder performs frequent short canonical writes while review,
+        # enrichment checkpoints, and derived projections can hold coherent read
+        # snapshots. WAL lets those readers coexist with the single SQLite writer.
+        connection.execute("PRAGMA busy_timeout=30000")
         try:
             stat = path.stat()
             identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
@@ -1871,6 +1875,8 @@ class PdfCorpusRepository:
             connection.close()
 
     def _initialize_records_db(self, connection: sqlite3.Connection) -> None:
+        # Journal mode is persistent on the per-build canonical Record store.
+        connection.execute("PRAGMA journal_mode=WAL")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS corpus_records (
