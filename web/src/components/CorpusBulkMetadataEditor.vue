@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import { usableListOptions, usableOptions } from "../domain/metadataValues";
+import { metadataRegistryFields, metadataRegistryGroups } from "../domain/metadataFieldRegistry";
 import type { MetadataSchema } from "../api/metadataSchemas";
 import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
@@ -119,61 +120,68 @@ const legacyGroups: BulkGroup[] = [
   },
 ] as unknown as BulkGroup[];
 const identityGroup = legacyGroups.find((group) => group.key === "identity")!;
-// With a schema, the groups and fields are the schema's (the locked core first, in the discourse group); document details stay last.
+// Schema-backed groups, cardinality and controls come from one canonical
+// registry. Document overrides remain a distinct compatibility group because
+// they are not ordinary record-scoped schema fields.
+const registryFields = computed(() =>
+  metadataRegistryFields(props.schema, props.regionTypes, props.discourseRoles),
+);
+const registryFieldMap = computed(() =>
+  Object.fromEntries(registryFields.value.map((field) => [field.name, field])),
+);
 const groups = computed<BulkGroup[]>(() =>
   props.schema
     ? [
-        ...props.schema.groups.map((group) => ({
-          key: group.key,
-          label: group.label,
-          fallback: group.label,
-          help: "pdf_corpus.bulk_schema_group_help",
-          helpFallback: "",
-          fields: Array.from(
-            new Set([
-              ...(group.key === "discourse"
-                ? ["region_type", "primary_text", "discourse_role"]
-                : []),
-              ...props
-                .schema!.fields.filter((field) => field.group === group.key)
-                .map((field) => field.name),
-            ]),
-          ),
-        })),
+        ...metadataRegistryGroups(props.schema, props.regionTypes, props.discourseRoles).map(
+          (group) => ({
+            key: group.key,
+            label: group.label,
+            fallback: group.label,
+            help: "pdf_corpus.bulk_schema_group_help",
+            helpFallback: "",
+            fields: group.fields.map((field) => field.name),
+          }),
+        ),
         identityGroup,
       ]
     : legacyGroups,
 );
-const schemaFieldMap = computed(() =>
-  Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
-);
 const listFields = computed(() =>
   props.schema
     ? new Set([
-        ...props.schema.fields.filter((f) => f.type === "list").map((f) => f.name),
+        ...registryFields.value
+          .filter((field) => field.control === "multi-combobox")
+          .map((field) => field.name),
         "document_language",
       ])
     : new Set(["topics", "concepts", "persons", "works_referenced", "document_language"]),
 );
 const booleanFields = computed(() =>
   props.schema
-    ? new Set([
-        "primary_text",
-        ...props.schema.fields.filter((f) => f.type === "boolean").map((f) => f.name),
-      ])
+    ? new Set(
+        registryFields.value
+          .filter((field) => field.control === "boolean")
+          .map((field) => field.name),
+      )
     : new Set(["primary_text"]),
 );
-const enumValues = computed<Record<string, string[]>>(() => ({
-  region_type: props.regionTypes || [],
-  discourse_role: props.discourseRoles || [],
-  ...Object.fromEntries(
-    (props.schema?.fields || [])
-      .filter((f) => f.type === "choice" && f.strict)
-      .map((f) => [f.name, f.values.map((v) => v.value)]),
-  ),
-}));
+const enumValues = computed<Record<string, string[]>>(() =>
+  props.schema
+    ? Object.fromEntries(
+        registryFields.value
+          .filter((field) => field.control === "enum" && field.allowedValues?.length)
+          .map((field) => [field.name, [...(field.allowedValues || [])]]),
+      )
+    : {
+        region_type: props.regionTypes || [],
+        discourse_role: props.discourseRoles || [],
+      },
+);
 const name = (field: string) =>
-  i18n.t(`record.${field}`, schemaFieldMap.value[field]?.label || field.replaceAll("_", " "));
+  i18n.t(
+    `record.${field}`,
+    registryFieldMap.value[field]?.label || field.replaceAll("_", " "),
+  );
 const filteredGroups = computed(() => {
   const q = query.value.trim().toLowerCase();
   if (!q) return groups.value;
