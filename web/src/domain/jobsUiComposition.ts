@@ -19,57 +19,57 @@
 // Composition of the jobs workspace, operation dock, operations panel, job dialogs and Research workspace over the
 // shared state. These factories depend on each other (the dock and panel open the job dialogs; the dialogs refresh the
 // panel), so each helper is wrapped to be looked up when called. Importing this module registers their hooks.
-import { tr, trf } from "../domain/sharedTranslate";
-import { state } from "../domain/sharedUrlState";
+import { tr, trf } from "./sharedTranslate";
+import { state } from "./sharedUrlState";
 import "diff";
-import "../domain/operationsDock";
+import "./operationsDock";
 import "./operationsPanelHost";
-import "../domain/operationsPanel";
-import { cloneAuditValue } from "../domain/recordValues";
-import "../domain/urlState";
-import { formatTimestamp } from "../domain/recordTableHelpers";
-import "../domain/recordQuery";
-import { sanitizeResearchGeneration } from "../domain/researchPayloads";
-import { fullCitation } from "../domain/citations";
-import "../domain/recordsFiles";
-import "../domain/runtimeConstants";
-import { jsonPretty, reviewDiffSides } from "../domain/reviewPresentation";
-import "../domain/workMetadata";
-import "../domain/numberFormatting";
-import "../domain/researcherInputFilter";
-import "../domain/tabScrollPreservation";
-import "../domain/searchFilterSchema";
-import { touchupRecordPayload, upsertRecordPayload } from "../domain/recordPayloads";
-import "../domain/recordFormatting";
-import { api } from "../domain/legacyApi";
-import "../domain/pastedRecord";
-import { providerRequestConfig } from "../domain/providerRequest";
-import { showAppModal } from "../domain/disabledControls";
-import "../domain/sharedRecordScopes";
-import "../domain/recordHistory";
-import "../domain/dashboardCharts";
-import { updateDbStatusElements } from "../domain/sharedDbPresence";
-import { hasCorpusDb, recordStores } from "../domain/storeAvailability";
-import { registerOperationHooks } from "../domain/operationHooks";
-import { registerOperationProgress } from "../domain/operationProgressHooks";
-import "../domain/storeExport";
-import { evidenceSelection as sharedEvidenceSelection } from "../domain/sharedSearchSupport";
-import { label, pages } from "../domain/sharedRecordHelpers";
-import "../domain/sharedPdfLinking";
-import "../domain/sharedRecordWorkspace";
-import { recordPresenters as sharedRecordPresenters } from "../domain/sharedRecordPresenters";
-import { providerProfilesService, warmupProviderProfile } from "../domain/sharedProviderProfiles";
-import "../domain/sharedSearchWorkspace";
-import "../domain/tableColumns";
-import "../domain/sharedRecordsWorkspace";
-import "../domain/legacyDomListeners";
-import "../domain/legacyClickDelegation";
-import "../domain/listPaging";
-import "../domain/sharedWorksWorkspace";
-import { workDialogs } from "../domain/sharedWorkDialogs";
-import { operationPresenters } from "../domain/sharedOperationPresenters";
-import "../domain/storeWorks";
-import { createJobsWorkspace } from "../domain/jobsWorkspace";
+import "./operationsPanel";
+import { cloneAuditValue } from "./recordValues";
+import "./urlState";
+import { formatTimestamp } from "./recordTableHelpers";
+import "./recordQuery";
+import { sanitizeResearchGeneration } from "./researchPayloads";
+import { fullCitation } from "./citations";
+import "./recordsFiles";
+import "./runtimeConstants";
+import { jsonPretty, reviewDiffSides } from "./reviewPresentation";
+import "./workMetadata";
+import "./numberFormatting";
+import "./researcherInputFilter";
+import "./tabScrollPreservation";
+import "./searchFilterSchema";
+import { touchupRecordPayload, upsertRecordPayload } from "./recordPayloads";
+import "./recordFormatting";
+import { api } from "./legacyApi";
+import "./pastedRecord";
+import { providerRequestConfig } from "./providerRequest";
+import { showAppModal } from "./disabledControls";
+import "./sharedRecordScopes";
+import "./recordHistory";
+import "./dashboardCharts";
+import { updateDbStatusElements } from "./sharedDbPresence";
+import { hasCorpusDb, recordStores } from "./storeAvailability";
+import { registerOperationHooks } from "./operationHooks";
+import { registerOperationProgress } from "./operationProgressHooks";
+import "./storeExport";
+import { evidenceSelection as sharedEvidenceSelection } from "./sharedSearchSupport";
+import { label, pages } from "./sharedRecordHelpers";
+import "./sharedPdfLinking";
+import "./sharedRecordWorkspace";
+import { recordPresenters as sharedRecordPresenters } from "./sharedRecordPresenters";
+import { providerProfilesService, warmupProviderProfile } from "./sharedProviderProfiles";
+import "./sharedSearchWorkspace";
+import "./tableColumns";
+import "./sharedRecordsWorkspace";
+import "./legacyDomListeners";
+import "./legacyClickDelegation";
+import "./listPaging";
+import "./sharedWorksWorkspace";
+import { workDialogs } from "./sharedWorkDialogs";
+import { operationPresenters } from "./sharedOperationPresenters";
+import "./storeWorks";
+import { createJobsWorkspace } from "./jobsWorkspace";
 import {
   refreshJobs,
   startJobPolling,
@@ -78,15 +78,15 @@ import {
   clearFinishedOperations,
   cancelBackgroundJob,
   syncJobProgressToasts,
-} from "../domain/jobsActions";
-import { registerResearchActions } from "../domain/researchActions";
+} from "./jobsActions";
+import { registerResearchActions } from "./researchActions";
 import {
   notifyVectorStoresChanged,
   openCollectionCreationWizard,
   triggerUpsertQueue,
-} from "../domain/sharedVectorCollections";
-import { registerVectorStoreActions } from "../domain/vectorStoreActions";
-import { registerTouchupActions } from "../domain/touchupActions";
+} from "./sharedVectorCollections";
+import { registerVectorStoreActions } from "./vectorStoreActions";
+import { registerTouchupActions } from "./touchupActions";
 import {
   touchupWorkspaceInfo,
   touchupProviderStatus,
@@ -94,38 +94,38 @@ import {
   touchupRequest,
   touchupSubmitBackground,
   touchupApplyResults,
-} from "../domain/sharedTouchupWorkflow";
-import { registerOperationsPanelHooks } from "../domain/operationsPanelHooks";
-import "../domain/sharedDashboardData";
-import "../domain/sharedPdfExplorerRenderer";
-import { applyPdfLinkMatch, registerPdfLlmTaskHooks } from "../domain/pdfPageLlmActions";
-import { ragGradeHtml } from "../domain/ragGradeHtml";
-import { createJobDialogs } from "../domain/jobDialogs";
-import "../domain/workDialogs";
-import { createOperationDock } from "../domain/operationDock";
-import "../domain/clipboardCopy";
-import { getUrlSyncHook, navSnapshot, navigateTo, renderView } from "../domain/sharedNavigation";
-import "../domain/sharedUrlState";
-import "../domain/navigation";
-import { persistPrefs, refreshShell, shell } from "../domain/sharedWorkspaceStorage";
-import * as sharedRecordEditing from "../domain/sharedRecordEditing";
-import { createOperationsPanelBridge } from "../domain/operationsPanelBridge";
-import "../domain/fileDerivedState";
-import "../domain/sharedFileLifecycle";
-import { persistFileNow } from "../domain/sharedWorkspacePersistence";
-import "../domain/sharedAppLifecycle";
-import "../domain/sharedCompareLibrary";
-import "../domain/recordOptionLabel";
-import "../domain/sharedStoreRecords";
-import { createResearchWorkspace } from "../domain/researchWorkspace";
-import "../domain/sharedAnnotations";
+} from "./sharedTouchupWorkflow";
+import { registerOperationsPanelHooks } from "./operationsPanelHooks";
+import "./sharedDashboardData";
+import "./sharedPdfExplorerRenderer";
+import { applyPdfLinkMatch, registerPdfLlmTaskHooks } from "./pdfPageLlmActions";
+import { ragGradeHtml } from "./ragGradeHtml";
+import { createJobDialogs } from "./jobDialogs";
+import "./workDialogs";
+import { createOperationDock } from "./operationDock";
+import "./clipboardCopy";
+import { getUrlSyncHook, navSnapshot, navigateTo, renderView } from "./sharedNavigation";
+import "./sharedUrlState";
+import "./navigation";
+import { persistPrefs, refreshShell, shell } from "./sharedWorkspaceStorage";
+import * as sharedRecordEditing from "./sharedRecordEditing";
+import { createOperationsPanelBridge } from "./operationsPanelBridge";
+import "./fileDerivedState";
+import "./sharedFileLifecycle";
+import { persistFileNow } from "./sharedWorkspacePersistence";
+import "./sharedAppLifecycle";
+import "./sharedCompareLibrary";
+import "./recordOptionLabel";
+import "./sharedStoreRecords";
+import { createResearchWorkspace } from "./researchWorkspace";
+import "./sharedAnnotations";
 import "../state/jobsState";
-import { recordFingerprint } from "../domain/corpusCache";
-import { refreshStores } from "../domain/sharedStores";
-import { canAccessPage, hasCapability, isResearcher } from "../domain/sharedSession";
-import "../domain/databaseCreationRequest";
-import "../domain/sharedAppearance";
-import "../domain/relativeTimeLabel";
+import { recordFingerprint } from "./corpusCache";
+import { refreshStores } from "./sharedStores";
+import { canAccessPage, hasCapability, isResearcher } from "./sharedSession";
+import "./databaseCreationRequest";
+import "./sharedAppearance";
+import "./relativeTimeLabel";
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- the factories take loosely typed shared helpers */
 // Resolves the helper when it is called, not when this module evaluates: several are declared later in this module.

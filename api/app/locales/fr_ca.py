@@ -394,6 +394,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'faq.grade_conceptual_precision': 'Précision conceptuelle',
  'faq.grade_coverage': 'Couverture',
  'faq.grade_interpretive_usefulness': 'Utilité interprétative',
+ 'faq.grade_overall': 'Global',
+ 'runtime.no_summary_returned': 'Aucun résumé n\'a été retourné.',
  'faq.grade_query_relevance': 'Pertinence par rapport à la question',
  'faq.grade_raw_output': 'Sortie technique brute',
  'faq.grade_raw_output_help': 'La sortie brute de l’évaluateur est conservée pour l’auditabilité et le débogage.',
@@ -853,6 +855,10 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'runtime.disabled.load_records': 'Chargez d\'abord des fiches JSONL.',
  'runtime.disabled.select_record': 'Sélectionnez d\'abord une fiche.',
  'runtime.disabled.chroma_unavailable': 'ChromaDB n\'est pas disponible. Démarrez ou connectez ChromaDB avant d\'utiliser les fonctions de base de données.',
+ 'runtime.disabled.admin_only': 'Cet espace de travail est réservé aux administrateurs.',
+ 'runtime.disabled.response_library_chroma': 'ChromaDB n\'est pas disponible; la bibliothèque de réponses ne peut donc pas être ouverte.',
+ 'runtime.result_opening': 'Ouverture…',
+ 'runtime.result_open_failed': 'Impossible d\'ouvrir le résultat de l\'opération',
  'runtime.disabled.create_corpus_db': 'Créez ou restaurez d\'abord une base de données vectorielle de corpus.',
  'runtime.toast.cannot_edit_records': 'Votre rôle n’autorise pas la modification des notices.',
  'runtime.toast.cannot_export': 'Votre rôle n’autorise pas l’exportation des données du corpus.',
@@ -2693,8 +2699,9 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.accept_all': 'Tout accepter',
  'pdf_corpus.accept_all_queue': 'Accepter la file',
  'pdf_corpus.accept_blocked_metadata': 'Confirmez les métadonnées requises avant d’accepter cette fiche : {fields}.',
- 'pdf_corpus.accept_blocked_source': 'Résolvez ou rejetez ce problème d’extraction de la source avant d’accepter la '
-                                     'fiche.',
+ 'pdf_corpus.accept_blocked_source': 'Cette fiche comporte un problème d’extraction de la source. Inspectez la source, '
+                                     'corrigez ou confirmez le texte révisé, puis enregistrez avec « Marquer ce problème '
+                                     'de source au niveau de la fiche comme résolu » sélectionné; sinon, rejetez la fiche.',
  'pdf_corpus.record_save_failed': 'La fiche {record} — {fields} n’a pas pu être enregistrée : {error}',
  'pdf_corpus.accept_clean': 'Accepter les fiches nettes ({count})',
  'pdf_corpus.accept_clean_confirm': 'Accepter {count} fiche(s) sans problème? Les fiches ayant des problèmes de '

@@ -49,11 +49,11 @@ document.addEventListener(
     event.stopImmediatePropagation();
     resultButton.disabled = true;
     const original = resultButton.innerHTML;
-    resultButton.textContent = "Opening…";
+    resultButton.textContent = tr("runtime.result_opening");
     void Promise.resolve(openJobResults(jobId))
       .catch((error: any) =>
         openMessageDialog({
-          title: "Could not open operation result",
+          title: tr("runtime.result_open_failed"),
           message: error?.message || String(error),
           tone: "danger",
         }),

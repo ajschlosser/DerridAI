@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, watch } from "vue";
 import {

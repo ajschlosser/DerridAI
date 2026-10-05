@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { nextTick, onBeforeUnmount, onMounted } from "vue";
 import { refreshJobs } from "../domain/jobsActions";
 import { mountOperationsPanelHost } from "../domain/operationsPanelHooks";
-import { unmountOperationsPanel } from "../runtime/operationsPanelHost";
+import { unmountOperationsPanel } from "../domain/operationsPanelHost";
 
 onMounted(async () => {
   await refreshJobs({ rerender: true });

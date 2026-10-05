@@ -18,7 +18,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { createResearchWorkspace } from "../../src/domain/researchWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 type Anything = any;
 

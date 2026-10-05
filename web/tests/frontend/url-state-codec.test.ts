@@ -18,7 +18,7 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { createUrlStateCodec } from "../../src/domain/urlStateCodec";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // The codec must work without navigation, rendering or persistence helpers, so a router-based replacement can use it.
 describe("URL state codec", () => {

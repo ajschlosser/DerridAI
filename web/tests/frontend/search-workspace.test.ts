@@ -18,7 +18,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSearchWorkspace } from "../../src/domain/searchWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // The Search workspace commands set fields on the runtime state, save preferences and sync the URL. The view-level
 // behavior is covered by the legacy baseline's search scenarios; these pin the commands themselves.
