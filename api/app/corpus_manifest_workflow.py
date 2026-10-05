@@ -404,7 +404,17 @@ CURRENT REVIEWED RECORD TEXT:
         if missing_document_fields:
             blockers.append({"code": "required_document_metadata", "count": len(missing_document_fields), "fields": missing_document_fields})
         if validation and not bool(validation.get("source_valid", validation.get("valid", True))):
-            blockers.append({"code": "source_validation", "count": len(validation.get("missing_block_ids") or []) + len(validation.get("text_fidelity_errors") or []) + len(validation.get("source_order_errors") or [])})
+            source_validation_count = sum(
+                len(validation.get(key) or [])
+                for key in (
+                    "missing_block_ids",
+                    "duplicate_block_ids",
+                    "text_fidelity_errors",
+                    "source_order_errors",
+                    "page_mapping_errors",
+                )
+            )
+            blockers.append({"code": "source_validation", "count": source_validation_count})
         if validation and not bool(validation.get("metadata_valid", validation.get("valid", True))):
             validation_issues = validation.get("validation_issues")
             if isinstance(validation_issues, list):
@@ -503,6 +513,11 @@ CURRENT REVIEWED RECORD TEXT:
         source_ids = [block["block_id"] for block in blocks]
         source_index = {block_id: index for index, block_id in enumerate(source_ids)}
         used_ids = [block_id for record in records for block_id in record.get("source_block_ids") or []]
+        owners_by_block: dict[str, list[str]] = {}
+        for record in records:
+            record_id = str(record.get("record_id") or "")
+            for block_id in record.get("source_block_ids") or []:
+                owners_by_block.setdefault(str(block_id), []).append(record_id)
         missing = [block_id for block_id in source_ids if block_id not in used_ids]
         usage_counts = Counter(used_ids)
         duplicates = sorted(block_id for block_id, count in usage_counts.items() if count > 1)
@@ -669,6 +684,41 @@ CURRENT REVIEWED RECORD TEXT:
                 "field": field_value,
                 "reason": reason_value,
             })
+
+        for block_id in missing:
+            add_issue(
+                "source_coverage",
+                {"field": str(block_id), "reason": "source unit is not covered by any Record"},
+            )
+        for block_id in duplicates:
+            owners = owners_by_block.get(str(block_id)) or [""]
+            for record_id in owners:
+                add_issue(
+                    "source_duplicate",
+                    {
+                        "record_id": record_id,
+                        "field": str(block_id),
+                        "reason": "source unit is assigned to more than one Record",
+                    },
+                )
+        for record_id in sorted(set(fidelity_errors)):
+            add_issue(
+                "source_fidelity",
+                record_id,
+                default_reason="record extraction no longer matches its declared source units",
+            )
+        for record_id in sorted(set(order_errors)):
+            add_issue(
+                "source_order",
+                record_id,
+                default_reason="record source units are duplicated, discontinuous, or out of document order",
+            )
+        for record_id in sorted(set(page_errors)):
+            add_issue(
+                "source_page_mapping",
+                record_id,
+                default_reason="record page or time mapping does not match its declared source units",
+            )
 
         for item in evidence_errors:
             add_issue("metadata_evidence", item)

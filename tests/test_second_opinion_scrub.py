@@ -217,6 +217,8 @@ CARRIES_RECORDS = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision"),
+    # Minimal review-status is still derived from one authoritative Record.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-status"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/disposition"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/metadata"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/review/undo"),
@@ -258,6 +260,9 @@ BUILD_LEVEL = {
     ("DELETE", "/api/pdf/corpus-builds/{build_id}"),
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
+    # Reconciliation returns the same build-level readiness/validation shape after
+    # recomputing it from persisted Records; it does not return Record field values.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/reconcile"),
     # Provider annotations derive only from source text; no reviewer decisions are embedded.
     ("GET", "/api/pdf/corpus-builds/{build_id}/document-intelligence"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),

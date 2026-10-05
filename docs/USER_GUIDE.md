@@ -841,7 +841,18 @@ so revision checks are safe, while saves for different records can proceed
 independently. A failed background save leaves the local edit visible and
 reports the affected field or record rather than discarding unrelated edits.
 Acceptance remains server-confirmed because metadata and source-quality rules
-can block it.
+can block it. If a review response times out, DerridAI checks the small
+authoritative review-status endpoint before treating the save as failed; a
+decision that already committed is kept instead of being rolled back or blindly
+retried.
+
+Opening Publication readiness and attempting publication both drain outstanding
+review saves and run a full post-run reconciliation. This recomputes review
+aggregates, source coverage, text fidelity, source ordering, page/time mapping,
+and publication readiness from persisted Records. Source-validation blockers are
+shown as structured findings with the affected Record or source unit where one
+can be identified, so a strict publication gate does not leave only a generic
+HTTP conflict as the recovery path.
 
 ## Corpus Builder metadata population
 

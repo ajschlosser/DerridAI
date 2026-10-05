@@ -101,6 +101,17 @@ export class RecordMutationQueue {
     }
   }
 
+  async waitForAll(): Promise<void> {
+    while (true) {
+      const waits = Array.from(new Set(this.pending.values()));
+      if (!waits.length) return;
+      await Promise.all(waits.map((pending) => pending.catch(() => undefined)));
+      // Let completion handlers remove settled entries and expose anything that
+      // was queued behind them before deciding that review persistence is quiet.
+      await Promise.resolve();
+    }
+  }
+
   /** True when a mutation for this record is queued behind the one currently running. */
   hasQueuedBehind(recordId: string): boolean {
     return (this.queued.get(recordId) || 0) > 1;

@@ -35,6 +35,7 @@ export function useCorpusPublication(options: {
   setMessage: (message: string, tone?: MessageTone) => void;
   refreshBuild: () => Promise<void>;
   refreshBuilds: () => Promise<void>;
+  beforePublish?: () => Promise<void>;
   t: (key: string, fallback?: string) => string;
   tf: (key: string, values: Record<string, string | number>) => string;
 }) {
@@ -74,7 +75,27 @@ export function useCorpusPublication(options: {
     if (!options.currentBuild.value) return null;
     options.busy.value = "publish";
     try {
-      const result = await corpusBuilderApi.publish(options.currentBuild.value.build_id, {
+      const buildId = options.currentBuild.value.build_id;
+      // Finish outstanding optimistic review writes first, then recompute the
+      // complete authoritative corpus state. Publication should never race a
+      // background save or rely on counters/validation left over from the run.
+      await options.beforePublish?.();
+      const reconciled = await corpusBuilderApi.reconcile(buildId);
+      if (options.currentBuild.value?.build_id === buildId) {
+        options.currentBuild.value = reconciled;
+      }
+      await options.refreshBuilds();
+
+      if (
+        !publishOptions.acceptUnreviewed &&
+        reconciled.publication_readiness &&
+        !reconciled.publication_readiness.can_publish
+      ) {
+        options.setMessage(options.t("pdf_corpus.publication_waiting_help"));
+        return null;
+      }
+
+      const result = await corpusBuilderApi.publish(buildId, {
         acceptUnreviewed: publishOptions.acceptUnreviewed,
       });
       await options.refreshBuild();

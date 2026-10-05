@@ -22,6 +22,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const corpusBuilderApi = vi.hoisted(() => ({
   disposition: vi.fn(),
   reviewDecision: vi.fn(),
+  reviewStatus: vi.fn(),
   bulkDisposition: vi.fn(),
   undoReview: vi.fn(),
   redoReview: vi.fn(),
@@ -103,6 +104,7 @@ function setup(beforeDecision?: () => Promise<boolean>) {
   const advanceFrom = vi.fn(async () => undefined);
   const refreshBuild = vi.fn(async () => undefined);
   const refreshRecords = vi.fn(async () => undefined);
+  const reconcileRecords = vi.fn(async () => undefined);
   const focusFirstMetadataBlocker = vi.fn();
   const setMessage = vi.fn();
 
@@ -136,6 +138,7 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     getSelectionVersion,
     refreshBuild,
     refreshRecords,
+    reconcileRecords,
     focusFirstMetadataBlocker,
     setMessage,
     t: (key) => key,
@@ -160,6 +163,8 @@ function setup(beforeDecision?: () => Promise<boolean>) {
     syncBuildInRail,
     selectRecord,
     advanceFrom,
+    refreshBuild,
+    reconcileRecords,
     setMessage,
     focusFirstMetadataBlocker,
   };
@@ -325,6 +330,51 @@ describe("Corpus Builder review decisions", () => {
     await state.queued[0].request(false);
     expect(state.selectedRecordId.value).toBe("r1");
     expect(state.selectRecord).not.toHaveBeenCalled();
+  });
+
+  it("keeps an accepted decision when the response times out after the server committed it", async () => {
+    const state = setup();
+    corpusBuilderApi.reviewDecision.mockRejectedValue(
+      new Error("Network error · timed out after 30s"),
+    );
+    corpusBuilderApi.reviewStatus.mockResolvedValue({
+      record_id: "r1",
+      record_revision: 2,
+      review_disposition: "accepted",
+      accepted: true,
+      rejected: false,
+      needs_review: false,
+    });
+
+    await state.decisions.attemptAccept();
+    expect(state.selectedRecord.value?.review_disposition).toBe("accepted");
+
+    await expect(state.queued[0].request(false)).resolves.toBeUndefined();
+
+    expect(corpusBuilderApi.reviewStatus).toHaveBeenCalledWith("b1", "r1");
+    expect(state.refreshBuild).toHaveBeenCalled();
+    expect(state.reconcileRecords).toHaveBeenCalledWith(["r1"]);
+    expect(state.selectedRecord.value?.review_disposition).toBe("accepted");
+  });
+
+  it("treats a timeout as a failure when authoritative state did not advance", async () => {
+    const state = setup();
+    const timeout = new Error("Network error · timed out after 30s");
+    corpusBuilderApi.reviewDecision.mockRejectedValue(timeout);
+    corpusBuilderApi.reviewStatus.mockResolvedValue({
+      record_id: "r1",
+      record_revision: 1,
+      review_disposition: "pending",
+      accepted: false,
+      rejected: false,
+      needs_review: true,
+    });
+
+    await state.decisions.attemptAccept();
+
+    await expect(state.queued[0].request(false)).rejects.toBe(timeout);
+    expect(state.refreshBuild).not.toHaveBeenCalled();
+    expect(state.reconcileRecords).not.toHaveBeenCalled();
   });
 
   it("rolls back only the failed decision without replacing a later selection", async () => {
