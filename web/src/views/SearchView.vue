@@ -457,6 +457,7 @@ async function addAdvancedFilter() {
     field: newFilterField.value,
     op,
     value: newFilterValue.value,
+    kind: schemaFilterFields.value.find((item) => item.key === newFilterField.value)?.kind || "text",
   });
   newFilterValue.value = "";
   await load({ refresh: false, autoRun: false });
