@@ -160,20 +160,26 @@ class HeadlessCorpusRunner:
         return repository, manager
 
     @staticmethod
-    def _validated_request(config: CorpusProcessingConfig, asset_id: str) -> dict[str, Any]:
+    def _validated_request(
+        config: CorpusProcessingConfig,
+        asset_id: str,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         from .models import PdfCorpusBuildCreate
 
         request = config.build_request()
         request["asset_id"] = asset_id
+        desired_autonomous = {
+            **(request.get("autonomous") or {}),
+            "enabled": True,
+        }
         # The CLI owns the synchronization boundary. Let the ordinary build worker
         # stop at review, then run the same autonomous policy directly below.
-        autonomous = dict(request.get("autonomous") or {})
-        autonomous["enabled"] = False
-        request["autonomous"] = autonomous
-        return PdfCorpusBuildCreate.model_validate(request).model_dump(
+        request["autonomous"] = {**desired_autonomous, "enabled": False}
+        validated = PdfCorpusBuildCreate.model_validate(request).model_dump(
             mode="json",
             exclude_none=True,
         )
+        return validated, desired_autonomous
 
     def _wait_for_build(
         self,
@@ -258,11 +264,10 @@ class HeadlessCorpusRunner:
         except (OSError, ValueError) as exc:
             raise SourceInputError(str(exc)) from exc
 
-        request = self._validated_request(config, str(asset["asset_id"]))
-        desired_autonomous = {
-            **(config.build_request().get("autonomous") or {}),
-            "enabled": True,
-        }
+        request, desired_autonomous = self._validated_request(
+            config,
+            str(asset["asset_id"]),
+        )
         try:
             build = manager.create(request)
         except ValueError as exc:
@@ -296,6 +301,19 @@ class HeadlessCorpusRunner:
         target = self._source_output_path(source_path, output)
         profile: RunProfile = force_profile or config.publication.profile
         publication_id = str(publication.get("publication_id") or "")
+        if not target.name.endswith(".jsonl.zst"):
+            raise OutputWriteError("Corpus output must end in .jsonl.zst")
+        if profile == "celf" and publication.get("celf_conformant") is not True:
+            conformance = publication.get("celf_conformance")
+            detail = (
+                str(conformance)
+                if conformance not in (None, {})
+                else "no conformance detail was recorded"
+            )
+            raise PublicationExecutionError(
+                "cELF output was requested but the canonical publication did not "
+                f"pass cELF conformance: {detail}"
+            )
         try:
             if profile == "celf":
                 published = repository.publication_path(publication_id)
