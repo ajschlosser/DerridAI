@@ -23,10 +23,7 @@ import { openMergeFilesDialog } from "../composables/mergeFilesDialog";
 import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 import { openOcrCleanupDialog as openOcrCleanupDialogHost } from "../composables/ocrCleanupDialog";
-import {
-  openRecordFieldEditorDialog,
-  type RecordEditorSection,
-} from "../composables/recordFieldEditorDialog";
+import { openRecordFieldEditorDialog } from "../composables/recordFieldEditorDialog";
 import { openUpsertQueueDialog } from "../composables/upsertQueueDialog";
 import { openRecordHistoryDialog } from "../composables/recordHistoryDialog";
 
@@ -73,7 +70,6 @@ type Helper =
   | "renderView"
   | "restoreRecordHistoryVersion"
   | "sameValue"
-  | "selectedIndex"
   | "selectedRecord"
   | "selectedReviewItems"
   | "shell"
@@ -85,84 +81,6 @@ type Deps = { state: Loose; fileTimers: Map<string, ReturnType<typeof setTimeout
   Helper,
   Fn
 >;
-
-/** The groups of fields the record editor shows, in order. */
-const EDITOR_GROUPS = [
-  {
-    key: "record.group_source",
-    fallback: "Source",
-    fields: [
-      "record_id",
-      "work",
-      "document_author",
-      "edition",
-      "year",
-      "page_start",
-      "page_end",
-      "region_type",
-      "region_author",
-      "primary_text",
-      "canonical_work_id",
-      "pdf_file",
-      "pdf_pages",
-    ],
-  },
-  {
-    key: "record.group_discourse",
-    fallback: "Discourse",
-    fields: [
-      "speaker",
-      "position_holder",
-      "target",
-      "discourse_role",
-      "proposition_status",
-      "semantic_function",
-      "stance",
-      "claim_scope",
-    ],
-  },
-  {
-    key: "record.group_quotation",
-    fallback: "Quotation provenance",
-    fields: [
-      "is_direct_quote",
-      "quoted_speaker",
-      "quoted_author",
-      "quoted_work",
-      "quoted_position_holder",
-      "quoted_addressee",
-      "quoted_referent",
-      "quotation_chain",
-    ],
-  },
-  {
-    key: "record.group_indexing",
-    fallback: "Indexing",
-    fields: ["topics", "concepts", "persons", "works_referenced"],
-  },
-  {
-    key: "record.group_quality",
-    fallback: "Quality & review",
-    fields: [
-      "attribution_confidence",
-      "semantic_classification_confidence",
-      "extraction_quality",
-      "needs_review",
-      "review_reason",
-    ],
-  },
-  {
-    key: "record.group_language",
-    fallback: "Language & translation",
-    fields: ["document_language", "original_language", "document_is_translation", "translator"],
-  },
-  {
-    key: "record.group_citation",
-    fallback: "Citation",
-    fields: ["inline_citation", "full_citation"],
-  },
-  { key: "record.group_text", fallback: "Text", fields: ["text", "text_length"] },
-];
 
 export function createRecordDialogs(deps: Deps) {
   const {
@@ -201,7 +119,6 @@ export function createRecordDialogs(deps: Deps) {
     renderView,
     restoreRecordHistoryVersion,
     sameValue,
-    selectedIndex,
     selectedRecord,
     selectedReviewItems,
     shell,
@@ -419,52 +336,6 @@ export function createRecordDialogs(deps: Deps) {
       },
     });
   }
-  function openEditor() {
-    const f = activeFile(),
-      i = selectedIndex(f),
-      r = selectedRecord();
-    if (!r) return;
-    const used = new Set<string>();
-    const sections: RecordEditorSection[] = [];
-    for (const group of EDITOR_GROUPS) {
-      const keys = group.fields.filter((k) => k in r);
-      if (!keys.length) continue;
-      keys.forEach((k) => used.add(k));
-      sections.push({
-        title: tr(group.key, group.fallback),
-        fields: keys.map((k) => recordEditorField(k, r[k], label)),
-      });
-    }
-    const other = Object.keys(r).filter((k) => !used.has(k) && k !== "updates");
-    if (other.length)
-      sections.push({
-        title: tr("record.group_other"),
-        fields: other.map((k) => recordEditorField(k, r[k], label)),
-      });
-    openRecordFieldEditorDialog({
-      title: tr("record.edit"),
-      subtitle: `${r.record_id || ""} · ${r.work || f.name}`,
-      help: "",
-      footerNote: tr("records.editor.local_note"),
-      saveLabel: tr("records.editor.save"),
-      parseErrorTitle: copy.saveFailed,
-      sections,
-      save: async (values) => {
-        const next = { ...r, ...values };
-        if ("text_length" in next) next.text_length = String(next.text || "").length;
-        const changes: Any = {};
-        for (const [field, value] of Object.entries(next))
-          if (field !== "updates" && !sameValue(r[field], value)) changes[field] = value;
-        const count = applyRecordChanges(f, i, changes, { source: "manual" });
-        shell();
-        renderView();
-        count
-          ? toast(copy.saved(count), { tone: "success" })
-          : toast(copy.noChanges, { tone: "warning" });
-        return true;
-      },
-    });
-  }
   function openStoreRecordEditor(record: Any) {
     const chromaId = record._chroma_id;
     if (!chromaId) return toast(tr("record.no_storage_id"), { tone: "warning" });
@@ -633,7 +504,6 @@ export function createRecordDialogs(deps: Deps) {
     openMergeDialog,
     openBulkFieldEditor,
     openOcrCleanupDialog,
-    openEditor,
     openStoreRecordEditor,
     openRecordHistoryBrowser,
     openUpsertQueue,
