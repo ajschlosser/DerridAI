@@ -45,6 +45,11 @@ export const corpusBuildsApi = {
     ),
   build: (buildId: string) =>
     apiRequest<CorpusBuild>(`${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}`),
+  reconcile: (buildId: string) =>
+    apiRequest<CorpusBuild>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/reconcile`,
+      { method: "POST", timeoutMs: 120_000 },
+    ),
   llmTrace: (buildId: string) =>
     apiRequest<{ items: CorpusLlmTraceEntry[]; total: number }>(
       `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/llm-trace`,

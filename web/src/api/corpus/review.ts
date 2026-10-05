@@ -69,6 +69,17 @@ export const corpusReviewApi = {
         }),
       },
     ),
+  reviewStatus: (buildId: string, recordId: string) =>
+    apiRequest<{
+      record_id: string;
+      record_revision: number;
+      review_disposition: "pending" | "accepted" | "rejected";
+      accepted: boolean;
+      rejected: boolean;
+      needs_review: boolean;
+    }>(
+      `${LEGACY_CORPUS_BASE}/corpus-builds/${encodeURIComponent(buildId)}/records/${encodeURIComponent(recordId)}/review-status`,
+    ),
   bulkDisposition: (
     buildId: string,
     disposition: "pending" | "accepted" | "rejected",

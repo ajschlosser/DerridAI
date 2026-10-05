@@ -17,12 +17,13 @@
  */
 
 import { ref } from "vue";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const publish = vi.fn();
+const reconcile = vi.fn();
 vi.mock("../../src/api/corpus", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/api/corpus")>()),
-  corpusBuilderApi: { publish, publicationUrl: (id: string) => `/download/${id}` },
+  corpusBuilderApi: { publish, reconcile, publicationUrl: (id: string) => `/download/${id}` },
 }));
 
 const { useCorpusPublication } = await import(
@@ -48,6 +49,14 @@ function setup() {
 }
 
 describe("unreviewed corpus publication", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reconcile.mockResolvedValue({
+      build_id: "build-1",
+      publication_readiness: { can_publish: true },
+    });
+  });
+
   it("requests an autonomous publication and reports its independent decision status", async () => {
     publish.mockResolvedValueOnce({
       publication_id: "p1",
@@ -64,6 +73,24 @@ describe("unreviewed corpus publication", () => {
     await composable.publish({ acceptUnreviewed: true });
     expect(publish).toHaveBeenCalledWith("build-1", { acceptUnreviewed: true });
     expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published_unreviewed|3|2|5");
+  });
+
+  it("reconciles before publication and keeps the user in cleanup when blockers remain", async () => {
+    reconcile.mockResolvedValueOnce({
+      build_id: "build-1",
+      publication_readiness: {
+        can_publish: false,
+        blockers: [{ code: "source_validation", count: 1 }],
+      },
+    });
+    const { composable, setMessage } = setup();
+
+    const result = await composable.publish();
+
+    expect(result).toBeNull();
+    expect(reconcile).toHaveBeenCalledWith("build-1");
+    expect(publish).not.toHaveBeenCalled();
+    expect(setMessage).toHaveBeenCalledWith("pdf_corpus.publication_waiting_help");
   });
 
   it("keeps the normal publication path reviewed", async () => {

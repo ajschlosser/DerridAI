@@ -5303,6 +5303,20 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         self.repo.save_build(build)
         return build
 
+    def reconcile_review_state(self, build_id: str) -> dict[str, Any]:
+        """Recompute authoritative review aggregates and publication validation.
+
+        Interactive review keeps individual writes small. This explicit post-run
+        reconciliation is where DerridAI deliberately pays the document-wide
+        validation cost and derives publication readiness from persisted Records.
+        """
+        build = self.repo.get_build(build_id)
+        if str(build.get("status") or "") in {"queued", "running"}:
+            raise ValueError(
+                "Wait for the active corpus operation to finish before reconciling publication readiness."
+            )
+        return self._reconcile_and_validate(build_id)
+
     def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]:
         """Validate current topology without restoring a settled worker snapshot."""
         base: dict[str, Any] = {}
@@ -5500,57 +5514,66 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build_id: str,
         record: dict[str, Any],
         previous: dict[str, Any],
+        *,
+        validate_record: bool = True,
     ) -> dict[str, Any]:
-        """Validate and persist one ordinary review edit without corpus scans.
+        """Persist one ordinary review edit and refresh its inexpensive aggregates.
 
         Structural edits continue through ``_rewrite_and_validate`` because they
-        change topology. Ordinary text, metadata, evidence, and disposition
-        edits only need record-local validation plus scalar build-counter deltas.
+        change topology. Text, metadata, and evidence edits still run record-local
+        validation. A disposition-only decision can skip that validation: loading
+        and filtering every source block for a book-length document made a simple
+        Accept/Reject wait on document-scale work. Full source coverage and
+        text-fidelity validation is recomputed by ``reconcile_review_state``
+        before publication.
         """
         build = self.repo.get_build(build_id)
-        blocks = [
-            block for block in self.repo.load_blocks(str(build["asset_id"]))
-            if not block.get("excluded_reason")
-        ]
-        blocks = _manifest_main_text_blocks(
-            blocks,
-            build.get("manifest") or {},
-            bounds_confirmed=bool(build.get("manifest_confirmed_at")),
-        )
         profile = self._profile_of_build(build)
         _sync_record_metadata_state(record, profile)
         _enforce_review_invariants(record)
-        local = self.validate_records(blocks, [record], profile)
-        existing = dict(build.get("validation") or {})
-        record_id = str(record.get("record_id") or "")
-        list_fields = (
-            "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
-            "printed_page_label_errors", "metadata_schema_errors",
-            "relationship_errors", "human_ownership_errors", "record_content_errors",
-            "citation_errors", "suspicious_record_sizes",
-            "metadata_evidence_errors",
-        )
-        for field in list_fields:
-            prior = existing.get(field)
-            if not isinstance(prior, list):
-                continue
-            retained = [
-                item for item in prior
-                if str(item.get("record_id") if isinstance(item, dict) else item) != record_id
+        if validate_record:
+            blocks = [
+                block for block in self.repo.load_blocks(str(build["asset_id"]))
+                if not block.get("excluded_reason")
             ]
-            additions = local.get(field)
-            if isinstance(additions, list):
-                existing[field] = retained + additions
-        existing["metadata_valid"] = not any(
-            existing.get(field) for field in (
-                "metadata_evidence_errors", "metadata_schema_errors",
-                "relationship_errors", "human_ownership_errors",
-                "record_content_errors", "citation_errors",
-                "printed_page_label_errors",
+            blocks = _manifest_main_text_blocks(
+                blocks,
+                build.get("manifest") or {},
+                bounds_confirmed=bool(build.get("manifest_confirmed_at")),
             )
-        )
-        existing["valid"] = bool(existing.get("source_valid", True) and existing["metadata_valid"])
-        build["validation"] = existing
+            local = self.validate_records(blocks, [record], profile)
+            existing = dict(build.get("validation") or {})
+            record_id = str(record.get("record_id") or "")
+            list_fields = (
+                "text_fidelity_errors", "source_order_errors", "page_mapping_errors",
+                "printed_page_label_errors", "metadata_schema_errors",
+                "relationship_errors", "human_ownership_errors", "record_content_errors",
+                "citation_errors", "suspicious_record_sizes",
+                "metadata_evidence_errors",
+            )
+            for field in list_fields:
+                prior = existing.get(field)
+                if not isinstance(prior, list):
+                    continue
+                retained = [
+                    item for item in prior
+                    if str(item.get("record_id") if isinstance(item, dict) else item) != record_id
+                ]
+                additions = local.get(field)
+                if isinstance(additions, list):
+                    existing[field] = retained + additions
+            existing["metadata_valid"] = not any(
+                existing.get(field) for field in (
+                    "metadata_evidence_errors", "metadata_schema_errors",
+                    "relationship_errors", "human_ownership_errors",
+                    "record_content_errors", "citation_errors",
+                    "printed_page_label_errors",
+                )
+            )
+            existing["valid"] = bool(
+                existing.get("source_valid", True) and existing["metadata_valid"]
+            )
+            build["validation"] = existing
         if build.get("publication"):
             history = list(build.get("publication_history") or [])
             history.append(build["publication"])
