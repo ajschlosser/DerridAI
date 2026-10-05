@@ -209,6 +209,14 @@ def source_aware_select[Candidate: Mapping[str, Any]](
         if left_work and left_work == right_work:
             penalty += 0.12
 
+        left_author = str(left.get("document_author") or "").strip().casefold()
+        right_author = str(right.get("document_author") or "").strip().casefold()
+        if left_author and left_author == right_author:
+            # Work/source diversity alone can still collapse onto a prolific
+            # author represented by many distinct documents. Penalize repeated
+            # document authors so cross-author alternatives remain competitive.
+            penalty += 0.20
+
         try:
             left_page = int(left.get("page_start"))
             right_page = int(right.get("page_start"))
