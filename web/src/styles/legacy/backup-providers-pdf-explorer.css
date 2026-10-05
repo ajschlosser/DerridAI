@@ -1,0 +1,263 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.10.0 — full backup / restore */
+
+.backup-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 9px 0 2px;
+}
+.backup-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 25px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.backup-summary b {
+  color: var(--text);
+}
+
+/* 0.10.1 */
+.ui-collapse-title {
+  display: none;
+  font-size: 0.8125rem;
+  font-weight: 850;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.ui-collapsed {
+  min-height: 34px !important;
+  height: 34px !important;
+  max-height: 34px !important;
+  padding: 0 !important;
+  margin-bottom: 6px !important;
+  overflow: hidden !important;
+}
+.ui-collapsed
+  > :not(.cardhead):not(.dash-chart-head):not(.provider-profile-card-head):not(
+    .rag-live-job-head
+  ):not(.section-title-row) {
+  display: none !important;
+}
+.ui-collapsed > .cardhead,
+.ui-collapsed > .dash-chart-head,
+.ui-collapsed > .provider-profile-card-head,
+.ui-collapsed > .rag-live-job-head,
+.ui-collapsed > .section-title-row {
+  min-height: 34px !important;
+  height: 34px !important;
+  max-height: 34px !important;
+  margin: 0 !important;
+  padding: 5px 8px !important;
+  border: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.ui-collapsed > .cardhead > *:not(.ui-collapse-title):not(.ui-collapse-toggle),
+.ui-collapsed > .dash-chart-head > *:not(.ui-collapse-title):not(.ui-collapse-toggle),
+.ui-collapsed > .provider-profile-card-head > *:not(.ui-collapse-title):not(.ui-collapse-toggle),
+.ui-collapsed > .rag-live-job-head > *:not(.ui-collapse-title):not(.ui-collapse-toggle),
+.ui-collapsed > .section-title-row > *:not(.ui-collapse-title):not(.ui-collapse-toggle) {
+  display: none !important;
+}
+.ui-collapsed .ui-collapse-title {
+  display: block;
+  flex: 1;
+}
+.ui-collapse-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+/* Provider registry */
+.providers-page {
+  display: grid;
+  gap: 12px;
+}
+.providers-overview {
+  border-left: 4px solid var(--line-strong);
+}
+
+.providers-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.provider-profile-card.default-provider {
+  box-shadow: inset 4px 0 0 var(--accent);
+  border-color: var(--tone-ok-edge);
+}
+
+/* Response cache */
+.response-cache-page {
+  display: grid;
+  gap: var(--page-gap);
+}
+.response-cache-overview {
+  border-left: 4px solid var(--line-strong);
+}
+.response-cache-kpis {
+  margin-top: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.response-cache-page table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.response-cache-page th,
+.response-cache-page td {
+  padding: 7px 8px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  font-size: 0.8125rem;
+}
+.response-cache-page th {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.copy-record-mini {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.copy-record-mini:hover {
+  border-color: var(--line);
+  background: var(--card);
+  color: var(--accent-fg);
+}
+.copy-record-mini svg {
+  width: 12px;
+  height: 12px;
+}
+.llm-tool-grid .field-wide {
+  grid-column: span 2;
+}
+.subtle-danger {
+  opacity: 0.82;
+}
+.subtle-danger:hover {
+  opacity: 1;
+}
+.pdf-toolbar-menu-popover .btn {
+  justify-content: flex-start;
+  width: 100%;
+}
+.pdfgrid-v2 {
+  grid-template-columns: minmax(0, 1.65fr) minmax(340px, 0.75fr) !important;
+  align-items: start;
+}
+
+/* Standard message dialogs */
+.message-dialog {
+  width: min(560px, calc(100% - 24px));
+}
+.message-modal-body {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.message-dialog.danger .dh {
+  border-top: 3px solid var(--tone-danger-border);
+}
+
+/* v0.10.1 cleanup — destructive work actions and persistent operation history */
+.remove-work-dialog {
+  width: min(720px, calc(100% - 24px));
+}
+.remove-work-body {
+  display: grid;
+  gap: 10px;
+}
+.remove-work-files {
+  display: grid;
+  gap: 6px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 2px;
+}
+.remove-work-files .check-item,
+.remove-work-body > .check-item {
+  align-items: flex-start;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.remove-work-files .check-item span,
+.remove-work-body > .check-item span {
+  display: grid;
+  gap: 2px;
+}
+.remove-work-files small,
+.remove-work-body small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.rag-live-job .tools .danger {
+  margin-left: 2px;
+}
+.dialog-action-spacer {
+  flex: 1;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  cursor: not-allowed;
+}
+
+/* Keep disabled controls hoverable so explanatory native tooltips remain available. */
+button:disabled[data-disabled-reason],
+input:disabled[data-disabled-reason],
+select:disabled[data-disabled-reason] {
+  pointer-events: auto;
+}

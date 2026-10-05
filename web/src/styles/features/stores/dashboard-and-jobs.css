@@ -1,0 +1,103 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.db-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 150px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.db-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a6aaa5;
+  flex: 0 0 auto;
+}
+
+.db-browser-tab {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 8px 10px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--muted);
+  cursor: pointer;
+}
+.db-browser-tab span {
+  display: inline-flex;
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.db-work-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 9px;
+}
+.db-work-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 11px;
+  padding: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.db-work-card:hover {
+  border-color: var(--tone-ok-edge);
+  background: var(--accent-soft);
+}
+.db-work-card > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.db-work-card b {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-work-card small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.db-work-card strong {
+  font-size: 1.125rem;
+  font-family: Georgia, serif;
+  font-weight: 500;
+  color: var(--accent-fg);
+}

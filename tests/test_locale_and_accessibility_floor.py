@@ -77,7 +77,11 @@ def test_no_explicit_frontend_font_size_is_below_twelve_pixels():
     """
     pattern = re.compile(r"font-size\s*:\s*([0-9.]+)(px|rem)")
     offenders: list[str] = []
-    paths = [ROOT / "web/src/style.css", *WEB.rglob("*.vue")]
+    paths = [
+        ROOT / "web/src/style.css",
+        *sorted((ROOT / "web/src/styles").rglob("*.css")),
+        *WEB.rglob("*.vue"),
+    ]
     for path in paths:
         text = path.read_text(encoding="utf-8")
         for match in pattern.finditer(text):

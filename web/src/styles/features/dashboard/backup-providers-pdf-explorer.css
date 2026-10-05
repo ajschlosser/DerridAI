@@ -1,0 +1,72 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Compact dashboard vector stores */
+
+/* Compact recent RAG table */
+.recent-rag-table-wrap {
+  overflow-x: auto;
+}
+.recent-rag-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.recent-rag-table th,
+.recent-rag-table td {
+  padding: 7px 8px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+  font-size: 0.8125rem;
+}
+.recent-rag-table th {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.recent-rag-table th:nth-child(1) {
+  width: 145px;
+}
+.recent-rag-table th:nth-child(2) {
+  width: auto;
+}
+.recent-rag-table th:nth-child(3) {
+  width: 190px;
+}
+.recent-rag-table th:nth-child(4) {
+  width: 150px;
+}
+.recent-rag-table th:nth-child(5) {
+  width: 90px;
+}
+.recent-rag-table th:nth-child(6) {
+  width: 58px;
+}
+.recent-rag-table td > span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.recent-rag-question {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}

@@ -1,0 +1,96 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.compare-toolbar {
+  margin-bottom: 10px;
+}
+.compare-paste-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.compare-paste-input {
+  min-height: 300px !important;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace !important;
+}
+.compare-results {
+  overflow: hidden;
+}
+.compare-table-wrap {
+  overflow: auto;
+  max-height: 72vh;
+}
+.compare-table {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.compare-table th,
+.compare-table td {
+  border-top: 1px solid var(--line);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+.compare-table th:first-child,
+.compare-table td:first-child {
+  width: 180px;
+}
+.compare-table td:first-child {
+  display: grid;
+  gap: 2px;
+}
+.compare-table td:first-child small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-table pre {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.compare-same {
+  opacity: 0.66;
+}
+.compare-changed {
+  background: var(--card);
+}
+@media (max-width: 720px) {
+  .provider-profile-card-head {
+    display: grid;
+  }
+  .provider-profile-grid,
+  .compare-paste-grid,
+  .pdf-draft-targets,
+  .rag-grade-scores,
+  .pie-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .pie-chart svg {
+    justify-self: center;
+  }
+}

@@ -1,0 +1,75 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.collection-wizard-v037 .wizard-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.collection-wizard-v037 .workflow-fields {
+  display: grid;
+  gap: 16px;
+}
+.collection-wizard-v037 .muted-field {
+  opacity: 0.68;
+}
+.collection-wizard-v037 textarea.control {
+  resize: vertical;
+  min-height: 70px;
+}
+.manifest-review {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  margin: 0;
+}
+.manifest-review > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.8fr) minmax(0, 1.25fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.manifest-review > div:nth-child(odd) {
+  border-right: 1px solid var(--line);
+}
+.manifest-review > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+.manifest-review dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.manifest-review dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.86rem;
+}
+.vector-hero-kicker .section-label {
+  margin-right: 2px;
+}
+.vector-hero-menu-popover .btn {
+  width: 100%;
+}
+.vector-rail-actions .control {
+  min-width: 0;
+}

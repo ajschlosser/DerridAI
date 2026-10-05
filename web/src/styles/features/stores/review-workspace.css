@@ -1,0 +1,80 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.store-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 13px;
+}
+
+.store-record-toolbar {
+  margin-top: 5px;
+}
+.store-table {
+  min-width: 1100px;
+}
+
+.store-table {
+  width: 100%;
+  min-width: 0 !important;
+  table-layout: fixed;
+}
+.store-table th,
+.store-table td {
+  overflow: hidden;
+}
+.store-table th:nth-child(1),
+.store-table td:nth-child(1) {
+  width: 190px;
+}
+.store-table th:nth-child(2),
+.store-table td:nth-child(2) {
+  width: 150px;
+}
+.store-table th:nth-child(3),
+.store-table td:nth-child(3) {
+  width: 180px;
+}
+.store-table th:nth-child(4),
+.store-table td:nth-child(4) {
+  width: 74px;
+}
+.store-table th:nth-child(5),
+.store-table td:nth-child(5) {
+  width: 145px;
+}
+.store-table th:nth-child(6),
+.store-table td:nth-child(6) {
+  width: 82px;
+}
+.store-table th:nth-child(7),
+.store-table td:nth-child(7) {
+  width: auto;
+}
+.store-table th:nth-child(8),
+.store-table td:nth-child(8) {
+  width: 135px;
+}
+.store-table .textcell {
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

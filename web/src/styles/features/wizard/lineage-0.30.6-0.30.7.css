@@ -1,0 +1,94 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.wizard-work-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.wizard-work-toolbar > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+.wizard-work-toolbar b {
+  font-size: 0.78125rem;
+}
+.wizard-work-toolbar small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.wizard-work-list {
+  display: grid;
+  max-height: 310px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.wizard-work-row {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px !important;
+  align-items: start !important;
+  padding: 9px 11px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.wizard-work-row:last-child {
+  border-bottom: 0;
+}
+.wizard-work-row:hover {
+  background: var(--card);
+}
+.wizard-work-row > span {
+  display: grid;
+  gap: 2px;
+}
+.wizard-work-row b {
+  font-size: 0.78125rem;
+}
+.wizard-work-row small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.wizard-work-row input {
+  margin-top: 3px;
+  accent-color: var(--ui-accent);
+}
+.wizard-sync-summary {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.wizard-sync-summary > span {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  min-width: 92px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.wizard-sync-summary > span b {
+  font-size: 0.9375rem;
+  color: var(--text-2);
+}

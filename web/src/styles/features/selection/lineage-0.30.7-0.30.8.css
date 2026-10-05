@@ -1,0 +1,68 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.selection-annotation-popover {
+  position: fixed;
+  z-index: 800;
+  width: min(390px, calc(100vw - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
+}
+.selection-annotation-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+}
+.selection-annotation-head > span {
+  display: grid;
+  gap: 2px;
+}
+.selection-annotation-head b {
+  font-size: 0.84375rem;
+}
+.selection-annotation-head small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.selection-annotation-popover blockquote {
+  max-height: 96px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--ui-accent);
+  background: var(--card);
+  border-radius: 0 7px 7px 0;
+  font:
+    12.5px/1.45 Georgia,
+    serif;
+}
+.selection-annotation-popover textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+.selection-annotation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}

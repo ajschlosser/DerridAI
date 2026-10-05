@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 Components take colours, type sizes and status styling from tokens, not literals. That is what lets one stylesheet serve light, dark, increased-contrast and forced-colors modes. The tokens live in two places:
 
-- `web/src/style.css` defines the neutrals (`--bg`, `--card`, `--soft`, `--text`, `--muted`, `--line`, `--line-strong`) and the accent family (`--ui-accent*`), with their dark values under `html[data-color-scheme="dark"]`.
+- `web/src/style.css` (an ordered `@import` index over `web/src/styles/legacy/*.css` (residual shared/base rules) and `web/src/styles/features/<feature>/*.css` (per-feature rules); import order is cascade order, so do not reorder) defines the neutrals (`--bg`, `--card`, `--soft`, `--text`, `--muted`, `--line`, `--line-strong`) and the accent family (`--ui-accent*`), with their dark values under `html[data-color-scheme="dark"]`.
 - `web/src/styles/tokens.css` defines everything built on top of them, described below.
 
 ## Colour

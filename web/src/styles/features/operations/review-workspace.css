@@ -1,0 +1,71 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.operation-progress {
+  position: fixed;
+  z-index: 160;
+  right: 18px;
+  bottom: 18px;
+  width: min(390px, calc(100vw - 36px));
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-overlay);
+  box-shadow: 0 18px 55px rgba(19, 29, 24, 0.22);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: 0.18s ease;
+}
+.operation-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.operation-progress-head > div {
+  display: grid;
+  gap: 2px;
+}
+.operation-progress-head b {
+  font-size: 0.8125rem;
+}
+.operation-progress-head span,
+.operation-progress-detail {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.operation-progress-track {
+  height: 7px;
+  margin-top: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--soft);
+}
+.operation-progress-track i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+.operation-progress-detail {
+  margin-top: 7px;
+  min-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

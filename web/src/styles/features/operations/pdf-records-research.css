@@ -1,0 +1,57 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.8.0 — cancellable background-operation controls */
+.operation-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+.operation-progress-detail {
+  overflow-wrap: anywhere;
+}
+
+/* 0.10.0 — operation minimization, universal collapsibility, provider profiles,
+   FAQ/RAG grading, compare paste, PDF relationships, bulk editing, and DB filters */
+.operation-progress-stack {
+  flex-direction: column;
+  pointer-events: auto;
+}
+.operation-stack-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-overlay);
+  box-shadow: 0 8px 24px rgba(19, 29, 24, 0.12);
+  pointer-events: auto;
+}
+.operation-stack-toolbar span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+.operation-stack-items {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+}

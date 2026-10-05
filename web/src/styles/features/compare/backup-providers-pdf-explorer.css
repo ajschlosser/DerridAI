@@ -1,0 +1,297 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.compare-page {
+  display: grid;
+  gap: 12px;
+}
+.compare-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.compare-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.compare-picker-card {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+  box-shadow: 0 2px 8px rgba(23, 33, 27, 0.035);
+}
+.compare-side-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.compare-autocomplete-shell {
+  position: relative;
+  display: flex;
+  gap: 5px;
+}
+.compare-autocomplete {
+  min-width: 0;
+  flex: 1;
+}
+.compare-autocomplete-results {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 330px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  box-shadow: 0 16px 38px rgba(20, 29, 24, 0.15);
+}
+.compare-autocomplete-results:empty {
+  display: none;
+}
+.compare-autocomplete-results button {
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  text-align: left;
+  cursor: pointer;
+}
+.compare-autocomplete-results button:last-child {
+  border-bottom: 0;
+}
+.compare-autocomplete-results button:hover,
+.compare-autocomplete-results button:focus {
+  background: var(--soft);
+  outline: 0;
+}
+.compare-autocomplete-results b {
+  font-size: 0.8125rem;
+}
+.compare-autocomplete-results span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-selected-hint {
+  min-height: 18px;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-modern-results {
+  display: grid;
+  gap: 10px;
+}
+.compare-record-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.compare-record-summary {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.compare-record-summary b {
+  font-size: 0.8125rem;
+}
+.compare-record-summary span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-result-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.compare-result-summary span {
+  display: inline-flex;
+  gap: 4px;
+  align-items: baseline;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-result-summary b {
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+.compare-changes-section {
+  display: grid;
+  gap: 8px;
+}
+.compare-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.compare-diff-card {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.compare-diff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  background: var(--soft);
+  border-bottom: 1px solid var(--line);
+}
+.compare-diff-head b {
+  font-size: 0.8125rem;
+}
+.compare-diff-head span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.compare-diff-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.compare-diff-sides > div {
+  min-width: 0;
+  padding: 9px;
+}
+.compare-diff-sides > div + div {
+  border-left: 1px solid var(--line);
+}
+.compare-diff-sides small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.compare-diff-sides pre {
+  max-height: 300px;
+  overflow: auto;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.compare-unchanged {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.compare-unchanged > summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 0.8125rem;
+}
+.compare-unchanged-list {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+.compare-unchanged-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.7fr) minmax(100px, 0.6fr) minmax(0, 1.7fr);
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+.compare-unchanged-row:last-child {
+  border-bottom: 0;
+}
+.compare-unchanged-row span {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.compare-empty-state,
+.compare-no-results {
+  padding: 24px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+  color: var(--muted);
+}
+.compare-paste-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.compare-paste-input {
+  min-height: 260px;
+}
+
+@media (max-width: 700px) {
+  .dashboard-charts-primary,
+  .dashboard-rankings-primary,
+  .compare-selectors,
+  .compare-record-pair,
+  .compare-diff-sides,
+  .compare-paste-grid,
+  .history-diff-values {
+    grid-template-columns: 1fr;
+  }
+  .compare-diff-sides > div + div,
+  .history-diff-values > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .history-version-nav {
+    grid-template-columns: auto 1fr auto;
+  }
+  .history-version-position span {
+    display: none;
+  }
+  .record-history-actions {
+    flex-wrap: wrap;
+  }
+  .dialog-action-spacer {
+    display: none;
+  }
+}
