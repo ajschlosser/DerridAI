@@ -365,6 +365,23 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
     stored={row["record_id"]:row for row in repo.load_records(build_id)}
     assert stored["r-left"]["source_extracted_text"]=="Record"
     assert stored["r-right"]["source_extracted_text"]=="text"
+    # Re-projection is deterministic but not silent: the immutable publication
+    # retains hashes and conservation status for the derived-state correction.
+    published={
+        row["record_id"]:row
+        for row in iter_jsonl_zst(
+            repo.publication_path(publication["publication_id"]),
+            rehydrate_evidence=False,
+        )
+    }
+    left_projection=published["r-left"]["source_projection_reconciliation_history"][-1]
+    right_projection=published["r-right"]["source_projection_reconciliation_history"][-1]
+    assert left_projection["method"]=="derive_from_active_source_units"
+    assert right_projection["method"]=="derive_from_active_source_units"
+    assert left_projection["source_text_conserved"] is False
+    assert right_projection["source_text_conserved"] is False
+    assert left_projection["previous_source_projection_hash"]
+    assert left_projection["source_projection_hash"]
 
 
 def test_accept_unreviewed_repairs_retired_sourceunit_reference_with_audit_history(tmp_path:Path):
@@ -563,6 +580,101 @@ def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_
         assert source_units
         assert all("source_unit_id" in row for row in source_units)
 
+
+def test_accept_unreviewed_repairs_recoverable_duplicate_active_ownership(tmp_path:Path):
+    """A stale duplicate binding is repaired only when each projection has one exact owner."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    base=repo.load_records(build_id)[0]
+
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    template=dict(units[0])
+    units.extend([
+        {
+            **template,
+            "source_unit_id":"u-left",
+            "unit_id":"u-left",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "text":"Record",
+            "active":True,
+        },
+        {
+            **template,
+            "source_unit_id":"u-right",
+            "unit_id":"u-right",
+            "source_block_ids":["b1"],
+            "parent_unit_ids":["b1"],
+            "text":"text",
+            "active":True,
+        },
+    ])
+    repo.save_source_units(build_id,units)
+
+    common={
+        **{
+            key:value for key,value in base.items()
+            if key not in {"field_assertions","current_field_assertions"}
+        },
+        "accepted":False,
+        "rejected":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_block_ids":["b1"],
+        "pdf_pages":[1],
+        "page_start":None,
+        "page_end":None,
+    }
+    left={
+        **json.loads(json.dumps(common)),
+        "record_id":"r-left",
+        "text":"Record",
+        "text_length":6,
+        "source_unit_ids":["u-left"],
+        "source_extracted_text":"Record",
+    }
+    right={
+        **json.loads(json.dumps(common)),
+        "record_id":"r-right",
+        "text":"text",
+        "text_length":4,
+        # Stale topology: both Records point at u-left even though the retained
+        # source projection proves that this Record belongs to u-right.
+        "source_unit_ids":["u-left"],
+        "source_extracted_text":"text",
+    }
+    repo.save_records(build_id,[left,right])
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==2
+    stored={row["record_id"]:row for row in repo.load_records(build_id)}
+    assert stored["r-left"]["source_unit_ids"]==["u-left"]
+    assert stored["r-right"]["source_unit_ids"]==["u-right"]
+    history=stored["r-right"]["source_topology_reconciliation_history"]
+    assert history[-1]["method"]=="unique_source_projection_match"
+    assert history[-1]["previous_source_unit_ids"]==["u-left"]
+    assert history[-1]["source_unit_ids"]==["u-right"]
+    assert history[-1]["transaction_id"].startswith("publication-finalize-")
+    assert history[-1]["previous_source_projection_hash"]
+    assert history[-1]["reconciled_source_projection_hash"]
+    published={
+        row["record_id"]:row
+        for row in iter_jsonl_zst(
+            repo.publication_path(publication["publication_id"]),
+            rehydrate_evidence=False,
+        )
+    }
+    published_history=published["r-right"]["source_topology_reconciliation_history"]
+    assert published_history[-1]["event_id"]==history[-1]["event_id"]
+    assert published_history[-1]["source_text_conserved"] is True
+    refreshed=repo.get_build(build_id)
+    assert refreshed["validation"]["duplicate_source_unit_ids"]==[]
+    assert refreshed["validation"]["missing_source_unit_ids"]==[]
+    assert refreshed["validation"]["source_conservation_errors"]==[]
 
 def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
     """Bypassing review never bypasses actual source loss or an in-progress build."""

@@ -594,16 +594,21 @@ def repair_record_source_topology(
     units: list[dict[str, Any]],
     *,
     source_block_ids: set[str] | None = None,
+    transaction_id: str = "",
 ) -> list[dict[str, Any]]:
     """Repair only provably equivalent stale Record-to-SourceUnit bindings.
 
-    A retired SourceUnit may be replaced by its active descendants only when
-    their concatenated extraction is identical. A missing/stale unit ID may also
-    be recovered when immutable roots plus the previous source extraction identify
-    exactly one contiguous active window. Ambiguity remains a validation blocker.
+    Reconciliation is deliberately conservative. A binding may move only when
+    current SourceUnit lineage proves an equivalent replacement, or when the
+    Record's prior source-extraction projection identifies exactly one contiguous
+    active SourceUnit window under compatible immutable extraction roots.
 
-    Every applied repair is appended to source_topology_reconciliation_history so
-    compatibility migration never erases the prior topology.
+    Duplicate active ownership is not treated as authoritative merely because
+    both IDs are active. Those Records are re-evaluated from their conserved
+    source projection, and ambiguous cases remain publication blockers.
+
+    Every applied repair is appended to source_topology_reconciliation_history.
+    No retired SourceUnit or previous binding is deleted.
     """
     all_units = {
         str(unit.get("source_unit_id") or unit.get("unit_id")): unit
@@ -651,40 +656,102 @@ def repair_record_source_topology(
             and str(active[unit_id].get("text") or "").strip()
         )
 
+    def roots_for(unit_id: str) -> set[str]:
+        return set(
+            source_unit_root_block_ids(
+                unit_id,
+                all_units,
+                immutable_roots,
+            )
+        )
+
+    current_ids_by_record = {
+        str(record.get("record_id") or ""): record_source_unit_ids(record)
+        for record in records
+    }
+    current_owners: dict[str, list[str]] = {}
+    for record_id, unit_ids in current_ids_by_record.items():
+        for unit_id in unit_ids:
+            if unit_id in active:
+                current_owners.setdefault(unit_id, []).append(record_id)
+
+    def target_projection(record: dict[str, Any]) -> str:
+        value = record.get("source_extracted_text")
+        return _squash(str(value or "")) if value is not None else ""
+
+    def roots_compatible(record: dict[str, Any], unit_ids: list[str]) -> bool:
+        declared_roots = {
+            str(value)
+            for value in record.get("source_block_ids") or []
+            if str(value)
+        }
+        if not declared_roots:
+            return False
+        candidate_roots = {
+            root
+            for unit_id in unit_ids
+            for root in roots_for(unit_id)
+        }
+        return bool(candidate_roots) and candidate_roots <= declared_roots
+
     proposals: dict[str, tuple[list[str], str, list[str]]] = {}
     fixed_owners: dict[str, str] = {}
 
+    # Reserve only bindings that are unambiguous and agree with the retained
+    # extraction projection. Shared active IDs are topology drift, not authority.
+    stable_record_ids: set[str] = set()
     for record in records:
         record_id = str(record.get("record_id") or "")
-        current_ids = record_source_unit_ids(record)
-        if current_ids and all(unit_id in active for unit_id in current_ids):
-            for unit_id in current_ids:
-                fixed_owners.setdefault(unit_id, record_id)
+        current_ids = current_ids_by_record.get(record_id, [])
+        if not current_ids or not all(unit_id in active for unit_id in current_ids):
             continue
+        if any(len(current_owners.get(unit_id) or []) != 1 for unit_id in current_ids):
+            continue
+        target = target_projection(record)
+        if target and _squash(unit_text(current_ids)) != target:
+            continue
+        stable_record_ids.add(record_id)
+        for unit_id in current_ids:
+            fixed_owners[unit_id] = record_id
 
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        if record_id in stable_record_ids:
+            continue
+        current_ids = current_ids_by_record.get(record_id, [])
+        target = target_projection(record)
+
+        # Prefer explicit lineage because it is the strongest source-binding proof.
         replacement: list[str] = []
         reasons: list[str] = []
         lineage_safe = bool(current_ids)
         for unit_id in current_ids:
             if unit_id in active:
+                if len(current_owners.get(unit_id) or []) != 1:
+                    lineage_safe = False
+                    break
                 replacement.append(unit_id)
                 continue
-            descendants = active_descendants(unit_id)
+            prior = all_units.get(unit_id)
+            descendants = active_descendants(unit_id) if prior is not None else []
             if not descendants:
                 lineage_safe = False
                 break
-            prior = all_units.get(unit_id)
-            if prior is not None:
-                prior_text = _squash(str(prior.get("text") or ""))
-                descendant_text = _squash(unit_text(descendants))
-                if prior_text != descendant_text:
-                    lineage_safe = False
-                    break
+            prior_text = _squash(str(prior.get("text") or ""))
+            descendant_text = _squash(unit_text(descendants))
+            if prior_text != descendant_text:
+                lineage_safe = False
+                break
             replacement.extend(descendants)
             reasons.append(f"{unit_id} -> {','.join(descendants)}")
 
         replacement = list(dict.fromkeys(replacement))
-        if lineage_safe and replacement:
+        if (
+            lineage_safe
+            and replacement
+            and roots_compatible(record, replacement)
+            and (not target or _squash(unit_text(replacement)) == target)
+        ):
             proposals[record_id] = (
                 replacement,
                 "active_descendant_lineage",
@@ -692,26 +759,23 @@ def repair_record_source_topology(
             )
             continue
 
-        roots = {
+        # Fallback is exact and unique: one contiguous active window, wholly
+        # inside the Record's immutable roots, reproduces the retained extraction.
+        declared_roots = {
             str(value)
             for value in record.get("source_block_ids") or []
             if str(value)
         }
-        target = _squash(str(record.get("source_extracted_text") or ""))
-        if not roots or not target:
+        if not declared_roots or not target:
             continue
         eligible = {
             unit_id
             for unit_id in active_order
-            if (
-                set(
-                    source_unit_root_block_ids(
-                        unit_id,
-                        all_units,
-                        immutable_roots,
-                    )
-                )
-                & roots
+            if roots_for(unit_id)
+            and roots_for(unit_id) <= declared_roots
+            and (
+                unit_id not in fixed_owners
+                or fixed_owners[unit_id] == record_id
             )
         }
         matches: list[list[str]] = []
@@ -724,10 +788,13 @@ def repair_record_source_topology(
                 if unit_id not in eligible:
                     break
                 candidate_window.append(unit_id)
-                parts.append(str(active[unit_id].get("text") or "").strip())
-                joined = _squash(JOIN.join(part for part in parts if part))
+                part = str(active[unit_id].get("text") or "").strip()
+                if part:
+                    parts.append(part)
+                joined = _squash(JOIN.join(parts))
                 if joined == target:
                     matches.append(list(candidate_window))
+                    break
                 if len(joined) > len(target):
                     break
         if len(matches) == 1:
@@ -766,8 +833,17 @@ def repair_record_source_topology(
         ]
         if previous_ids == unit_ids:
             continue
+        previous_projection = str(record.get("source_extracted_text") or "")
+        reconciled_projection = unit_text(unit_ids)
+        conserved = (
+            not previous_projection
+            or _squash(previous_projection) == _squash(reconciled_projection)
+        )
+        if not conserved:
+            continue
         event = {
             "event_id": f"source-topology-{uuid.uuid4().hex}",
+            "transaction_id": transaction_id or None,
             "at": iso_now(),
             "method": method,
             "previous_source_unit_ids": previous_ids,
@@ -778,6 +854,12 @@ def repair_record_source_topology(
                 if str(value)
             ],
             "lineage_replacements": reasons,
+            "previous_source_projection_hash": source_unit_text_hash(
+                previous_projection
+            ),
+            "reconciled_source_projection_hash": source_unit_text_hash(
+                reconciled_projection
+            ),
             "source_text_conserved": True,
         }
         record["source_unit_ids"] = list(unit_ids)
@@ -790,7 +872,6 @@ def repair_record_source_topology(
         record["source_topology_reconciliation_history"] = history[-50:]
         events.append({"record_id": record_id, **event})
     return events
-
 
 def synchronize_record_source_projection(
     records: list[dict[str, Any]],
@@ -819,6 +900,25 @@ def synchronize_record_source_projection(
             if str(active[unit_id].get("text") or "").strip()
         )
         if record.get("source_extracted_text") != extracted:
+            previous = str(record.get("source_extracted_text") or "")
+            event = {
+                "event_id": f"source-projection-{uuid.uuid4().hex}",
+                "at": iso_now(),
+                "method": "derive_from_active_source_units",
+                "source_unit_ids": list(unit_ids),
+                "previous_source_projection_hash": source_unit_text_hash(previous),
+                "source_projection_hash": source_unit_text_hash(extracted),
+                "source_text_conserved": (
+                    not previous or _squash(previous) == _squash(extracted)
+                ),
+            }
+            history = [
+                dict(item)
+                for item in record.get("source_projection_reconciliation_history") or []
+                if isinstance(item, dict)
+            ]
+            history.append(event)
+            record["source_projection_reconciliation_history"] = history[-50:]
             record["source_extracted_text"] = extracted
             changed += 1
     return changed
