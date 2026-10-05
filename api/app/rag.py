@@ -966,19 +966,39 @@ def _tokenize(text: str) -> set[str]:
     }
 
 
+def _rerank_candidate_text(item: Mapping[str, Any]) -> str:
+    """Expose source identity to rerankers without confusing mention with authorship."""
+
+    record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+    passage = str(item.get("_rerank_text") or record.get("text") or "")
+    return "\n".join(
+        [
+            f"Document author: {record.get('document_author') or ''}",
+            f"Work: {record.get('work') or ''}",
+            f"Quoted author: {record.get('quoted_author') or ''}",
+            f"Quoted work: {record.get('quoted_work') or ''}",
+            f"Position holder: {record.get('position_holder') or ''}",
+            f"Passage: {passage}",
+        ]
+    )
+
+
 def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
     q = _tokenize(query)
     scored: list[dict[str, Any]] = []
     for index, item in enumerate(docs):
         record = item["record"]
         text = " ".join([
+            str(record.get("document_author") or ""),
             str(record.get("work") or ""),
             str(record.get("speaker") or ""),
+            str(record.get("quoted_author") or ""),
+            str(record.get("quoted_work") or ""),
             str(record.get("position_holder") or ""),
             str(record.get("topics") or ""),
             str(record.get("concepts") or ""),
             str(record.get("persons") or ""),
-            str(item.get("_rerank_text") or record.get("text") or ""),
+            _rerank_candidate_text(item),
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
@@ -1017,11 +1037,7 @@ def _cross_encoder_rerank(
         [
             (
                 query,
-                str(
-                    item.get("_rerank_text")
-                    or item["record"].get("text")
-                    or ""
-                ),
+                _rerank_candidate_text(item),
             )
             for item in docs
         ],
@@ -1887,10 +1903,14 @@ def run_rag_pipeline(
         effective_reranker = "none"
 
     update("rerank", 0, 1, effective_reranker)
-    rerank_query = (
-        query_metadata["prompt_query"]
-        + "\n"
-        + query_metadata["prompt_query_fr"]
+    rerank_query = "\n".join(
+        value
+        for value in (
+            query_metadata["prompt_query"],
+            query_metadata["prompt_query_fr"],
+            explicit_scope_text,
+        )
+        if value
     ).strip()
     requested_top_n = (
         len(ranking_candidates)
