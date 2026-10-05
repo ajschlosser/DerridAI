@@ -19,7 +19,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createNavigation } from "../../src/domain/navigation";
 import { createWorksWorkspace } from "../../src/domain/worksWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // The modern Works Playwright workflow covers rendered search/actions/handoffs; these tests pin the commands.
 function setup(overrides: Record<string, unknown> = {}) {

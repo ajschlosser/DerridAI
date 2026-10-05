@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { bindJobsState } from "../state/jobsState";
-import { bindWorkspaceGroups } from "../state/workspaceState";
+import { bindJobsState } from "./jobsState";
+import { bindWorkspaceGroups } from "./workspaceState";
 
 // Initial value of the legacy runtime's single mutable workspace state. Moved verbatim from
 // the old runtime so the shape has one home; the runtime still owns the instance it creates.

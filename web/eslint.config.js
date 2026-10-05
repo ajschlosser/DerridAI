@@ -68,10 +68,4 @@ export default ts.config(
       "no-empty-pattern": "off",
     },
   },
-  {
-    files: ["src/runtime/runtime.js"],
-    // SA-10: the JS bridge intentionally exposes callbacks and legacy helpers;
-    // retain correctness rules while tracking unused-symbol cleanup separately.
-    rules: { "@typescript-eslint/no-unused-vars": "off" },
-  },
 );

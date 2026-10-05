@@ -19,7 +19,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "../../src/composables/notifications";
 import { createJobsWorkspace } from "../../src/domain/jobsWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { jobsState } from "../../src/state/jobsState";
 import { RealtimeClient } from "../../src/realtime/client";
 import { MockSocket, jobEvent } from "./realtime-support";

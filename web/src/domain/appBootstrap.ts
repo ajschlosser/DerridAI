@@ -21,7 +21,7 @@
 // evaluate before the entry points below (formerly runtime/registrations.js).
 import "diff";
 import "./operationsDock";
-import "../runtime/operationsPanelHost";
+import "./operationsPanelHost";
 import "./operationsPanel";
 import "./recordValues";
 import "./urlState";
@@ -102,7 +102,7 @@ import "./sharedAnnotations";
 import "../state/jobsState";
 import "./corpusCache";
 import "./sharedUrlState";
-import "../runtime/jobsUiComposition";
+import "./jobsUiComposition";
 import "./sharedStores";
 import "./sharedSession";
 import "./databaseCreationRequest";
