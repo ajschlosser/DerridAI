@@ -157,7 +157,8 @@ class OperationsMixin:
         if build.get("status") in {"queued", "running"}:
             build["cancel_requested"] = True
             build["cancel_requested_at"] = build.get("cancel_requested_at") or iso_now()
-            build["stage_before_cancel"] = build.get("stage")
+            if not build.get("stage_before_cancel"):
+                build["stage_before_cancel"] = build.get("stage")
             build["stage"] = "cancelling"
             operation = build.get("metadata_operation")
             if isinstance(operation, dict) and operation.get("state") in {"queued", "running"}:
