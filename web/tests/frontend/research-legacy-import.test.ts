@@ -29,12 +29,15 @@ let wrapper: ReturnType<typeof mount>;
 let state: ReturnType<typeof useLegacyThreadImport>;
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.stubGlobal("requestIdleCallback", undefined);
+  vi.stubGlobal("cancelIdleCallback", undefined);
   setActivePinia(createPinia());
   useAuthStore().user = { id: 1, role: "admin", capabilities: [] } as never;
   api.importLegacy.mockReset();
 });
 afterEach(() => {
   wrapper?.unmount();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 function start() {
