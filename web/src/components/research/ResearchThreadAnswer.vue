@@ -169,17 +169,17 @@ watch(
           <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
           <template v-if="inspectOpen">
             <ResearchResultPresentation
-            :instance-id="`thread-answer-${turn.turn_id}`"
-            :instance-label="`${turn.ordinal}: ${turn.user_question}`"
-            :job="answer.data.value"
-            :result="result"
-            :active-evidence-index="activeEvidenceIndex"
-            :researcher="!auth.isAdmin"
-            read-only
-            @evidence="activeEvidenceIndex = $event"
-            @select-evidence="activeEvidenceIndex = $event"
-            @open-record="openRecord"
-            @open-relationships="openRelationships"
+              :instance-id="`thread-answer-${turn.turn_id}`"
+              :instance-label="`${turn.ordinal}: ${turn.user_question}`"
+              :job="answer.data.value"
+              :result="result"
+              :active-evidence-index="activeEvidenceIndex"
+              :researcher="!auth.isAdmin"
+              read-only
+              @evidence="activeEvidenceIndex = $event"
+              @select-evidence="activeEvidenceIndex = $event"
+              @open-record="openRecord"
+              @open-relationships="openRelationships"
             />
             <details v-if="result.research_thread">
               <summary>{{ i18n.t("research.thread_context_audit") }}</summary>
