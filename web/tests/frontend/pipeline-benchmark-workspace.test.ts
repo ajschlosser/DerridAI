@@ -138,6 +138,14 @@ describe("PipelineBenchmarkWorkspace", () => {
 
     vi.spyOn(chromaApi, "collections").mockResolvedValue([
       {
+        name: "_response_cache",
+        count: 7,
+        protected: false,
+        collection_role: "general",
+        language_codes: [],
+        metadata: { derridai_system_collection: "response_cache" },
+      },
+      {
         name: "corpus",
         count: 42,
         protected: false,
@@ -187,6 +195,9 @@ describe("PipelineBenchmarkWorkspace", () => {
     await flushPromises();
     const dialog = body().querySelector("[role=dialog]")!;
     expect(dialog.textContent).toContain("cannot be replaced");
+    expect(
+      [...dialog.querySelectorAll<HTMLSelectElement>("select option")].map((option) => option.value),
+    ).not.toContain("_response_cache");
     setField(dialog.querySelector('input[type="text"]'), "trace-definition-001");
     setField(dialog.querySelector('input[type="number"]'), "1");
     setField(dialog.querySelector("select"), "corpus");
