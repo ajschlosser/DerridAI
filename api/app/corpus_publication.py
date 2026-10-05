@@ -208,7 +208,16 @@ SOURCE_TEXT:
 
 # Segmentation must conserve text even when review is skipped; page mapping and metadata
 # validation issues are review-resolvable and are carried as unreviewed instead.
-TEXT_CONSERVATION_ERROR_KEYS = ("missing_block_ids", "duplicate_block_ids", "text_fidelity_errors", "source_order_errors")
+TEXT_CONSERVATION_ERROR_KEYS = (
+    "missing_block_ids",
+    "missing_source_unit_ids",
+    "duplicate_block_ids",
+    "unknown_source_unit_ids",
+    "source_reference_errors",
+    "source_conservation_errors",
+    "text_fidelity_errors",
+    "source_order_errors",
+)
 UNREVIEWED_PUBLISHABLE_STATUSES = frozenset({"ready", "awaiting_review"})
 # Public per-record marker for publications that bypassed human review.
 REVIEWER_ACCEPTED = "reviewer_accepted"
