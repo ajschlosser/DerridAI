@@ -212,18 +212,10 @@ def _fields_for_semantic_role(schema: Any, semantic_id: str) -> list[str]:
     """
     if schema is None:
         return list(_SEMANTIC_FIELD_FALLBACKS.get(semantic_id, ()))
-    names: list[str] = []
     try:
-        field_names = schema.field_names()
+        return list(schema.fields_for_semantic_compatibility_id(semantic_id))
     except (AttributeError, TypeError):
         return list(_SEMANTIC_FIELD_FALLBACKS.get(semantic_id, ()))
-    for name in field_names:
-        try:
-            if schema.semantic_compatibility_id(name) == semantic_id:
-                names.append(name)
-        except (AttributeError, KeyError):
-            continue
-    return names
 
 
 def _semantic_values(
