@@ -38,6 +38,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, NoReturn, Self
 
+from ..corpus_llm_helpers import StructuredOutputError
+from ..llm_failures import failure_disposition
 from .models import PipelineDefinition, PipelineRunTrace, PipelineStageDefinition
 from .registry import reject_unhonoured_config
 from .service import pipeline_hash
@@ -277,9 +279,16 @@ class StructuredStageSession:
             if stage_role(self.plan.fallback or self.plan.entry) == "review"
             else "pipeline escalation"
         )
-        raise ValueError(
+        dispositions = [failure_disposition(exc) for _, exc in failures]
+        raise StructuredOutputError(
             f"LLM structured output failed after bounded retry and {suffix}: "
-            + " | ".join(pieces)
+            + " | ".join(pieces),
+            failures=pieces,
+            timed_out=any(
+                disposition.failure_class == "timeout" for disposition in dispositions
+            ),
+            truncated=any(bool(getattr(exc, "truncated", False)) for _, exc in failures),
+            failure_details=dispositions,
         )
 
     def finish(self, *, cancelled: bool = False) -> None:

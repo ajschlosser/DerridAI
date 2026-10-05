@@ -287,8 +287,10 @@ def complete_structured_json[T](
                     failure_kind=kind,
                 )
             )
+            explicitly_nonretryable = getattr(exc, "retryable", None) is False
             may_retry = (
                 attempt < total_attempts
+                and not explicitly_nonretryable
                 and (
                     (kind == "timeout" and retry_timeouts)
                     or (kind != "timeout" and (kind != "transport" or retry_transport_errors))

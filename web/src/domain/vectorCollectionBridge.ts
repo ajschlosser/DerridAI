@@ -20,6 +20,43 @@ import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
 /* Copyright 2026 Aaron John Schlosser, PhD. */
 
+/* eslint-disable @typescript-eslint/no-explicit-any -- the shared workspace state and its helpers are loosely typed */
+type Loose = Record<string, any>;
+
+export interface VectorCollectionBridgeDeps {
+  state: Loose;
+  workIndex: () => Map<string, { work: string; rows: Loose[] }>;
+  recordStores: () => unknown[];
+  tr: (key: string, fallback?: string) => string;
+  trf: (
+    key: string,
+    fallback?: string | Record<string, unknown>,
+    values?: Record<string, unknown>,
+  ) => string;
+  esc: (value: unknown) => string;
+  icon: (name: string) => string;
+  api: (path: string, options?: RequestInit) => Promise<any>;
+  refreshStores: () => Promise<unknown>;
+  persistPrefs: () => void;
+  upsertRows: (
+    rows: any,
+    label?: string,
+    options?: { largeSyncConfirmed?: boolean },
+  ) => Promise<unknown>;
+  decorateDisabledControls: (root?: Document | Element) => void;
+  showAppModal: (dialog: HTMLDialogElement) => void;
+}
+
+export interface CollectionWizardOptions {
+  defaultProvider?: string;
+  defaultModel?: string;
+  installedModels?: Loose[];
+  providerProfiles?: Loose[];
+}
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error && error.message ? error.message : String(error);
+
 /** Live collection-creation bridge for the Vue Vector Stores workspace. */
 export function createVectorCollectionBridge({
   state,
@@ -35,11 +72,11 @@ export function createVectorCollectionBridge({
   upsertRows,
   decorateDisabledControls,
   showAppModal,
-}) {
-  function notifyVectorStoresChanged() {
+}: VectorCollectionBridgeDeps) {
+  function notifyVectorStoresChanged(): void {
     window.dispatchEvent(new CustomEvent("derridai:vector-stores-changed"));
   }
-  function collectionSyncableWorks() {
+  function collectionSyncableWorks(): { work: string; count: number; rows: Loose[] }[] {
     return [...workIndex().values()]
       .sort((a, b) => String(a.work).localeCompare(String(b.work)))
       .map((item) => ({ work: item.work, count: item.rows.length, rows: item.rows }));
@@ -50,11 +87,11 @@ export function createVectorCollectionBridge({
     defaultModel = "bge-m3:latest",
     installedModels = [],
     providerProfiles = [],
-  } = {}) {
+  }: CollectionWizardOptions = {}): void {
     const dialog = document.createElement("dialog");
     dialog.className = "collection-wizard-dialog workflow-dialog collection-wizard-v037";
     const works = collectionSyncableWorks();
-    const embeddingProfiles = (providerProfiles || []).filter(
+    const embeddingProfiles: Loose[] = (providerProfiles || []).filter(
       (profile) =>
         profile &&
         profile.id &&
@@ -76,7 +113,7 @@ export function createVectorCollectionBridge({
     const initialProfile = embeddingProfiles.find(
       (profile) => `profile:${profile.id}` === initialProvider,
     );
-    const form = {
+    const form: Loose = {
       name: recordStores().length ? "" : "derrida-primary",
       description: "",
       role: "primary",
@@ -102,31 +139,36 @@ export function createVectorCollectionBridge({
     const precomputedMissing = () =>
       form.provider === "precomputed" &&
       selectedRows().some((row) => !Array.isArray(row.embedding) || !row.embedding.length);
+    const field = <T extends HTMLElement = HTMLInputElement>(selector: string) =>
+      dialog.querySelector<T>(selector);
+    const fields = <T extends HTMLElement = HTMLInputElement>(selector: string) => [
+      ...dialog.querySelectorAll<T>(selector),
+    ];
     const persistFields = () => {
-      const name = dialog.querySelector("#wizardCollectionName");
+      const name = field("#wizardCollectionName");
       if (name) form.name = name.value.trim();
-      const description = dialog.querySelector("#wizardCollectionDescription");
+      const description = field<HTMLTextAreaElement>("#wizardCollectionDescription");
       if (description) form.description = description.value.trim();
-      const role = dialog.querySelector("#wizardCollectionRole");
+      const role = field<HTMLSelectElement>("#wizardCollectionRole");
       if (role) form.role = role.value;
-      const languageBoxes = [...dialog.querySelectorAll("[data-wizard-language]")];
+      const languageBoxes = fields("[data-wizard-language]");
       if (languageBoxes.length)
         form.languages = new Set(
           languageBoxes.filter((box) => box.checked).map((box) => box.dataset.wizardLanguage),
         );
-      const provider = dialog.querySelector('input[name="wizardEmbeddingProviderRadio"]:checked');
+      const provider = field('input[name="wizardEmbeddingProviderRadio"]:checked');
       if (provider) form.provider = provider.value;
-      const model = dialog.querySelector("#wizardEmbeddingModel");
+      const model = field("#wizardEmbeddingModel");
       if (model) form.model = model.value.trim();
-      const dimension = dialog.querySelector("#wizardEmbeddingDimension");
+      const dimension = field("#wizardEmbeddingDimension");
       if (dimension) form.dimension = dimension.value.trim();
-      const distance = dialog.querySelector("#wizardDistanceMetric");
+      const distance = field<HTMLSelectElement>("#wizardDistanceMetric");
       if (distance) form.distance = distance.value;
-      const retrieval = dialog.querySelector("#wizardRetrievalMode");
+      const retrieval = field<HTMLSelectElement>("#wizardRetrievalMode");
       if (retrieval) form.retrieval = retrieval.value;
-      const protection = dialog.querySelector("#wizardProtected");
+      const protection = field("#wizardProtected");
       if (protection) form.protected = protection.checked;
-      const workBoxes = [...dialog.querySelectorAll("[data-wizard-work]")];
+      const workBoxes = fields("[data-wizard-work]");
       if (workBoxes.length)
         form.selectedWorks = new Set(
           workBoxes.filter((box) => box.checked).map((box) => box.dataset.wizardWork),
@@ -169,7 +211,7 @@ export function createVectorCollectionBridge({
     };
     const stepContent = () =>
       step === 0 ? sourceStep() : step === 1 ? retrievalStep() : reviewStep();
-    const runPreflight = async (button) => {
+    const runPreflight = async (button: HTMLButtonElement) => {
       persistFields();
       if (precomputedMissing()) {
         toast(tr("vector.precomputed_missing_embeddings"), { tone: "warning" });
@@ -201,7 +243,7 @@ export function createVectorCollectionBridge({
       } catch (error) {
         openMessageDialog({
           title: tr("vector.preflight_failed"),
-          message: error.message || String(error),
+          message: errorMessage(error),
           tone: "danger",
         });
         return false;
@@ -212,7 +254,9 @@ export function createVectorCollectionBridge({
     };
     const render = () => {
       dialog.innerHTML = `<div class="workflow-dialog-head"><div><span class="section-label">${esc(tr("vector.new_collection"))}</span><h2>${esc(tr("vector.new_direction_build"))}</h2><p>${esc(tr("vector.new_direction_build_help"))}</p></div><button class="btn icon-only" type="button" data-close aria-label="${esc(tr("ui.close"))}">${icon("close")}</button></div><ol class="workflow-steps" aria-label="${esc(tr("vector.creation_steps"))}">${steps.map((label, index) => `<li class="${index === step ? "active" : index < step ? "done" : ""}"><span>${index + 1}</span><b>${esc(label)}</b></li>`).join("")}</ol>${stepContent()}<div class="workflow-dialog-actions"><button class="btn" type="button" data-close>${esc(tr("ui.cancel"))}</button><div class="workflow-action-spacer"></div>${step ? `<button class="btn" type="button" id="wizardBack">← ${esc(tr("ui.back"))}</button>` : ""}${step < 2 ? `<button class="btn primary" type="button" id="wizardNext">${esc(step === 1 ? tr("vector.preflight_and_review") : tr("ui.next"))} →</button>` : `<button class="btn primary" type="button" id="wizardCreate">${icon("plus")}${esc(form.selectedWorks.size ? tr("vector.create_and_build") : tr("vector.create_empty"))}</button>`}</div>`;
-      dialog.querySelectorAll("[data-close]").forEach((button) => (button.onclick = close));
+      dialog
+        .querySelectorAll("[data-close]")
+        .forEach((button) => ((button as HTMLElement).onclick = close));
       dialog.querySelector("#wizardBack")?.addEventListener("click", () => {
         persistFields();
         step = Math.max(0, step - 1);
@@ -228,7 +272,7 @@ export function createVectorCollectionBridge({
           return;
         }
         if (step === 1) {
-          const ok = await runPreflight(event.currentTarget);
+          const ok = await runPreflight(event.currentTarget as HTMLButtonElement);
           if (ok) {
             step = 2;
             render();
@@ -238,7 +282,7 @@ export function createVectorCollectionBridge({
       dialog.querySelectorAll('input[name="wizardEmbeddingProviderRadio"]').forEach((input) =>
         input.addEventListener("change", (event) => {
           persistFields();
-          form.provider = event.target.value;
+          form.provider = (event.target as HTMLInputElement).value;
           const profile = embeddingProfiles.find((item) => `profile:${item.id}` === form.provider);
           if (profile?.model) form.model = String(profile.model);
           else if (form.provider === "ollama" && !form.model)
@@ -268,7 +312,7 @@ export function createVectorCollectionBridge({
         if (!form.name) return toast(tr("vector.collection_name_required"), { tone: "warning" });
         if (precomputedMissing())
           return toast(tr("vector.precomputed_missing_embeddings"), { tone: "warning" });
-        const button = dialog.querySelector("#wizardCreate");
+        const button = dialog.querySelector<HTMLButtonElement>("#wizardCreate")!;
         button.disabled = true;
         button.textContent = tr("vector.creating_collection");
         try {
@@ -320,7 +364,7 @@ export function createVectorCollectionBridge({
           button.textContent = tr("vector.create_collection");
           openMessageDialog({
             title: tr("vector.create_failed"),
-            message: error.message || String(error),
+            message: errorMessage(error),
             tone: "danger",
           });
         }

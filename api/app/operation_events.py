@@ -45,7 +45,7 @@ MAX_METADATA_NOTES = 512
 MAX_NOTE_FIELD_IDS = 32
 
 METADATA_NOTE_KINDS = frozenset({"record_started", "field_checked", "record_completed"})
-METADATA_FAMILY_STATES = frozenset({"complete", "failed", "skipped", "needs_review"})
+METADATA_FAMILY_STATES = frozenset({"complete", "failed", "skipped", "needs_review", "retry_pending"})
 
 _lock = threading.Lock()
 _corpus_builds: dict[str, dict[str, Any]] = {}

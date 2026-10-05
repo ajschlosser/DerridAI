@@ -300,6 +300,7 @@ from .language_segmentation import ends_sentence_text, starts_mid_sentence_text
 from .language_segmentation import (
     profile_metadata as language_segmentation_profile,
 )
+from .llm_failures import FailureDisposition, failure_disposition
 from .main_text_start import infer_main_text_start
 from .memory_prefill import prefill_records
 from .metadata_exemplar_projection import (
@@ -308,6 +309,11 @@ from .metadata_exemplar_projection import (
     record_projection_result,
 )
 from .metadata_exemplar_retrieval import ChromaMetadataExemplarIndex
+from .metadata_failure_recovery import (
+    next_record_recovery_delay,
+    pending_recovery_families,
+    queue_due_recoveries,
+)
 from .metadata_schema import (
     MetadataSchema,
 )
@@ -3604,6 +3610,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             raise LookupError("No review provider is configured for this build.")
 
         all_failures: list[str] = []
+        all_failure_details: list[FailureDisposition] = []
         timed_out = False
         any_truncated = False
 
@@ -3854,6 +3861,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             except StructuredCompletionError as exc:
                 failure = exc.last_error or exc
                 all_failures.append(f"{role} {provider}/{model}: {failure}")
+                all_failure_details.append(failure_disposition(exc))
                 timed_out = timed_out or exc.timed_out
                 any_truncated = any_truncated or exc.truncated
 
@@ -3864,6 +3872,7 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
             failures=all_failures,
             timed_out=timed_out,
             truncated=any_truncated,
+            failure_details=all_failure_details,
         )
 
     def _document_manifest_call(
@@ -4780,6 +4789,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             "skipped": "metadata_tasks_skipped",
             "running": "metadata_tasks_running",
             "queued": "metadata_tasks_queued",
+            "retry_pending": "metadata_tasks_queued",
         }
         with self._lock:
             allowed_fields = self._allowed_fields(build_id)
@@ -4865,7 +4875,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                     "started_at": entry.get("started_at"),
                 })
             updates["metadata_active_tasks"] = active[:32]
-            if settled_state in {"complete", "failed", "needs_review", "skipped"}:
+            if settled_state in {"complete", "failed", "needs_review", "skipped", "retry_pending"}:
                 updates["metadata_last_progress_at"] = iso_now()
             self._update(build_id, **updates)
 
@@ -4906,7 +4916,9 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 "metadata_tasks_failed": sum(1 for value in states if value in {"failed", "needs_review"}),
                 "metadata_tasks_skipped": sum(1 for value in states if value == "skipped"),
                 "metadata_tasks_running": 0,
-                "metadata_tasks_queued": sum(1 for value in states if value == "queued"),
+                "metadata_tasks_queued": sum(
+                    1 for value in states if value in {"queued", "retry_pending"}
+                ),
                 "metadata_active_tasks": [],
             }
 
@@ -5095,6 +5107,75 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             prioritized_request = dict(request)
             prioritized_request["_priority_record_ids"] = priority_ids
             return self._schedule_build_enrichment(build_id, prioritized_request, manifest, settled_records)
+
+        # Provider outages are operational failures, not scholarly conclusions.
+        # Let the rest of the corpus settle first, then retry only due families.
+        # The retry-pending state and its absolute not-before timestamp are durable,
+        # so a process restart/resume continues from this point without repeating
+        # already-completed sibling families.
+        recovery_rows = [
+            row for row in settled_records if pending_recovery_families(row)
+        ]
+        if recovery_rows:
+            delays = [
+                delay
+                for row in recovery_rows
+                if (delay := next_record_recovery_delay(row)) is not None
+            ]
+            wait_seconds = min(delays) if delays else 0.0
+            self._update(
+                build_id,
+                metadata_recovery_pending=sum(
+                    len(pending_recovery_families(row)) for row in recovery_rows
+                ),
+                metadata_recovery_wait_seconds=round(wait_seconds, 3),
+                metadata_last_progress_at=iso_now(),
+            )
+            if wait_seconds > 0:
+                deadline = time.monotonic() + wait_seconds
+                while time.monotonic() < deadline:
+                    if self._cancelled(build_id):
+                        raise InterruptedError("Corpus build cancelled")
+                    time.sleep(min(0.25, max(0.0, deadline - time.monotonic())))
+
+            recovery_ids = [str(row.get("record_id") or "") for row in recovery_rows]
+            promoted_ids: list[str] = []
+            promoted_family_count = 0
+
+            def promote_due_recoveries(rows: list[dict[str, Any]]) -> None:
+                nonlocal promoted_family_count
+                for row in rows:
+                    due = queue_due_recoveries(row)
+                    if due:
+                        promoted_ids.append(str(row.get("record_id") or ""))
+                        promoted_family_count += len(due)
+
+            self.repo.reconcile_records(
+                build_id,
+                promote_due_recoveries,
+                record_ids=recovery_ids,
+            )
+            promoted_ids = list(dict.fromkeys(value for value in promoted_ids if value))
+            if promoted_ids:
+                prioritized_request = dict(request)
+                prioritized_request["_priority_record_ids"] = promoted_ids
+                self._update(
+                    build_id,
+                    metadata_recovery_pending=max(
+                        0,
+                        sum(len(pending_recovery_families(row)) for row in recovery_rows)
+                        - promoted_family_count,
+                    ),
+                    metadata_recovery_wait_seconds=0.0,
+                    metadata_last_progress_at=iso_now(),
+                )
+                return self._schedule_build_enrichment(
+                    build_id,
+                    prioritized_request,
+                    manifest,
+                    self.repo.load_records(build_id),
+                )
+
         settled_states = _metadata_family_states(settled_records)
         self._update(
             build_id,
