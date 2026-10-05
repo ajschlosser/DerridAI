@@ -209,11 +209,8 @@ const changes = computed(() => {
 });
 const dirtyCount = computed(() => Object.keys(changes.value).length);
 function fieldLabel(key: string) {
-  return i18n.t(
-    `field.${key}`,
-    schemaRegistryFieldMap.value[key]?.label ||
-      key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
-  );
+  const schemaLabel = schemaRegistryFieldMap.value[key]?.label;
+  return schemaLabel ? i18n.t(`field.${key}`, schemaLabel) : i18n.t(`field.${key}`);
 }
 function isArrayField(key: string) {
   const control =
