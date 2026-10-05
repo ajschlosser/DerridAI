@@ -1,0 +1,432 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* --------------------------------------------------------------------------
+   DerridAI 0.30.5 — aligned workflows, work metadata enrichment, annotations
+   -------------------------------------------------------------------------- */
+
+/* Shared workflow shell. Language installation and work-metadata enrichment
+   intentionally use the same visual and interaction grammar. */
+
+.workflow-dialog {
+  width: min(940px, calc(100vw - 32px));
+  max-height: min(90vh, 920px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.24);
+  padding: 0;
+  color: var(--text);
+}
+.workflow-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.44);
+  backdrop-filter: blur(3px);
+}
+.workflow-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 22px 24px 18px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--card), var(--card));
+}
+.workflow-heading {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.workflow-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--ui-accent-soft, #eef6f2);
+  color: var(--accent-fg);
+  font-size: 1.4375rem;
+}
+.workflow-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.workflow-heading p {
+  margin: 0 0 4px;
+  color: var(--accent-fg);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.workflow-heading h2 {
+  margin: 0;
+  font-size: 1.375rem;
+  line-height: 1.2;
+  color: var(--text);
+}
+.workflow-heading > div > span {
+  display: block;
+  margin-top: 7px;
+  max-width: 720px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.workflow-close {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  font-size: 1.3125rem;
+}
+.workflow-steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin: 0;
+  padding: 14px 24px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.workflow-steps li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.workflow-steps li:not(:last-child)::after {
+  content: "";
+  height: 1px;
+  background: var(--soft);
+  position: absolute;
+  left: calc(50% + 34px);
+  right: 14px;
+  top: 50%;
+}
+.workflow-steps li > span {
+  position: relative;
+  z-index: 1;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--soft);
+  color: var(--muted);
+  font-weight: 800;
+}
+.workflow-steps li.active {
+  color: var(--accent-fg);
+}
+.workflow-steps li.active > span {
+  background: var(--ui-accent, #466b5b);
+  color: var(--accent-on);
+}
+.workflow-form {
+  display: grid;
+}
+.workflow-section {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1fr);
+  gap: 24px;
+  padding: 21px 24px;
+  border-bottom: 1px solid var(--line);
+}
+.workflow-section-copy {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+.workflow-section-copy > b {
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+.workflow-section-copy > span {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.workflow-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+.workflow-identity-fields {
+  grid-template-columns: minmax(150px, 0.7fr) minmax(230px, 1.35fr) minmax(160px, 0.7fr);
+}
+.workflow-field {
+  display: grid !important;
+  grid-template-rows: 18px 42px minmax(34px, auto);
+  gap: 6px !important;
+  align-content: start !important;
+  margin: 0 !important;
+}
+.workflow-field > span {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-2);
+}
+.workflow-field > small {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted);
+  align-self: start;
+}
+
+.workflow-provider-area {
+  display: grid;
+  gap: 10px;
+}
+.workflow-provider-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: #17233b;
+  color: var(--accent-on);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+.workflow-provider-empty {
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.workflow-provider-empty b {
+  display: block;
+  font-size: 0.8125rem;
+}
+.workflow-provider-empty p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.workflow-review-strip {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 0.7fr) minmax(150px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  align-items: center;
+  margin: 18px 24px 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--ui-accent, #466b5b) 18%, var(--line));
+  border-radius: 10px;
+  background: var(--ui-accent-soft, #eef6f2);
+}
+.workflow-review-strip > span {
+  display: grid;
+  gap: 2px;
+}
+.workflow-review-strip b {
+  font-size: 0.78125rem;
+  color: var(--text-2);
+}
+.workflow-review-strip small,
+.workflow-review-note {
+  font-size: 0.8125rem;
+  color: var(--tone-info-fg);
+  line-height: 1.45;
+}
+.workflow-summary-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid !important;
+  place-items: center;
+  background: var(--card);
+  color: var(--accent-fg);
+}
+.workflow-summary-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.workflow-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 18px 24px 20px;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--card) 97%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 1050px) {
+  .workflow-identity-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .workflow-identity-fields > .workflow-field:last-child {
+    grid-column: 1/-1;
+  }
+}
+@media (max-width: 780px) {
+  .workflow-dialog {
+    width: 100%;
+    max-height: 94vh;
+    border-radius: 12px;
+  }
+  .workflow-dialog-header {
+    padding: 17px;
+  }
+  .workflow-section {
+    grid-template-columns: 1fr;
+    gap: 11px;
+    padding: 17px;
+  }
+  .workflow-fields,
+  .workflow-identity-fields,
+  .workflow-provider-grid {
+    grid-template-columns: 1fr;
+  }
+  .workflow-identity-fields > .workflow-field:last-child {
+    grid-column: auto;
+  }
+  .workflow-review-strip {
+    grid-template-columns: 36px 1fr;
+    margin: 14px 17px 0;
+  }
+  .workflow-review-strip > *:nth-child(n + 3) {
+    grid-column: 1/-1;
+  }
+  .workflow-actions {
+    padding: 15px 17px;
+  }
+  .annotations-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .annotations-toolbar .view-tabs {
+    align-self: flex-start;
+  }
+}
+@media (max-width: 520px) {
+  .workflow-steps li b {
+    display: none;
+  }
+  .workflow-steps {
+    padding-inline: 17px;
+  }
+  .annotation-work-group > summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+/* 0.30.5 provider selection uses the same profile-select interaction used by
+   Research/PDF/LLM review, while retaining the install workflow's visual shell. */
+.workflow-provider-select-field {
+  max-width: 680px;
+}
+.workflow-provider-select {
+  width: 100%;
+  min-height: 42px;
+}
+.workflow-provider-summary {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  max-width: 680px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.workflow-provider-summary > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.workflow-provider-summary b {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workflow-provider-summary small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell-primary-nav button.active,
+.shell-more-tools-list button.active {
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+  font-weight: 700;
+}
+.shell-primary-nav button.active svg {
+  color: var(--accent-fg);
+}
+.shell-more-tools-list {
+  display: grid;
+  gap: 2px;
+  margin-top: 3px;
+  max-height: 270px;
+  overflow: auto;
+}
+.sidebar-collapsed .shell-brand-button,
+.sidebar-collapsed .shell-primary-nav button {
+  justify-content: center;
+}
+.sidebar-collapsed .shell-primary-nav button span,
+.sidebar-collapsed .shell-sidebar-footer,
+.sidebar-collapsed .shell-more-tools,
+.sidebar-collapsed .shell-brand-word {
+  display: none;
+}
+.dashboard-search-tabs,
+.view-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--soft);
+}
+.dashboard-search-tabs button.active,
+.view-tab.active {
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+  font-weight: 750;
+}
+.search-mode-card .view-tabs {
+  margin: 0 14px 12px;
+}
+.shell-more-tools[open] {
+  display: flex;
+  flex-direction: column;
+}
+.shell-more-tools-list {
+  max-height: none !important;
+  overflow: visible !important;
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+.shell-more-tools > summary {
+  flex: 0 0 auto;
+}

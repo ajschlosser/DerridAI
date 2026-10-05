@@ -1,0 +1,85 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.queue-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.queue-change-list {
+  border-top: 1px solid var(--line);
+  padding: 8px 10px;
+  background: var(--card);
+  display: grid;
+  gap: 6px;
+}
+.queue-change-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) minmax(170px, 0.8fr);
+  gap: 8px;
+  align-items: start;
+  font-size: 0.8125rem;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.queue-change-row:last-child {
+  border-bottom: 0;
+}
+.queue-change-row > b {
+  font-size: 0.8125rem;
+}
+.queue-change-row > span {
+  color: var(--muted);
+}
+.queue-change-row details summary {
+  cursor: pointer;
+  color: var(--accent-fg);
+  font-weight: 750;
+}
+.queue-change-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  gap: 4px;
+  align-items: start;
+  margin-top: 5px;
+}
+.queue-change-values pre {
+  margin: 0;
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  background: var(--soft);
+  padding: 6px;
+  border-radius: 6px;
+}
+
+@media (max-width: 900px) {
+  .upsert-queue-head {
+    grid-template-columns: 1fr;
+  }
+  .queue-change-row {
+    grid-template-columns: 1fr;
+  }
+}

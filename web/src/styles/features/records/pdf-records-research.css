@@ -1,0 +1,211 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.7.0 — review record previews */
+.record-preview-dialog {
+  width: min(1380px, calc(100% - 24px));
+}
+.record-preview-body {
+  display: grid;
+  gap: 12px;
+  max-height: 76vh;
+  overflow: auto;
+}
+.record-preview-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.record-preview-summary > div {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.record-preview-summary span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+}
+.record-preview-summary b {
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.record-preview-section {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+  padding: 11px;
+}
+.record-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.record-preview-heading b {
+  font-size: 0.8125rem;
+}
+.record-preview-heading span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.record-preview-metadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.record-preview-field {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+.record-preview-field > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+}
+.record-preview-field i {
+  font-style: normal;
+  color: var(--accent-fg);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.record-preview-field pre,
+.record-preview-text,
+.record-preview-proposal-grid pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow: auto;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.record-preview-text {
+  max-height: 440px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--soft);
+}
+.record-preview-proposals {
+  display: grid;
+  gap: 9px;
+}
+.record-preview-proposals > div {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.record-preview-proposal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+  margin-top: 6px;
+}
+.record-preview-proposal-grid pre {
+  max-height: 220px;
+  padding: 7px;
+  background: var(--soft);
+  border-radius: 7px;
+}
+.record-preview-proposals small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.record-preview-history {
+  display: grid;
+}
+.record-preview-history > div {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr) 100px;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.record-preview-history > div:first-child {
+  border-top: 0;
+}
+.record-preview-history time,
+.record-preview-history span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.record-preview-history b {
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 1180px) {
+  .rag-runner-page {
+    grid-template-columns: 1fr;
+  }
+
+  .rag-config-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .record-preview-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .record-preview-metadata {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 760px) {
+  .rag-config-grid,
+  .rag-number-grid,
+  .rag-toggle-grid,
+  .rag-result-grid {
+    grid-template-columns: 1fr;
+  }
+  .rag-evidence-meta {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rag-evidence-source {
+    grid-template-columns: 1fr;
+  }
+  .record-preview-summary,
+  .record-preview-metadata {
+    grid-template-columns: 1fr;
+  }
+  .record-preview-proposal-grid {
+    grid-template-columns: 1fr;
+  }
+  .record-preview-proposal-grid > span {
+    display: none;
+  }
+}
+.rag-runner-page {
+  grid-template-columns: minmax(0, 1fr) !important;
+}

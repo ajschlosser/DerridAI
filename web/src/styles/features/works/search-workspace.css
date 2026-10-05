@@ -1,0 +1,90 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.works-semantic-map-dialog {
+  width: min(960px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 64px);
+  border: 0;
+  border-radius: var(--radius-overlay);
+  padding: 0;
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+  overflow: auto;
+}
+.works-semantic-map-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(2px);
+}
+.works-semantic-map-dialog header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-overlay);
+}
+.works-semantic-map-dialog header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+.works-semantic-map-dialog header button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+.works-semantic-tabs {
+  display: inline-flex;
+  margin: 12px 20px 0;
+  padding: 2px;
+  gap: 2px;
+  border-radius: var(--radius-control);
+  background: var(--surface-inset);
+}
+.works-semantic-tabs button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.works-semantic-tabs button:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+.works-semantic-record-pick {
+  display: grid;
+  gap: 4px;
+  margin: 12px 20px 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.works-semantic-map-dialog > p {
+  padding: 0 20px 20px;
+}

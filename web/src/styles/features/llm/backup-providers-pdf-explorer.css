@@ -1,0 +1,72 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* LLM tool launcher / results */
+.llm-tool-launcher {
+  width: min(1050px, calc(100% - 24px));
+}
+.llm-tool-body {
+  display: grid;
+  gap: 10px;
+}
+.llm-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.llm-tool-grid textarea {
+  min-height: 86px;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.llm-tool-profile-actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.llm-tool-result-dialog {
+  width: min(1050px, calc(100% - 24px));
+}
+.llm-tool-text {
+  margin: 0;
+  max-height: 65vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    12px/1.55 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.llm-tool-match {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+.llm-tool-match b {
+  font-size: 0.8125rem;
+}
+.llm-tool-match p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}

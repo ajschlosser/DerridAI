@@ -16,14 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveHex } from "./helpers/css-tokens";
+import { readGlobalCss } from "./helpers/global-css";
 
 // Home-page and sign-in colours that axe cannot judge (glyph-only icons, small dots) or that once failed.
 // WCAG 1.4.3 text >= 4.5:1, 1.4.11 icons and state indicators >= 3:1, 2.5.8 targets >= 24px.
-const css = readFileSync(resolve(process.cwd(), "src/style.css"), "utf8");
+const css = readGlobalCss();
 const rule = (selector: string): string => {
   const match = css.match(
     new RegExp(`${selector.replace(/[.[\]()]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "g"),

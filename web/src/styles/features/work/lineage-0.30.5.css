@@ -1,0 +1,122 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Metadata proposal review behaves like a real bulk-edit surface. */
+.work-metadata-proposal-dialog {
+  width: min(1180px, calc(100vw - 28px));
+  max-height: 90vh;
+}
+.work-proposal-body {
+  display: grid;
+  gap: 12px;
+}
+.work-proposal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.work-proposal-table-wrap {
+  overflow: auto;
+  max-height: 58vh;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.work-proposal-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 960px;
+}
+.work-proposal-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+  text-align: left;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+}
+.work-proposal-table td {
+  vertical-align: top;
+  padding: 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8125rem;
+}
+.work-proposal-table td:nth-child(1) {
+  width: 34px;
+}
+.work-proposal-table td:nth-child(2) {
+  width: 180px;
+}
+.work-proposal-table td:nth-child(3) {
+  width: 135px;
+}
+.work-proposal-table td:nth-child(4) {
+  width: 180px;
+}
+.work-proposal-table td:nth-child(5) {
+  min-width: 260px;
+}
+.work-proposal-table td:nth-child(6) {
+  min-width: 220px;
+}
+.work-proposal-table td > b,
+.work-proposal-table td > small {
+  display: block;
+}
+.work-proposal-errors {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px;
+}
+.work-proposal-errors > div {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+}
+.work-proposal-errors > div span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.work-metadata-scope {
+  display: grid;
+  gap: 9px;
+}
+.work-metadata-scope > strong {
+  font-size: 0.9375rem;
+}
+.work-metadata-scope > small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.work-metadata-sample {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.work-metadata-sample span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}

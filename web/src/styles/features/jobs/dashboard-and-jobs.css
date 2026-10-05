@@ -1,0 +1,89 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.job-status,
+.job-applied {
+  display: inline-flex;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Background job result review is a flat list/table, not record cards. */
+.job-results-dialog {
+  width: min(1480px, calc(100% - 24px));
+}
+.job-change-review {
+  max-height: 72vh;
+  overflow: auto;
+}
+.job-change-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--panel);
+  padding-bottom: 8px;
+}
+.job-change-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.job-change-table {
+  width: 100%;
+  min-width: 1180px;
+  table-layout: fixed;
+}
+.job-change-table th:nth-child(1) {
+  width: 40px;
+}
+.job-change-table th:nth-child(2) {
+  width: 170px;
+}
+.job-change-table th:nth-child(3) {
+  width: 160px;
+}
+.job-change-table th:nth-child(4),
+.job-change-table th:nth-child(5) {
+  width: 280px;
+}
+.job-change-table th:nth-child(6) {
+  width: auto;
+}
+.job-change-table td {
+  vertical-align: top;
+}
+.job-change-table pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}

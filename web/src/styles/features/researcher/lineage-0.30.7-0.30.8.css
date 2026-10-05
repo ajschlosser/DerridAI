@@ -1,0 +1,109 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Researcher provider profiles now follow the same card/editor model as the
+   main provider workspace and support model discovery. */
+.researcher-provider-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+.researcher-provider-profile-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.035);
+}
+.researcher-provider-profile-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.researcher-provider-profile-card > header > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+.researcher-provider-profile-card > header > div > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.researcher-provider-profile-card header b {
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.researcher-provider-profile-card header small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.researcher-provider-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 13px;
+}
+.researcher-provider-savebar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 11px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+.researcher-provider-savebar > span {
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.researcher-provider-empty-state {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 30px 20px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.researcher-provider-empty-state b {
+  font-size: 0.9375rem;
+}
+.researcher-provider-empty-state p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78125rem;
+  line-height: 1.5;
+}
+.researcher-provider-dialog {
+  width: min(760px, calc(100vw - 28px));
+}
+.researcher-provider-dialog .researcher-provider-profile-card {
+  box-shadow: none;
+}

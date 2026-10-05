@@ -1,0 +1,186 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Research: primary question workflow first, advanced configuration grouped
+   beneath it. The page now reads as a modern workspace instead of a stack of
+   undifferentiated settings. */
+.research-page-0309 {
+  max-width: 1500px;
+  margin: 0 auto;
+  display: grid;
+  gap: 14px;
+}
+.research-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--card) 0%, var(--card) 100%);
+}
+.research-hero h1 {
+  margin: 3px 0 5px;
+  font:
+    600 clamp(1.75rem, 4vw, 2.35rem) / 1.15 Georgia,
+    "Times New Roman",
+    serif;
+  color: var(--text);
+}
+.research-hero p {
+  margin: 0;
+  max-width: 760px;
+  color: var(--muted);
+}
+.research-hero-status {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.research-hero-status span {
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.research-pipeline-head {
+  padding: 15px 18px !important;
+  border-bottom: 1px solid var(--line);
+}
+.research-page-0309 #ragInstructions {
+  min-height: 92px;
+}
+.research-page-0309 .rag-config-grid {
+  grid-template-columns: repeat(2, minmax(220px, 1fr)) !important;
+  gap: 12px;
+}
+.research-page-0309 .rag-number-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  gap: 10px;
+}
+.research-page-0309 .rag-result-section-head {
+  align-items: start;
+}
+.research-page-0309 .rag-result-section-head b {
+  font-size: 0.875rem;
+}
+.research-page-0309 .field {
+  display: grid;
+  grid-template-rows: auto minmax(40px, auto) auto;
+  align-content: start;
+  gap: 6px;
+}
+.research-page-0309 .field > label,
+.research-page-0309 .field-label-row label {
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+@media (max-width: 1000px) {
+  .record-annotation {
+    grid-template-columns: 1fr !important;
+  }
+  .record-annotation-remove {
+    justify-self: start;
+  }
+  .research-hero {
+    align-items: start;
+    flex-direction: column;
+  }
+  .research-hero-status {
+    justify-content: flex-start;
+  }
+  .research-page-0309 .rag-number-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .compare-intro-card {
+    align-items: start;
+    flex-direction: column;
+  }
+  .compare-selectors,
+  .compare-paste-grid,
+  .research-page-0309 .rag-config-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .research-hero h1 {
+    font-size: 1.5rem;
+  }
+  .record-find-control {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+}
+.record-annotation {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+  padding: 15px 16px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  background: var(--card) !important;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04) !important;
+}
+.record-annotation-remove {
+  justify-self: end !important;
+}
+
+/* WCAG/readability floor for core app text and controls. */
+:where(
+  .note,
+  small,
+  .badge,
+  .pill,
+  .chip,
+  .field > span,
+  .field > label,
+  .section-label,
+  .record-inline-actions,
+  .researcher-result-meta,
+  .vector-collection-meta
+) {
+  font-size: max(0.75rem, 0.75rem) !important;
+  line-height: 1.45 !important;
+}
+
+/* Search/reset controls should look like normal secondary actions, not split-input appendages. */
+.record-find-control {
+  gap: 7px;
+}
+.language-database-grid .field {
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.language-database-grid .field > span {
+  font-size: 0.8125rem;
+  font-weight: 750;
+  color: var(--text-2);
+}
+.language-database-grid .field > small {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--muted);
+}

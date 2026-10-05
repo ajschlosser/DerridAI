@@ -1,0 +1,76 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Compare: explanatory copy belongs in a structured page header, not as an
+   orphaned note under the tabs. */
+.compare-intro-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: end;
+  padding: 16px 18px;
+}
+.compare-intro-card h1 {
+  margin: 3px 0 5px;
+  font:
+    600 25px/1.12 Georgia,
+    "Times New Roman",
+    serif;
+  color: var(--text);
+}
+.compare-intro-card p {
+  margin: 0;
+  max-width: 720px;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.compare-intro-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.compare-page > .compare-picker-card {
+  margin-top: 0;
+}
+.compare-autocomplete-results b,
+.compare-diff-head b,
+.compare-unchanged > summary {
+  font-size: 0.8125rem !important;
+}
+.compare-autocomplete-results span,
+.compare-diff-head code,
+.compare-diff-head > span,
+.compare-side-label {
+  font-size: 0.8125rem !important;
+}
+:where(
+  .compare-diff-head code,
+  .compare-diff-head > span,
+  .compare-side-label,
+  .vector-provider-options small,
+  .wizard-work-toolbar small,
+  .wizard-work-row small,
+  .wizard-sync-summary > span,
+  .dashboard-mini-caption span
+) {
+  font-size: 0.8125rem !important;
+  line-height: 1.45 !important;
+}

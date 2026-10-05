@@ -1,0 +1,172 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.vector-collection-head span:not(.badge) {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.vector-collection-list .storeitem {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+}
+.vector-collection-list .storeitem:hover {
+  background: var(--card);
+}
+.vector-collection-list .storeitem.active {
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+}
+.vector-collection-list .storeitem > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.vector-collection-list .storeitem b {
+  font-size: 0.78125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vector-collection-list .storeitem small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.vector-settings-body .field {
+  min-width: 0;
+}
+.vector-inline-fieldset .language-checks {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vector-inline-fieldset .language-checks label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+}
+.vector-transfer-groups .section-label {
+  display: block;
+  margin-bottom: 8px;
+}
+.vector-transfer-groups .store-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.vector-browser-card .db-work-browser,
+.vector-browser-card .store-record-toolbar,
+.vector-browser-card .tablewrap {
+  margin: 12px;
+}
+.vector-browser-card .tablewrap {
+  width: calc(100% - 24px);
+}
+.vector-provider-options label.selected {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 10%, transparent);
+}
+.muted-field {
+  opacity: 0.65;
+}
+.wizard-sync-summary .info {
+  flex: 1 1 100%;
+  display: grid;
+  gap: 3px;
+}
+@media (max-height: 820px) and (min-width: 901px) {
+  .shell-brand-row {
+    min-height: 48px !important;
+  }
+  .shell-primary-nav button,
+  .shell-more-tools-list button {
+    min-height: 34px !important;
+    padding: 6px 9px !important;
+  }
+  .shell-more-tools > summary {
+    padding: 6px 9px !important;
+  }
+  .shell-sidebar-footer {
+    padding-top: 6px !important;
+    margin-top: 4px !important;
+  }
+}
+.collection-wizard-dialog .workflow-dialog-head {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+}
+.collection-wizard-dialog .workflow-steps li:not(:last-child)::after {
+  top: 13px;
+  left: 35px;
+  right: -14px;
+  height: 2px;
+  background: var(--soft);
+  z-index: 0;
+}
+.collection-wizard-dialog .wizard-work-row:nth-child(even) {
+  border-right: 0;
+}
+.collection-wizard-dialog .wizard-sync-summary .info {
+  grid-column: auto !important;
+  align-content: center;
+}
+.dashboard-work-carousel-shell > .carousel-arrow {
+  width: 36px;
+  height: 36px;
+  align-self: center;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--card) 96%, transparent);
+  color: var(--text-2);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+  font-size: 1.25rem;
+  display: grid;
+  place-items: center;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease;
+}
+.dashboard-work-carousel-shell > .carousel-arrow:hover {
+  transform: translateY(-1px);
+  background: var(--ui-accent);
+  color: var(--accent-on);
+  border-color: var(--ui-accent);
+  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.14);
+}
+.dashboard-work-carousel-shell > .carousel-arrow:active {
+  transform: translateY(0) scale(0.96);
+}
+/* Storybook component library counterparts for the 0.30.7 refactor. */

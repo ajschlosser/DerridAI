@@ -1,0 +1,128 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Shared dense-workspace table contract. Domain views keep their own column sizing and actions. */
+:where(.ui-table-scroll) {
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  scrollbar-gutter: stable both-edges;
+}
+:where(.ui-table) {
+  color: var(--text-primary);
+}
+:where(.ui-table thead th) {
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-weight: var(--fw-semibold);
+}
+:where(.ui-table tbody tr) {
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+:where(.ui-table tbody tr:hover),
+:where(.ui-table tbody tr:focus-visible) {
+  background: var(--surface-hover);
+}
+:where(.ui-table tbody tr.selected) {
+  background: var(--surface-selected);
+}
+:where(.ui-table-sticky-start),
+:where(.ui-table-sticky-end) {
+  background: var(--surface-card);
+}
+:where(.ui-table tbody tr:hover .ui-table-sticky-start),
+:where(.ui-table tbody tr:hover .ui-table-sticky-end),
+:where(.ui-table tbody tr:focus-visible .ui-table-sticky-start),
+:where(.ui-table tbody tr:focus-visible .ui-table-sticky-end) {
+  background: var(--surface-hover);
+}
+:where(.ui-table tbody tr.selected .ui-table-sticky-start),
+:where(.ui-table tbody tr.selected .ui-table-sticky-end) {
+  background: var(--surface-selected);
+}
+@media (forced-colors: active) {
+  :where(
+    .card,
+    .ui-card,
+    .btn,
+    .ui-button,
+    .ui-menu-trigger,
+    .control,
+    .search input,
+    .field input,
+    .field textarea,
+    .field select,
+    .ui-menu-list,
+    .autocomplete-list
+  ) {
+    border-color: CanvasText;
+  }
+  :where(.ui-table-scroll, .ui-table th, .ui-table td) {
+    border-color: CanvasText;
+  }
+  :where(.ui-table thead th) {
+    background: Canvas;
+    color: CanvasText;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.btn, .ui-button, .ui-menu-trigger, .card, .ui-card) {
+    transition: none;
+  }
+  :where(.ui-table tbody tr) {
+    transition: none;
+  }
+}
+
+/* Search results grow with the page. Horizontal overflow stays on the table; vertical wheel must reach the document. */
+.search-native-page .search-table-scroll {
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+}
+/*
+ * Icon SVGs use a zero-specificity default size so they cannot fall back to the
+ * browser's large replaced-element dimensions. Context-specific component rules
+ * remain free to size icons smaller without DOM width/height attributes.
+ */
+:where(svg[viewBox="0 0 24 24"][stroke-width="1.8"][aria-hidden="true"]) {
+  width: 24px;
+  height: 24px;
+}
+
+/* Sidebar surface treatments stay global to preserve the app-shell DOM contract. */
+.shell-sidebar {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-raised) 96%, var(--ui-accent-soft)) 0%,
+    var(--surface-card) 42%,
+    color-mix(in srgb, var(--surface-inset) 72%, var(--surface-card)) 100%
+  );
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ui-accent) 8%, transparent);
+}
+
+.mobile-navigation-drawer .shell-navigation {
+  background: var(--surface-card);
+}
+
+@media (max-width: 780px) {
+  .shell-sidebar {
+    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--ui-accent) 12%, transparent);
+  }
+}

@@ -1,0 +1,264 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.research-pipeline-chip.selected {
+  border-color: var(--ui-accent-border);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 14%, transparent);
+}
+.research-settings-studio-head .btn.icon-only {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 1.25rem;
+}
+.research-settings-nav > button.active b {
+  color: var(--accent-fg);
+}
+.research-settings-card.wide {
+  grid-column: 1/-1;
+}
+.research-settings-grid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.research-settings-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.research-settings-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.research-settings-card.generation-parameters {
+  background: var(--card);
+}
+.research-settings-card.generation-parameters .research-settings-section-head {
+  margin-bottom: 13px;
+}
+.research-settings-studio-dialog :is(button, input, textarea, select):focus-visible {
+  outline: 3px solid var(--ui-accent-focus) !important;
+  outline-offset: 2px !important;
+  box-shadow: none;
+}
+.research-settings-studio-dialog fieldset:disabled .control {
+  cursor: not-allowed;
+}
+
+/* 0.36.2 — Bugs in the Machine: shareable state, records table ergonomics,
+   mixed-work metadata inspection, reusable work insights, and provider-profile UX. */
+.records-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable both-edges;
+  -webkit-overflow-scrolling: touch;
+}
+.records-table-wrap:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 3px;
+}
+.records-table-wrap table {
+  min-width: 900px;
+}
+.records-table-wrap .page-start-head,
+.records-table-wrap .page-start-cell {
+  width: 96px;
+  min-width: 88px;
+  max-width: 108px;
+}
+.records-table-wrap .page-start-head .column-filter,
+.records-table-wrap .page-start-head input,
+.records-table-wrap .page-start-head select {
+  min-width: 0;
+  width: 100%;
+}
+.records-table-wrap .extracted-text-head,
+.records-table-wrap .extracted-text-cell {
+  width: clamp(255px, 29.75vw, 425px);
+  min-width: 255px;
+  max-width: 425px;
+}
+.records-table-wrap .extracted-text-cell {
+  line-height: 1.46;
+}
+.records-table-wrap .record-actions-head {
+  min-width: 164px;
+}
+
+.mixed-value-inspect {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text-2);
+  font: inherit;
+  cursor: pointer;
+}
+.mixed-value-inspect:hover {
+  border-color: var(--ui-accent-border);
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+}
+.mixed-value-inspect:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+}
+.mixed-value-inspect > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mixed-value-inspect > b {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+.mixed-value-inspect > small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.mixed-values-dialog {
+  width: min(720px, calc(100vw - 28px));
+  height: min(760px, calc(100vh - 28px));
+  max-height: min(760px, calc(100vh - 28px));
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+}
+.mixed-values-dialog[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.mixed-values-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(3px);
+}
+.mixed-values-dialog .dh {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 19px 21px;
+  border-bottom: 1px solid var(--line);
+}
+.mixed-values-body {
+  min-height: 0;
+  padding: 18px 21px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+.mixed-values-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 13px;
+}
+.mixed-value-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 11px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.mixed-value-rank {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+.mixed-value-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.mixed-value-copy > b {
+  overflow-wrap: anywhere;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+.mixed-value-copy > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.mixed-value-count {
+  display: grid;
+  justify-items: end;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  font-weight: 800;
+}
+.mixed-value-count small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.mixed-values-dialog .da {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+.mixed-values-dialog :is(button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .records-table-wrap .extracted-text-head,
+  .records-table-wrap .extracted-text-cell {
+    width: 238px;
+    min-width: 238px;
+    max-width: 306px;
+  }
+  .mixed-value-row {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .mixed-value-count {
+    grid-column: 2;
+    justify-items: start;
+  }
+  .mixed-values-dialog {
+    width: calc(100vw - 12px);
+    max-height: calc(100vh - 12px);
+    border-radius: 12px;
+  }
+}

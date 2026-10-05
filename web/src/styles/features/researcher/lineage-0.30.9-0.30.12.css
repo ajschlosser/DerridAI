@@ -1,0 +1,94 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Researcher index terms use the same badge grammar as the administrator
+   record view rather than a compressed nested-list appearance. */
+.researcher-index-card {
+  overflow: hidden;
+}
+.researcher-badge-wrap {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 7px !important;
+  align-items: flex-start;
+}
+.researcher-index-chip {
+  display: inline-flex !important;
+  width: auto !important;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: var(--ui-accent-soft) !important;
+  border: 1px solid color-mix(in srgb, var(--ui-accent) 22%, var(--line)) !important;
+}
+.researcher-index-card {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.researcher-badge-wrap {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 7px !important;
+}
+.researcher-index-chip {
+  display: inline-flex !important;
+  max-width: 100%;
+  min-height: 30px !important;
+  border-radius: 999px !important;
+  padding: 0 !important;
+}
+.researcher-access-list {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+}
+.researcher-access-item {
+  display: grid;
+  grid-template-columns: 125px minmax(150px, 1fr) minmax(160px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.researcher-access-item b {
+  font-size: 0.78125rem;
+  color: var(--text-2);
+}
+.researcher-access-item > span:not(.researcher-access-provider) {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.researcher-access-item small {
+  font-size: 0.8125rem;
+  color: var(--accent-fg);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.researcher-access-provider {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
+}
