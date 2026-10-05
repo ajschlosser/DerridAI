@@ -119,7 +119,7 @@ from .pipelines.evidence_recovery import (
     ClosedChoiceAnswer,
     execute_evidence_recovery,
 )
-from .rag import _citation_strings
+from .corpus_citations import _citation_strings
 from .run_guidance import find_guidance_matches, format_group_guidance
 from .source_embeddings import SourceEmbeddingProjection
 
