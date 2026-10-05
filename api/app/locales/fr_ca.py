@@ -3848,7 +3848,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.accept_unreviewed_scope': 'Sélectionne les suggestions admissibles du modèle ou déterministes dans l’instantané de publication. Leur dérivation, confiance, preuve, évaluation et autorité non révisée restent intactes. Cela ne transforme pas ces assertions en valeurs confirmées par une personne et ne crée pas de déclaration de révision humaine.',
  'pdf_corpus.accept_unreviewed_preserves': 'Conserve les valeurs déjà confirmées ou corrigées, exclut les fiches rejetées et ne promeut pas les propositions invalides.',
  'pdf_corpus.accept_unreviewed_conformance': 'Évalue indépendamment la conformité cELF Core et Publication. Une révision humaine est requise uniquement lorsque le contrat de métadonnées actif l’exige; l’instantané obtenu peut tout de même signaler des bloqueurs de conformité.',
- 'pdf_corpus.accept_unreviewed_source_gate': 'La couverture de la source et la fidélité du texte ne sont jamais ignorées. Un texte source manquant, dupliqué, réordonné ou altéré bloque toujours la publication.',
+ 'pdf_corpus.accept_unreviewed_source_gate': 'DerridAI finalise d’abord la topologie SourceUnit actuelle et revérifie la conservation de la source. Les avertissements hérités de topologie ou de fidélité ne nécessitent pas d’acceptation manuelle; une source réellement manquante, dupliquée, réordonnée ou altérée bloque toujours la publication.',
  'pdf_corpus.accept_unreviewed_snapshot_only': 'Votre état de révision enregistré reste inchangé; vous pouvez poursuivre la révision et publier une version ultérieure.',
  'pdf_corpus.pending_review': 'Fiches en attente de révision',
  'pdf_corpus.unresolved_metadata': 'Champs de métadonnées non résolus',
