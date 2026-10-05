@@ -31,6 +31,7 @@ from pydantic import (
 from .enrichment_cycles import MAX_PASSES
 from .metadata_schema import MetadataSchema
 from .pipelines.models import PipelineConfigOverrideSet
+from .research_filters import normalize_document_filter, normalize_metadata_filter
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -431,6 +432,32 @@ class RAGPromptMetadataPolicy(BaseModel):
                 seen.add(field)
         return cleaned
 
+class ResearchFilterPlan(BaseModel):
+    """Executable retrieval scope compiled from explicit or interpreted instructions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metadata_filter: dict[str, Any] | None = None
+    document_filter: dict[str, Any] | None = None
+    source: Literal[
+        "explicit",
+        "deterministic_natural_language",
+        "model_assisted",
+    ] = "explicit"
+    original_text: str | None = Field(default=None, max_length=8000)
+    remaining_instructions: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("metadata_filter")
+    @classmethod
+    def validate_metadata_filter(cls, value: Any) -> dict[str, Any] | None:
+        return normalize_metadata_filter(value)
+
+    @field_validator("document_filter")
+    @classmethod
+    def validate_document_filter(cls, value: Any) -> dict[str, Any] | None:
+        return normalize_document_filter(value)
+
+
 class RAGEvidenceSelection(BaseModel):
     """A user-selected evidence item supplied to a RAG run.
 
@@ -464,6 +491,7 @@ class RAGRunRequest(BaseModel):
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
+    filter_plan: ResearchFilterPlan | None = None
     locales: list[LanguageCode] = Field(default_factory=_default_locales)
     search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
