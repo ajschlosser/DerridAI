@@ -1851,6 +1851,14 @@ class PdfCorpusRepository:
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(path, timeout=30)
+        # Corpus Builder performs frequent short canonical writes while review,
+        # enrichment checkpoints, and derived projections can hold coherent read
+        # snapshots. WAL lets those readers coexist with the single SQLite writer
+        # instead of turning an ordinary enrichment checkpoint into a 30-second
+        # lock failure. Keep an explicit busy timeout as protection against true
+        # writer/writer contention across repository instances or processes.
+        connection.execute("PRAGMA busy_timeout=30000")
+        connection.execute("PRAGMA synchronous=NORMAL")
         try:
             stat = path.stat()
             identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
@@ -1870,6 +1878,11 @@ class PdfCorpusRepository:
             connection.close()
 
     def _initialize_records_db(self, connection: sqlite3.Connection) -> None:
+        # Journal mode is persistent on the database file. Set it only at the
+        # coordinated initialization boundary rather than on every warm read.
+        # Existing build databases are initialized again after an API restart,
+        # so they migrate to WAL without a separate schema migration.
+        connection.execute("PRAGMA journal_mode=WAL")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS corpus_records (
