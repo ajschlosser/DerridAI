@@ -538,14 +538,17 @@ export function createSearchWorkspace(deps: Deps) {
     persistPrefs();
     syncUrl({ replace: true });
   }
-  function addSearchAdvancedFilter(
-    { field = "", op = "eq", value = "", kind = "text" }: {
-      field?: string;
-      op?: string;
-      value?: string;
-      kind?: FilterFieldKind;
-    } = {},
-  ) {
+  function addSearchAdvancedFilter({
+    field = "",
+    op = "eq",
+    value = "",
+    kind = "text",
+  }: {
+    field?: string;
+    op?: string;
+    value?: string;
+    kind?: FilterFieldKind;
+  } = {}) {
     field = String(field || "");
     value = String(value ?? "").trim();
     if (!field) return;
@@ -558,9 +561,7 @@ export function createSearchWorkspace(deps: Deps) {
       state.searchDatabaseRan = false;
       state.storeSearchError = "";
     } else {
-      const nextOp = filterOpsForKind(kind).some(([candidate]) => candidate === op)
-        ? op
-        : "eq";
+      const nextOp = filterOpsForKind(kind).some(([candidate]) => candidate === op) ? op : "eq";
       if (!["empty", "notempty"].includes(nextOp) && !value) return;
       state.globalFilters = [
         ...(state.globalFilters || []),
