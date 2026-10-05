@@ -56,15 +56,17 @@ def semantic_value(record: Mapping[str, Any], semantic_id: str) -> Any:
     retrieval/reranking algorithms.
     """
 
-    mutable = record if isinstance(record, dict) else dict(record)
-    for assertion in current_assertions(mutable):
-        if assertion.field_id != semantic_id:
-            continue
-        if assertion.value_status == "confirmed_absent":
+    assertion_buckets = record.get("field_assertions")
+    if isinstance(assertion_buckets, dict):
+        mutable = record if isinstance(record, dict) else dict(record)
+        for assertion in current_assertions(mutable):
+            if assertion.field_id != semantic_id:
+                continue
+            if assertion.value_status == "confirmed_absent":
+                return None
+            if assertion.value_status == "present":
+                return assertion.value
             return None
-        if assertion.value_status == "present":
-            return assertion.value
-        return None
 
     for name in _projection_names(semantic_id):
         if name in record:
