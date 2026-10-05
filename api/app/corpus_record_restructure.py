@@ -266,6 +266,97 @@ def _source_unit_descends_from(
     )
 
 
+def reconcile_redundant_active_source_roots(
+    units: list[dict[str, Any]],
+    *,
+    transaction_id: str,
+) -> list[dict[str, Any]]:
+    """Retire only compatibility roots exactly conserved by active descendants.
+
+    Some older SourceUnit stores can contain both an immutable block-shaped root
+    and replacement descendants marked active. That is redundant topology, not
+    evidence that the source occurs twice. The root can be retired only when the
+    ordered active descendants reconstruct its text exactly apart from whitespace.
+
+    The root row is retained with successor links, hashes, and a reconciliation
+    event. Non-conserving or ambiguous shapes are left unchanged for validation to
+    block rather than guessed or flattened.
+    """
+    units_by_id = {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+    active_order = [
+        str(unit.get("source_unit_id") or unit.get("unit_id"))
+        for unit in units
+        if unit.get("active")
+        and str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    ]
+    events: list[dict[str, Any]] = []
+    now = iso_now()
+
+    for root_id in active_order:
+        root = units_by_id.get(root_id)
+        if root is None or not root.get("active"):
+            continue
+        # Compatibility roots use the immutable extraction block ID as both the
+        # SourceUnit ID and block_id. Replacement units have independent IDs.
+        if str(root.get("block_id") or "") != root_id:
+            continue
+        descendants = [
+            unit_id
+            for unit_id in active_order
+            if unit_id != root_id
+            and _source_unit_descends_from(unit_id, root_id, units_by_id)
+        ]
+        if not descendants:
+            continue
+
+        root_text = str(root.get("text") or "")
+        descendant_text = JOIN.join(
+            str((units_by_id.get(unit_id) or {}).get("text") or "").strip()
+            for unit_id in descendants
+            if str((units_by_id.get(unit_id) or {}).get("text") or "").strip()
+        )
+        if _squash(root_text) != _squash(descendant_text):
+            continue
+
+        prior_successors = [
+            str(value)
+            for value in root.get("successor_unit_ids") or []
+            if str(value)
+        ]
+        root["active"] = False
+        root["retired_at"] = root.get("retired_at") or now
+        root["retired_transaction_id"] = (
+            root.get("retired_transaction_id") or transaction_id
+        )
+        root["successor_unit_ids"] = list(
+            dict.fromkeys([*prior_successors, *descendants])
+        )
+        event = {
+            "event_id": f"source-topology-{uuid.uuid4().hex}",
+            "transaction_id": transaction_id,
+            "at": now,
+            "method": "retire_redundant_compatibility_root",
+            "source_unit_id": root_id,
+            "successor_unit_ids": list(descendants),
+            "source_text_hash": source_unit_text_hash(root_text),
+            "successor_text_hash": source_unit_text_hash(descendant_text),
+            "source_text_conserved": True,
+        }
+        history = [
+            dict(item)
+            for item in root.get("topology_reconciliation_history") or []
+            if isinstance(item, dict)
+        ]
+        history.append(event)
+        root["topology_reconciliation_history"] = history[-50:]
+        events.append(event)
+    return events
+
+
 def repair_record_source_topology(
     records: list[dict[str, Any]],
     units: list[dict[str, Any]],
