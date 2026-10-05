@@ -554,6 +554,11 @@ CURRENT REVIEWED RECORD TEXT:
         source_ids = list(block_map)
         source_id_set = set(source_ids)
         source_index = {block_id: index for index, block_id in enumerate(source_ids)}
+        all_units_by_id = {
+            str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+            for unit in source_units or []
+            if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+        }
         units_by_id = active_source_unit_map(source_units or [])
         use_source_units = bool(units_by_id)
         topology_map = units_by_id if use_source_units else block_map
@@ -575,7 +580,7 @@ CURRENT REVIEWED RECORD TEXT:
             if use_source_units:
                 roots = source_unit_root_block_ids(
                     unit_id,
-                    units_by_id,
+                    all_units_by_id,
                     source_id_set,
                 )
             else:
