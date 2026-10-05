@@ -23,7 +23,6 @@ import { openDatabaseCreationFromResearch } from "./databaseCreationRequest";
 import { api } from "./legacyApi";
 import { reviewKey } from "./evidenceSelection";
 import { reviewItemFromKey, selectedReviewItems } from "./reviewItems";
-import { filterOpsForField } from "./searchFilterSchema";
 import { toggleSort } from "./recordTableHelpers";
 import { recordDialogs } from "./sharedRecordDialogs";
 import { dbSearchWhere, label } from "./sharedRecordHelpers";
@@ -60,7 +59,6 @@ export const searchWorkspace = createSearchWorkspace({
   dbSearchFilterDescriptors: searchFacets.dbSearchFilterDescriptors,
   dbSearchWhere,
   evidenceIsSelected: evidenceSelection.evidenceIsSelected,
-  filterOpsForField,
   getTableColumns,
   hasCapability,
   isResearcher,
