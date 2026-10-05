@@ -135,6 +135,9 @@ const generation = ref<Record<string, unknown>>({});
 const jobs = ref<ResearchJob[]>([]);
 const activeJob = ref<ResearchJob | null>(null);
 const sessionJobIds = ref<Set<string>>(new Set());
+const threadRefreshKey = ref(0);
+const retryFocusJob = ref("");
+let submissionRequest = 0;
 const activeEvidenceIndex = ref(0);
 const settingsDrawer = ref<{
   open: (
@@ -468,9 +471,16 @@ function changeProfile(id: string) {
   generation.value = profileGeneration(profile);
   discoveredModels.value = profile?.model ? [String(profile.model)] : [];
 }
-async function runResearch() {
-  if (!config.value || !canRun.value || starting.value) return;
-  if (route.query.job) await router.replace({ path: "/rag" });
+async function runResearch(turn?: ResearchTurn) {
+  if (!config.value || starting.value || !workspace.value?.can_run || !auth.can("rag.run")) return;
+  if (turn) {
+    if (turn.thread_id !== currentThreadId.value || !["failed", "cancelled"].includes(turn.status))
+      return;
+  } else {
+    if (!canRun.value) return;
+    if (route.query.job) await router.replace({ path: "/rag" });
+  }
+  const request = ++submissionRequest;
   ++answerRequest;
   answerLoading.value = false;
   answerError.value = "";
@@ -479,8 +489,10 @@ async function runResearch() {
   try {
     persistDraft();
     const job = (await researchActions.startResearchRun({
-      prompt: prompt.value,
-      instructions: instructions.value,
+      prompt: turn?.user_question ?? prompt.value,
+      instructions: turn ? turn.user_instructions || "" : instructions.value,
+      retry_thread_id: turn?.thread_id,
+      retry_turn_id: turn?.turn_id,
       provider_profile_id: config.value.provider_profile_id,
       model: model.value,
       generation: generation.value,
@@ -489,11 +501,13 @@ async function runResearch() {
       settings_pipeline_overrides: settingsPipelineOverrides.value,
       run_pipeline_overrides: runPipelineOverrides.value,
     })) as ResearchJob;
+    if (disposed || request !== submissionRequest) return;
     sessionJobIds.value.add(job.id);
     activeJob.value = job;
     activeEvidenceIndex.value = 0;
     jobs.value = [job, ...jobs.value.filter((item) => item.id !== job.id)];
     schedulePoll(true);
+    if (turn) retryFocusJob.value = job.id;
     if (job.thread_id) {
       await router.push({ path: "/rag", query: { thread: job.thread_id, job: job.id } });
     }
@@ -502,9 +516,13 @@ async function runResearch() {
       .querySelector(".research-answer-workspace")
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    if (request === submissionRequest)
+      toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   } finally {
-    starting.value = false;
+    if (request === submissionRequest) {
+      starting.value = false;
+      if (turn) ++threadRefreshKey.value;
+    }
   }
 }
 async function refreshLiveJobs() {
@@ -781,6 +799,9 @@ watch(
 watch(
   () => [route.name, route.query.job, route.query.thread],
   ([name]) => {
+    if (String(route.query.job || "") !== retryFocusJob.value) retryFocusJob.value = "";
+    ++submissionRequest;
+    starting.value = false;
     ++answerRequest;
     activeJob.value = null;
     answerLoading.value = false;
@@ -789,10 +810,33 @@ watch(
     if (name === "rag") void loadWorkspace(true);
   },
 );
+// Route hydration can temporarily remove the result region; focus it only once the new attempt is rendered.
+watch(
+  () => [activeJob.value?.id, answerLoading.value, answerError.value, workspace.value],
+  () => {
+    if (
+      !retryFocusJob.value ||
+      activeJob.value?.id !== retryFocusJob.value ||
+      String(route.query.job || "") !== retryFocusJob.value ||
+      answerLoading.value ||
+      answerError.value
+    )
+      return;
+    const region = document.querySelector<HTMLElement>(".research-result-presentation");
+    if (region) {
+      region.focus();
+      retryFocusJob.value = "";
+    }
+  },
+  { flush: "post" },
+);
 // Account/capability changes invalidate every pending read and visible research artifact.
 watch(
   () => [auth.user?.id, auth.user?.role, auth.can("rag.run")],
   () => {
+    retryFocusJob.value = "";
+    ++submissionRequest;
+    starting.value = false;
     ++workspaceRequest;
     ++answerRequest;
     ++runsRequest;
@@ -815,6 +859,7 @@ onMounted(() => {
   if (isNativeResearch.value) void loadWorkspace(true);
 });
 onBeforeUnmount(() => {
+  ++submissionRequest;
   disposed = true;
   ++workspaceRequest;
   ++answerRequest;
@@ -897,6 +942,17 @@ onBeforeUnmount(() => {
         <ResearchThreadBrowser
           :thread-id="currentThreadId"
           :job-id="String(route.query.job || '')"
+          :retry-disabled="
+            starting ||
+            loading ||
+            Boolean(workspaceError) ||
+            !workspace?.can_run ||
+            !config ||
+            !profiles.length
+          "
+          :retry-busy="starting"
+          :refresh-key="threadRefreshKey"
+          @retry-turn="runResearch"
           @select="selectThread"
           @open="openThreadTurn"
           @new="newThread"
@@ -973,6 +1029,9 @@ onBeforeUnmount(() => {
         </button>
       </div>
       <ResearchResultPresentation
+        tabindex="-1"
+        role="region"
+        :aria-label="i18n.t('research.answer')"
         v-if="workspace && ((!answerLoading && !answerError) || activeResult)"
         :job="activeJob"
         :result="activeResult"

@@ -346,6 +346,13 @@ export function createResearchWorkspace(deps: Deps) {
   }
   async function startResearchRun(input: Loose = {}) {
     if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
+    const retryThreadId = String(input.retry_thread_id || "");
+    const retryTurnId = String(input.retry_turn_id || "");
+    if (Boolean(retryThreadId) !== Boolean(retryTurnId))
+      throw new Error(tr("research.thread_retry_invalid"));
+    const endpoint = retryTurnId
+      ? `/api/research/threads/${encodeURIComponent(retryThreadId)}/turns/${encodeURIComponent(retryTurnId)}/retry`
+      : "/api/jobs/rag";
     // Research composes a one-run draft over the saved Settings configuration.
     // Do not write the draft back into ragConfig: the Research modal is the
     // highest-precedence layer for this run only.
@@ -433,7 +440,7 @@ export function createResearchWorkspace(deps: Deps) {
     });
     persistPrefs();
 
-    const job = await api("/api/jobs/rag", {
+    const job = await api(endpoint, {
       method: "POST",
       body: JSON.stringify({
         prompt,

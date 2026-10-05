@@ -1072,6 +1072,8 @@ Each database search method runs a versioned Pipeline Studio pipeline of the sam
 
 ## RAG Research
 
+Failed or cancelled turns offer **Retry with current settings**. This preserves the original question and instructions and uses the current Research settings and selected evidence, creating another attempt of the same visible turn. Unarchive an archived thread before retrying, and wait for any active turn to finish. Retry opens the new attempt's result. If the request is interrupted, the thread refreshes to show the server's state before another retry; the request is not automatically repeated.
+
 Submitting a new question opens its newly created thread and selected run. Completed turns show answer text inline, expandable citations, and an **Open answer and evidence** link for the full run audit. Each turn loads independently. If a process-local job is unavailable, its question and status remain visible; use the Response Library for saved answers where your role permits access. Running output continues to stream in the selected run presentation.
 
 **Research threads** opens a paginated list of your own new Research threads. Select a thread to inspect its questions and turn statuses; **Open answer and evidence** opens that turn using the existing run view. Thread/run selection is retained in the URL and browser Back/Forward restores it. A missing run does not remove its question from the thread. **New question** clears the selected answer and focuses the composer for independent research. Follow-up submission is currently disabled while a thread is selected until advisory thread context is implemented. Older saved responses remain in the Response Library; automatic singleton-thread migration is still pending.

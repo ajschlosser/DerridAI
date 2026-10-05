@@ -52,6 +52,46 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("research workspace commands", () => {
+  it("retries through the existing run validation and narrow turn endpoint", async () => {
+    const api = vi.fn(async (_path: string, _options: unknown) => ({
+      id: "new-job",
+      status: "running",
+      thread_id: "thread/a",
+      turn_id: "turn b",
+    }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Research started",
+      selectedEvidenceEntries: () => [{ key: "e", record_id: "r" }],
+      selectedEvidencePayload: () => [{ record_id: "r", collection: "corpus" }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model-current" }),
+      isResearcher: () => true,
+      api,
+    });
+    const job = await workspace.startResearchRun({
+      prompt: "Original question",
+      instructions: "Original instructions",
+      retry_thread_id: "thread/a",
+      retry_turn_id: "turn b",
+    });
+    expect(job).toMatchObject({ id: "new-job", thread_id: "thread/a", turn_id: "turn b" });
+    expect(api.mock.calls[0][0]).toBe("/api/research/threads/thread%2Fa/turns/turn%20b/retry");
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body).toMatchObject({
+      prompt: "Original question",
+      instructions: "Original instructions",
+      model: "model-current",
+      selected_evidence: [{ record_id: "r", collection: "corpus" }],
+    });
+    expect(body).not.toHaveProperty("retry_turn_id");
+    expect(body).not.toHaveProperty("prior_answers");
+  });
+  it("rejects incomplete retry identifiers before sending or changing run state", async () => {
+    const api = vi.fn();
+    const { workspace } = setup({ hasCapability: () => true, api });
+    await expect(workspace.startResearchRun({ retry_turn_id: "turn" })).rejects.toThrow();
+    expect(api).not.toHaveBeenCalled();
+  });
   it("preserves thread linkage through the job presentation adapter", async () => {
     const { researchJobForUi } = await import("../../src/domain/researchPayloads");
     expect(

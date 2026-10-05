@@ -34,6 +34,7 @@ defineProps<{
   includeArchived?: boolean;
   busy?: boolean;
   notice?: string;
+  retryDisabled?: boolean;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -41,6 +42,7 @@ const emit = defineEmits<{
   new: [];
   page: [offset: number];
   retry: [];
+  retryTurn: [turn: ResearchTurn];
   rename: [];
   archive: [];
   remove: [];
@@ -128,6 +130,23 @@ const i18n = useI18nStore();
             <h4 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h4>
             <p>{{ i18n.t(`research.thread_status_${turn.status}`) }}</p>
             <slot name="answer" :turn="turn" />
+            <div v-if="['failed', 'cancelled'].includes(turn.status)">
+              <p>{{ i18n.t("research.thread_retry_help") }}</p>
+              <button
+                class="btn"
+                type="button"
+                :disabled="
+                  busy ||
+                  loading ||
+                  retryDisabled ||
+                  Boolean(thread.archived_at) ||
+                  thread.turns.some((item) => ['queued', 'running'].includes(item.status))
+                "
+                @click="emit('retryTurn', turn)"
+              >
+                {{ i18n.t("research.thread_retry") }}
+              </button>
+            </div>
             <p v-if="turn.error" role="alert">{{ turn.error }}</p>
             <button
               v-if="turn.job_id"
