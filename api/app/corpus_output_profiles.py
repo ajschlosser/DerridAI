@@ -56,7 +56,7 @@ def _sha256_file(path: Path) -> str:
 
 def research_metadata_fields(schema: MetadataSchema) -> list[str]:
     """Return the stable metadata allow-list for the compact research profile."""
-    ordered: list[str] = list(MANIFEST_INHERITED_FIELDS)
+    ordered: list[str] = sorted(MANIFEST_INHERITED_FIELDS)
     ordered.extend(CORE_FIELDS)
     ordered.extend(
         field.name
@@ -167,7 +167,8 @@ def atomic_copy(source: str | Path, destination: str | Path) -> None:
     temporary = Path(tmp_name)
     try:
         shutil.copyfile(source_path, temporary)
-        with temporary.open("rb") as handle:
+        with temporary.open("rb+") as handle:
+            handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, target)
     finally:
