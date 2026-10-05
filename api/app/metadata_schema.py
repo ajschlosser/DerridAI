@@ -726,7 +726,9 @@ def build_group_prompt(
             "- Boolean fields (" + ", ".join(boolean_fields) + ") are three-state: true, false, or null. "
             "False is an explicit supported value, not absence. When the source supports false, return false "
             "with outcome=\"supported_value\". Use outcome=\"no_supported_value\" only with null when "
-            "the field genuinely has no applicable value."
+            "the field genuinely has no applicable value. For every assessed Boolean field, its field_assessments "
+            "entry MUST include assessed_value and that value MUST exactly repeat the corresponding metadata "
+            "value as true, false, or null."
         )
     if group_key == CORE_GROUP:
         lines += [
@@ -807,6 +809,17 @@ class FieldAssessment(BaseModel):
     outcome: AssessmentOutcome
 
 
+class BooleanFieldAssessment(FieldAssessment):
+    """Assessment that independently echoes the Boolean value being supported.
+
+    Metadata is the materialized proposal; this echo lets deterministic validation
+    detect a model that returns (for example) metadata=false while explaining that
+    the proposition is true. Natural-language reasons are never parsed as data.
+    """
+
+    assessed_value: bool | None
+
+
 class MetadataResponseBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assessed_fields_for_validation: ClassVar[tuple[str, ...]] = ()
@@ -884,14 +897,22 @@ class MetadataResponseBase(BaseModel):
             needs_review = bool(assessment.get("needs_review"))
 
             contradiction = ""
+            if field in self.boolean_fields_for_validation:
+                assessed_value = assessment.get("assessed_value")
+                if assessed_value != value:
+                    contradiction = (
+                        f"boolean assessed_value={assessed_value!r} disagrees with "
+                        f"metadata value={value!r}"
+                    )
             if (
-                field in self.boolean_fields_for_validation
+                not contradiction
+                and field in self.boolean_fields_for_validation
                 and value is False
                 and outcome == "no_supported_value"
             ):
                 # False is a substantive negative classification, not an empty value.
                 # Treat a model's common "no supported value" wording as the supported
-                # boolean answer rather than manufacturing a contradiction for review.
+                # boolean answer only when its independent Boolean echo agrees.
                 assessment_model = (
                     getattr(assessments_obj, field, None)
                     if isinstance(assessments_obj, BaseModel)
@@ -900,11 +921,11 @@ class MetadataResponseBase(BaseModel):
                 if assessment_model is not None:
                     assessment_model.outcome = "supported_value"
                 outcome = "supported_value"
-            if outcome == "supported_value" and missing(value):
+            if not contradiction and outcome == "supported_value" and missing(value):
                 contradiction = "outcome=supported_value but the metadata value is empty"
-            elif outcome == "no_supported_value" and not missing(value):
+            elif not contradiction and outcome == "no_supported_value" and not missing(value):
                 contradiction = "outcome=no_supported_value but a metadata value was returned"
-            elif outcome == "uncertain" and not needs_review:
+            elif not contradiction and outcome == "uncertain" and not needs_review:
                 contradiction = "outcome=uncertain but needs_review was false"
 
             if contradiction:
@@ -1036,6 +1057,8 @@ def response_model_for(
         if field.assess or any(member.assess for member in field.members)
     )
     assessed_names = list(dict.fromkeys(assessed_names))
+    boolean_fields = {"primary_text"} if group_key == CORE_GROUP else set()
+    boolean_fields.update(field.name for field in group_fields if field.type == "boolean")
 
     fields: dict[str, Any] = {
         "metadata": (metadata, ...),
@@ -1043,7 +1066,11 @@ def response_model_for(
     }
     if assessed_names:
         assessment_props: dict[str, Any] = {
-            name: (FieldAssessment, ...) for name in assessed_names
+            name: (
+                BooleanFieldAssessment if name in boolean_fields else FieldAssessment,
+                ...,
+            )
+            for name in assessed_names
         }
         assessments = create_model(
             f"{group_key.title()}FieldAssessments",
@@ -1069,8 +1096,6 @@ def response_model_for(
     )
     response.assessed_fields_for_validation = tuple(assessed_names)
     response.evidence_fields_for_validation = tuple(sorted(evidence_names))
-    boolean_fields = {"primary_text"} if group_key == CORE_GROUP else set()
-    boolean_fields.update(field.name for field in group_fields if field.type == "boolean")
     response.boolean_fields_for_validation = frozenset(boolean_fields)
 
     # Open text/list values must never be populated from the schema's own control
@@ -1139,8 +1164,9 @@ _DISCOURSE_FOOTER = (
     "For every populated attribution-bearing field and every populated hybrid field (region_type, primary_text, discourse_role), include "
     "field_evidence using only current-record block IDs, confidence 0..1, and a short reason. Use null or [] when unsupported.\n"
     "Return one field_assessments entry for every one of {assessed_fields}, even when its metadata value is null or empty. Each assessment "
-    "must contain all four keys: confidence (a number 0..1, or null only when confidence genuinely cannot be estimated), needs_review, reason, "
-    "and outcome. Keep every assessment reason to one short sentence. Never put a proposed value only in the reason: outcome=\"supported_value\" "
+    "must contain confidence (a number 0..1, or null only when confidence genuinely cannot be estimated), needs_review, reason, and outcome. "
+    "Boolean assessments must also contain assessed_value exactly matching the metadata value. Keep every assessment reason to one short sentence. "
+    "Never put a proposed value only in the reason: outcome=\"supported_value\" "
     "requires the corresponding metadata value to be non-null/non-empty. Use outcome=\"no_supported_value\" when the source supports that no "
     "value applies, and outcome=\"uncertain\" when the field cannot be determined. Mark needs_review=true whenever "
     "a proposed value or supported absence is genuinely ambiguous, attribution is uncertain, evidence is weak, or confidence is not sufficient "

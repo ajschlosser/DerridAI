@@ -45,7 +45,7 @@ def test_profile_and_prompt_ids_are_pinned():
     assert cb.PROFILE_VERSION=='derrida-scholarly-v12'
     assert cb.DOCUMENT_PROMPT_VERSION=='derridai-document-manifest-v4'
     assert cb.SEGMENTATION_PROMPT_VERSION=='derridai-local-boundaries-v9'
-    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v15'
+    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v16'
     assert cb.PUBLICATION_SCHEMA_VERSION=='derridai-corpus-jsonl-v1'
     assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v12'
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}

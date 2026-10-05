@@ -174,6 +174,42 @@ def test_middle_confidence_populates_but_does_not_bypass_calibrated_autofill(tmp
     assert status["reason_code"] == "autofill_not_approved"
 
 
+def test_high_confidence_uncertain_outcome_never_autofills(tmp_path: Path, monkeypatch):
+    """Structured uncertainty is a hard autofill stop even at very high confidence.
+
+    Boolean self-contradictions are normalized to outcome=uncertain by the response
+    validator, so this invariant prevents a contradictory value from becoming
+    auto-resolved if bounded consistency repair cannot fix the model response.
+    """
+    reply = _discourse_reply(
+        region_type="main_text",
+        primary_text=True,
+        discourse_role="analysis",
+        speaker="Jacques Derrida",
+    )
+    reply["field_assessments"]["speaker"] = {
+        "confidence": 0.99,
+        "needs_review": True,
+        "reason": "Conflicting attribution cues remain.",
+        "outcome": "uncertain",
+    }
+    reply["field_evidence"]["speaker"] = {
+        "block_ids": ["b1"],
+        "confidence": 0.99,
+        "reason": "The candidate is explicit but attribution is unresolved.",
+    }
+
+    record = _enrich(tmp_path, monkeypatch, _record(), reply)
+
+    status = record["metadata_field_status"]["speaker"]
+    assert record["speaker"] == "Jacques Derrida"
+    assert status["status"] == "unresolved"
+    assert status["reason_code"] == "ambiguous"
+    assert status["auto_populated"] is True
+    assert status["autofilled"] is False
+    assert status["verification_status"] == "pending_review"
+
+
 def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, monkeypatch):
     """An explicit confidence=null must not hide a valid model proposal."""
     reply = _discourse_reply(
