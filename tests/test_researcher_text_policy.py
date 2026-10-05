@@ -29,10 +29,8 @@ import importlib.util
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-_APP_BOOTSTRAP_PATH = ROOT / "web/src/domain/appBootstrap.ts"
-_INPUT_FILTER_PATH = ROOT / "web/src/domain/researcherInputFilter.ts"
-APP_BOOTSTRAP = _APP_BOOTSTRAP_PATH.read_text(encoding="utf-8")
-INPUT_FILTER = _INPUT_FILTER_PATH.read_text(encoding="utf-8")
+APP_BOOTSTRAP = (ROOT / "web/src/domain/appBootstrap.ts").read_text(encoding="utf-8")
+INPUT_FILTER = (ROOT / "web/src/domain/researcherInputFilter.ts").read_text(encoding="utf-8")
 POLICY_ROUTES = "\n".join(
     (ROOT / path).read_text(encoding="utf-8")
     for path in (
@@ -76,8 +74,7 @@ def test_researcher_text_policy_detects_nested_and_obfuscated_language():
     reports where in a nested payload the bad value is ("input.tags[1]").
     Wiring (source text): server route owners still enforce researcher text. The focused
     researcherInputFilter module owns the browser warning, input filtering, token digest,
-    and hashed-policy fetch after the runtime decomposition; older branches may still
-    carry those hooks directly in runtime.js.
+    and hashed-policy fetch after the legacy runtime retirement.
     """
     content_filter = _load_content_filter()
     policies = [_DUMMY_POLICY]
@@ -90,5 +87,4 @@ def test_researcher_text_policy_detects_nested_and_obfuscated_language():
     assert "filterResearcherInputElement" in INPUT_FILTER
     assert "researcherTokenDigest" in INPUT_FILTER
     assert "/api/i18n/content-policy" in INPUT_FILTER
-    if _INPUT_FILTER_PATH.exists():
-        assert "researcherInputFilter" in APP_BOOTSTRAP
+    assert "researcherInputFilter" in APP_BOOTSTRAP
