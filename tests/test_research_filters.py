@@ -11,6 +11,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from app.chroma_store import ChromaStore
 from app.models import RAGRunRequest, ResearchFilterPlan
 from app.research_filters import (
     combine_metadata_filters,
@@ -100,3 +101,75 @@ def test_rag_filter_plan_validates_before_job_execution() -> None:
             source_collection="corpus",
             filter_plan={"metadata_filter": {"page_start": {"$gte": "late"}}},
         )
+
+
+class _CaptureCollection:
+    def __init__(self) -> None:
+        self.metadata = {"hnsw:space": "cosine"}
+        self.last_get = None
+        self.last_query = None
+
+    def count(self) -> int:
+        return 1
+
+    def query(self, **kwargs):
+        self.last_query = kwargs
+        return {
+            "ids": [["r1"]],
+            "documents": [["The trace is not a presence."]],
+            "metadatas": [[{"_record_id": "r1", "work": "Of Grammatology"}]],
+            "distances": [[0.1]],
+            "embeddings": [[[0.2, 0.3]]],
+        }
+
+    def get(self, **kwargs):
+        self.last_get = kwargs
+        return {
+            "ids": ["r1"],
+            "documents": ["The trace is not a presence."],
+            "metadatas": [{"_record_id": "r1", "work": "Of Grammatology"}],
+        }
+
+
+class _Embeddings:
+    def embed_query(self, _query, *, provider=None, model=None):
+        return [0.1, 0.2]
+
+
+def _capture_store(collection: _CaptureCollection) -> ChromaStore:
+    store = object.__new__(ChromaStore)
+    store._collection = lambda _name: collection
+    store._embedding_spec = lambda _collection: ("chroma", None)
+    store.embeddings = _Embeddings()
+    return store
+
+
+def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
+    collection = _CaptureCollection()
+    store = _capture_store(collection)
+    where = {"work": {"$eq": "Of Grammatology"}}
+    where_document = {"$contains": "trace"}
+
+    semantic = store.semantic_candidates(
+        "corpus",
+        "trace",
+        4,
+        where=where,
+        where_document=where_document,
+    )
+
+    assert [item["record"]["record_id"] for item in semantic] == ["r1"]
+    assert collection.last_query["where"] == where
+    assert collection.last_query["where_document"] == where_document
+
+    lexical = store.lexical_search(
+        "corpus",
+        "trace",
+        4,
+        where=where,
+        where_document=where_document,
+    )
+
+    assert [item["record"]["record_id"] for item in lexical] == ["r1"]
+    assert collection.last_get["where"] == where
+    assert collection.last_get["where_document"] == where_document
