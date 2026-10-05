@@ -214,7 +214,10 @@ from .corpus_record_quality import (
     _trash_quality_report,
     iso_now,
 )
-from .corpus_record_restructure import synchronize_record_source_projection
+from .corpus_record_restructure import (
+    repair_record_source_topology,
+    synchronize_record_source_projection,
+)
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_aggregates import record_review_aggregate
 from .corpus_review_queue import (
@@ -5392,7 +5395,25 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # judged against stale legacy block projections. Legacy builds without an
         # explicit SourceUnit topology stay mutation-free during validation.
         if source_units:
+            repair_events = repair_record_source_topology(
+                records,
+                source_units,
+                source_block_ids={
+                    str(block.get("block_id") or "")
+                    for block in blocks
+                    if str(block.get("block_id") or "")
+                },
+            )
             synchronize_record_source_projection(records, source_units)
+            if repair_events:
+                prior_events = [
+                    dict(item)
+                    for item in build.get("source_topology_reconciliation_history") or []
+                    if isinstance(item, dict)
+                ]
+                build["source_topology_reconciliation_history"] = (
+                    prior_events + repair_events
+                )[-200:]
         validation_profile = {
             **profile,
             "_validation_source_units": source_units,

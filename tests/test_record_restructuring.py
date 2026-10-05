@@ -311,6 +311,129 @@ def test_inactive_sourceunit_reference_is_blocking():
     assert validation["source_reference_errors"][0]["field"] == "u-old"
 
 
+def test_reconciliation_repairs_retired_sourceunit_to_conserving_descendants():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-old",
+            "unit_id": "u-old",
+            "source_block_ids": ["b1"],
+            "text": "Alpha Beta",
+            "active": False,
+        },
+        {
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["u-old"],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["u-old"],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [{
+        "record_id": "r1",
+        "source_unit_ids": ["u-old"],
+        "source_block_ids": ["b1"],
+        "source_extracted_text": "Alpha Beta",
+        "text": "Alpha Beta",
+    }]
+
+    events = repair_record_source_topology(records, units)
+
+    assert records[0]["source_unit_ids"] == ["u-left", "u-right"]
+    assert events[0]["method"] == "active_descendant_lineage"
+    history = records[0]["source_topology_reconciliation_history"]
+    assert history[-1]["previous_source_unit_ids"] == ["u-old"]
+    assert history[-1]["source_unit_ids"] == ["u-left", "u-right"]
+    assert history[-1]["source_text_conserved"] is True
+
+
+def test_reconciliation_does_not_guess_ambiguous_sourceunit_ownership():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-old",
+            "unit_id": "u-old",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": False,
+        },
+        {
+            "source_unit_id": "u-new",
+            "unit_id": "u-new",
+            "source_block_ids": ["b1"],
+            "parent_unit_ids": ["u-old"],
+            "text": "Alpha",
+            "active": True,
+        },
+    ]
+    records = [
+        {
+            "record_id": "r1",
+            "source_unit_ids": ["u-old"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        },
+        {
+            "record_id": "r2",
+            "source_unit_ids": ["u-old"],
+            "source_block_ids": ["b1"],
+            "source_extracted_text": "Alpha",
+            "text": "Alpha",
+        },
+    ]
+
+    events = repair_record_source_topology(records, units)
+
+    assert events == []
+    assert records[0]["source_unit_ids"] == ["u-old"]
+    assert records[1]["source_unit_ids"] == ["u-old"]
+
+
+def test_reconciliation_can_recover_unique_projection_when_stale_unit_is_missing():
+    from app.corpus_record_restructure import repair_record_source_topology
+
+    units = [
+        {
+            "source_unit_id": "u-left",
+            "unit_id": "u-left",
+            "source_block_ids": ["b1"],
+            "text": "Alpha",
+            "active": True,
+        },
+        {
+            "source_unit_id": "u-right",
+            "unit_id": "u-right",
+            "source_block_ids": ["b1"],
+            "text": "Beta",
+            "active": True,
+        },
+    ]
+    records = [{
+        "record_id": "r1",
+        "source_unit_ids": ["missing-old-unit"],
+        "source_block_ids": ["b1"],
+        "source_extracted_text": "Alpha Beta",
+        "text": "Reviewed wording may differ",
+    }]
+
+    events = repair_record_source_topology(records, units)
+
+    assert records[0]["source_unit_ids"] == ["u-left", "u-right"]
+    assert events[0]["method"] == "unique_source_projection_match"
+
+
 def test_reordered_sourceunits_are_blocking():
     blocks = [
         {"block_id": "b1", "page": 1, "type": "paragraph", "text": "Alpha"},

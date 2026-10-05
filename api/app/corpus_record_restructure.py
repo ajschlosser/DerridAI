@@ -237,6 +237,238 @@ def source_unit_root_block_ids(
     return roots
 
 
+
+def _source_unit_descends_from(
+    unit_id: str,
+    ancestor_id: str,
+    units_by_id: dict[str, dict[str, Any]],
+    seen: set[str] | None = None,
+) -> bool:
+    """Whether a SourceUnit has an ancestor in its explicit lineage."""
+    if unit_id == ancestor_id:
+        return True
+    visited = set(seen or ())
+    if unit_id in visited:
+        return False
+    visited.add(unit_id)
+    unit = units_by_id.get(unit_id)
+    if not unit:
+        return False
+    parents = [
+        str(value)
+        for value in unit.get("parent_unit_ids") or []
+        if str(value)
+    ]
+    return any(
+        parent == ancestor_id
+        or _source_unit_descends_from(parent, ancestor_id, units_by_id, visited)
+        for parent in parents
+    )
+
+
+def repair_record_source_topology(
+    records: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+    *,
+    source_block_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Repair only provably equivalent stale Record-to-SourceUnit bindings.
+
+    A retired SourceUnit may be replaced by its active descendants only when
+    their concatenated extraction is identical. A missing/stale unit ID may also
+    be recovered when immutable roots plus the previous source extraction identify
+    exactly one contiguous active window. Ambiguity remains a validation blocker.
+
+    Every applied repair is appended to source_topology_reconciliation_history so
+    compatibility migration never erases the prior topology.
+    """
+    all_units = {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+    active = active_source_unit_map(units)
+    active_order = [
+        str(unit.get("source_unit_id") or unit.get("unit_id"))
+        for unit in units
+        if unit.get("active")
+        and str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    ]
+    if not active_order:
+        return []
+
+    immutable_roots = set(source_block_ids or ())
+    if not immutable_roots:
+        immutable_roots = {
+            str(value)
+            for unit in units
+            for value in unit.get("source_block_ids") or []
+            if str(value) and str(value) not in all_units
+        }
+        immutable_roots.update(
+            str(unit.get("source_unit_id") or unit.get("unit_id"))
+            for unit in units
+            if str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+            and str(unit.get("source_unit_id") or unit.get("unit_id"))
+            == str(unit.get("block_id") or "")
+        )
+
+    def active_descendants(unit_id: str) -> list[str]:
+        return [
+            candidate
+            for candidate in active_order
+            if _source_unit_descends_from(candidate, unit_id, all_units)
+        ]
+
+    def unit_text(unit_ids: list[str]) -> str:
+        return JOIN.join(
+            str(active[unit_id].get("text") or "").strip()
+            for unit_id in unit_ids
+            if unit_id in active
+            and str(active[unit_id].get("text") or "").strip()
+        )
+
+    proposals: dict[str, tuple[list[str], str, list[str]]] = {}
+    fixed_owners: dict[str, str] = {}
+
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        current_ids = record_source_unit_ids(record)
+        if current_ids and all(unit_id in active for unit_id in current_ids):
+            for unit_id in current_ids:
+                fixed_owners.setdefault(unit_id, record_id)
+            continue
+
+        replacement: list[str] = []
+        reasons: list[str] = []
+        lineage_safe = bool(current_ids)
+        for unit_id in current_ids:
+            if unit_id in active:
+                replacement.append(unit_id)
+                continue
+            descendants = active_descendants(unit_id)
+            if not descendants:
+                lineage_safe = False
+                break
+            prior = all_units.get(unit_id)
+            if prior is not None:
+                prior_text = _squash(str(prior.get("text") or ""))
+                descendant_text = _squash(unit_text(descendants))
+                if prior_text != descendant_text:
+                    lineage_safe = False
+                    break
+            replacement.extend(descendants)
+            reasons.append(f"{unit_id} -> {','.join(descendants)}")
+
+        replacement = list(dict.fromkeys(replacement))
+        if lineage_safe and replacement:
+            proposals[record_id] = (
+                replacement,
+                "active_descendant_lineage",
+                reasons,
+            )
+            continue
+
+        roots = {
+            str(value)
+            for value in record.get("source_block_ids") or []
+            if str(value)
+        }
+        target = _squash(str(record.get("source_extracted_text") or ""))
+        if not roots or not target:
+            continue
+        eligible = {
+            unit_id
+            for unit_id in active_order
+            if (
+                set(
+                    source_unit_root_block_ids(
+                        unit_id,
+                        all_units,
+                        immutable_roots,
+                    )
+                )
+                & roots
+            )
+        }
+        matches: list[list[str]] = []
+        for start, first in enumerate(active_order):
+            if first not in eligible:
+                continue
+            parts: list[str] = []
+            candidate_window: list[str] = []
+            for unit_id in active_order[start:]:
+                if unit_id not in eligible:
+                    break
+                candidate_window.append(unit_id)
+                parts.append(str(active[unit_id].get("text") or "").strip())
+                joined = _squash(JOIN.join(part for part in parts if part))
+                if joined == target:
+                    matches.append(list(candidate_window))
+                if len(joined) > len(target):
+                    break
+        if len(matches) == 1:
+            proposals[record_id] = (
+                matches[0],
+                "unique_source_projection_match",
+                [],
+            )
+
+    proposed_owners: dict[str, list[str]] = {}
+    for record_id, (unit_ids, _method, _reasons) in proposals.items():
+        for unit_id in unit_ids:
+            proposed_owners.setdefault(unit_id, []).append(record_id)
+
+    events: list[dict[str, Any]] = []
+    for record in records:
+        record_id = str(record.get("record_id") or "")
+        proposal = proposals.get(record_id)
+        if proposal is None:
+            continue
+        unit_ids, method, reasons = proposal
+        if any(
+            (
+                unit_id in fixed_owners
+                and fixed_owners[unit_id] != record_id
+            )
+            or len(proposed_owners.get(unit_id) or []) != 1
+            for unit_id in unit_ids
+        ):
+            continue
+
+        previous_ids = [
+            str(value)
+            for value in record.get("source_unit_ids") or []
+            if str(value)
+        ]
+        if previous_ids == unit_ids:
+            continue
+        event = {
+            "event_id": f"source-topology-{uuid.uuid4().hex}",
+            "at": iso_now(),
+            "method": method,
+            "previous_source_unit_ids": previous_ids,
+            "source_unit_ids": list(unit_ids),
+            "source_block_ids": [
+                str(value)
+                for value in record.get("source_block_ids") or []
+                if str(value)
+            ],
+            "lineage_replacements": reasons,
+            "source_text_conserved": True,
+        }
+        record["source_unit_ids"] = list(unit_ids)
+        history = [
+            dict(item)
+            for item in record.get("source_topology_reconciliation_history") or []
+            if isinstance(item, dict)
+        ]
+        history.append(event)
+        record["source_topology_reconciliation_history"] = history[-50:]
+        events.append({"record_id": record_id, **event})
+    return events
+
+
 def synchronize_record_source_projection(
     records: list[dict[str, Any]],
     units: list[dict[str, Any]],

@@ -393,9 +393,104 @@ def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp
     try:
         manager.publish(build_id,accept_unreviewed=True)
     except ValueError as exc:
-        assert "text-fidelity" in str(exc)
+        assert "source validation" in str(exc)
+        assert "source_coverage" in str(exc)
     else:
         raise AssertionError("actual missing source coverage must still block publication")
+
+
+def test_accept_unreviewed_repairs_retired_sourceunit_binding_before_publication(tmp_path:Path):
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    rows=repo.load_records(build_id)
+
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    old=dict(units[0])
+    old["source_unit_id"]="u-old"
+    old["unit_id"]="u-old"
+    old["text"]="Record text"
+    old["active"]=False
+    units.append(old)
+    units.extend([
+        {
+            **old,
+            "source_unit_id":"u-left",
+            "unit_id":"u-left",
+            "parent_unit_ids":["u-old"],
+            "text":"Record",
+            "active":True,
+        },
+        {
+            **old,
+            "source_unit_id":"u-right",
+            "unit_id":"u-right",
+            "parent_unit_ids":["u-old"],
+            "text":"text",
+            "active":True,
+        },
+    ])
+    repo.save_source_units(build_id,units)
+
+    rows[0]["source_unit_ids"]=["u-old"]
+    rows[0]["source_block_ids"]=["b1"]
+    rows[0]["source_extracted_text"]="Record text"
+    rows[0]["accepted"]=False
+    rows[0]["review_disposition"]="pending"
+    rows[0]["needs_review"]=True
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    stored=repo.load_records(build_id)[0]
+    assert stored["source_unit_ids"]==["u-left","u-right"]
+    assert stored["source_extracted_text"]=="Record\n\ntext"
+    history=stored["source_topology_reconciliation_history"]
+    assert history[-1]["previous_source_unit_ids"]==["u-old"]
+    assert history[-1]["source_text_conserved"] is True
+    refreshed=repo.get_build(build_id)
+    assert refreshed["validation"]["missing_block_ids"]==[]
+    assert refreshed["validation"]["missing_source_unit_ids"]==[]
+    assert refreshed["validation"]["duplicate_block_ids"]==[]
+    assert refreshed["validation"]["unknown_source_unit_ids"]==[]
+    assert refreshed["validation"]["source_reference_errors"]==[]
+    assert refreshed["validation"]["source_conservation_errors"]==[]
+    assert refreshed["validation"]["text_fidelity_errors"]==[]
+    assert refreshed["validation"]["source_order_errors"]==[]
+    assert refreshed["source_topology_reconciliation_history"]
+
+
+def test_publication_blocker_names_remaining_source_findings():
+    from app.corpus_publication import publication_blocker
+
+    validation = {
+        "source_valid": False,
+        "valid": False,
+        "missing_source_unit_ids": ["u-missing"],
+        "validation_issues": [
+            {
+                "code": "source_coverage",
+                "record_id": "",
+                "field": "u-missing",
+                "reason": "active source unit is not covered by any Record",
+            }
+        ],
+    }
+    message = publication_blocker(
+        {"status": "awaiting_review"},
+        [{"record_id": "r1"}],
+        validation,
+        require_acceptance=False,
+        accept_unreviewed=True,
+    )
+
+    assert message is not None
+    assert "source_coverage: 1" in message
+    assert "u-missing" in message
+    assert "active source unit is not covered" in message
 
 
 def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:Path):
