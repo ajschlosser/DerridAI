@@ -2241,7 +2241,11 @@ class PdfCorpusRepository:
                     (payload, record_id),
                 )
                 corpus_document_context.ensure(connection)
-                corpus_queue_projection.update_rows(connection, [(int(row[0]), record)])
+                corpus_queue_projection.update_rows(
+                    connection,
+                    [(int(row[0]), record)],
+                    schema=self._record_schema(build_id),
+                )
                 version = connection.execute(
                     "SELECT state_version FROM review_queue_rows WHERE record_id=?", (record_id,),
                 ).fetchone()
@@ -2335,7 +2339,9 @@ class PdfCorpusRepository:
         )
         corpus_document_context.ensure(connection)
         corpus_queue_projection.update_rows(
-            connection, [(ordinal, record) for ordinal, record, _payload in changed],
+            connection,
+            [(ordinal, record) for ordinal, record, _payload in changed],
+            schema=self._record_schema(build_id),
         )
 
     def _reconcile_records_optimistic(
@@ -2664,7 +2670,10 @@ class PdfCorpusRepository:
         signature = self._schema_signature(schema)
         identity = self._review_projection_schema_identity(schema)
         corpus_queue_projection.ensure(
-            connection, identity, lambda payload: self._decode_migrated(payload, schema, signature),
+            connection,
+            identity,
+            lambda payload: self._decode_migrated(payload, schema, signature),
+            schema=schema,
             rebuild=rebuild,
         )
 
