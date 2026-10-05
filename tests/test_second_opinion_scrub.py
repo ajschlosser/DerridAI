@@ -110,6 +110,26 @@ from app.config import APP_VERSION  # noqa: E402
 
 def _manager(tmp_path: Path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    # The unfinished-export path reads immutable extraction blocks. Install a
+    # minimal real asset fixture instead of relying on a dangling build asset ID.
+    repo.asset_meta_path("a").write_text(
+        json.dumps({
+            "asset_id": "a",
+            "media_kind": "text",
+            "filename": "x.txt",
+            "block_count": 1,
+        }),
+        encoding="utf-8",
+    )
+    repo.asset_blocks_path("a").write_text(
+        json.dumps({
+            "block_id": "b1",
+            "text": "t",
+            "type": "paragraph",
+            "page": 1,
+        }) + "\n",
+        encoding="utf-8",
+    )
     build = repo.create_build({
         "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
         "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,
