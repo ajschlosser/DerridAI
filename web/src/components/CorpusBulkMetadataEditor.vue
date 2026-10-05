@@ -20,7 +20,10 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18nStore } from "../stores/i18n";
 import { usableListOptions, usableOptions } from "../domain/metadataValues";
-import { metadataRegistryFields, metadataRegistryGroups } from "../domain/metadataFieldRegistry";
+import {
+  metadataRegistryFields,
+  metadataRegistryGroups,
+} from "../domain/metadataFieldRegistry";
 import type { MetadataSchema } from "../api/metadataSchemas";
 import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
