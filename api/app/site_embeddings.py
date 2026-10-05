@@ -20,9 +20,12 @@ into the API image and corpus processing never triggers the download.
 from __future__ import annotations
 
 import hashlib
+import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from .config import settings
 
@@ -107,6 +110,86 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _model_cache_dir() -> Path:
+    """Return the deterministic cache directory for the pinned browser model."""
+    profile = BROWSER_EMBEDDING_PROFILE
+    repository = str(profile["id"]).replace("/", "--")
+    return (
+        Path(settings.rag_model_cache)
+        / "site-embeddings"
+        / repository
+        / str(profile["revision"])
+    )
+
+
+def _download_model_file(relative: str, target: Path) -> None:
+    """Download one pinned public artifact without invoking Hugging Face Hub.
+
+    DerridAI's publication model is a public, revision-pinned dependency. Using
+    the Hub snapshot helper for it makes a normal anonymous download emit an
+    authentication warning in API logs. A direct HTTPS transfer keeps anonymous
+    operation quiet while still honoring HF_TOKEN when an administrator supplies
+    one for higher Hub rate limits.
+    """
+    import httpx
+
+    profile = BROWSER_EMBEDDING_PROFILE
+    repository = quote(str(profile["id"]), safe="/")
+    revision = quote(str(profile["revision"]), safe="")
+    artifact = quote(relative, safe="/")
+    url = f"https://huggingface.co/{repository}/resolve/{revision}/{artifact}"
+    headers = {"User-Agent": "DerridAI/site-embeddings"}
+    token = os.environ.get("HF_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=target.parent,
+            prefix=f".{target.name}.",
+            suffix=".part",
+            delete=False,
+        ) as temporary:
+            temporary_path = Path(temporary.name)
+            with httpx.stream(
+                "GET",
+                url,
+                headers=headers,
+                follow_redirects=True,
+                timeout=httpx.Timeout(120.0, connect=20.0),
+            ) as response:
+                response.raise_for_status()
+                for chunk in response.iter_bytes():
+                    temporary.write(chunk)
+        temporary_path.replace(target)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
+
+
+def _prepare_model_snapshot() -> Path:
+    """Ensure the allowlisted model snapshot exists and verifies locally."""
+    local_dir = _model_cache_dir()
+    for relative in _ALLOWED_FILES:
+        target = local_dir / relative
+        expected = _EXPECTED_SHA256.get(relative)
+        if target.is_file() and (expected is None or _sha256(target) == expected):
+            continue
+        target.unlink(missing_ok=True)
+        _download_model_file(relative, target)
+
+    for relative, expected in _EXPECTED_SHA256.items():
+        path = local_dir / relative
+        if not path.is_file() or _sha256(path) != expected:
+            raise BrowserEmbeddingUnavailableError(
+                f"The pinned browser embedding artifact {relative!r} failed integrity verification."
+            )
+    return local_dir
+
 def _load_runtime() -> tuple[Any, Any]:
     global _runtime
     if _runtime is not None:
@@ -116,25 +199,9 @@ def _load_runtime() -> tuple[Any, Any]:
             return _runtime
         try:
             import onnxruntime as ort
-            from huggingface_hub import snapshot_download
             from transformers import AutoTokenizer
 
-            cache_dir = Path(settings.rag_model_cache) / "site-embeddings"
-            local_dir = Path(
-                snapshot_download(
-                    repo_id=str(BROWSER_EMBEDDING_PROFILE["id"]),
-                    revision=str(BROWSER_EMBEDDING_PROFILE["revision"]),
-                    allow_patterns=list(_ALLOWED_FILES),
-                    cache_dir=str(cache_dir),
-                )
-            )
-            for relative, expected in _EXPECTED_SHA256.items():
-                path = local_dir / relative
-                if not path.is_file() or _sha256(path) != expected:
-                    raise BrowserEmbeddingUnavailableError(
-                        f"The pinned browser embedding artifact {relative!r} failed integrity verification."
-                    )
-
+            local_dir = _prepare_model_snapshot()
             tokenizer = AutoTokenizer.from_pretrained(local_dir, local_files_only=True)
             session = ort.InferenceSession(
                 str(local_dir / str(BROWSER_EMBEDDING_PROFILE["model_file"])),
