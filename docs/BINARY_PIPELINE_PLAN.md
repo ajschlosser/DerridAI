@@ -122,7 +122,6 @@ CI must eventually fail when Pipeline Studio, the API, and the CLI drift. Requir
 gates include catalog/schema coverage, export-import hash round trips, server/headless
 execution parity, and compiled-binary capability reporting.
 
-
 ## Supported targets
 
 The first release target matrix is:
@@ -695,20 +694,20 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | Milestone                              | Status      | Deliverable                                                                                                                                                                                                                 |
 | -------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | B0. Architecture                       | DONE        | Python shared-engine + Nuitka native-binary direction; standalone-first policy; four target keys; release-vs-repo binary gate.                                                                                              |
-| B1. Versioned CLI config               | IN PROGRESS | Strict YAML validation, stable exit categories, secret-by-environment resolution, and corpus-build wiring are implemented; the v1 bespoke settings surface must migrate toward the shared PipelineDefinition contract. |
+| B1. Versioned CLI config               | IN PROGRESS | Strict YAML validation, stable exit categories, secret-by-environment resolution, and corpus-build wiring are implemented; the v1 bespoke settings surface must migrate toward the shared PipelineDefinition contract.      |
 | B2. Binary build spine                 | IN PROGRESS | Target identity helpers, Nuitka entry point/build script, artifact naming, manifest/checksum generation, compiled-binary smoke harness, and four-target standalone CI are implemented; onefile/release publication remains. |
 | B3. Installer spine                    | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned/latest release resolution are implemented; they become end-to-end testable once release assets exist.                      |
-| B4. Headless runner                    | IN PROGRESS | Synchronous source-to-canonical-build application service is implemented without an HTTP dependency; actual compiled-binary end-to-end corpus acceptance remains.                                                            |
-| B5. Automatic settlement               | IN PROGRESS | The headless runner invokes the shared autonomous settlement policy and publishes unreviewed values without granting human authority; end-to-end regression coverage remains.                                                |
-| B6. Research output                    | IN PROGRESS | Explicit allow-list research projection and atomic `.jsonl.zst` writing are implemented and unit-tested; compiled-binary fixture acceptance remains.                                                                         |
-| B7. cELF output                        | IN PROGRESS | The CLI uses the canonical publication/conformance path and rejects requested cELF output that is non-conformant; compiled-binary fixture acceptance remains.                                                                |
+| B4. Headless runner                    | IN PROGRESS | Synchronous source-to-canonical-build application service is implemented without an HTTP dependency; actual compiled-binary end-to-end corpus acceptance remains.                                                           |
+| B5. Automatic settlement               | IN PROGRESS | The headless runner invokes the shared autonomous settlement policy and publishes unreviewed values without granting human authority; end-to-end regression coverage remains.                                               |
+| B6. Research output                    | IN PROGRESS | Explicit allow-list research projection and atomic `.jsonl.zst` writing are implemented and unit-tested; compiled-binary fixture acceptance remains.                                                                        |
+| B7. cELF output                        | IN PROGRESS | The CLI uses the canonical publication/conformance path and rejects requested cELF output that is non-conformant; compiled-binary fixture acceptance remains.                                                               |
 | B8. Capability doctor                  | TODO        | Source-kind-aware helper/model/provider diagnostics.                                                                                                                                                                        |
 | B9. Native standalone acceptance       | TODO        | Full deterministic compiled-artifact fixture suite on all four target keys.                                                                                                                                                 |
 | B10. Onefile acceptance                | TODO        | Onefile artifacts pass the same suite; size report determines release/repo distribution.                                                                                                                                    |
 | B11. Signing/release                   | TODO        | Checksums, manifests, signing/notarization, immutable release assets, installer release resolution.                                                                                                                         |
 | B12. Repo-binary decision              | TODO        | Use measured onefile sizes to decide whether `bin/` artifacts are committed.                                                                                                                                                |
 | B13. Documentation/release integration | TODO        | README/USER_GUIDE/ARCHITECTURE/CONTRIBUTING and release process updated after behavior is implemented.                                                                                                                      |
-| B14. Shared pipeline contract           | IN PROGRESS | Pipeline/Studio/CLI ownership, versioning, migration, export/import, and drift rules are documented; contract identity, CLI v2 envelope, round-trip/parity CI, and binary capability checks remain.                          |
+| B14. Shared pipeline contract          | IN PROGRESS | Pipeline/Studio/CLI ownership, versioning, migration, export/import, and drift rules are documented; contract identity, CLI v2 envelope, round-trip/parity CI, and binary capability checks remain.                         |
 
 ## Definition of done
 
