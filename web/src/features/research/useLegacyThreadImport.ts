@@ -21,6 +21,7 @@ import { researchThreadsApi } from "../../api/researchThreads";
 import { useAuthStore } from "../../stores/auth";
 
 const AUTO_IMPORT_PAUSE_MS = 750;
+const AUTO_IMPORT_IDLE_TIMEOUT_MS = 2_000;
 
 /** Incremental migration is independent of the authoritative Library reads. */
 export function useLegacyThreadImport() {
@@ -31,12 +32,15 @@ export function useLegacyThreadImport() {
   const refreshKey = ref(0);
   let offset = 0;
   let request = 0;
-  let scheduled: number | undefined;
+  let scheduled: { id: number; idle: boolean } | null = null;
   let disposed = false;
 
   function cancelScheduled() {
-    if (scheduled !== undefined) window.clearTimeout(scheduled);
-    scheduled = undefined;
+    if (!scheduled) return;
+    if (scheduled.idle && typeof window.cancelIdleCallback === "function")
+      window.cancelIdleCallback(scheduled.id);
+    else window.clearTimeout(scheduled.id);
+    scheduled = null;
   }
 
   function scheduleNextBatch() {
@@ -45,10 +49,18 @@ export function useLegacyThreadImport() {
     // Legacy response migration is maintenance work, not a prerequisite for
     // using the Library. Yield between batches so search, navigation, and
     // Research rendering remain responsive while a large history is imported.
-    scheduled = window.setTimeout(() => {
-      scheduled = undefined;
+    const run = () => {
+      scheduled = null;
       void retry();
-    }, AUTO_IMPORT_PAUSE_MS);
+    };
+    if (typeof window.requestIdleCallback === "function") {
+      scheduled = {
+        id: window.requestIdleCallback(run, { timeout: AUTO_IMPORT_IDLE_TIMEOUT_MS }),
+        idle: true,
+      };
+    } else {
+      scheduled = { id: window.setTimeout(run, AUTO_IMPORT_PAUSE_MS), idle: false };
+    }
   }
 
   async function retry() {
