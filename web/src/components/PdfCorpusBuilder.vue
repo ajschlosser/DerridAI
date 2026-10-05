@@ -714,6 +714,7 @@ const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusP
   setMessage,
   refreshBuild,
   refreshBuilds,
+  beforePublish: () => recordSaveQueue.waitForAll(),
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
 });
