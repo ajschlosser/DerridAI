@@ -81,19 +81,19 @@ Backend Python domain
 
 The following are authoritative:
 
-| Concern | Authority |
-| --- | --- |
-| Which pipeline purposes exist | `PipelinePurposeSpec` / purpose registry |
-| Which strategies may execute | `StrategyRegistry` |
-| Strategy configuration fields and bounds | `StrategySpec.config_schema` |
-| Stage graph and fallback semantics | `PipelineDefinition` |
-| Input/output port semantics | strategy/purpose contracts |
-| Override eligibility | purpose/assignment/override contracts |
-| Runtime validation | backend pipeline validators |
-| Scholarly/provenance guarantees | purpose + strategy scholarly-effect contracts |
-| Corpus metadata schema | MetadataSchema / FieldAssertion domain |
-| Presentation, labels, layout | UI/i18n layer |
-| CLI argument spelling | CLI adapter |
+| Concern                                  | Authority                                     |
+| ---------------------------------------- | --------------------------------------------- |
+| Which pipeline purposes exist            | `PipelinePurposeSpec` / purpose registry      |
+| Which strategies may execute             | `StrategyRegistry`                            |
+| Strategy configuration fields and bounds | `StrategySpec.config_schema`                  |
+| Stage graph and fallback semantics       | `PipelineDefinition`                          |
+| Input/output port semantics              | strategy/purpose contracts                    |
+| Override eligibility                     | purpose/assignment/override contracts         |
+| Runtime validation                       | backend pipeline validators                   |
+| Scholarly/provenance guarantees          | purpose + strategy scholarly-effect contracts |
+| Corpus metadata schema                   | MetadataSchema / FieldAssertion domain        |
+| Presentation, labels, layout             | UI/i18n layer                                 |
+| CLI argument spelling                    | CLI adapter                                   |
 
 No web component, TypeScript type, YAML parser, or binary packaging module may
 become the semantic authority for a pipeline setting.
@@ -150,7 +150,7 @@ pipeline:
   overrides:
     pipeline_id: corpus-builder
     pipeline_version: 12
-    stages: {...}
+    stages: { ... }
 
 metadata:
   schema_id: default
@@ -363,17 +363,17 @@ A field that affects execution cannot be marked `ui_only`.
 
 Examples:
 
-| Field | Class |
-| --- | --- |
-| stage rerank limit | shared |
-| metadata enrichment strategy | shared |
-| stage timeout/config option | shared |
-| graph edge/fallback | shared |
-| Pipeline Studio panel width | ui_only |
-| selected editor tab | ui_only |
-| CLI output path | cli_only |
-| CLI `--quiet` | cli_only |
-| internal checkpoint key | internal |
+| Field                        | Class    |
+| ---------------------------- | -------- |
+| stage rerank limit           | shared   |
+| metadata enrichment strategy | shared   |
+| stage timeout/config option  | shared   |
+| graph edge/fallback          | shared   |
+| Pipeline Studio panel width  | ui_only  |
+| selected editor tab          | ui_only  |
+| CLI output path              | cli_only |
+| CLI `--quiet`                | cli_only |
+| internal checkpoint key      | internal |
 
 ## CI drift gates
 
@@ -528,17 +528,17 @@ The following invariants are release-blocking:
 
 Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 
-| Step | Status | Work |
-| --- | --- | --- |
-| C0. Establish authority boundary | DONE | Existing `PipelineDefinition`, purpose registry, strategy registry, and generated Pipeline Studio catalog are declared canonical. |
-| C1. Document shared contract | DONE | This document defines ownership, versioning, migration, export/import, and drift rules. |
-| C2. Contract identity | TODO | Add explicit pipeline-contract/application/strategy-version capability identity to catalog and binary diagnostics. |
-| C3. CLI v2 envelope | TODO | Introduce a run-envelope version that embeds/references canonical `PipelineDefinition` and typed overrides. |
-| C4. Legacy CLI migration | TODO | Deterministically migrate current v1 `CorpusProcessingConfig` settings into the v2 envelope/shared contract. |
-| C5. Pipeline Studio export/import | TODO | Export/import canonical definition plus optional run envelope without secrets. |
-| C6. Generated frontend contracts | IN PROGRESS | Continue replacing hand-maintained workflow semantics with server-derived catalog/types/fixtures. |
-| C7. Drift CI | TODO | Add backend/frontend/CLI property coverage and catalog compatibility checks. |
-| C8. Round-trip CI | TODO | Preserve pipeline hash through Studio/API/CLI export-import. |
-| C9. Execution parity CI | TODO | Run the same resolved definitions through server and headless paths and compare semantics. |
-| C10. Binary capability CI | TODO | Verify compiled strategy catalog matches the source-tree catalog. |
-| C11. Corpus Builder convergence | IN PROGRESS | Incrementally move execution-affecting Corpus Builder settings onto registered pipeline strategies without behavior regressions. |
+| Step                              | Status      | Work                                                                                                                              |
+| --------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| C0. Establish authority boundary  | DONE        | Existing `PipelineDefinition`, purpose registry, strategy registry, and generated Pipeline Studio catalog are declared canonical. |
+| C1. Document shared contract      | DONE        | This document defines ownership, versioning, migration, export/import, and drift rules.                                           |
+| C2. Contract identity             | TODO        | Add explicit pipeline-contract/application/strategy-version capability identity to catalog and binary diagnostics.                |
+| C3. CLI v2 envelope               | TODO        | Introduce a run-envelope version that embeds/references canonical `PipelineDefinition` and typed overrides.                       |
+| C4. Legacy CLI migration          | TODO        | Deterministically migrate current v1 `CorpusProcessingConfig` settings into the v2 envelope/shared contract.                      |
+| C5. Pipeline Studio export/import | TODO        | Export/import canonical definition plus optional run envelope without secrets.                                                    |
+| C6. Generated frontend contracts  | IN PROGRESS | Continue replacing hand-maintained workflow semantics with server-derived catalog/types/fixtures.                                 |
+| C7. Drift CI                      | TODO        | Add backend/frontend/CLI property coverage and catalog compatibility checks.                                                      |
+| C8. Round-trip CI                 | TODO        | Preserve pipeline hash through Studio/API/CLI export-import.                                                                      |
+| C9. Execution parity CI           | TODO        | Run the same resolved definitions through server and headless paths and compare semantics.                                        |
+| C10. Binary capability CI         | TODO        | Verify compiled strategy catalog matches the source-tree catalog.                                                                 |
+| C11. Corpus Builder convergence   | IN PROGRESS | Incrementally move execution-affecting Corpus Builder settings onto registered pipeline strategies without behavior regressions.  |
