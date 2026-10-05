@@ -31,7 +31,6 @@ from .corpus_cli_config import CorpusProcessingConfig
 from .corpus_output_profiles import atomic_copy, write_research_jsonl_zst
 from .metadata_schema import MetadataSchema
 
-
 RunProfile = Literal["research", "celf"]
 ProgressCallback = Callable[[dict[str, Any]], None]
 
