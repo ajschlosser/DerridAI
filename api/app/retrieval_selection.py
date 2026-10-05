@@ -215,7 +215,11 @@ def source_aware_select[Candidate: Mapping[str, Any]](
             # Work/source diversity alone can still collapse onto a prolific
             # author represented by many distinct documents. Penalize repeated
             # document authors so cross-author alternatives remain competitive.
-            penalty += 0.20
+            # A different-author candidate should remain viable even when the
+            # prolific author's second-best passage is only modestly less
+            # relevant. This penalty applies only after the first selection and
+            # only when both records identify the same source author.
+            penalty += 0.75
 
         try:
             left_page = int(left.get("page_start"))
