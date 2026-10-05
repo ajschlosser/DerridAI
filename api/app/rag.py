@@ -41,6 +41,18 @@ from .pipelines.research import (
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
 from .research_memory import ResponseMemoryIndex, memory_guidance
+from .research_semantics import (
+    CONCEPTS_ID,
+    PERSONS_ID,
+    SOURCE_AUTHOR_ID,
+    SPEAKER_ID,
+    TOPICS_ID,
+    rerank_attribution_context,
+    semantic_text,
+    semantic_value,
+    source_author,
+    source_work_label,
+)
 from .research_sizing import (
     automatic_collection_sizing,
     collapse_adjacent_candidates,
@@ -119,8 +131,8 @@ You are DerridAI, an evidence-grounded scholarly research assistant.
 </EVIDENCE>
 
 Guidelines:
-- Preserve speaker, quoted_speaker, quoted_author, quoted_work, position_holder, stance, target, discourse_role, and proposition_status.
-- Use document_author from each evidence record, when present, as the source-document author. Never substitute a default author when it is absent.
+- Preserve all supplied source-identity, attribution, quotation, stance, target, discourse-role, and proposition-status metadata.
+- Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
 - Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
 - Use the supplied EVIDENCE as the sole basis for substantive claims.
 - Prior memory is advisory workflow context, not current evidence. Never cite it
@@ -621,8 +633,8 @@ def structured_chat_complete(
 
 
 def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
-    author = str(record.get("document_author") or record.get("speaker") or "")
-    work = str(record.get("work") or "")
+    author = source_author(record) or semantic_text(record, SPEAKER_ID)
+    work = source_work_label(record)
     edition = str(record.get("edition") or "")
     year = record.get("year") or ""
     page_start = record.get("page_start")
@@ -750,8 +762,8 @@ def _context_string(
             f"<BEGIN EVIDENCE_TAG {tag}>",
             f"evidence_tag=[[{tag}]]",
             f"record_id={record.get('record_id', '')}",
-            f"work={record.get('work', '')}",
-            f"document_author={record.get('document_author', '')}",
+            f"source_work={source_work_label(record)}",
+            f"source_document_author={source_author(record)}",
             *metadata_lines,
             f"citation={inline}",
             f"text={compact_text}",
@@ -802,8 +814,8 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
             field
             for field, value in {
                 "record_id": record.get("record_id"),
-                "work": record.get("work"),
-                "document_author": record.get("document_author"),
+                "work": source_work_label(record),
+                "document_author": source_author(record),
                 "exact_text": record.get("text"),
                 "inline_citation": item.get("inline_citation"),
                 "full_citation": item.get("full_citation"),
@@ -967,20 +979,11 @@ def _tokenize(text: str) -> set[str]:
 
 
 def _rerank_candidate_text(item: Mapping[str, Any]) -> str:
-    """Expose source identity to rerankers without confusing mention with authorship."""
+    """Expose semantic attribution roles to rerankers."""
 
     record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
     passage = str(item.get("_rerank_text") or record.get("text") or "")
-    return "\n".join(
-        [
-            f"Document author: {record.get('document_author') or ''}",
-            f"Work: {record.get('work') or ''}",
-            f"Quoted author: {record.get('quoted_author') or ''}",
-            f"Quoted work: {record.get('quoted_work') or ''}",
-            f"Position holder: {record.get('position_holder') or ''}",
-            f"Passage: {passage}",
-        ]
-    )
+    return rerank_attribution_context(record, passage)
 
 
 def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
@@ -989,20 +992,17 @@ def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[
     for index, item in enumerate(docs):
         record = item["record"]
         text = " ".join([
-            str(record.get("document_author") or ""),
-            str(record.get("work") or ""),
-            str(record.get("speaker") or ""),
-            str(record.get("quoted_author") or ""),
-            str(record.get("quoted_work") or ""),
-            str(record.get("position_holder") or ""),
-            str(record.get("topics") or ""),
-            str(record.get("concepts") or ""),
-            str(record.get("persons") or ""),
+            source_author(record),
+            source_work_label(record),
+            semantic_text(record, SPEAKER_ID),
+            semantic_text(record, TOPICS_ID),
+            semantic_text(record, CONCEPTS_ID),
+            semantic_text(record, PERSONS_ID),
             _rerank_candidate_text(item),
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
-        author_tokens = _tokenize(str(record.get("document_author") or ""))
+        author_tokens = _tokenize(source_author(record))
         source_author_overlap = len(q & author_tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
         similarity = float(
@@ -1253,16 +1253,16 @@ def _mentioned_work_groups(
     groups: list[list[str]] = []
     author_works: dict[str, set[str]] = {}
     for summary in work_summaries:
-        work = str(summary.get("work") or "").strip()
+        work = str(summary.get("scope_label") or "").strip()
         if not work:
             continue
         normalized_work = _normalized_scope_text(work)
         if normalized_work and normalized_work in query:
             groups.append([work])
 
-        author_values = summary.get("authors")
+        author_values = summary.get("source_authors")
         if not isinstance(author_values, (list, tuple, set)):
-            author_values = [summary.get("document_author")]
+            author_values = []
         for raw_author in author_values:
             author = str(raw_author or "").strip()
             if not author or not _mentions_scope_author(question, author):
@@ -1310,16 +1310,22 @@ def _explicit_scope_work_groups(
         for row in rows:
             if not isinstance(row, Mapping):
                 continue
-            work = str(row.get("work") or "").strip()
+            work = source_work_label(row)
             if not work:
                 continue
-            summary = work_summaries.setdefault(work, {"work": work, "authors": set()})
-            author = str(row.get("document_author") or "").strip()
+            summary = work_summaries.setdefault(
+                work,
+                {"scope_label": work, "source_authors": set()},
+            )
+            author = source_author(row)
             if author:
-                summary["authors"].add(author)
+                summary["source_authors"].add(author)
 
     normalized = [
-        {"work": item["work"], "authors": sorted(item["authors"])}
+        {
+            "scope_label": item["scope_label"],
+            "source_authors": sorted(item["source_authors"]),
+        }
         for item in work_summaries.values()
     ]
     return _mentioned_work_groups(normalized, question)
@@ -1726,7 +1732,7 @@ def run_rag_pipeline(
             (
                 item
                 for item in raw_results
-                if str((item.get("record") or {}).get("work") or "") in works
+                if source_work_label(item.get("record") or {}) in works
             ),
             None,
         )
@@ -1778,8 +1784,8 @@ def run_rag_pipeline(
                 "works": works,
                 "matched": True,
                 "record_id": logical,
-                "work": record.get("work"),
-                "document_author": record.get("document_author"),
+                "scope_label": source_work_label(record),
+                "source_document_author": semantic_value(record, SOURCE_AUTHOR_ID),
                 "group": group_index,
             }
         )
