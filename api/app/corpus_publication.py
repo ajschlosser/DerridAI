@@ -275,7 +275,9 @@ def _source_validation_blocker_message(validation: dict[str, Any]) -> str:
             for code, count in sorted(counts.items())
         )
         examples: list[str] = []
-        for item in issues[:3]:
+        for index, item in enumerate(issues):
+            if index >= 3:
+                break
             parts = [
                 str(item.get("record_id") or "").strip(),
                 str(item.get("field") or "").strip(),
