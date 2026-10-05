@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import copy
-
 import json
 import logging
 import re
@@ -42,6 +41,13 @@ from .pipelines.research import (
     resolve_research_runtime_settings,
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .research_followup import (
+    GENERATION_CONTRACT,
+    QUERY_CONTRACT,
+    advisory_context,
+    contextual_query_prompt,
+    validate_contextual_query,
+)
 from .research_memory import ResponseMemoryIndex, memory_guidance
 from .research_semantics import (
     CONCEPTS_ID,
@@ -76,10 +82,6 @@ from .structured_json import (
     parse_json_object,
 )
 from .system_store import system_store
-from .research_followup import (
-    QUERY_CONTRACT, GENERATION_CONTRACT, advisory_context,
-    contextual_query_prompt, validate_contextual_query,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -1512,7 +1514,7 @@ def run_rag_pipeline(
             "contextualization": {
                 "contract": QUERY_CONTRACT,
                 "attempted": bool(thread_context) and effective_query_decomposition,
-                "fallback": bool(thread_context) and not bool(parsed_query),
+                "fallback": bool(thread_context) and effective_query_decomposition and not bool(parsed_query),
                 "provider": provider if thread_context and effective_query_decomposition else None,
                 "model": model if thread_context and effective_query_decomposition else None,
                 "original_question": request.prompt,
@@ -2384,6 +2386,10 @@ def run_rag_pipeline(
     # support can be checked against the Records this answer may actually cite.
     prior_response_memory, prior_claim_memory, memory_detail = memory_guidance(
         query_metadata["prompt_query"],
+        **({"excluded_response_ids": [item["response_id"] for item in
+            (thread_audit.get("context_selection") or {}).get("items", [])
+            if item.get("role") == "assistant" and item.get("response_id")]}
+           if thread_audit else {}),
         use_responses=request.use_prior_response_memory,
         use_claims=request.use_prior_claim_memory,
         owner=owner,

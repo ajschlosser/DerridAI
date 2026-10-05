@@ -470,3 +470,92 @@ test("first question keeps the existing composer and submits one history-free ru
   expect(requests[0]).not.toHaveProperty("retry_turn_id");
   await expect(composer).toBeVisible();
 });
+
+test("follow-up stays in its thread and preserves the previous answer", async ({ page }) => {
+  const current = detail("a");
+  const job = {
+    id: "follow-job",
+    type: "rag",
+    status: "queued",
+    thread_id: "a",
+    turn_id: "follow-turn",
+  };
+  const requests: Record<string, unknown>[] = [];
+  await mockBackend(page, {
+    fixtures: {
+      "/api/research/threads": { threads: [summary("a")] },
+      "/api/research/threads/a": () => current,
+      "/api/jobs/job-a": {
+        id: "job-a",
+        type: "rag",
+        status: "completed",
+        prompt: "Question a",
+        result: { answer: "Previous answer", evidence: [] },
+      },
+      "/api/jobs/follow-job": job,
+    },
+  });
+  await page.route("**/api/research/threads/a/turns", async (route) => {
+    requests.push(route.request().postDataJSON());
+    current.turns.push({
+      ...current.turns[0],
+      turn_id: "follow-turn",
+      ordinal: 2,
+      user_question: "What about Levinas?",
+      status: "queued",
+      job_id: "follow-job",
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(job),
+    });
+  });
+  await page.goto(APP + "/rag?thread=a&job=job-a");
+  await expect(page.locator(".thread-answer-text").first()).toContainText("Previous answer");
+  await page.locator("#researchQuestion").fill("What about Levinas?");
+  await expect(page.locator(".research-run-button")).toBeEnabled();
+  await page.locator(".research-run-button").click();
+  await expect(page).toHaveURL(/thread=a&job=follow-job/);
+  expect(requests).toHaveLength(1);
+  expect(requests[0].prompt).toBe("What about Levinas?");
+  expect(requests[0]).not.toHaveProperty("thread_context");
+  await expect(page.locator(".thread-answer-text").first()).toContainText("Previous answer");
+  await expect(page.locator(".research-run-button")).toBeDisabled();
+});
+
+test("Library imports legacy singletons and preserves thread search URL state", async ({
+  page,
+}) => {
+  let imported = false;
+  await mockBackend(page, {
+    fixtures: {
+      "POST /api/research/threads/import-legacy": () => {
+        imported = true;
+        return { created: 1, next_offset: 1, has_more: false };
+      },
+      "/api/research/threads": () => ({
+        threads: imported ? [{ ...summary("legacy"), title: "Legacy Levinas" }] : [],
+      }),
+      "/api/research/threads/legacy": detail("legacy"),
+    },
+  });
+  await page.goto(APP + "/faq");
+  const library = page.locator(".research-thread-library");
+  await expect(library.getByRole("button", { name: /Legacy Levinas/ })).toBeVisible();
+  const search = library.getByLabel("Search thread titles and questions");
+  await search.fill("Levinas");
+  await search.press("Tab");
+  await expect(page).toHaveURL(/thread_q=Levinas/);
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(
+      (value) => document.documentElement.setAttribute("data-color-scheme", value),
+      theme,
+    );
+    expect(
+      (await new AxeBuilder({ page }).include(".research-thread-library").analyze()).violations,
+    ).toEqual([]);
+  }
+  await library.getByRole("button", { name: /Legacy Levinas/ }).click();
+  await expect(page).toHaveURL(/rag\?thread=legacy/);
+});

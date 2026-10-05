@@ -1007,6 +1007,8 @@ Done when “What about Levinas?” can retrieve as a meaningful standalone quer
 
 Done when prior generated content cannot become support merely through prompt inclusion.
 
+- **Phases H/I implemented (2026-10-05), on `feat/research-threads-f-j`.** Immutable Research pipeline v2 definitions register bounded thread context and bilingual contextualization with distinct advisory ports; v1 is retained. Pipeline/Settings/run overrides govern selection and traces expose text-free policy/count/fallback/hash state. Arbitrary changed Research bindings remain inspect-only. The composer submits owner-scoped follow-ups only after thread readiness/concurrency checks. The Library presents searchable, paginated threads and retains filter URL state. Owned legacy responses import automatically in 200-summary metadata-only batches with local retry, exact singleton recovery and tombstone protection. Unowned historical entries remain in the administrative saved-run archive rather than receiving guessed ownership. Existing per-run grading and rerun remain accessible; rerun parameters discard historical thread/idempotency addressing. Targeted checks: 92 backend tests, 68 frontend unit tests, app/site/SDK and test typechecks passed. Full validation is in progress for J.
+
 ### Phase H — Pipeline Studio integration
 
 1. Register thread-context/contextualization strategies.

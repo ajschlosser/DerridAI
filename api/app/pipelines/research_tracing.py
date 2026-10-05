@@ -24,6 +24,7 @@ until they are modeled as first-class pipeline stages.
 
 from __future__ import annotations
 
+from hashlib import sha256
 from typing import Any
 
 from ..models import RAGRunRequest
@@ -135,6 +136,19 @@ def build_research_trace(
         and "lexical" in search_types
     )
 
+    if plan.thread_context_stage_id:
+        audit = result.get("research_thread") or {}
+        selection = audit.get("context_selection") or {}
+        trace_stages.append(trace_stage(
+            plan.thread_context_stage_id, strategy_for(plan.thread_context_stage_id),
+            input_count=selection.get("prior_turn_count", 0),
+            output_count=len(selection.get("items") or []),
+            parameters={"strategy": selection.get("strategy"),
+                        "character_count": selection.get("character_count", 0),
+                        "policy": selection.get("policy")},
+            status="completed" if selection else "skipped",
+        ))
+
     if plan.query_stage_id:
         query_stage = stage_payloads.get("query_metadata") or {}
         query_executed = (
@@ -161,12 +175,15 @@ def build_research_trace(
                     else None
                 ),
                 parameters={
+                    "contract": result.get("query_contract"),
                     "requested": retrieval.get("requested_query_decomposition"),
                     "effective": retrieval.get("query_decomposition"),
                     "num_predict": retrieval.get(
                         "query_decomposition_num_predict"
                     ),
                 },
+                fallback_reason=("contextualization_failed_using_original_question"
+                                 if ((result.get("research_thread") or {}).get("contextualization") or {}).get("fallback") else None),
                 status="completed" if query_executed else "skipped",
             )
         )
@@ -613,6 +630,10 @@ def build_research_trace(
             "ranking_model": selection.get("ranking_model"),
             "selected_turn_ids": selection.get("selected_turn_ids", []),
             "context_consumed": thread_audit.get("context_consumed", False),
+            "context_characters": selection.get("character_count", 0),
+            "derived_query_hash": sha256(str((thread_audit.get("contextualization") or {}).get("derived_query") or "").encode()).hexdigest(),
+            "contextualization_attempted": (thread_audit.get("contextualization") or {}).get("attempted", False),
+            "contextualization_fallback": (thread_audit.get("contextualization") or {}).get("fallback", False),
         }
 
     finished = parse_trace_datetime(finished_at)

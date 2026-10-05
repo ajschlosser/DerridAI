@@ -72,6 +72,11 @@ def list_threads(
     return {"threads": threads}
 
 
+@router.post("/api/research/threads/import-legacy")
+def import_legacy(request: Request, offset: int = Query(default=0, ge=0)) -> dict[str, Any]:
+    return research_threads.import_legacy_responses(request_user(request).username, response_store, offset=offset)
+
+
 @router.post("/api/research/threads", status_code=201)
 def create_thread(body: ThreadCreate, request: Request) -> dict[str, Any]:
     thread = research_threads.thread_store().create_thread(

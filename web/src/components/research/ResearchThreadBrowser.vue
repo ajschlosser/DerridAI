@@ -35,8 +35,14 @@ const props = defineProps<{
   retryDisabled?: boolean;
   retryBusy?: boolean;
   refreshKey?: number;
+  library?: boolean;
+  initialSearch?: string;
+  initialOffset?: number;
+  initialArchived?: boolean;
 }>();
 const emit = defineEmits<{
+  continuable: [value: boolean];
+  filters: [value: { search: string; offset: number; includeArchived: boolean }];
   select: [id: string];
   open: [turn: ResearchTurn];
   new: [];
@@ -46,8 +52,24 @@ const emit = defineEmits<{
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
 }>();
 const auth = useAuthStore();
-const offset = ref(0);
-const includeArchived = ref(false);
+const offset = ref(props.initialOffset || 0);
+const search = ref(props.initialSearch || "");
+const includeArchived = ref(Boolean(props.initialArchived));
+watch(
+  () => [props.initialSearch, props.initialOffset, props.initialArchived],
+  () => {
+    search.value = props.initialSearch || "";
+    includeArchived.value = Boolean(props.initialArchived);
+    offset.value = props.initialOffset || 0;
+  },
+);
+watch([search, offset, includeArchived], () =>
+  emit("filters", {
+    search: search.value,
+    offset: offset.value,
+    includeArchived: includeArchived.value,
+  }),
+);
 const dialog = ref<"rename" | "delete" | null>(null);
 const busy = ref(false);
 const mutationError = ref("");
@@ -69,9 +91,14 @@ const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
 const scope = computed(() => [auth.user?.id, auth.user?.role, allowed.value]);
 const list = useDataQuery(
   "research_threads",
-  () => researchThreadsApi.list({ offset: offset.value, includeArchived: includeArchived.value }),
+  () =>
+    researchThreadsApi.list({
+      offset: offset.value,
+      includeArchived: includeArchived.value,
+      ...(search.value ? { search: search.value } : {}),
+    }),
   {
-    detail: () => [...scope.value, "list", offset.value, includeArchived.value],
+    detail: () => [...scope.value, "list", offset.value, includeArchived.value, search.value],
     enabled: allowed,
   },
 );
@@ -105,13 +132,28 @@ function retryTurn(turn: ResearchTurn) {
     return;
   emit("retryTurn", turn);
 }
-watch(includeArchived, () => {
+watch([includeArchived, search], () => {
   offset.value = 0;
 });
 const error = computed(() => {
   const value = list.error.value || (props.threadId ? detail.error.value : null);
   return value instanceof Error ? value.message : value ? String(value) : "";
 });
+const continuable = computed(() => {
+  const thread = detail.data.value;
+  return Boolean(
+    allowed.value &&
+      thread &&
+      thread.thread_id === props.threadId &&
+      !thread.archived_at &&
+      !detail.isFetching.value &&
+      !detail.error.value &&
+      !busy.value &&
+      !thread.turns.some((turn) => ["queued", "running"].includes(turn.status)),
+  );
+});
+watch(continuable, (value) => emit("continuable", value), { immediate: true });
+onBeforeUnmount(() => emit("continuable", false));
 // Revoked access/deletion must clear cached content; transient failures retain it.
 function inaccessible(value: unknown) {
   return value instanceof ApiError && [401, 403, 404].includes(value.status);
@@ -203,6 +245,9 @@ function retry() {
     :selected-thread-id="threadId"
     :selected-job-id="jobId"
     :offset="offset"
+    :search="search"
+    :show-preview="library"
+    @search="search = $event"
     :loading="list.isFetching.value || (Boolean(threadId) && detail.isFetching.value)"
     :error="error || (!dialog ? mutationError : '')"
     :include-archived="includeArchived"

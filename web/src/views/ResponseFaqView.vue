@@ -20,7 +20,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
+import ResearchThreadBrowser from "../components/research/ResearchThreadBrowser.vue";
+import { researchThreadsApi } from "../api/researchThreads";
+import type { ResearchTurn } from "../types/researchThreads";
 import AppIcon from "../components/AppIcon.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
@@ -39,8 +41,66 @@ import {
   rerunResponseFaqRecord,
 } from "../domain/sharedResponseFaq";
 
+const importBusy = ref(false);
+const importError = ref("");
+const importOffset = ref(0);
+const importHasMore = ref(true);
+const libraryRefresh = ref(0);
+let importRequest = 0;
+async function importLegacy() {
+  if (importBusy.value || !auth.can("rag.run")) return;
+  const request = ++importRequest;
+  importBusy.value = true;
+  importError.value = "";
+  try {
+    const result = await researchThreadsApi.importLegacy(importOffset.value);
+    if (request !== importRequest) return;
+    importOffset.value = result.next_offset;
+    importHasMore.value = result.has_more;
+    ++libraryRefresh.value;
+  } catch (error) {
+    if (request === importRequest)
+      importError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (request === importRequest) {
+      importBusy.value = false;
+      if (importHasMore.value && !importError.value) void importLegacy();
+    }
+  }
+}
+function libraryFilters(value: { search: string; offset: number; includeArchived: boolean }) {
+  void router.replace({
+    query: {
+      ...route.query,
+      thread_q: value.search || undefined,
+      thread_offset: value.offset ? String(value.offset) : undefined,
+      thread_archived: value.includeArchived ? "true" : undefined,
+    },
+  });
+}
+function selectLibraryThread(id: string) {
+  void router.push({ path: "/rag", query: { thread: id } });
+}
+function openLibraryTurn(turn: ResearchTurn) {
+  selectLibraryThread(turn.thread_id);
+}
 const i18n = useI18nStore();
 const auth = useAuthStore();
+watch(
+  () => [auth.user?.id, auth.user?.role, auth.can("rag.run")],
+  () => {
+    ++importRequest;
+    importBusy.value = false;
+    importError.value = "";
+    importOffset.value = 0;
+    importHasMore.value = true;
+    if (auth.can("rag.run")) void importLegacy();
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  ++importRequest;
+});
 const router = useRouter();
 const route = useRoute();
 const routeText = (value: unknown) =>
@@ -146,7 +206,10 @@ async function syncFaqUrl() {
     return;
   writingRoute = true;
   try {
-    await router.replace({ path: "/faq", query: next });
+    await router.replace({
+      path: "/faq",
+      query: { ...route.query, q: undefined, page: undefined, id: undefined, ...next },
+    });
   } finally {
     writingRoute = false;
   }
@@ -442,6 +505,32 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
       </template>
     </UiPageHeader>
 
+    <section v-if="auth.can('rag.run')" class="research-thread-library">
+      <p>{{ i18n.t("faq.thread_library_help") }}</p>
+      <ResearchThreadBrowser
+        thread-id=""
+        job-id=""
+        library
+        :initial-search="routeText(route.query.thread_q)"
+        :initial-offset="Math.max(0, Number(route.query.thread_offset) || 0)"
+        :initial-archived="route.query.thread_archived === 'true'"
+        @filters="libraryFilters"
+        :refresh-key="libraryRefresh"
+        @select="selectLibraryThread"
+        @open="openLibraryTurn"
+        @new="newResearch"
+      />
+      <button
+        v-if="importHasMore"
+        type="button"
+        class="btn"
+        :disabled="importBusy"
+        @click="importLegacy"
+      >
+        {{ i18n.t(importBusy ? "loading.updating" : "research.threads_import_legacy") }}
+      </button>
+      <p v-if="importError" role="alert">{{ importError }}</p>
+    </section>
     <div v-if="readError && !archiveOpen" class="response-faq-read-error" role="alert">
       <p>{{ i18n.tf(ready ? "faq.refresh_failed" : "faq.read_failed", { message: readError }) }}</p>
       <button class="btn" type="button" :disabled="loading" @click="load()">
@@ -461,15 +550,7 @@ onBeforeUnmount(() => window.clearTimeout(searchTimer));
       <UiLoadingState variant="skeleton" :label="i18n.t('faq.loading')" />
     </div>
 
-    <AccessibleEmptyState
-      v-else-if="ready && !cacheTotal && !readError"
-      icon="spark"
-      icon-tone="neutral"
-      :title="i18n.t('faq.empty_title')"
-      :description="i18n.t('faq.empty_help')"
-    />
-
-    <section v-else-if="selected && result" class="response-faq-workspace">
+    <section v-if="selected && result" class="response-faq-workspace">
       <ResponseFaqSelectionBar
         :record="selected"
         :evidence-count="evidenceCount"

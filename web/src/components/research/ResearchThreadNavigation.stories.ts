@@ -82,3 +82,7 @@ export const Archived: Story = {
 };
 
 export const RetryPending: Story = { args: { retryDisabled: true } };
+
+export const Library: Story = {
+  args: { thread: null, selectedThreadId: "", showPreview: true, search: "responsibility" },
+};

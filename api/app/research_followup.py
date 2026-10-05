@@ -25,7 +25,7 @@ def advisory_context(audit: dict[str, Any] | None, question: str) -> str:
     # Historical marker names must not alias E0 etc. in the current packet.
     # JSON escaping prevents history from closing the explicit prompt section.
     text = json.dumps(items, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e")
-    return re.sub(r"\[\[E[^\]]*\]\]", "[historical citation omitted]", text)
+    return re.sub(r"\bE\d+\b", "historical-citation", text)
 
 
 def contextual_query_prompt(question: str, instructions: str, context: str) -> str:
