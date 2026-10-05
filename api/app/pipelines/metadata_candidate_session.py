@@ -74,6 +74,8 @@ class RoutingSessionResult:
     server_proposals: ProposalPacket
     reviewer_packet: ReviewerPacket
     stages: tuple[PipelineStageTrace, ...]
+    pipeline_id: str
+    pipeline_version: int
     pipeline_hash: str
 
 
@@ -226,5 +228,6 @@ class CandidateRoutingSession:
                 withheld_fields=tuple(name for name in self.collector.fields if name in self.blind_fields),
                 diagnostics=packet.diagnostics,
             ),
-            stages=tuple(result.stages), pipeline_hash=result.pipeline_hash,
+            stages=tuple(result.stages), pipeline_id=pipeline.pipeline_id,
+            pipeline_version=pipeline.version, pipeline_hash=result.pipeline_hash,
         )

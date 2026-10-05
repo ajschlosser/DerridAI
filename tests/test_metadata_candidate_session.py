@@ -53,6 +53,8 @@ def test_all_sources_fan_in_preserves_rivals_and_model_review_state():
     assert result.reviewer_packet.proposals[0].support == "model_inferred"
     assert result.server_proposals.proposals[0].needs_review
     assert owner.record == before
+    assert result.pipeline_id == "metadata.candidate_shadow"
+    assert result.pipeline_version == 1 and len(result.pipeline_hash) == 64
     assert sum(stage.stage_id.startswith("collect_") for stage in result.stages) == 4
     assert "Rousseau" not in str([stage.model_dump() for stage in result.stages])
 
