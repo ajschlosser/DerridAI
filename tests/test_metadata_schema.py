@@ -1106,3 +1106,27 @@ def test_composite_assessment_states_cannot_populate_scalar_metadata():
     assert parsed.metadata.speaker is None
     assert parsed.field_assessments.speaker.outcome == "uncertain"
     assert parsed.field_assessments.speaker.needs_review is True
+
+
+def test_schema_resolves_renamed_fields_by_semantic_compatibility_identity():
+    schema = ms.default_schema()
+    renamed = schema.model_copy(
+        update={
+            "fields": [
+                field.model_copy(
+                    update={"name": "interlocutor"}
+                    if field.name == "position_holder"
+                    else {}
+                )
+                for field in schema.fields
+            ]
+        }
+    )
+
+    assert renamed.fields_for_semantic_compatibility_id("derridai.position_holder") == [
+        "interlocutor"
+    ]
+    assert renamed.fields_for_semantic_compatibility_id("derridai.indexing.persons") == [
+        "persons"
+    ]
+    assert renamed.fields_for_semantic_compatibility_id("missing.semantic.role") == []
