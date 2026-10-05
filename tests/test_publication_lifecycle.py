@@ -393,7 +393,8 @@ def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp
     try:
         manager.publish(build_id,accept_unreviewed=True)
     except ValueError as exc:
-        assert "text-fidelity" in str(exc)
+        assert "source validation" in str(exc)
+        assert "source_coverage" in str(exc)
     else:
         raise AssertionError("actual missing source coverage must still block publication")
 
@@ -451,7 +452,14 @@ def test_accept_unreviewed_repairs_retired_sourceunit_binding_before_publication
     assert history[-1]["previous_source_unit_ids"]==["u-old"]
     assert history[-1]["source_text_conserved"] is True
     refreshed=repo.get_build(build_id)
-    assert refreshed["validation"]["source_valid"] is True
+    assert refreshed["validation"]["missing_block_ids"]==[]
+    assert refreshed["validation"]["missing_source_unit_ids"]==[]
+    assert refreshed["validation"]["duplicate_block_ids"]==[]
+    assert refreshed["validation"]["unknown_source_unit_ids"]==[]
+    assert refreshed["validation"]["source_reference_errors"]==[]
+    assert refreshed["validation"]["source_conservation_errors"]==[]
+    assert refreshed["validation"]["text_fidelity_errors"]==[]
+    assert refreshed["validation"]["source_order_errors"]==[]
     assert refreshed["source_topology_reconciliation_history"]
 
 
