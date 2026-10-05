@@ -197,12 +197,14 @@ jobs:
             exit 0
           fi
 
-          # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
+          # Temporary formatter diagnostic for the two remaining CLI documentation files.
           git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
             '*.ts' '*.tsx' '*.vue' '*.css' '*.scss' '*.html' \
             | xargs -0 --no-run-if-empty ./web/node_modules/.bin/prettier \
-              --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+              --write --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown
+          git diff -- docs/BINARY_PIPELINE_PLAN.md docs/PIPELINE_CONFIGURATION_CONTRACT.md
+          exit 1
 
   backend-lint:
     needs: changes
