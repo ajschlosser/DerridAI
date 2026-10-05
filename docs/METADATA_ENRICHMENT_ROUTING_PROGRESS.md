@@ -33,7 +33,7 @@ This is the authoritative resume point for the revised Pipeline Studio candidate
 | Safe parallel scheduling                                | Complete | `394745cf`; bounded server opt-in, stable fan-in/traces, shared capacity and cancellation coverage                        |
 | Baseline benchmark and instrumentation                  | Partial  | Isolated runner and character/lookup counters implemented; real-provider case/model selection remains pending             |
 | Candidate packet, collection, aggregation, invalidation | Complete | `fcf4ab99`; server-only collection foundation; production registration and routing remain disabled                        |
-| Current-record support and observe-only router          | Pending  | Must precede activation of RESOLVE/VERIFY                                                                                 |
+| Current-record support and observe-only router          | Complete | Exact current-locator checks and server-only advisory route observations                                                  |
 | RESOLVE, VERIFY, scoped INFER and proposal fan-in       | Pending  | No new routing behavior enabled                                                                                           |
 | Retrieval consolidation, calibration, benchmark tuning  | Pending  | No 33% performance or reviewer-quality claim                                                                              |
 
@@ -62,7 +62,7 @@ PR #508 merged into master at `51b481cf`; that master was merged into this branc
 
 ## Next action
 
-Implement current-Record support validation and the observe-only router over the collected packets. Do not activate RESOLVE/VERIFY or register a production adaptive graph until support, reviewer visibility, authority and failure invariants pass. The historical compiler still accepts its bounded provider graph; the new collection contracts/handlers are available only to explicit server-owned observation graphs, outside the public catalog.
+Implement RESOLVE/VERIFY, scoped INFER and proposal fan-in only after the applicable schema/value, semantic-support and reviewer-visibility gates are defined and validated. The observation checkpoint validates exact mention occurrence, not proposition-level support or calibrated resolution. Production activation remains disabled; preserve historical enrichment/provider behavior and authority policy. Real-provider benchmark corpus/model selection remains pending.
 
 ## Historical executor migration checkpoint (`9381c191`)
 
@@ -135,3 +135,21 @@ Concurrent integration: preserved `33beed23` and `4ba99d92` baseline-runner/inst
 Post-integration validation: 178 focused tests passed, including the concurrent benchmark-runner tests; full backend Ruff and full mypy passed for 267 source files. The earlier full regression and its baseline reproduction preceded this integration; no green full-regression claim is made for the merged head.
 
 Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/pull/517. After the validated integration was pushed, master advanced to `7243f61e` (audio word/speaker alignment, PR #514). That later master is not merged into this checkpoint; refresh it and revalidate before claiming merge readiness. Work stopped with 16% of the five-hour usage window remaining, as requested.
+
+## Current support and observe-only routing checkpoint (2026-10-04)
+
+- Added `metadata_candidate_observation.py`: typed, read-only route observations bound to the exact collection snapshot. Changed Record/schema/reviewer/configuration dependencies, incompatible packet bindings, mismatched field identities and out-of-scope candidates fail visibly.
+- Current support checks require matching Record ID, RecordRevision and SourceDocument, integer offsets (booleans rejected), bounds and an exact text slice. Only NLP current locators establish `exact_mention`; historical precedents, exact memory and Document Intelligence hints never acquire current evidence by transfer. Semantic support remains explicitly unchecked.
+- A single exact person-indexing value suggests RESOLVE; rival candidates, corrections, absence and other candidate-bearing fields suggest VERIFY; candidate-free fields suggest scoped INFER. These labels are observations only: no resolver, verifier or provider executes, no canonical field changes, and no human authority is established. Duplicate origins conservatively remain separate and can force VERIFY; no calibrated confidence is invented.
+- Server-only strategy/handler consumes `metadata_candidate_set` and returns `metadata_hypothesis_set` through named ports. Public registration, UI controls and production assignments remain unchanged. Callers retain responsibility for canonical exemplar selection and reviewer/blind-review visibility, as at the collection boundary. The observation API does not create a new client-facing review surface.
+- Refreshed master to `c4dc05aa` before validation. 233 focused tests passed across candidate collection/observation, generic execution, contracts, workflow semantics, public catalog, historical enrichment, benchmark runner and human ownership/reruns. Fifteen new cases cover invalid/current/historical locators, stale snapshots, rival/absent/corrected candidates, incompatible fields, scoped empty routes, read-only authority and named-port/source-free traces. Ruff and catalog exporter `--check` passed. No dead code was found in the touched implementation.
+- Validation limitations: the reused Python environment lacks mypy. Full preflight is recorded below; no full-regression, real-provider latency, reviewer-quality, calibrated resolution or merge-readiness claim is made. The initial sandbox test run could not create temporary storage; rerunning with scratch storage under this workspace passed. Git Bash required execution outside the Windows sandbox.
+
+- Checkpoint implementation commit: `ad0a7fe7`. Full preflight attempted after commit: full backend Ruff and Python syntax passed; required formatting gate could not find this fresh clone's `web/node_modules`, generated-artifact gate reported stale/unverifiable artifacts, mypy was missing, and full regression could not start because pytest-xdist was missing (`-n`/`--dist` unsupported). The separately executed public pipeline catalog check passed, and the touched Markdown was formatted with the existing workspace Prettier. These limitations are not accepted passes. Commit/push use `DERRIDAI_SKIP_PREFLIGHT=1` after the manual targeted checks and this failed full-preflight attempt.
+- Stopping after this bounded observation checkpoint with 11% of the five-hour allowance remaining at the latest usage check, above the requested 8% floor. Resume with semantic-support/reviewer gates and RESOLVE/VERIFY/scoped INFER/proposal fan-in; do not enable adaptive production routing based on exact mention occurrence alone.
+
+## PR #520 CI repair (2026-10-04)
+
+- Merged current master `ad28261f`, including the completed legacy-runtime retirement from PR #518, before revalidating this branch.
+- Updated the researcher text-policy wiring guard to read the canonical `domain/appBootstrap.ts` and `domain/researcherInputFilter.ts` modules directly now that `runtime.js` has been retired. This removes the stale collection-time dependency on the deleted compatibility file without changing policy behavior.
+- Restored the touched files' UTF-8 copyright marker after an earlier shell-encoding round trip. This is repository hygiene only; it does not alter candidate-routing semantics.
