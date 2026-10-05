@@ -159,6 +159,115 @@ def assert_active_source_unit_ownership(
             owners[unit_id] = record_id
 
 
+def active_source_unit_map(units: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Return active SourceUnits keyed by canonical unit ID."""
+    return {
+        str(unit.get("source_unit_id") or unit.get("unit_id")): unit
+        for unit in units
+        if unit.get("active")
+        and str(unit.get("source_unit_id") or unit.get("unit_id") or "")
+    }
+
+
+def record_source_unit_ids(record: dict[str, Any]) -> list[str]:
+    """Return the canonical topology IDs for a Record, with legacy block fallback."""
+    explicit = [
+        str(value)
+        for value in record.get("source_unit_ids") or []
+        if str(value)
+    ]
+    if explicit:
+        return explicit
+    return [
+        str(value)
+        for value in record.get("source_block_ids") or []
+        if str(value)
+    ]
+
+
+def source_unit_root_block_ids(
+    unit_id: str,
+    units_by_id: dict[str, dict[str, Any]],
+    source_block_ids: set[str],
+    seen: set[str] | None = None,
+) -> list[str]:
+    """Resolve a SourceUnit through lineage to immutable extraction-block IDs.
+
+    Structural edits may replace one extraction block with multiple SourceUnits,
+    or later replace those replacement units again. Publication validation needs
+    the immutable extraction roots for coverage/order checks without flattening
+    the current SourceUnit topology back into legacy block ownership.
+    """
+    value = str(unit_id or "")
+    if not value:
+        return []
+    if value in source_block_ids:
+        return [value]
+    visited = set(seen or ())
+    if value in visited:
+        return []
+    visited.add(value)
+    unit = units_by_id.get(value)
+    if not unit:
+        return []
+    parents = [
+        str(parent)
+        for parent in unit.get("parent_unit_ids") or []
+        if str(parent)
+    ]
+    if not parents:
+        parents = [
+            str(parent)
+            for parent in unit.get("source_block_ids") or []
+            if str(parent)
+        ]
+    if not parents:
+        block_id = str(unit.get("block_id") or "")
+        parents = [block_id] if block_id else []
+    roots: list[str] = []
+    for parent in parents:
+        for root in source_unit_root_block_ids(
+            parent,
+            units_by_id,
+            source_block_ids,
+            visited,
+        ):
+            if root not in roots:
+                roots.append(root)
+    return roots
+
+
+def synchronize_record_source_projection(
+    records: list[dict[str, Any]],
+    units: list[dict[str, Any]],
+) -> int:
+    """Rebuild derived Record extraction text from authoritative active SourceUnits.
+
+    The Record text field is an editorial/review layer and may legitimately differ
+    from the immutable extraction. source_extracted_text is a provenance projection:
+    after split/combine/create operations it must be derived from the SourceUnits
+    owned by the Record, never copied from reviewed text. This migration is
+    deterministic and does not claim a human decision.
+    """
+    active = active_source_unit_map(units)
+    changed = 0
+    for record in records:
+        unit_ids = record_source_unit_ids(record)
+        if not unit_ids or any(unit_id not in active for unit_id in unit_ids):
+            continue
+        if not record.get("source_unit_ids"):
+            record["source_unit_ids"] = list(unit_ids)
+            changed += 1
+        extracted = JOIN.join(
+            str(active[unit_id].get("text") or "").strip()
+            for unit_id in unit_ids
+            if str(active[unit_id].get("text") or "").strip()
+        )
+        if record.get("source_extracted_text") != extracted:
+            record["source_extracted_text"] = extracted
+            changed += 1
+    return changed
+
 def assert_text_conserved(before: list[str], after: list[str]) -> None:
     """Refuse an edit that loses, invents, duplicates, or reorders text."""
     if _squash("".join(before)) != _squash("".join(after)):
