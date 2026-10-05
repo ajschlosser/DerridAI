@@ -20,6 +20,8 @@ import { onBeforeUnmount, ref, watch } from "vue";
 import { researchThreadsApi } from "../../api/researchThreads";
 import { useAuthStore } from "../../stores/auth";
 
+const AUTO_IMPORT_PAUSE_MS = 750;
+
 /** Incremental migration is independent of the authoritative Library reads. */
 export function useLegacyThreadImport() {
   const auth = useAuthStore();
@@ -29,8 +31,29 @@ export function useLegacyThreadImport() {
   const refreshKey = ref(0);
   let offset = 0;
   let request = 0;
+  let scheduled: number | undefined;
+  let disposed = false;
+
+  function cancelScheduled() {
+    if (scheduled !== undefined) window.clearTimeout(scheduled);
+    scheduled = undefined;
+  }
+
+  function scheduleNextBatch() {
+    cancelScheduled();
+    if (disposed || busy.value || error.value || !hasMore.value || !auth.can("rag.run")) return;
+    // Legacy response migration is maintenance work, not a prerequisite for
+    // using the Library. Yield between batches so search, navigation, and
+    // Research rendering remain responsive while a large history is imported.
+    scheduled = window.setTimeout(() => {
+      scheduled = undefined;
+      void retry();
+    }, AUTO_IMPORT_PAUSE_MS);
+  }
+
   async function retry() {
     if (busy.value || !auth.can("rag.run")) return;
+    cancelScheduled();
     const current = ++request;
     busy.value = true;
     error.value = "";
@@ -46,7 +69,7 @@ export function useLegacyThreadImport() {
     } finally {
       if (current === request) {
         busy.value = false;
-        if (hasMore.value && !error.value) void retry();
+        if (hasMore.value && !error.value) scheduleNextBatch();
       }
     }
   }
@@ -54,16 +77,19 @@ export function useLegacyThreadImport() {
     () => [auth.user?.id, auth.user?.role, auth.can("rag.run")],
     () => {
       ++request;
+      cancelScheduled();
       offset = 0;
       busy.value = false;
       error.value = "";
       hasMore.value = true;
-      if (auth.can("rag.run")) void retry();
+      if (auth.can("rag.run")) scheduleNextBatch();
     },
     { immediate: true },
   );
   onBeforeUnmount(() => {
+    disposed = true;
     ++request;
+    cancelScheduled();
   });
   return { busy, error, hasMore, refreshKey, retry };
 }
