@@ -4840,6 +4840,66 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             if not applied:
                 if current:
                     logger.warning("Discarded stale initial metadata checkpoint for build %s record %s", build_id, record_id)
+
+                # A reviewer can change a Record after this family entered the
+                # running state. The canonical Record is then requeued and this
+                # worker's terminal checkpoint is correctly rejected as stale.
+                # The build-level active-task summary is a separate operational
+                # projection, though: without clearing the matching old run it
+                # can leave the Record displayed as "active" for the rest of a
+                # book-length pass. Remove only the exact run identified by the
+                # callback's started_at value so a newer requeued run for the
+                # same Record/family cannot be hidden or have its counter stolen.
+                terminal_states = {"complete", "failed", "needs_review", "skipped"}
+                callback_ledger = (
+                    copy.get("metadata_execution_ledger")
+                    if isinstance(copy.get("metadata_execution_ledger"), dict)
+                    else {}
+                )
+                callback_entry = (
+                    callback_ledger.get(task_name)
+                    if isinstance(callback_ledger.get(task_name), dict)
+                    else {}
+                )
+                callback_started_at = str(callback_entry.get("started_at") or "")
+                if state in terminal_states and callback_started_at:
+                    build = self.repo.get_build(build_id)
+                    active_before = list(build.get("metadata_active_tasks") or [])
+                    stale_active = [
+                        item
+                        for item in active_before
+                        if (
+                            str(item.get("record_id") or "") == record_id
+                            and str(item.get("task") or "") == task_name
+                            and str(item.get("started_at") or "") == callback_started_at
+                        )
+                    ]
+                    if stale_active:
+                        stale_updates: dict[str, Any] = {
+                            "metadata_active_tasks": [
+                                item
+                                for item in active_before
+                                if item not in stale_active
+                            ][:32],
+                            "metadata_tasks_running": max(
+                                0, int(build.get("metadata_tasks_running") or 0) - 1
+                            ),
+                            "metadata_last_progress_at": iso_now(),
+                        }
+                        live_record = current[0] if current else {}
+                        live_status = (
+                            live_record.get("metadata_stage_status")
+                            if isinstance(live_record.get("metadata_stage_status"), dict)
+                            else {}
+                        )
+                        if (
+                            live_record.get("metadata_requeue_requested")
+                            and str(live_status.get(task_name) or "") == "queued"
+                        ):
+                            stale_updates["metadata_tasks_queued"] = (
+                                int(build.get("metadata_tasks_queued") or 0) + 1
+                            )
+                        self._update(build_id, **stale_updates)
                 return
             merged = current[0]
 
