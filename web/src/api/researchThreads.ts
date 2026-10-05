@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { apiRequest } from "./http";
 import type {
   ResearchThread,
@@ -26,6 +27,11 @@ const THREADS_PATH = "/api/research/threads";
 
 /** Thread authority is SQLite; answer/evidence bodies use the existing authorized run APIs. */
 export const researchThreadsApi = {
+  importLegacy: (offset = 0) =>
+    apiRequest<{ created: number; next_offset: number; has_more: boolean }>(
+      `${THREADS_PATH}/import-legacy?offset=${offset}`,
+      { method: "POST" },
+    ),
   list: (options: { offset?: number; search?: string; includeArchived?: boolean } = {}) => {
     const query = new URLSearchParams({
       limit: "50",

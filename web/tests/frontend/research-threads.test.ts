@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 import { mount, flushPromises } from "@vue/test-utils";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -519,4 +520,21 @@ it("refreshes authoritative state after archive failure without resending a pote
   await flushPromises();
   expect(api.patch).toHaveBeenCalledTimes(1);
   expect(wrapper.text()).not.toContain("Connection interrupted");
+});
+
+it("allows follow-ups only for a loaded unarchived thread with no active turn", async () => {
+  const wrapper = browser();
+  await flushPromises();
+  expect(wrapper.emitted("continuable")?.at(-1)).toEqual([true]);
+  api.get.mockResolvedValue({ ...thread("a"), archived_at: "2026-10-05" });
+  await wrapper.setProps({ refreshKey: 1 });
+  await flushPromises();
+  expect(wrapper.emitted("continuable")?.at(-1)).toEqual([false]);
+  api.get.mockResolvedValue({
+    ...thread("a"),
+    turns: [{ ...thread("a").turns[0], status: "running" }],
+  });
+  await wrapper.setProps({ refreshKey: 2 });
+  await flushPromises();
+  expect(wrapper.emitted("continuable")?.at(-1)).toEqual([false]);
 });

@@ -29,7 +29,11 @@ from typing import Any
 
 from . import operation_events
 from .models import RAGRunRequest
-from .research_context import rank_cached_thread_context, select_thread_context
+from .research_context import (
+    ThreadContextPolicy,
+    rank_cached_thread_context,
+    select_thread_context,
+)
 from .research_thread_store import ResearchThreadStore, ThreadNotFound, get_thread_store
 from .research_turn_results import saved_turn_result
 
@@ -81,13 +85,32 @@ def start_run(
             return _with_thread(jobs.get(turn["job_id"]), turn)
     body = body.model_copy(update={"thread_id": turn["thread_id"]})
     try:
-        # Stored for audit only in this checkpoint; generation still receives
-        # no historical content until the separate prompt contract lands.
+        # Resolve the same immutable pipeline version/override policy as the worker.
+        from .pipelines.manager import pipeline_manager
+        from .pipelines.models import PipelineDefinition
+        from .pipelines.overrides import resolve_pipeline_config
+        from .pipelines.research import compile_research_pipeline
+
+        definition = (pipeline_manager.get_definition(body.pipeline_id, body.pipeline_version)
+                      if body.pipeline_id else PipelineDefinition.model_validate(
+                          pipeline_manager.resolve("research")["pipeline"]))
+        if definition is None:
+            raise ValueError("Research pipeline was not found")
+        effective = resolve_pipeline_config(
+            definition, settings_overrides=body.settings_pipeline_overrides,
+            run_overrides=body.run_pipeline_overrides,
+        ).effective
+        plan = compile_research_pipeline(effective)
+        context_config = plan.stage_configs.get(plan.thread_context_stage_id) or {}
+        policy = ThreadContextPolicy(**{key: value for key, value in context_config.items()
+                                       if key in {"max_turns", "max_characters", "max_answer_characters", "include_answers"}})
+        body = body.model_copy(update={"pipeline_id": definition.pipeline_id, "pipeline_version": definition.version})
         cache = getattr(jobs, "_store", None)
         context = select_thread_context(
-            store, turn["turn_id"], owner, jobs.get,
+            store, turn["turn_id"], owner, jobs.get, policy=policy,
             read_saved=(lambda prior, username: saved_turn_result(prior, username, cache)) if cache else None,
-            rank_older=lambda query, texts: rank_cached_thread_context(query, texts, body.cross_encoder_model),
+            rank_older=(lambda query, texts: rank_cached_thread_context(query, texts, body.cross_encoder_model))
+            if context_config.get("semantic", True) else None,
         )
         store.save_context_selection(turn["turn_id"], owner, context.snapshot())
         job = jobs.create(body, owner=owner, turn_id=turn["turn_id"])
@@ -144,6 +167,7 @@ def sync_turn_from_job(job: dict[str, Any]) -> None:
                 owner,
                 research_run_id=job["id"],
                 response_record_id=str(record_id or job["id"]),
+                contextualized_query=((job.get("result") or {}).get("query_metadata") or {}).get("prompt_query"),
             )
         elif status in ("failed", "cancelled"):
             store.end_turn(
@@ -160,3 +184,13 @@ def sync_turn_from_job(job: dict[str, Any]) -> None:
         logger.exception("Could not link Research job %s to turn %s", job.get("id"), turn_id)
         return
     notify_changed()
+
+
+def import_legacy_responses(owner: str, cache: Any, *, offset: int = 0, limit: int = 200) -> dict[str, Any]:
+    """Materialize one bounded owner-scoped batch; preserve cache and provenance."""
+    page = cache.get_legacy_response_summaries(owner, limit=limit, offset=offset)
+    created = thread_store().materialize_legacy(owner, page["records"])
+    if created:
+        notify_changed()
+    return {"created": len(created), "next_offset": offset + page["scanned"],
+            "has_more": page["scanned"] == limit}

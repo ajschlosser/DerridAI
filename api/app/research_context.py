@@ -61,6 +61,7 @@ class ThreadContextItem:
     role: Literal["user", "assistant"]
     text: str
     source: Literal["immediate_previous", "recent_fallback", "semantic"]
+    response_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,12 +71,14 @@ class ThreadContextPacket:
     policy: ThreadContextPolicy
     strategy: str = "previous_and_recent_fallback"
     ranking_model: str | None = None
+    prior_turn_count: int = 0
 
     def snapshot(self) -> dict[str, Any]:
         return {
             "version": "research-thread-context-v2",
             "strategy": self.strategy,
             "ranking_model": self.ranking_model,
+            "prior_turn_count": self.prior_turn_count,
             "advisory": True,
             "evidentiary": False,
             "policy": asdict(self.policy),
@@ -169,7 +172,7 @@ def select_thread_context(
                     continue
                 items.append(
                     ThreadContextItem(
-                        turn["turn_id"], turn["ordinal"], "assistant", answer, source
+                        turn["turn_id"], turn["ordinal"], "assistant", answer, source, turn.get("research_run_id")
                     )
                 )
             else:
@@ -210,7 +213,7 @@ def select_thread_context(
         selected_count += 1
         characters += size
     selected.sort(key=lambda item: (item.ordinal, item.role == "assistant"))
-    return ThreadContextPacket(tuple(selected), tuple(warnings), policy, strategy, ranking_model)
+    return ThreadContextPacket(tuple(selected), tuple(warnings), policy, strategy, ranking_model, len(previous))
 
 
 def rank_cached_thread_context(query: str, texts: list[str], model: str) -> tuple[list[float] | None, str]:

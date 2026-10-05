@@ -67,6 +67,7 @@ class ResearchPipelinePlan:
     pipeline_version: int
     pipeline_hash: str
     query_stage_id: str | None
+    thread_context_stage_id: str | None
     query_decomposition_available: bool
     semantic_stage_id: str | None
     lexical_stage_id: str | None
@@ -155,6 +156,8 @@ SUPPORTED_STRATEGIES = frozenset(
     {
         "query.passthrough",
         "query.research_decompose",
+        "query.research_contextualize",
+        "context.research_thread",
         "retrieve.chroma_similarity",
         "retrieve.lexical_bm25",
         "normalize.collection_relevance",
@@ -389,6 +392,11 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         by_strategy.setdefault(stage.strategy, []).append(stage)
 
     query_decompose = _single_stage(by_strategy, "query.research_decompose")
+    contextualize = _single_stage(by_strategy, "query.research_contextualize")
+    context_stage = _single_stage(by_strategy, "context.research_thread")
+    if contextualize and query_decompose:
+        raise ValueError("Research supports only one query transformation")
+    query_decompose = query_decompose or contextualize
     query_passthrough = _single_stage(by_strategy, "query.passthrough")
     if query_decompose and query_passthrough:
         raise ValueError("Research supports one query-transform stage, not both.")
@@ -432,7 +440,10 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         if stage_id in stages
     ]
     if query_stage:
-        if enabled_entries != [query_stage.id]:
+        expected_entry = context_stage.id if context_stage else query_stage.id
+        if context_stage and (context_stage.next != [query_stage.id] or not contextualize):
+            raise ValueError("Thread context must directly feed contextualization")
+        if enabled_entries != [expected_entry]:
             raise ValueError(
                 "Research pipelines with a query-transform stage must use that "
                 "stage as the single enabled entry point."
@@ -448,6 +459,8 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
                     f"retrieval stage {retrieval_stage.id!r}."
                 )
     else:
+        if context_stage:
+            raise ValueError("Thread context requires a contextualization stage")
         expected_entries = {
             stage.id
             for stage in (semantic, lexical)
@@ -648,6 +661,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         pipeline_version=pipeline.version,
         pipeline_hash=pipeline_hash(pipeline),
         query_stage_id=query_stage.id if query_stage else None,
+        thread_context_stage_id=context_stage.id if context_stage else None,
         query_decomposition_available=query_decompose is not None,
         semantic_stage_id=semantic.id if semantic else None,
         lexical_stage_id=lexical.id if lexical else None,

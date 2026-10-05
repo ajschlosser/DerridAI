@@ -2112,6 +2112,30 @@ class ChromaStore:
         mentions_capability = any(token in message for token in ("unsupported", "not supported", "invalid", "unexpected"))
         return mentions_feature and mentions_capability
 
+    def get_legacy_response_summaries(self, owner: str, *, limit: int = 200, offset: int = 0) -> dict[str, Any]:
+        """Owner-scoped, bounded metadata scan; never decode answer/evidence payloads."""
+        try:
+            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return {"records": [], "scanned": 0}
+            raise
+        payload = collection.get(where={"owner": owner}, include=["metadatas"], limit=limit, offset=offset)
+        metadata = payload.get("metadatas") or []
+        summaries = []
+        for storage_id, item in zip(payload.get("ids") or [], metadata, strict=True):
+            item = item or {}
+            if item.get("owner") != owner or item.get("research_thread"):
+                continue
+            if not item.get("question") or not item.get("response_id"):
+                continue
+            summaries.append({
+                "record_id": item.get("record_id") or storage_id,
+                "question": item["question"], "run_id": item["response_id"],
+                "created_at": item.get("created_at"), "instructions": item.get("instructions"),
+            })
+        return {"records": summaries, "scanned": len(metadata)}
+
     def get_response_cache_records(
         self,
         *,
@@ -2225,6 +2249,9 @@ class ChromaStore:
             "response_type": "rag",
             "owner": owner,
             "research_thread": result.get("research_thread"),
+            "pipeline": result.get("pipeline"),
+            "prompt_contract": result.get("prompt_contract"),
+            "query_contract": result.get("query_contract"),
             "question": result.get("prompt") or request.get("prompt") or "",
             "instructions": request.get("instructions") or "",
             "text": result.get("answer") or "",

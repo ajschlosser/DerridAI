@@ -422,15 +422,16 @@ class ResearchThreadStore(PipelineDatabase):
         *,
         research_run_id: str | None,
         response_record_id: str | None,
+        contextualized_query: str | None = None,
     ) -> dict[str, Any]:
         with self.lock, self.connect() as conn:
             turn = self._owned_turn(conn, turn_id, owner)
             now = _iso_now()
             conn.execute(
                 """UPDATE research_turns SET status='completed', error=NULL,
-                   research_run_id=COALESCE(?, research_run_id), response_record_id=?, updated_at=?
+                   research_run_id=COALESCE(?, research_run_id), response_record_id=?, updated_at=?, contextualized_query=COALESCE(?, contextualized_query)
                    WHERE turn_id=?""",
-                (research_run_id, response_record_id, now, turn_id),
+                (research_run_id, response_record_id, now, contextualized_query, turn_id),
             )
             self._touch(conn, turn["thread_id"], now)
             return _turn_row(self._owned_turn(conn, turn_id, owner))
@@ -507,8 +508,8 @@ class ResearchThreadStore(PipelineDatabase):
                 )
                 conn.execute(
                     """INSERT INTO research_turns (turn_id, thread_id, ordinal, user_question, status,
-                       research_run_id, response_record_id, created_at, updated_at)
-                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                       research_run_id, response_record_id, created_at, updated_at, user_instructions)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
                     (
                         f"rtt_{uuid.uuid4().hex}",
                         thread_id,
@@ -519,6 +520,7 @@ class ResearchThreadStore(PipelineDatabase):
                         record_id,
                         stamp,
                         stamp,
+                        item.get("instructions"),
                     ),
                 )
                 created.append({"thread_id": thread_id, "response_record_id": record_id})

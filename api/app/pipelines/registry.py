@@ -100,6 +100,27 @@ DEFAULT_STRATEGIES = [
         config_schema={"type": "object", "properties": {"num_predict": _integer(64, 8192)}},
     ),
     StrategySpec(
+        strategy_id="context.research_thread",
+        family="query_transform", scholarly_effect="advisory",
+        label="Research thread context",
+        description="Select owner-scoped completed turns within a bounded immutable advisory snapshot; historical answers never become evidence.",
+        input_type="query", output_type="query",
+        config_schema={"type": "object", "properties": {
+            "max_turns": _integer(1, 16), "max_characters": _integer(1, 128000),
+            "max_answer_characters": _integer(1, 64000),
+            "include_answers": {"type": "boolean"}, "semantic": {"type": "boolean"},
+        }},
+    ),
+    StrategySpec(
+        strategy_id="query.research_contextualize",
+        family="query_transform", scholarly_effect="transformation",
+        label="Bilingual follow-up contextualization",
+        description="Resolve follow-up references using advisory history in the existing bilingual query call; preserve the original question and visibly fall back on failure.",
+        input_type="query", output_type="query", deterministic=False,
+        invokes_llm=True, capabilities=["chat_model"],
+        config_schema={"type": "object", "properties": {"num_predict": _integer(64, 8192)}},
+    ),
+    StrategySpec(
         strategy_id="query.evidence_field",
         family="query_transform",
         scholarly_effect="transformation",

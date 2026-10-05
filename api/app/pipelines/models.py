@@ -73,6 +73,7 @@ ScholarlyEffect = Literal[
 CONSTANT_BOUND = 1_000_000.0
 
 DataType = Literal[
+    "thread_context",
     "query",
     "candidate_set",
     "context_packet",

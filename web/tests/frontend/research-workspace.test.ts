@@ -88,6 +88,30 @@ describe("research workspace commands", () => {
     expect(state.ragConfig.k).toBe(64);
   });
 
+  it("submits a follow-up to the selected thread without transporting history", async () => {
+    const api = vi.fn(async (_path: string, _options: unknown) => ({
+      id: "next-job",
+      status: "queued",
+      thread_id: "thread/a",
+      turn_id: "next-turn",
+    }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "pinned", record_id: "r1" }],
+      selectedEvidencePayload: () => [{ record_id: "r1", collection: "corpus" }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+    await workspace.startResearchRun({ prompt: "What about Levinas?", thread_id: "thread/a" });
+    expect(api.mock.calls[0][0]).toBe("/api/research/threads/thread%2Fa/turns");
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.prompt).toBe("What about Levinas?");
+    expect(body).not.toHaveProperty("thread_context");
+    expect(body).not.toHaveProperty("prior_answers");
+  });
+
   it("retries through the existing run validation and narrow turn endpoint", async () => {
     const api = vi.fn(async (_path: string, _options: unknown) => ({
       id: "new-job",

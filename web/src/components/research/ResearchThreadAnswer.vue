@@ -15,6 +15,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useResearchDraft } from "../../features/research/useResearchDraft";
@@ -159,6 +160,10 @@ function openRelationships(index: number, mode: "trace" | "model") {
             @open-record="openRecord"
             @open-relationships="openRelationships"
           />
+          <details v-if="result.research_thread">
+            <summary>{{ i18n.t("research.thread_context_audit") }}</summary>
+            <pre>{{ JSON.stringify(result.research_thread, null, 2) }}</pre>
+          </details>
         </details>
       </template>
       <p v-else-if="!answer.isFetching.value && !answer.error.value">

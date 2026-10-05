@@ -53,10 +53,12 @@ import UiPageHeader from "../components/ui/UiPageHeader.vue";
 const route = useRoute();
 const threadBrowserOpen = ref(false);
 const newQuestionRequested = ref(false);
+const threadContinuable = ref(false);
 const currentThreadId = computed(() => String(route.query.thread || ""));
 watch(
   currentThreadId,
   (id) => {
+    threadContinuable.value = false;
     if (id) threadBrowserOpen.value = true;
   },
   { immediate: true },
@@ -253,7 +255,8 @@ const canConfigureResearch = computed(() =>
 );
 const canGrade = computed(() => auth.isAdmin);
 const runDisabledReason = computed(() => {
-  if (currentThreadId.value) return i18n.t("research.thread_context_pending");
+  if (currentThreadId.value && !threadContinuable.value)
+    return i18n.t("research.thread_followup_unavailable");
   if (!workspace.value?.can_run || !auth.can("rag.run")) return i18n.t("permissions.rag_denied");
   if (!prompt.value.trim()) return i18n.t("research.prompt_required");
   if (!profiles.value.length) return i18n.t("research.no_profile_configured");
@@ -509,7 +512,11 @@ async function runResearch(turn?: ResearchTurn) {
       answerError.value = i18n.t("research.filters.blocked");
       return;
     }
-    if (route.query.job) await router.replace({ path: "/rag" });
+    if (route.query.job)
+      await router.replace({
+        path: "/rag",
+        query: currentThreadId.value ? { thread: currentThreadId.value } : {},
+      });
   }
   const request = ++submissionRequest;
   ++answerRequest;
@@ -523,6 +530,7 @@ async function runResearch(turn?: ResearchTurn) {
       prompt: turn?.user_question ?? prompt.value,
       instructions: turn ? turn.user_instructions || "" : instructions.value,
       filter_plan: turn ? null : filterPlanForRun(),
+      thread_id: turn ? undefined : currentThreadId.value || undefined,
       retry_thread_id: turn?.thread_id,
       retry_turn_id: turn?.turn_id,
       provider_profile_id: config.value.provider_profile_id,
@@ -553,7 +561,7 @@ async function runResearch(turn?: ResearchTurn) {
   } finally {
     if (request === submissionRequest) {
       starting.value = false;
-      if (turn) ++threadRefreshKey.value;
+      if (turn || currentThreadId.value) ++threadRefreshKey.value;
     }
   }
 }
@@ -633,7 +641,11 @@ function stopJobFollowers() {
   jobFollowers.clear();
 }
 async function openJob(job: ResearchJob) {
-  if (route.query.job) await router.replace({ path: "/rag" });
+  if (route.query.job)
+    await router.replace({
+      path: "/rag",
+      query: currentThreadId.value ? { thread: currentThreadId.value } : {},
+    });
   await loadAnswer(job);
 }
 async function cancelJob(job: ResearchJob) {
@@ -986,6 +998,7 @@ onBeforeUnmount(() => {
           "
           :retry-busy="starting"
           :refresh-key="threadRefreshKey"
+          @continuable="threadContinuable = $event"
           @retry-turn="runResearch"
           @select="selectThread"
           @open="openThreadTurn"

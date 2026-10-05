@@ -76,6 +76,7 @@ export type PipelineDataType =
   | "query"
   | "candidate_set"
   | "context_packet"
+  | "thread_context"
   | "model_output"
   | "evaluation"
   | "number"

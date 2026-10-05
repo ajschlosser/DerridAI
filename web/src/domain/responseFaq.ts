@@ -58,7 +58,10 @@ export function createResponseFaq({
     });
   }
   function rerunResponseFaqRecord(record: Loose = {}) {
-    return prepareRagRerun(record.rag_request || {});
+    const request = { ...(record.rag_request || {}) };
+    delete request.thread_id;
+    delete request.idempotency_key;
+    return prepareRagRerun(request);
   }
   return { getResponseFaqPage, gradeResponseFaqRecord, rerunResponseFaqRecord };
 }
