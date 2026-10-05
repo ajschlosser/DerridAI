@@ -89,11 +89,12 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   for (const theme of ["light", "dark"]) {
     await page.evaluate(async (value) => {
       document.documentElement.setAttribute("data-color-scheme", value);
-      const dialog = document.querySelector('[role="dialog"]');
+      const dialog = document.documentElement;
       if (dialog)
         await Promise.all(
           dialog
             .getAnimations({ subtree: true })
+            .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
             .map((animation) => animation.finished.catch(() => {})),
         );
     }, theme);
@@ -164,11 +165,12 @@ test("manage a thread through rename, archive, restore, and confirmed deletion",
   for (const theme of ["light", "dark"]) {
     await page.evaluate(async (value) => {
       document.documentElement.setAttribute("data-color-scheme", value);
-      const dialog = document.querySelector('[role="dialog"]');
+      const dialog = document.documentElement;
       if (dialog)
         await Promise.all(
           dialog
             .getAnimations({ subtree: true })
+            .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
             .map((animation) => animation.finished.catch(() => {})),
         );
     }, theme);
@@ -199,11 +201,12 @@ test("manage a thread through rename, archive, restore, and confirmed deletion",
   for (const theme of ["light", "dark"]) {
     await page.evaluate(async (value) => {
       document.documentElement.setAttribute("data-color-scheme", value);
-      const dialog = document.querySelector('[role="dialog"]');
+      const dialog = document.documentElement;
       if (dialog)
         await Promise.all(
           dialog
             .getAnimations({ subtree: true })
+            .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
             .map((animation) => animation.finished.catch(() => {})),
         );
     }, theme);
@@ -223,4 +226,85 @@ test("manage a thread through rename, archive, restore, and confirmed deletion",
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(mutations.filter((item) => item.method === "DELETE")).toHaveLength(1);
   await expect(nav.getByRole("heading", { name: "Question a", exact: true })).toHaveCount(0);
+});
+
+test("retry preserves a cancelled turn and opens its new attempt with keyboard focus", async ({
+  page,
+}) => {
+  let record = {
+    ...detail("b"),
+    turns: [
+      {
+        ...detail("b").turns[0],
+        status: "cancelled",
+        user_instructions: "Preserve attribution",
+        attempt: 1,
+      },
+    ],
+  };
+  const job = {
+    id: "retry-job",
+    type: "rag",
+    status: "running",
+    thread_id: "b",
+    turn_id: "b-1",
+    prompt: "Question b",
+  };
+  const requests: Record<string, unknown>[] = [];
+  await mockBackend(page, {
+    fixtures: {
+      "/api/research/threads": { threads: [summary("b")] },
+      "/api/research/threads/b": () => record,
+      "/api/jobs/retry-job": job,
+    },
+  });
+  await page.route("**/api/research/threads/b/turns/b-1/retry", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    requests.push(route.request().postDataJSON());
+    record = {
+      ...record,
+      turns: [
+        { ...record.turns[0], status: "running", job_id: "retry-job", attempt: 2, error: null },
+      ],
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(job),
+    });
+  });
+  await page.goto(APP + "/rag?thread=b");
+  const nav = page.locator(".research-thread-navigation");
+  const retry = nav.getByRole("button", { name: "Retry with current settings", exact: true });
+  await expect(retry).toBeEnabled();
+  await expect(nav).toContainText("preserves the original question and instructions");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(async (value) => {
+      document.documentElement.setAttribute("data-color-scheme", value);
+      await Promise.all(
+        document.documentElement
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+          .map((animation) => animation.finished.catch(() => {})),
+      );
+    }, theme);
+    expect(
+      (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
+    ).toEqual([]);
+  }
+  await retry.focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/thread=b&job=retry-job/);
+  await expect(nav.locator("article")).toHaveCount(1);
+  await expect(nav.getByRole("heading", { name: "Question b" })).toBeVisible();
+  await expect(retry).toHaveCount(0);
+  await expect(page.locator(".research-result-presentation")).toBeFocused();
+  await expect(page.locator(".research-run-button")).toBeDisabled();
+  expect(requests).toHaveLength(1);
+  expect(requests[0]).toMatchObject({
+    prompt: "Question b",
+    instructions: "Preserve attribution",
+    selected_evidence: [],
+  });
+  expect(requests[0]).not.toHaveProperty("prior_answers");
 });

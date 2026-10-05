@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import type { MetadataSchema } from "../../api/metadataSchemas";
 import UiDialog from "../ui/UiDialog.vue";
 import {
   INSPECTOR_TABS,
@@ -32,12 +33,16 @@ import {
   type InspectorTabKey,
 } from "../../domain/inspectorLayout";
 
-const props = defineProps<{ layout: InspectorLayout; record?: Record<string, unknown> }>();
+const props = defineProps<{
+  layout: InspectorLayout;
+  record?: Record<string, unknown>;
+  schema?: MetadataSchema | null;
+}>();
 const emit = defineEmits<{ apply: [layout: InspectorLayout]; reset: [] }>();
 const i18n = useI18nStore();
 const isOpen = ref(false);
 const tab = ref<InspectorTabKey>("overview");
-const draft = ref<InspectorLayout>(defaultInspectorLayout(props.record));
+const draft = ref<InspectorLayout>(defaultInspectorLayout(props.record, props.schema || null));
 const dragging = ref<number | null>(null);
 
 const tabLabels: Record<InspectorTabKey, [string, string]> = {
@@ -47,7 +52,9 @@ const tabLabels: Record<InspectorTabKey, [string, string]> = {
 };
 
 const rows = computed(() => draft.value[tab.value]);
-const unused = computed(() => unusedInspectorFields(tab.value, rows.value, props.record));
+const unused = computed(() =>
+  unusedInspectorFields(tab.value, rows.value, props.record, props.schema || null),
+);
 
 function fieldLabel(key: string) {
   if (key === "__pages") return i18n.t("record.page");
@@ -71,7 +78,7 @@ function apply() {
   isOpen.value = false;
 }
 function reset() {
-  draft.value = defaultInspectorLayout(props.record);
+  draft.value = defaultInspectorLayout(props.record, props.schema || null);
   emit("reset");
 }
 function setRows(next: InspectorLayoutRow[]) {

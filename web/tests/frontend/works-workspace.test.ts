@@ -20,6 +20,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createNavigation } from "../../src/domain/navigation";
 import { createWorksWorkspace } from "../../src/domain/worksWorkspace";
 import { createRuntimeState } from "../../src/state/runtimeState";
+import { metadataSchemasApi } from "../../src/api/metadataSchemas";
 
 // The modern Works Playwright workflow covers rendered search/actions/handoffs; these tests pin the commands.
 function setup(overrides: Record<string, unknown> = {}) {
@@ -245,6 +246,144 @@ describe("works workspace commands", () => {
         "X",
       ]);
     });
+  });
+
+  it("loads the pinned schema before presenting scoped work metadata", async () => {
+    const assertion = (fieldId: string, fieldName: string, value: string) => ({
+      assertion_id: `a-${fieldName}`,
+      field_id: fieldId,
+      field_name: fieldName,
+      value,
+      derivation_method: "model",
+      evaluation_status: "value_supported",
+      authority_status: "human_confirmed",
+      value_status: "present",
+      schema_id: "scope-test",
+    });
+    const rows = [
+      {
+        record: {
+          work: "Scoped work",
+          document_author: "Author",
+          corpus_theme: "hospitality",
+          passage_theme: "gift",
+          field_assertions: {
+            "field-corpus-theme": [assertion("field-corpus-theme", "corpus_theme", "hospitality")],
+            "field-passage-theme": [assertion("field-passage-theme", "passage_theme", "gift")],
+          },
+          current_field_assertions: {
+            "field-corpus-theme": "a-corpus_theme",
+            "field-passage-theme": "a-passage_theme",
+          },
+        },
+      },
+    ];
+    const item = {
+      work: "Scoped work",
+      count: 1,
+      review: 0,
+      files: ["scoped.jsonl"],
+      authors: ["Author"],
+      years: [],
+      rows,
+    };
+    vi.spyOn(metadataSchemasApi, "get").mockResolvedValue({
+      format_version: 2,
+      id: "scope-test",
+      name: "Scoped",
+      description: "",
+      groups: [
+        {
+          key: "custom",
+          label: "Custom",
+          intro: "",
+          fields_heading: "",
+          notes: [],
+          trailer: "",
+          footer: "",
+        },
+      ],
+      fields: [
+        {
+          field_id: "field-corpus-theme",
+          name: "corpus_theme",
+          label: "Corpus theme",
+          type: "text",
+          group: "custom",
+          role: "scholarly",
+          review_visibility: "primary",
+          scope: "corpus",
+          values: [],
+          strict: false,
+          instruction: "",
+          definitions_heading: "",
+          evidence: false,
+          assess: false,
+          review: false,
+          retrieval_profile: {
+            enabled: true,
+            max_items: 6,
+            min_similarity: 0,
+            include_corrections: true,
+            include_confirmed_absence: true,
+          },
+          pos_tags: [],
+          ner_tags: [],
+        },
+        {
+          field_id: "field-passage-theme",
+          name: "passage_theme",
+          label: "Passage theme",
+          type: "text",
+          group: "custom",
+          role: "scholarly",
+          review_visibility: "primary",
+          scope: "record",
+          values: [],
+          strict: false,
+          instruction: "",
+          definitions_heading: "",
+          evidence: false,
+          assess: false,
+          review: false,
+          retrieval_profile: {
+            enabled: true,
+            max_items: 6,
+            min_similarity: 0,
+            include_corrections: true,
+            include_confirmed_absence: true,
+          },
+          pos_tags: [],
+          ner_tags: [],
+        },
+      ],
+    });
+
+    const { state, workspace } = setup({
+      isResearcher: () => false,
+      providerProfiles: () => [],
+      recordStores: () => [],
+      hasCorpusDb: () => false,
+      workIndex: () => new Map([[item.work, item]]),
+      allAnnotations: () => [],
+      worksBiblioValue: () => ({ value: "", mixed: false }),
+      workDbStatus: () => ({ kind: "none", label: "" }),
+      label: (key: string) => key,
+      display: String,
+      workInsightMetrics: () => [],
+      tr: (key: string) => key,
+      dbUnavailableReason: () => "",
+    });
+    state.files = [{ id: "f" }];
+    state.workOverview = item.work;
+
+    await workspace.prepareWorksWorkspace();
+    const snapshot = workspace.getWorksWorkspaceSnapshot() as any;
+    const fields = snapshot.selected.metadata.map((entry: { field: string }) => entry.field);
+
+    expect(metadataSchemasApi.get).toHaveBeenCalledWith("scope-test");
+    expect(fields).toContain("corpus_theme");
+    expect(fields).not.toContain("passage_theme");
   });
 
   it("lets researchers search bibliographic metadata and facet by author", () => {

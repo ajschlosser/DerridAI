@@ -86,6 +86,74 @@ describe("work metadata helpers", () => {
     expect(metadata.some((item) => item.field === "speaker")).toBe(false);
   });
 
+  it("uses pinned schema scope instead of scholarly field names for work metadata", () => {
+    const asserted = (fieldId: string, fieldName: string, value: unknown) => ({
+      assertion_id: `a-${fieldName}`,
+      field_id: fieldId,
+      field_name: fieldName,
+      value,
+      derivation_method: "model",
+      evaluation_status: "value_supported",
+      authority_status: "human_confirmed",
+      value_status: "present",
+      schema_id: "scope-test",
+    });
+    const record = {
+      work: "W",
+      document_author: "A",
+      corpus_theme: "hospitality",
+      passage_theme: "gift",
+      field_assertions: {
+        "field-corpus-theme": [asserted("field-corpus-theme", "corpus_theme", "hospitality")],
+        "field-passage-theme": [asserted("field-passage-theme", "passage_theme", "gift")],
+      },
+      current_field_assertions: {
+        "field-corpus-theme": "a-corpus_theme",
+        "field-passage-theme": "a-passage_theme",
+      },
+    };
+    const scopedSchema = {
+      id: "scope-test",
+      groups: [{ key: "custom", label: "Custom" }],
+      fields: [
+        {
+          field_id: "field-corpus-theme",
+          name: "corpus_theme",
+          label: "Corpus theme",
+          type: "text",
+          group: "custom",
+          scope: "corpus",
+          role: "scholarly",
+        },
+        {
+          field_id: "field-passage-theme",
+          name: "passage_theme",
+          label: "Passage theme",
+          type: "text",
+          group: "custom",
+          scope: "record",
+          role: "scholarly",
+        },
+      ],
+    };
+
+    const metadata = work.workMetadataPresentationRows(
+      [mk(record), mk({ ...record })],
+      scopedSchema as never,
+    );
+
+    expect(metadata).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field_id: "field-corpus-theme",
+          field: "corpus_theme",
+          value: "hospitality",
+        }),
+      ]),
+    );
+    expect(metadata.some((item) => item.field === "passage_theme")).toBe(false);
+  });
+
   it("summarizes a work's rows", () => {
     for (const rows of rowsets) {
       expect([

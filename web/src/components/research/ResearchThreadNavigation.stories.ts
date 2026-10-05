@@ -80,3 +80,5 @@ export const Archived: Story = {
     threads: [{ ...summary, archived_at: "2026-10-05" }],
   },
 };
+
+export const RetryPending: Story = { args: { retryDisabled: true } };
