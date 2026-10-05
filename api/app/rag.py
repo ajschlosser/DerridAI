@@ -1056,6 +1056,16 @@ def _resolve_search_collections(
     if source is None:
         raise ValueError(f"Collection {source_name!r} does not exist.")
 
+    source_metadata = (
+        source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    )
+    system_kind = str(source_metadata.get("derridai_system_collection") or "").strip()
+    if system_kind:
+        raise ValueError(
+            f"Collection {source_name!r} is a DerridAI system collection "
+            f"({system_kind}) and cannot be used as a Research source collection."
+        )
+
     requested = list(dict.fromkeys(locales or ["en", "fr"]))
     requested_set = set(requested)
 
