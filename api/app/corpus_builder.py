@@ -214,6 +214,7 @@ from .corpus_record_quality import (
     _trash_quality_report,
     iso_now,
 )
+from .corpus_record_restructure import synchronize_record_source_projection
 from .corpus_review_actions import ReviewActionsMixin, _serialize_record_mutation
 from .corpus_review_aggregates import record_review_aggregate
 from .corpus_review_queue import (
@@ -5359,7 +5360,17 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         )
         build["source_quality"] = page_source_quality_report(blocks)
         profile = self._profile_of_build(build)
-        validation = self.validate_records(blocks, records, profile)
+        source_units = self.repo.load_source_units(str(build["build_id"]))
+        # source_extracted_text is a deterministic projection of the authoritative
+        # SourceUnits. Reconcile it before validation so structural edits are not
+        # judged against stale legacy block projections.
+        synchronize_record_source_projection(records, source_units)
+        validation = self.validate_records(
+            blocks,
+            records,
+            profile,
+            source_units=source_units,
+        )
         build["record_count"] = len(records)
         build["validation"] = validation
         # Metadata completion is derived from persisted record state, never from a
@@ -5541,7 +5552,13 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
                 build.get("manifest") or {},
                 bounds_confirmed=bool(build.get("manifest_confirmed_at")),
             )
-            local = self.validate_records(blocks, [record], profile)
+            local = self.validate_records(
+                blocks,
+                [record],
+                profile,
+                source_units=self.repo.load_source_units(build_id),
+                check_corpus_conservation=False,
+            )
             existing = dict(build.get("validation") or {})
             record_id = str(record.get("record_id") or "")
             list_fields = (
@@ -5805,6 +5822,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         build = self.repo.get_build(build_id)
         if self.repo.records_projection_dirty(build_id):
             self.repo.refresh_records_projection(build_id)
+        # Publication owns the final authoritative reconciliation too. The web
+        # client normally requests it first, but direct API callers and stale
+        # readiness state must not publish against obsolete legacy topology.
+        if str(build.get("status") or "") not in {"queued", "running"}:
+            build = self._reconcile_and_validate(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
         self._refresh_workflow_fields(build)
