@@ -3179,6 +3179,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
                                                 'remplacement au niveau d’une fiche déjà traitée, ou attendez la fin '
                                                 'de l’enrichissement avant de modifier le manifeste du document.',
  'pdf_corpus.download_jsonl': 'Télécharger le JSONL',
+ 'pdf_corpus.download_unfinished_corpus': 'Télécharger le corpus inachevé',
+ 'pdf_corpus.unfinished_corpus_download_started': 'Téléchargement d’une archive ponctuelle du corpus inachevé. Cette action ne publie ni n’accepte quoi que ce soit.',
  'pdf_corpus.edit_document_metadata': 'Modifier les métadonnées du document',
  'pdf_corpus.edit_text': 'Modifier le texte',
  'pdf_corpus.elapsed': 'Temps écoulé',

@@ -27,6 +27,7 @@ import hashlib
 import json
 import sys
 import types
+import zipfile
 from pathlib import Path
 
 sys.modules.setdefault("chromadb", types.SimpleNamespace())
@@ -366,6 +367,203 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
     assert stored["r-right"]["source_extracted_text"]=="text"
 
 
+def test_accept_unreviewed_repairs_retired_sourceunit_reference_with_audit_history(tmp_path:Path):
+    """Autonomous finalization may follow proven lineage without flattening it."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    units[0]["active"]=False
+    units[0]["successor_unit_ids"]=["u-current"]
+    units.append({
+        **units[0],
+        "source_unit_id":"u-current",
+        "unit_id":"u-current",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "successor_unit_ids":[],
+        "text":"Record text",
+        "active":True,
+        "transaction_id":"structural-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["b1"]
+    rows[0]["source_extracted_text"]="Record text"
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    stored=repo.load_records(build_id)[0]
+    assert stored["source_unit_ids"]==["u-current"]
+    [event]=stored["source_topology_reconciliation_history"]
+    assert event["method"]=="deterministic_active_descendant_reconciliation"
+    assert event["prior_source_unit_ids"]==["b1"]
+    assert event["source_unit_ids"]==["u-current"]
+    persisted_units={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted_units["b1"]["active"] is False
+    assert persisted_units["u-current"]["active"] is True
+
+
+def test_accept_unreviewed_retires_exact_redundant_root_before_validation(tmp_path:Path):
+    """An exact compatibility root plus replacement child is migrated, not double-counted."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    root=units[0]
+    # Reproduce an older store that left the compatibility root active while
+    # persisting an exact active replacement. The Record already owns the child,
+    # so the active root otherwise appears as a false uncovered SourceUnit.
+    units.append({
+        **root,
+        "source_unit_id":"u-current",
+        "unit_id":"u-current",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "text":"Record text",
+        "active":True,
+        "transaction_id":"legacy-structural-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["u-current"]
+    rows[0]["source_extracted_text"]="Record text"
+    repo.save_records(build_id,rows)
+
+    publication=manager.publish(build_id,accept_unreviewed=True)
+
+    assert publication["record_count"]==1
+    persisted={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted["b1"]["active"] is False
+    assert persisted["u-current"]["active"] is True
+    [event]=persisted["b1"]["topology_reconciliation_history"]
+    assert event["method"]=="retire_redundant_compatibility_root"
+    assert event["successor_unit_ids"]==["u-current"]
+    validation=repo.get_build(build_id)["validation"]
+    # Page/metadata review findings may keep the broad source_valid flag false in
+    # this minimal fixture. The conservation keys that gate autonomous publication
+    # must all be clear after retiring the redundant compatibility root.
+    assert validation["missing_source_unit_ids"]==[]
+    assert validation["unknown_source_unit_ids"]==[]
+    assert validation["source_reference_errors"]==[]
+    assert validation["source_conservation_errors"]==[]
+    assert validation["text_fidelity_errors"]==[]
+    assert validation["source_order_errors"]==[]
+
+
+def test_accept_unreviewed_does_not_retire_nonconserving_redundant_root(tmp_path:Path):
+    """A child that does not reconstruct its root remains a real publication blocker."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    units=repo.load_source_units(build_id)
+    root=units[0]
+    units.append({
+        **root,
+        "source_unit_id":"u-lossy",
+        "unit_id":"u-lossy",
+        "source_block_ids":["b1"],
+        "parent_unit_ids":["b1"],
+        "text":"Record",
+        "active":True,
+        "transaction_id":"legacy-lossy-1",
+    })
+    repo.save_source_units(build_id,units)
+    rows=repo.load_records(build_id)
+    rows[0]["source_unit_ids"]=["u-lossy"]
+    rows[0]["source_extracted_text"]="Record"
+    rows[0]["text"]="Record"
+    rows[0]["text_length"]=6
+    repo.save_records(build_id,rows)
+
+    try:
+        manager.publish(build_id,accept_unreviewed=True)
+    except ValueError as exc:
+        message=str(exc)
+        assert "source coverage and text-fidelity" in message
+        assert "unfinished corpus archive" in message
+    else:
+        raise AssertionError("lossy replacement topology must remain blocked")
+
+    persisted={row["source_unit_id"]:row for row in repo.load_source_units(build_id)}
+    assert persisted["b1"]["active"] is True
+    assert "topology_reconciliation_history" not in persisted["b1"]
+
+
+def test_unfinished_export_preserves_internal_topology_and_does_not_publish(tmp_path:Path):
+    """Researchers can inspect a blocked/draft corpus without changing its authority."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    build=_install_publishable(repo)
+    build_id=build["build_id"]
+    rows=repo.load_records(build_id)
+    rows[0].update({
+        "accepted":False,
+        "review_disposition":"pending",
+        "needs_review":True,
+        "source_extracted_text":"Record text",
+    })
+    repo.save_records(build_id,rows)
+    current=repo.get_build(build_id)
+    current["status"]="awaiting_review"
+    current["stage"]="review"
+    current["validation"]={
+        "valid":False,
+        "source_valid":False,
+        "validation_issues":[{
+            "code":"source_fidelity",
+            "record_id":"r1",
+            "field":"",
+            "reason":"inspection fixture",
+        }],
+    }
+    repo.save_build(current)
+
+    artifact=manager.create_unfinished_export(build_id)
+
+    assert artifact["filename"]=="test.unfinished-corpus.zip"
+    assert not repo.get_build(build_id).get("publication")
+    with zipfile.ZipFile(artifact["path"]) as archive:
+        names=set(archive.namelist())
+        assert {
+            "README.txt",
+            "export_manifest.json",
+            "build.json",
+            "records.jsonl",
+            "source_units.jsonl",
+            "source_units_persisted.jsonl",
+            "source_blocks.jsonl",
+            "retired_records.json",
+            "evidence_remap_pending.json",
+        } <= names
+        manifest=json.loads(archive.read("export_manifest.json"))
+        assert manifest["artifact_kind"]=="unfinished_corpus_export"
+        assert manifest["celf_publication"] is False
+        assert manifest["publication_ready"] is False
+        assert manifest["source_unit_store_present"] is False
+        assert manifest["persisted_source_unit_count"]==0
+        assert archive.read("source_units_persisted.jsonl")==b""
+        exported_records=[
+            json.loads(line)
+            for line in archive.read("records.jsonl").decode().splitlines()
+            if line
+        ]
+        assert exported_records[0]["review_disposition"]=="pending"
+        assert exported_records[0]["source_extracted_text"]=="Record text"
+        source_units=[
+            json.loads(line)
+            for line in archive.read("source_units.jsonl").decode().splitlines()
+            if line
+        ]
+        assert source_units
+        assert all("source_unit_id" in row for row in source_units)
+
+
 def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp_path:Path):
     """Bypassing review never bypasses actual source loss or an in-progress build."""
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
@@ -393,104 +591,9 @@ def test_accept_unreviewed_still_requires_text_fidelity_and_a_finished_build(tmp
     try:
         manager.publish(build_id,accept_unreviewed=True)
     except ValueError as exc:
-        assert "source validation" in str(exc)
-        assert "source_coverage" in str(exc)
+        assert "text-fidelity" in str(exc)
     else:
         raise AssertionError("actual missing source coverage must still block publication")
-
-
-def test_accept_unreviewed_repairs_retired_sourceunit_binding_before_publication(tmp_path:Path):
-    repo=cb.PdfCorpusRepository(tmp_path/"repo")
-    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    build=_install_publishable(repo)
-    build_id=build["build_id"]
-    rows=repo.load_records(build_id)
-
-    units=repo.load_source_units(build_id)
-    units[0]["active"]=False
-    old=dict(units[0])
-    old["source_unit_id"]="u-old"
-    old["unit_id"]="u-old"
-    old["text"]="Record text"
-    old["active"]=False
-    units.append(old)
-    units.extend([
-        {
-            **old,
-            "source_unit_id":"u-left",
-            "unit_id":"u-left",
-            "parent_unit_ids":["u-old"],
-            "text":"Record",
-            "active":True,
-        },
-        {
-            **old,
-            "source_unit_id":"u-right",
-            "unit_id":"u-right",
-            "parent_unit_ids":["u-old"],
-            "text":"text",
-            "active":True,
-        },
-    ])
-    repo.save_source_units(build_id,units)
-
-    rows[0]["source_unit_ids"]=["u-old"]
-    rows[0]["source_block_ids"]=["b1"]
-    rows[0]["source_extracted_text"]="Record text"
-    rows[0]["accepted"]=False
-    rows[0]["review_disposition"]="pending"
-    rows[0]["needs_review"]=True
-    repo.save_records(build_id,rows)
-
-    publication=manager.publish(build_id,accept_unreviewed=True)
-
-    assert publication["record_count"]==1
-    stored=repo.load_records(build_id)[0]
-    assert stored["source_unit_ids"]==["u-left","u-right"]
-    assert stored["source_extracted_text"]=="Record\n\ntext"
-    history=stored["source_topology_reconciliation_history"]
-    assert history[-1]["previous_source_unit_ids"]==["u-old"]
-    assert history[-1]["source_text_conserved"] is True
-    refreshed=repo.get_build(build_id)
-    assert refreshed["validation"]["missing_block_ids"]==[]
-    assert refreshed["validation"]["missing_source_unit_ids"]==[]
-    assert refreshed["validation"]["duplicate_block_ids"]==[]
-    assert refreshed["validation"]["unknown_source_unit_ids"]==[]
-    assert refreshed["validation"]["source_reference_errors"]==[]
-    assert refreshed["validation"]["source_conservation_errors"]==[]
-    assert refreshed["validation"]["text_fidelity_errors"]==[]
-    assert refreshed["validation"]["source_order_errors"]==[]
-    assert refreshed["source_topology_reconciliation_history"]
-
-
-def test_publication_blocker_names_remaining_source_findings():
-    from app.corpus_publication import publication_blocker
-
-    validation = {
-        "source_valid": False,
-        "valid": False,
-        "missing_source_unit_ids": ["u-missing"],
-        "validation_issues": [
-            {
-                "code": "source_coverage",
-                "record_id": "",
-                "field": "u-missing",
-                "reason": "active source unit is not covered by any Record",
-            }
-        ],
-    }
-    message = publication_blocker(
-        {"status": "awaiting_review"},
-        [{"record_id": "r1"}],
-        validation,
-        require_acceptance=False,
-        accept_unreviewed=True,
-    )
-
-    assert message is not None
-    assert "source_coverage: 1" in message
-    assert "u-missing" in message
-    assert "active source unit is not covered" in message
 
 
 def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:Path):

@@ -1731,6 +1731,20 @@ def rerun_pdf_corpus_record_metadata(build_id: str, record_id: str, body: PdfCor
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+@router.get("/api/pdf/corpus-builds/{build_id}/download-unfinished")
+def download_unfinished_pdf_corpus_build(build_id: str) -> FileResponse:
+    """Download current build state for inspection without publishing it."""
+    try:
+        artifact = pdf_corpus_builds.create_unfinished_export(build_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Corpus build not found") from exc
+    return FileResponse(
+        artifact["path"],
+        media_type="application/zip",
+        filename=str(artifact["filename"]),
+    )
+
+
 @router.post("/api/pdf/corpus-builds/{build_id}/publish")
 def publish_pdf_corpus_build(build_id: str, body: PdfCorpusPublishRequest) -> dict[str, Any]:
     try:

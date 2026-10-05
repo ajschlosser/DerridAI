@@ -457,6 +457,13 @@ const canPublishUnreviewed = computed(() =>
 async function publishUnreviewed() {
   await publishAndShow({ acceptUnreviewed: true });
 }
+async function downloadUnfinishedCorpus() {
+  const buildId = currentBuild.value?.build_id;
+  if (!buildId) return;
+  window.location.href = corpusBuilderApi.unfinishedCorpusUrl(buildId);
+  setMessage(i18n.t("pdf_corpus.unfinished_corpus_download_started"));
+}
+
 /** A successful publication lands on the Publish workspace, which shows the published snapshot. */
 async function publishAndShow(options: { acceptUnreviewed?: boolean } = {}) {
   const result = await publish({ download: false, ...options });
@@ -3103,6 +3110,7 @@ defineExpose({
       @rerun-enrichment="openEnrichmentFromFinish"
       @publish="publishAndShow()"
       @publish-unreviewed="publishUnreviewed"
+      @download-unfinished="downloadUnfinishedCorpus"
     />
 
     <CorpusReviewWorkspace

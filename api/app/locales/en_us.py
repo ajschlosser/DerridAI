@@ -2989,6 +2989,8 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
                                                 'settled record, or wait for enrichment to settle before changing the '
                                                 'document manifest.',
  'pdf_corpus.download_jsonl': 'Download JSONL',
+ 'pdf_corpus.download_unfinished_corpus': 'Download unfinished corpus',
+ 'pdf_corpus.unfinished_corpus_download_started': 'Downloading a point-in-time unfinished corpus archive. This does not publish or accept anything.',
  'pdf_corpus.edit_document_metadata': 'Edit document metadata',
  'pdf_corpus.edit_text': 'Edit text',
  'pdf_corpus.elapsed': 'Elapsed',

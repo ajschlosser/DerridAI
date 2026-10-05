@@ -47,6 +47,7 @@ const emit = defineEmits<{
   rerunEnrichment: [];
   publish: [];
   publishUnreviewed: [];
+  downloadUnfinished: [];
 }>();
 const i18n = useI18nStore();
 const confirmingUnreviewed = ref(false);
@@ -122,12 +123,20 @@ const counts = computed(() => [
           </div>
         </dl>
       </div>
-      <UiButton
-        v-if="canPublishUnreviewed"
-        :label="i18n.t('pdf_corpus.accept_unreviewed')"
-        :disabled="busy"
-        @click="confirmingUnreviewed = true"
-      />
+      <div class="publish-actions">
+        <UiButton
+          v-if="!published"
+          variant="soft"
+          :label="i18n.t('pdf_corpus.download_unfinished_corpus')"
+          @click="emit('downloadUnfinished')"
+        />
+        <UiButton
+          v-if="canPublishUnreviewed"
+          :label="i18n.t('pdf_corpus.accept_unreviewed')"
+          :disabled="busy"
+          @click="confirmingUnreviewed = true"
+        />
+      </div>
     </header>
 
     <CorpusFinishWorkspace
@@ -184,6 +193,12 @@ const counts = computed(() => [
 }
 .publish-summary[data-tone="warning"] {
   border-inline-start-color: var(--tone-warn-fg);
+}
+.publish-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
 }
 .publish-summary-copy {
   display: grid;
