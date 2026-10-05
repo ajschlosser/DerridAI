@@ -31,6 +31,7 @@ import time
 import uuid
 from collections.abc import Callable
 from concurrent.futures import Executor, ThreadPoolExecutor
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ValidationError
@@ -795,17 +796,21 @@ class MetadataEnrichmentExecutionMixin:
         migrate_record_assertions(record, schema)
         cached_prefills: dict[str, Any] = {}
         lookup_count = 0
-        lookup_keys: set[tuple[str, str, str]] = set()
+        # Preparation-local snapshot: misses are cached too. Distinct schema
+        # versions remain distinct keys, and the next preparation reads afresh.
+        adjudication_snapshot: dict[tuple[str, str, str], dict[str, Any] | None] = {}
 
         def lookup_adjudication(field: Any, version: str) -> dict[str, Any] | None:
             nonlocal lookup_count
             cardinality = "list" if field.type == "list" else "single"
-            lookup_count += 1
-            lookup_keys.add((field.name, cardinality, version))
-            return adjudication_suggestions(
-                record_id=str(record.get("record_id") or ""), text=source_text,
-                field=field.name, cardinality=cardinality, schema_version=version,
-            )
+            key = (field.name, cardinality, version)
+            if key not in adjudication_snapshot:
+                lookup_count += 1
+                adjudication_snapshot[key] = deepcopy(adjudication_suggestions(
+                    record_id=str(record.get("record_id") or ""), text=source_text,
+                    field=field.name, cardinality=cardinality, schema_version=version,
+                ))
+            return deepcopy(adjudication_snapshot[key])
 
         for field in schema.fields:
             cached = lookup_adjudication(field, str(schema.schema_version or ""))
@@ -1025,8 +1030,8 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                     stage_callback(record, skipped_family, "skipped", reason)
         record["metadata_candidate_workload"] = {
             "adjudication_lookups": lookup_count,
-            "distinct_adjudication_keys": len(lookup_keys),
-            "duplicate_adjudication_lookups": lookup_count - len(lookup_keys),
+            "distinct_adjudication_keys": len(adjudication_snapshot),
+            "duplicate_adjudication_lookups": lookup_count - len(adjudication_snapshot),
         }
         return tasks, source_ids, obvious_apparatus
 

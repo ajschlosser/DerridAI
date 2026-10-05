@@ -68,7 +68,7 @@ def test_actual_provider_attempt_characters_include_invalid_response(
         manager._executor.shutdown(wait=True)
 
 
-def test_legacy_exact_adjudication_is_repeated_for_same_field_snapshot(monkeypatch):
+def test_exact_adjudication_is_read_once_per_field_snapshot(monkeypatch):
     calls = []
     monkeypatch.setattr(
         execution,
@@ -93,13 +93,51 @@ def test_legacy_exact_adjudication_is_repeated_for_same_field_snapshot(monkeypat
         None,
         schema=schema,
     )
-    # This captures the historical behavior before the collection checkpoint.
     names = [item["field"] for item in calls]
     for field in schema.fields:
-        assert names.count(field.name) == 2
+        assert names.count(field.name) == 1
     measured = record["metadata_candidate_workload"]
     assert measured["adjudication_lookups"] == len(calls)
-    assert measured["duplicate_adjudication_lookups"] == len(schema.fields)
+    assert measured["duplicate_adjudication_lookups"] == 0
+
+
+def test_exact_memory_snapshot_preserves_prompt_values_versions_and_fresh_reads(monkeypatch):
+    schema = default_schema()
+    calls = []
+    stored = {"latest_value": ["Derrida"], "prior_values": [["Derrida"]]}
+
+    def lookup(**kwargs):
+        calls.append(kwargs)
+        return stored if kwargs["field"] == "persons" else None
+
+    monkeypatch.setattr(execution, "adjudication_suggestions", lookup)
+
+    def prepare(version):
+        record = {"record_id": "r1", "text": "Derrida speaks.", "source_block_ids": ["b1"]}
+        tasks, _, _ = execution.MetadataEnrichmentExecutionMixin()._prepare_metadata_tasks(
+            record, {}, {"schema_version": version, "families": ["indexing"]},
+            dict(CORPUS_PROFILES[PROFILE_VERSION]), {}, {}, "", "", None, schema=schema,
+        )
+        return record, tasks
+
+    record, tasks = prepare(schema.schema_version)
+    assert record["persons"] == ["Derrida"]
+    assert any('"exact_values": [["Derrida"]]' in task[1] for task in tasks)
+    assert len(calls) == len(schema.fields)
+    # Neither a materialized prefill nor a caller-owned cache value shares state.
+    record["persons"].append("Levinas")
+    assert stored["latest_value"] == ["Derrida"]
+    stored["latest_value"] = ["Levinas"]
+    stored["prior_values"] = [["Levinas"]]
+    fresh, tasks = prepare(schema.schema_version)
+    assert fresh["persons"] == ["Levinas"]
+    assert any('"exact_values": [["Levinas"]]' in task[1] for task in tasks)
+    assert len(calls) == 2 * len(schema.fields)
+    calls.clear()
+    distinct, _ = prepare("different-version")
+    assert len(calls) == 2 * len(schema.fields)
+    assert {item["schema_version"] for item in calls} == {schema.schema_version, "different-version"}
+    assert distinct["metadata_candidate_workload"]["duplicate_adjudication_lookups"] == 0
 
 
 def test_fixed_case_runs_real_enrichment_with_scripted_provider_and_safe_report(
