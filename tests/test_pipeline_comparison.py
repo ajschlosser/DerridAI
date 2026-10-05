@@ -251,8 +251,32 @@ class _ExplicitScopeStore:
             {"work": "Totality and Infinity", "document_author": "Emmanuel Levinas", "count": 1},
         ]
 
-    def lexical_search(self, name, query, limit, where=None):
+    def lexical_search(self, name, query, limit, where=None, where_document=None):
         assert name == "corpus"
+        assert where_document is None
+
+        def matches(record, predicate):
+            if not predicate:
+                return True
+            key, value = next(iter(predicate.items()))
+            if key == "$and":
+                return all(matches(record, child) for child in value)
+            if key == "$or":
+                return any(matches(record, child) for child in value)
+            actual = record.get(key)
+            if not isinstance(value, dict):
+                return actual == value
+            operator, expected = next(iter(value.items()))
+            if operator == "$eq":
+                return actual == expected
+            if operator == "$ne":
+                return actual != expected
+            if operator == "$in":
+                return actual in expected
+            if operator == "$nin":
+                return actual not in expected
+            raise AssertionError(f"unsupported fake filter operator: {operator}")
+
         derrida = {
             "id": "derrida-1",
             "record": {
@@ -280,8 +304,11 @@ class _ExplicitScopeStore:
             "relevance": 0.70,
         }
         if where:
-            works = set((where.get("work") or {}).get("$in") or [])
-            return [row for row in (derrida, levinas) if row["record"]["work"] in works][:limit]
+            return [
+                row
+                for row in (derrida, levinas)
+                if matches(row["record"], where)
+            ][:limit]
         # Reproduce the regression: broad retrieval is monopolized by the
         # largest author/work before explicit scope targeting runs.
         return [derrida][:limit]
@@ -323,6 +350,49 @@ def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
         for item in result["retrieval"]["explicit_scope_groups"]
         if item["matched"]
     } == {"Jacques Derrida", "Emmanuel Levinas"}
+
+
+def test_research_filter_wins_over_explicit_named_work_seed() -> None:
+    request = RAGRunRequest(
+        prompt=(
+            "Explain the relation between alterity and trace. "
+            "Cite Derrida and Levinas explicitly."
+        ),
+        pipeline_id="research.balanced",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+        filter_plan={
+            "metadata_filter": {
+                "work": {"$ne": "Totality and Infinity"}
+            },
+            "source": "explicit",
+        },
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert [item["record"]["record_id"] for item in result["evidence"]] == ["d1"]
+    assert result["retrieval"]["filter_plan"]["metadata_filter"] == {
+        "work": {"$ne": "Totality and Infinity"}
+    }
+    levinas_scope = next(
+        item
+        for item in result["retrieval"]["explicit_scope_groups"]
+        if "Totality and Infinity" in item["works"]
+    )
+    assert levinas_scope["matched"] is False
 
 
 
