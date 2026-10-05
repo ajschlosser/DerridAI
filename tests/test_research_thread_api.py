@@ -223,3 +223,36 @@ def test_thread_management_preserves_owner_boundary_and_sparse_patch(store, monk
     renamed = routes.patch_thread(thread["thread_id"], routes.ThreadPatch(title="New title"), None)
     assert renamed["title"] == "New title" and renamed["archived_at"] is not None
     assert "turns" not in renamed
+
+
+
+def test_context_snapshot_is_server_loaded_without_changing_current_prompt(store) -> None:
+    jobs = FakeJobs()
+    first = research_threads.start_run(jobs, _body("Derrida?"), owner="alice")
+    jobs.created[0].update(status="completed", result={"answer": "Prior answer [[E99]]"})
+    research_threads.sync_turn_from_job(jobs.created[0])
+    second = research_threads.start_run(jobs, _body("What about him?"), owner="alice",
+                                       thread_id=first["thread_id"])
+    turn = store.get_turn(second["turn_id"], "alice")
+    snapshot = turn["context_selection"]
+    assert snapshot["selected_turn_ids"] == [first["turn_id"]]
+    assert snapshot["items"][1]["text"] == "Prior answer [[E99]]"
+    assert snapshot["advisory"] and not snapshot["evidentiary"]
+    assert second["prompt"] == turn["user_question"] == "What about him?"
+    assert "context" not in second and "result" not in second
+
+
+def test_context_budget_failure_marks_new_turn_failed_without_starting_job(store) -> None:
+    from app.research_context import ContextBudgetExceeded
+
+    jobs = FakeJobs()
+    first = research_threads.start_run(jobs, _body(), owner="alice")
+    jobs.created[0].update(status="completed", result={"answer": "a" * 12001})
+    research_threads.sync_turn_from_job(jobs.created[0])
+    with pytest.raises(ContextBudgetExceeded):
+        research_threads.start_run(jobs, _body("And Levinas?"), owner="alice",
+                                   thread_id=first["thread_id"])
+    turns = store.get_thread(first["thread_id"], "alice")["turns"]
+    assert turns[-1]["status"] == "failed" and turns[-1]["job_id"] is None
+    assert "context answer budget" in turns[-1]["error"]
+    assert len(jobs.created) == 1
