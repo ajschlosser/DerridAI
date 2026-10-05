@@ -17,10 +17,7 @@
  */
 
 import { assertionFieldsByTab } from "./fieldAssertions";
-import {
-  metadataRegistryGroups,
-  type MetadataRegistryField,
-} from "./metadataFieldRegistry";
+import { metadataRegistryGroups, type MetadataRegistryField } from "./metadataFieldRegistry";
 import type { MetadataSchema } from "../api/metadataSchemas";
 
 const STORAGE_KEY = "derridai.record.inspectorLayout.v1";
