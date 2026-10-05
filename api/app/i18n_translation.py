@@ -22,8 +22,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from .models import OllamaTouchupOptions
-from .llm_transport import chat_complete
-from .rag import _extract_json
+from .rag import _extract_json, chat_complete
 from .structured_completion import StructuredAttemptContext, complete_structured_json
 
 _PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
