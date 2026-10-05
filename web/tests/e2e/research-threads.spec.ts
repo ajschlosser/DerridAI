@@ -308,3 +308,27 @@ test("retry preserves a cancelled turn and opens its new attempt with keyboard f
   });
   expect(requests[0]).not.toHaveProperty("prior_answers");
 });
+
+test("active thread previews are labelled and accessible in both themes", async ({ page }) => {
+  const active = detail("a");
+  active.turns[0].status = "running";
+  await mockBackend(page, {
+    fixtures: {
+      "/api/research/threads": { threads: [summary("a")] },
+      "/api/research/threads/a": active,
+    },
+  });
+  await page.goto(APP + "/rag?thread=a");
+  const navigation = page.locator(".research-thread-navigation");
+  await expect(navigation).toContainText("Drafting the answer");
+  await expect(navigation).toContainText("citations are not yet bound");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(
+      (value) => document.documentElement.setAttribute("data-color-scheme", value),
+      theme,
+    );
+    expect(
+      (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
+    ).toEqual([]);
+  }
+});

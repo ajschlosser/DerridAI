@@ -16,7 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, watch } from "vue";
+import { useResearchDraft } from "../../features/research/useResearchDraft";
 import { apiRequest, ApiError } from "../../api/http";
 import { useDataQuery } from "../../realtime/dataQuery";
 import { useAuthStore } from "../../stores/auth";
@@ -28,6 +29,32 @@ const props = defineProps<{ turn: ResearchTurn }>();
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
+const stream = useResearchDraft();
+const live = computed(
+  () =>
+    allowed.value &&
+    Boolean(props.turn.job_id) &&
+    ["queued", "running"].includes(props.turn.status),
+);
+// A retry starts a new stream. Scope changes drop advisory text synchronously.
+watch(
+  () => [
+    auth.user?.id,
+    auth.user?.role,
+    allowed.value,
+    props.turn.thread_id,
+    props.turn.turn_id,
+    props.turn.job_id,
+    props.turn.attempt,
+    live.value,
+  ],
+  () => {
+    stream.clear();
+    if (live.value) stream.follow(props.turn.job_id!);
+  },
+  { immediate: true, flush: "sync" },
+);
+onBeforeUnmount(stream.clear);
 const answer = useDataQuery(
   "research_threads",
   () => apiRequest<ResearchJob>(`/api/jobs/${encodeURIComponent(props.turn.job_id || "")}`),
@@ -57,28 +84,37 @@ const result = computed(() =>
 </script>
 <template>
   <section
-    v-if="allowed && turn.status === 'completed' && turn.job_id"
+    v-if="allowed && turn.job_id && (live || turn.status === 'completed')"
     :aria-label="i18n.t('research.answer')"
   >
-    <p v-if="answer.isFetching.value" role="status">{{ i18n.t("loading.updating") }}</p>
-    <div v-if="answer.error.value" role="alert">
-      <p>{{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}</p>
-      <button class="btn" type="button" @click="answer.refetch()">{{ i18n.t("ui.retry") }}</button>
-    </div>
-    <template v-if="result?.answer">
-      <p class="thread-answer-text">{{ result.answer }}</p>
-      <details v-if="result.evidence?.length">
-        <summary>{{ i18n.t("research.works_cited") }}</summary>
-        <ul>
-          <li v-for="(item, index) in result.evidence" :key="item.evidence_id || index">
-            {{ item.full_citation || item.inline_citation || item.evidence_id }}
-          </li>
-        </ul>
-      </details>
+    <template v-if="live">
+      <p role="status">{{ i18n.t("research.draft_heading") }}</p>
+      <p>{{ i18n.t("research.draft_help") }}</p>
+      <p class="thread-answer-text">{{ stream.draft.value?.text }}</p>
     </template>
-    <p v-else-if="!answer.isFetching.value && !answer.error.value">
-      {{ i18n.t("research.thread_run_unavailable") }}
-    </p>
+    <template v-else>
+      <p v-if="answer.isFetching.value" role="status">{{ i18n.t("loading.updating") }}</p>
+      <div v-if="answer.error.value" role="alert">
+        <p>{{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}</p>
+        <button class="btn" type="button" @click="answer.refetch()">
+          {{ i18n.t("ui.retry") }}
+        </button>
+      </div>
+      <template v-if="result?.answer">
+        <p class="thread-answer-text">{{ result.answer }}</p>
+        <details v-if="result.evidence?.length">
+          <summary>{{ i18n.t("research.works_cited") }}</summary>
+          <ul>
+            <li v-for="(item, index) in result.evidence" :key="item.evidence_id || index">
+              {{ item.full_citation || item.inline_citation || item.evidence_id }}
+            </li>
+          </ul>
+        </details>
+      </template>
+      <p v-else-if="!answer.isFetching.value && !answer.error.value">
+        {{ i18n.t("research.thread_run_unavailable") }}
+      </p>
+    </template>
   </section>
 </template>
 <style scoped>
