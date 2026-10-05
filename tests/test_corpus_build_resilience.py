@@ -930,13 +930,13 @@ def test_resume_reuses_current_document_intelligence(monkeypatch, tmp_path: Path
 def test_cancel_persists_intent_and_exposes_cancelling_stage(tmp_path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     build.update(
         status="running",
         stage="enriching",
         metadata_operation={"state": "running", "operation_id": "op-1"},
     )
     repo.save_build(build)
-    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     try:
         cancelled = manager.cancel(build["build_id"])
         assert cancelled["status"] == "running"
@@ -971,9 +971,9 @@ def test_durable_cancel_flag_is_honoured_without_live_token(tmp_path):
 def test_worker_progress_cannot_erase_cancelling_stage(tmp_path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
     build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     build.update(status="running", stage="enriching")
     repo.save_build(build)
-    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     try:
         manager.cancel(build["build_id"])
         updated = manager._update(
