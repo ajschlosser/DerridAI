@@ -195,9 +195,7 @@ describe("PipelineBenchmarkWorkspace", () => {
     await flushPromises();
     const dialog = body().querySelector("[role=dialog]")!;
     expect(dialog.textContent).toContain("cannot be replaced");
-    expect(
-      [...dialog.querySelectorAll<HTMLSelectElement>("select option")].map((option) => option.value),
-    ).not.toContain("_response_cache");
+    expect(dialog.querySelector('option[value="_response_cache"]')).toBeNull();
     setField(dialog.querySelector('input[type="text"]'), "trace-definition-001");
     setField(dialog.querySelector('input[type="number"]'), "1");
     setField(dialog.querySelector("select"), "corpus");
