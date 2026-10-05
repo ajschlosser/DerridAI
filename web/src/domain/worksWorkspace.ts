@@ -20,6 +20,8 @@
 // overview, sync, metadata dialogs, review and remove actions). Moved verbatim from the legacy runtime; the runtime's
 // state object and helpers are passed in as dependencies.
 import { fullCitation } from "./citations";
+import { currentFieldAssertions } from "./fieldAssertions";
+import { metadataSchemasApi, type MetadataSchema } from "../api/metadataSchemas";
 import { commonWorkValue, workCoverUrl, workMetadataPresentationRows } from "./workMetadata";
 import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
 import type { WorksDbStatusKind, WorksIndexFreshness } from "../types/works";
@@ -114,6 +116,50 @@ export function createWorksWorkspace(deps: Deps) {
     worksBiblioValue,
   } = deps;
   const workSearchCache = new WeakMap<object, string>();
+  const workMetadataSchemaCache = new Map<string, MetadataSchema | null>();
+
+  function schemaIdForRows(rows: Any[]): string {
+    const ids = new Set<string>();
+    for (const row of rows || []) {
+      const explicit = String(row?.record?.schema_id || "").trim();
+      if (explicit) ids.add(explicit);
+      for (const assertion of currentFieldAssertions(row?.record || {})) {
+        const id = String(assertion.schema_id || "").trim();
+        if (id) ids.add(id);
+      }
+    }
+    return ids.size === 1 ? [...ids][0] : "";
+  }
+
+  function workMetadataSchema(rows: Any[]): MetadataSchema | null {
+    const schemaId = schemaIdForRows(rows);
+    return schemaId ? workMetadataSchemaCache.get(schemaId) || null : null;
+  }
+
+  async function preloadWorkMetadataSchemas(rows: Any[]) {
+    const ids = new Set<string>();
+    for (const row of rows || []) {
+      const explicit = String(row?.record?.schema_id || "").trim();
+      if (explicit) ids.add(explicit);
+      for (const assertion of currentFieldAssertions(row?.record || {})) {
+        const id = String(assertion.schema_id || "").trim();
+        if (id) ids.add(id);
+      }
+    }
+    await Promise.all(
+      [...ids].map(async (id) => {
+        if (workMetadataSchemaCache.has(id)) return;
+        try {
+          workMetadataSchemaCache.set(id, await metadataSchemasApi.get(id));
+        } catch {
+          // Imported/legacy publications may reference a schema that is no
+          // longer installed. Their FieldAssertion identities still provide
+          // the compatibility path in workMetadataPresentationRows.
+          workMetadataSchemaCache.set(id, null);
+        }
+      }),
+    );
+  }
   const librarySearchFields = [
     ...WORK_METADATA_LLM_FIELDS,
     "canonical_work_id",
@@ -229,15 +275,17 @@ export function createWorksWorkspace(deps: Deps) {
     };
     if (!detail) return base;
 
-    const metadata = workMetadataPresentationRows(item.rows).map((item) => ({
+    const metadata = workMetadataPresentationRows(item.rows, workMetadataSchema(item.rows)).map(
+      (item) => ({
       field_id: item.field_id,
       field: item.field,
       field_label: label(item.field),
       mixed: item.mixed,
       value: item.mixed ? "" : String(display(item.value)),
       unique_count: item.unique_count,
-      empty: item.empty,
-    }));
+        empty: item.empty,
+      }),
+    );
     return {
       ...base,
       citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
@@ -354,6 +402,12 @@ export function createWorksWorkspace(deps: Deps) {
       await refreshServerAnnotations();
     } catch {
       /* annotations are best-effort */
+    }
+    try {
+      const rows = [...workIndex().values()].flatMap((item) => item.rows || []);
+      await preloadWorkMetadataSchemas(rows);
+    } catch {
+      /* schema enrichment is best-effort; assertion identity fallback remains */
     }
     if (Date.now() - Number(state.storesLastFetchedAt || 0) > 5000) {
       try {
