@@ -1858,7 +1858,6 @@ class PdfCorpusRepository:
         # lock failure. Keep an explicit busy timeout as protection against true
         # writer/writer contention across repository instances or processes.
         connection.execute("PRAGMA busy_timeout=30000")
-        connection.execute("PRAGMA synchronous=NORMAL")
         try:
             stat = path.stat()
             identity = (stat.st_dev, stat.st_ino, int(connection.execute("PRAGMA schema_version").fetchone()[0]))
