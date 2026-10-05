@@ -51,7 +51,14 @@ def _sync_record_metadata_state(
 ) -> None:
     migrate_record_assertions(record, schema)
     required = list(profile.get("required_metadata_fields") or [])
-    reviewable = list(profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS)
+    schema_review_fields = (
+        list(schema.review_fields())
+        if schema is not None and callable(getattr(schema, "review_fields", None))
+        else []
+    )
+    reviewable = schema_review_fields or list(
+        profile.get("review_metadata_fields") or REVIEW_METADATA_FIELDS
+    )
     incomplete: list[str] = []
     review_fields: list[str] = []
     policy_settled = (
