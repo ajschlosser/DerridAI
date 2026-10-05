@@ -125,6 +125,7 @@ const counts = computed(() => [
       </div>
       <div class="publish-actions">
         <UiButton
+          v-if="!published"
           variant="secondary"
           :label="i18n.t('pdf_corpus.download_unfinished_corpus')"
           @click="emit('downloadUnfinished')"
