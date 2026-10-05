@@ -33,12 +33,12 @@ import types
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from app.persistence_errors import PersistenceBusyError
-
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
+
+from app.persistence_errors import PersistenceBusyError
 
 # Isolate Corpus Builder tests from optional vector-store dependencies.  The
 # production module imports these helpers from app.rag, while this test only
