@@ -38,7 +38,7 @@ from .corpus_review_state import _queue_counts
 from .corpus_reviewer_helpers import _present_for_reviewer, _scrub_canonical_transport
 from .reviewer_context import current_reviewer
 
-CONTRACT = "corpus-review-projection-v1"
+CONTRACT = "corpus-review-projection-v2"
 COUNT_KEYS = tuple(_queue_counts([]))
 QUEUES = {"ready", "issues", "metadata", "topology", "source", "accepted", "rejected"}
 
@@ -238,6 +238,7 @@ def update_rows(
     rows: list[tuple[int, dict[str, Any]]],
     *,
     removed: list[str] | None = None,
+    schema: Any | None = None,
 ) -> None:
     generation = int(connection.execute("SELECT generation FROM review_projection_meta WHERE id=1").fetchone()[0])
     for record_id in removed or []:
@@ -270,7 +271,11 @@ def update_rows(
                 "INSERT INTO review_search VALUES(?,?,?)",
                 (record_id, scope, json.dumps(presented, ensure_ascii=False).casefold()),
             )
-            facets = _compute_observed_metadata_values([presented], present=False)
+            facets = _compute_observed_metadata_values(
+                [presented],
+                present=False,
+                schema=schema,
+            )
             contributions = [(record_id, scope, field, value) for field, values in facets.items() for value in values]
             connection.executemany("INSERT INTO review_facets VALUES(?,?,?,?)", contributions)
             connection.executemany(
@@ -282,8 +287,12 @@ def update_rows(
 
 
 def ensure(
-    connection: sqlite3.Connection, schema_identity: str,
-    decode: Callable[[str], dict[str, Any]], *, rebuild: bool = False,
+    connection: sqlite3.Connection,
+    schema_identity: str,
+    decode: Callable[[str], dict[str, Any]],
+    *,
+    schema: Any | None = None,
+    rebuild: bool = False,
 ) -> None:
     meta = connection.execute("SELECT contract,schema_identity FROM review_projection_meta WHERE id=1").fetchone()
     if rebuild or meta != (CONTRACT, schema_identity):
@@ -297,7 +306,11 @@ def ensure(
             (CONTRACT, schema_identity),
         )
         rows = connection.execute("SELECT ordinal,payload FROM corpus_records ORDER BY ordinal").fetchall()
-        update_rows(connection, [(int(ordinal), decode(payload)) for ordinal, payload in rows])
+        update_rows(
+            connection,
+            [(int(ordinal), decode(payload)) for ordinal, payload in rows],
+            schema=schema,
+        )
         connection.execute("DELETE FROM review_projection_dirty")
         return
     dirty = connection.execute("""
@@ -305,8 +318,10 @@ def ensure(
         LEFT JOIN corpus_records c ON c.record_id=d.record_id
     """).fetchall()
     update_rows(
-        connection, [(int(ordinal), decode(payload)) for _, ordinal, payload in dirty if payload is not None],
+        connection,
+        [(int(ordinal), decode(payload)) for _, ordinal, payload in dirty if payload is not None],
         removed=[record_id for record_id, _, payload in dirty if payload is None],
+        schema=schema,
     )
 
 
