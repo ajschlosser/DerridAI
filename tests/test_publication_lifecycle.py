@@ -335,7 +335,7 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
         "page_end":None,
     }
     left={
-        **common,
+        **json.loads(json.dumps(common)),
         "record_id":"r-left",
         "text":"Record",
         "text_length":6,
@@ -345,7 +345,7 @@ def test_accept_unreviewed_finalizes_sourceunit_topology_before_publication(tmp_
         "source_extracted_text":"Record text",
     }
     right={
-        **common,
+        **json.loads(json.dumps(common)),
         "record_id":"r-right",
         "text":"text",
         "text_length":4,
