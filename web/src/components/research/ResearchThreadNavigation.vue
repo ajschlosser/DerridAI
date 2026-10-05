@@ -31,6 +31,9 @@ defineProps<{
   offset: number;
   loading?: boolean;
   error?: string;
+  includeArchived?: boolean;
+  busy?: boolean;
+  notice?: string;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -38,6 +41,10 @@ const emit = defineEmits<{
   new: [];
   page: [offset: number];
   retry: [];
+  rename: [];
+  archive: [];
+  remove: [];
+  includeArchived: [value: boolean];
 }>();
 const i18n = useI18nStore();
 </script>
@@ -48,7 +55,16 @@ const i18n = useI18nStore();
     <button type="button" class="btn" @click="emit('new')">
       {{ i18n.t("research.thread_new") }}
     </button>
-    <p v-if="loading" role="status">{{ i18n.t("loading.updating") }}</p>
+    <label class="research-thread-archive-filter">
+      <input
+        type="checkbox"
+        :checked="includeArchived"
+        @change="emit('includeArchived', ($event.target as HTMLInputElement).checked)"
+      />
+      {{ i18n.t("research.threads_include_archived") }}
+    </label>
+    <p v-if="notice" role="status">{{ notice }}</p>
+    <p v-if="loading || busy" role="status">{{ i18n.t("loading.updating") }}</p>
     <div v-if="error" role="alert">
       <p>{{ error }}</p>
       <button type="button" class="btn" @click="emit('retry')">{{ i18n.t("ui.retry") }}</button>
@@ -63,6 +79,7 @@ const i18n = useI18nStore();
             @click="emit('select', item.thread_id)"
           >
             {{ item.title }}
+            <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
             <span>{{ i18n.tf("research.thread_turn_count", { count: item.turn_count }) }}</span>
           </button>
         </li>
@@ -89,6 +106,22 @@ const i18n = useI18nStore();
     </div>
     <section v-if="thread" :aria-label="thread.title">
       <h3>{{ thread.title }}</h3>
+      <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
+      <div
+        class="research-thread-management"
+        :aria-label="i18n.t('research.thread_manage')"
+        role="group"
+      >
+        <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
+          {{ i18n.t("research.thread_rename") }}
+        </button>
+        <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
+          {{ i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive") }}
+        </button>
+        <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
+          {{ i18n.t("research.thread_delete") }}
+        </button>
+      </div>
       <ol>
         <li v-for="turn in thread.turns" :key="turn.turn_id">
           <article :aria-labelledby="`heading-${turn.turn_id}`">
@@ -139,7 +172,14 @@ nav span {
   border-color: var(--accent-fg);
   font-weight: 700;
 }
-.research-thread-pages {
+.research-thread-archive-filter {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--page-gap) / 2);
+  margin-block: var(--page-gap);
+}
+.research-thread-pages,
+.research-thread-management {
   display: flex;
   flex-wrap: wrap;
   gap: calc(var(--page-gap) / 2);

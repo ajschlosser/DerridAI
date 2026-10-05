@@ -28,6 +28,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from .. import research_threads
+from ..content_filter import enforce_researcher_text
 from ..http_auth import request_user
 from ..models import RAGRunRequest
 from ..research_thread_store import ThreadNotFound
@@ -85,11 +86,14 @@ def get_thread(thread_id: str, request: Request) -> dict[str, Any]:
 
 @router.patch("/api/research/threads/{thread_id}")
 def patch_thread(thread_id: str, body: ThreadPatch, request: Request) -> dict[str, Any]:
-    owner = request_user(request).username
+    user = request_user(request)
+    owner = user.username
     store = research_threads.thread_store()
     try:
         thread = store.get_thread(thread_id, owner)
         if body.title is not None:
+            if user.role != "admin":
+                enforce_researcher_text({"title": body.title})
             thread = store.rename_thread(thread_id, owner, body.title)
         if body.archived is not None:
             thread = store.set_archived(thread_id, owner, body.archived)

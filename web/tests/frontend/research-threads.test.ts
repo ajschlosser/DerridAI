@@ -25,7 +25,7 @@ import ResearchThreadBrowser from "../../src/components/research/ResearchThreadB
 import ResearchThreadNavigation from "../../src/components/research/ResearchThreadNavigation.vue";
 import type { ResearchThreadDetail, ResearchThreadSummary } from "../../src/types/researchThreads";
 
-const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn() }));
+const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), patch: vi.fn(), remove: vi.fn() }));
 vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api }));
 const thread = (id: string): ResearchThreadDetail => ({
   thread_id: id,
@@ -83,6 +83,8 @@ beforeEach(() => {
     "research.thread_open_run": "Open answer",
     "ui.retry": "Retry",
   };
+  api.patch.mockResolvedValue(thread("a"));
+  api.remove.mockResolvedValue(undefined);
   api.list.mockResolvedValue({ threads: [summary("a")] });
   api.get.mockImplementation(async (id: string) => thread(id));
 });
@@ -93,7 +95,10 @@ afterEach(() => {
 function browser(id = "a") {
   const wrapper = mount(ResearchThreadBrowser, {
     props: { threadId: id, jobId: "job-a" },
-    global: { plugins: [[VueQueryPlugin, { queryClient: client }]] },
+    global: {
+      plugins: [[VueQueryPlugin, { queryClient: client }]],
+      stubs: { UiDialog: { template: `<div role="dialog"><slot/><slot name="footer"/></div>` } },
+    },
   });
   mounted.push(wrapper);
   return wrapper;
@@ -178,4 +183,120 @@ describe("Research thread shell", () => {
     await wrapper.get("section > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
   });
+});
+
+describe("Research thread management", () => {
+  it("sends a sparse title patch, rejects blank titles, and keeps failures editable", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    await wrapper.findAll(".research-thread-management button")[0].trigger("click");
+    await wrapper.get("#research-thread-title").setValue("   ");
+    expect(wrapper.get("button.thread-title-save").attributes("disabled")).toBeDefined();
+    await wrapper.get("form").trigger("submit");
+    expect(api.patch).not.toHaveBeenCalled();
+    await wrapper.get("#research-thread-title").setValue("  Updated inquiry  ");
+    api.patch.mockRejectedValueOnce(new Error("Save failed"));
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { title: "Updated inquiry" });
+    expect(wrapper.get('[role="dialog"]').text()).toContain("Save failed");
+    expect(wrapper.get("#research-thread-title").element).toHaveProperty(
+      "value",
+      "  Updated inquiry  ",
+    );
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+  });
+  it("archives and unarchives without sending question or answer bodies", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    api.get.mockResolvedValue({ ...thread("a"), archived_at: "now" });
+    await wrapper.findAll(".research-thread-management button")[1].trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { archived: true });
+    api.get.mockResolvedValue(thread("a"));
+    await wrapper.findAll(".research-thread-management button")[1].trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { archived: false });
+    await wrapper.get(".research-thread-archive-filter input").setValue(true);
+    await flushPromises();
+    expect(api.list).toHaveBeenLastCalledWith({ offset: 0, includeArchived: true });
+  });
+  it("only deletes after confirmation and clears selected turns when complete", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+    expect(api.remove).not.toHaveBeenCalled();
+    await wrapper.get('[role="dialog"] button').trigger("click");
+    expect(api.remove).not.toHaveBeenCalled();
+    await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+    await wrapper.findAll('[role="dialog"] button')[1].trigger("click");
+    await flushPromises();
+    expect(api.remove).toHaveBeenCalledWith("a");
+    expect(wrapper.emitted("removed")).toHaveLength(1);
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+  });
+  it("blocks duplicate saves and ignores completion after switching threads", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    let resolve!: (value: ReturnType<typeof thread>) => void;
+    api.patch.mockReturnValueOnce(
+      new Promise((yes) => {
+        resolve = yes;
+      }),
+    );
+    await wrapper.findAll(".research-thread-management button")[0].trigger("click");
+    await wrapper.get("form").trigger("submit");
+    await wrapper.get("form").trigger("submit");
+    expect(api.patch).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ threadId: "b" });
+    await flushPromises();
+    resolve(thread("a"));
+    await flushPromises();
+    expect(wrapper.text()).toContain("Question b");
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
+    expect(wrapper.emitted("removed")).toBeUndefined();
+  });
+  it("clears stale thread content when a mutation reports revoked access", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    api.patch.mockRejectedValue(new ApiError("Denied", 403));
+    api.get.mockRejectedValue(new ApiError("Denied", 403));
+    await wrapper.findAll(".research-thread-management button")[1].trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Question a");
+  });
+});
+
+it("does not apply a pending deletion to a replacement account's workspace", async () => {
+  const wrapper = browser();
+  await flushPromises();
+  let resolve!: () => void;
+  api.remove.mockReturnValueOnce(
+    new Promise<void>((yes) => {
+      resolve = yes;
+    }),
+  );
+  await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+  await wrapper.findAll('[role="dialog"] button')[1].trigger("click");
+  useAuthStore().user = null;
+  await flushPromises();
+  resolve();
+  await flushPromises();
+  expect(wrapper.emitted("removed")).toBeUndefined();
+  expect(wrapper.text()).not.toContain("Question a");
+});
+
+it("refreshes authoritative state after archive failure without resending a potentially completed mutation", async () => {
+  const wrapper = browser();
+  await flushPromises();
+  api.patch.mockRejectedValueOnce(new Error("Connection interrupted"));
+  await wrapper.findAll(".research-thread-management button")[1].trigger("click");
+  await flushPromises();
+  expect(wrapper.text()).toContain("Connection interrupted");
+  await wrapper.get('[role="alert"] button').trigger("click");
+  await flushPromises();
+  expect(api.patch).toHaveBeenCalledTimes(1);
+  expect(wrapper.text()).not.toContain("Connection interrupted");
 });

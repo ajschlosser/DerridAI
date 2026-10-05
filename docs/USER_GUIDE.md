@@ -1074,6 +1074,8 @@ Each database search method runs a versioned Pipeline Studio pipeline of the sam
 
 **Research threads** opens a paginated list of your own new Research threads. Select a thread to inspect its questions and turn statuses; **Open answer and evidence** opens that turn using the existing run view. Thread/run selection is retained in the URL and browser Back/Forward restores it. A missing run does not remove its question from the thread. **New question** clears the selected answer and focuses the composer for independent research. Follow-up submission is currently disabled while a thread is selected until advisory thread context is implemented. Older saved responses remain in the Response Library; automatic singleton-thread migration is still pending.
 
+Select a thread to **Rename thread**, **Archive thread**, or **Delete thread**. Enable **Include archived threads** to show archived threads in the list; **Unarchive thread** restores them. Rename failures preserve the title draft so you can correct it or try again. Deletion requires confirmation and removes the thread and question history; saved responses, corpus records, and scholarly provenance retain their existing retention policies. Researcher-authored titles are checked against the same text policy as Research questions.
+
 RAG runs as a background operation and exposes the pipeline itself rather than hiding it.
 
 Visible stages:

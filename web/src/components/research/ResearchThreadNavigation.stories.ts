@@ -72,3 +72,11 @@ export const OrderedTurns: Story = {};
 export const Empty: Story = { args: { threads: [], thread: null, selectedThreadId: "" } };
 export const RefreshFailure: Story = { args: { error: "Thread refresh unavailable" } };
 export const Narrow: Story = { parameters: { viewport: { defaultViewport: "mobile1" } } };
+
+export const Archived: Story = {
+  args: {
+    includeArchived: true,
+    thread: { ...thread, archived_at: "2026-10-05" },
+    threads: [{ ...summary, archived_at: "2026-10-05" }],
+  },
+};

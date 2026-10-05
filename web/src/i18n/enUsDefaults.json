@@ -9611,5 +9611,17 @@
   "research.thread_status_running": "Running",
   "research.thread_status_completed": "Completed",
   "research.thread_status_failed": "Failed",
-  "research.thread_status_cancelled": "Cancelled"
+  "research.thread_status_cancelled": "Cancelled",
+  "research.threads_include_archived": "Include archived threads",
+  "research.thread_archived": "Archived",
+  "research.thread_manage": "Manage thread",
+  "research.thread_rename": "Rename thread",
+  "research.thread_title": "Thread title",
+  "research.thread_archive": "Archive thread",
+  "research.thread_unarchive": "Unarchive thread",
+  "research.thread_delete": "Delete thread",
+  "research.thread_delete_help": "Delete this thread and its question history? Saved responses, corpus records, and scholarly provenance are retained under their existing policies.",
+  "research.thread_renamed": "Thread renamed.",
+  "research.thread_unarchived": "Thread unarchived.",
+  "research.thread_archive_saved": "Thread archived. Include archived threads to find it in the list."
 }

@@ -84,10 +84,16 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await page.goForward();
   await expect(navigation.getByRole("heading", { name: "Question b" })).toBeVisible();
   for (const theme of ["light", "dark"]) {
-    await page.evaluate(
-      (value) => document.documentElement.setAttribute("data-color-scheme", value),
-      theme,
-    );
+    await page.evaluate(async (value) => {
+      document.documentElement.setAttribute("data-color-scheme", value);
+      const dialog = document.querySelector('[role="dialog"]');
+      if (dialog)
+        await Promise.all(
+          dialog
+            .getAnimations({ subtree: true })
+            .map((animation) => animation.finished.catch(() => {})),
+        );
+    }, theme);
     const findings = await new AxeBuilder({ page })
       .include(".research-thread-navigation")
       .analyze();
@@ -101,4 +107,117 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await expect(page).toHaveURL(`${APP}/rag`);
   await expect(page.locator("#researchQuestion")).toBeFocused();
   await expect(page.locator("#researchQuestion")).toHaveValue("");
+});
+
+test("manage a thread through rename, archive, restore, and confirmed deletion", async ({
+  page,
+}) => {
+  let record = { ...detail("a"), archived_at: null as string | null };
+  let deleted = false;
+  const mutations: { method: string; body?: Record<string, unknown> }[] = [];
+  await mockBackend(page, {
+    fixtures: {
+      "/api/research/threads": (url) => ({
+        threads:
+          deleted || (record.archived_at && url.searchParams.get("include_archived") !== "true")
+            ? []
+            : [{ ...summary("a"), title: record.title, archived_at: record.archived_at }],
+      }),
+    },
+  });
+  await page.route("**/api/research/threads/a", async (route) => {
+    const method = route.request().method();
+    if (method === "PATCH") {
+      const body = route.request().postDataJSON();
+      mutations.push({ method, body });
+      record = {
+        ...record,
+        ...(body.title ? { title: body.title } : {}),
+        ...(typeof body.archived === "boolean"
+          ? { archived_at: body.archived ? "2026-10-05" : null }
+          : {}),
+      };
+    } else if (method === "DELETE") {
+      deleted = true;
+      mutations.push({ method });
+    }
+    await route.fulfill({
+      status: deleted ? (method === "DELETE" ? 204 : 404) : 200,
+      contentType: "application/json",
+      body:
+        method === "DELETE"
+          ? ""
+          : JSON.stringify(deleted ? { detail: "Thread not found" } : record),
+    });
+  });
+  await page.goto(APP + "/rag?thread=a");
+  const nav = page.locator(".research-thread-navigation");
+  const rename = nav.getByRole("button", { name: "Rename thread", exact: true });
+  await rename.focus();
+  await page.keyboard.press("Enter");
+  let dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Thread title", { exact: true })).toBeFocused();
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(async (value) => {
+      document.documentElement.setAttribute("data-color-scheme", value);
+      const dialog = document.querySelector('[role="dialog"]');
+      if (dialog)
+        await Promise.all(
+          dialog
+            .getAnimations({ subtree: true })
+            .map((animation) => animation.finished.catch(() => {})),
+        );
+    }, theme);
+    expect(
+      (await new AxeBuilder({ page }).include('[role="dialog"]').analyze()).violations,
+    ).toEqual([]);
+  }
+  await dialog.getByLabel("Thread title", { exact: true }).fill("New research title");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(rename).toBeFocused();
+  await expect(nav.getByRole("heading", { name: "New research title", exact: true })).toBeVisible();
+  expect(mutations[0]).toEqual({ method: "PATCH", body: { title: "New research title" } });
+  await nav.getByRole("button", { name: "Archive thread", exact: true }).click();
+  await expect(nav.getByRole("button", { name: "Unarchive thread", exact: true })).toBeVisible();
+  await nav.getByLabel("Include archived threads", { exact: true }).check();
+  await expect(
+    nav.getByRole("navigation").getByRole("button", { name: "New research title" }),
+  ).toBeVisible();
+  await nav.getByRole("button", { name: "Unarchive thread", exact: true }).click();
+  await expect(nav.getByRole("button", { name: "Archive thread", exact: true })).toBeVisible();
+  const remove = nav.getByRole("button", { name: "Delete thread", exact: true });
+  await remove.focus();
+  await page.keyboard.press("Enter");
+  dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText("Saved responses, corpus records, and scholarly provenance");
+  await expect(dialog.locator(".thread-dialog-cancel")).toBeFocused();
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate(async (value) => {
+      document.documentElement.setAttribute("data-color-scheme", value);
+      const dialog = document.querySelector('[role="dialog"]');
+      if (dialog)
+        await Promise.all(
+          dialog
+            .getAnimations({ subtree: true })
+            .map((animation) => animation.finished.catch(() => {})),
+        );
+    }, theme);
+    const findings = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
+    expect(findings.violations).toEqual([]);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(remove).toBeFocused();
+  expect(mutations.filter((item) => item.method === "DELETE")).toHaveLength(0);
+  await remove.click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Delete thread", exact: true })
+    .click();
+  await expect(page).toHaveURL(APP + "/rag");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(mutations.filter((item) => item.method === "DELETE")).toHaveLength(1);
+  await expect(nav.getByRole("heading", { name: "Question a", exact: true })).toHaveCount(0);
 });

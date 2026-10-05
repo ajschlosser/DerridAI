@@ -182,3 +182,44 @@ def test_job_manager_binds_turn_and_syncs_on_finish(store, monkeypatch) -> None:
     job = manager.create(_body("Q", provider="ollama", model="m"), owner="alice", turn_id=turn["turn_id"])
     assert job["turn_id"] == turn["turn_id"]
     assert store.get_turn(turn["turn_id"], "alice")["job_id"] == job["id"]
+
+
+@pytest.mark.parametrize("role", ["researcher", "custom_role"])
+def test_rename_enforces_researcher_text_before_any_mutation(store, monkeypatch, role) -> None:
+    from app.routers import research_threads as routes
+    from fastapi import HTTPException
+
+    thread = store.create_thread("alice", title="Original")
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role=role))
+    seen = []
+
+    def reject(value):
+        seen.append(value)
+        raise ValueError("text policy rejected title")
+
+    monkeypatch.setattr(routes, "enforce_researcher_text", reject)
+    with pytest.raises(HTTPException) as error:
+        routes.patch_thread(thread["thread_id"], routes.ThreadPatch(title="Rejected", archived=True), None)
+    assert error.value.status_code == 422
+    assert seen == [{"title": "Rejected"}]
+    unchanged = store.get_thread(thread["thread_id"], "alice")
+    assert unchanged["title"] == "Original" and unchanged["archived_at"] is None
+
+
+def test_thread_management_preserves_owner_boundary_and_sparse_patch(store, monkeypatch) -> None:
+    from app.routers import research_threads as routes
+    from fastapi import HTTPException
+
+    thread = store.create_thread("alice", title="Original")
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="bob", role="admin"))
+    with pytest.raises(HTTPException) as error:
+        routes.patch_thread(thread["thread_id"], routes.ThreadPatch(title="Other owner"), None)
+    assert error.value.status_code == 404
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role="researcher"))
+    monkeypatch.setattr(routes, "enforce_researcher_text", lambda _: pytest.fail("No authored text in archive patch"))
+    archived = routes.patch_thread(thread["thread_id"], routes.ThreadPatch(archived=True), None)
+    assert archived["title"] == "Original" and archived["archived_at"] is not None
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role="admin"))
+    renamed = routes.patch_thread(thread["thread_id"], routes.ThreadPatch(title="New title"), None)
+    assert renamed["title"] == "New title" and renamed["archived_at"] is not None
+    assert "turns" not in renamed

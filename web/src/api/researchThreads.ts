@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 import { apiRequest } from "./http";
-import type { ResearchThreadDetail, ResearchThreadSummary } from "../types/researchThreads";
+import type {
+  ResearchThread,
+  ResearchThreadDetail,
+  ResearchThreadSummary,
+} from "../types/researchThreads";
 
 const path = (id: string) => `/api/research/threads/${encodeURIComponent(id)}`;
 
@@ -32,4 +36,7 @@ export const researchThreadsApi = {
     return apiRequest<{ threads: ResearchThreadSummary[] }>(`/api/research/threads?${query}`);
   },
   get: (id: string) => apiRequest<ResearchThreadDetail>(path(id)),
+  patch: (id: string, patch: { title?: string; archived?: boolean }) =>
+    apiRequest<ResearchThread>(path(id), { method: "PATCH", body: JSON.stringify(patch) }),
+  remove: (id: string) => apiRequest<void>(path(id), { method: "DELETE" }),
 };

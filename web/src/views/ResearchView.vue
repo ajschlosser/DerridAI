@@ -67,6 +67,10 @@ async function openThreadTurn(turn: ResearchTurn) {
   if (turn.job_id)
     await router.push({ path: "/rag", query: { thread: turn.thread_id, job: turn.job_id } });
 }
+async function onThreadRemoved(error?: string) {
+  await newThread();
+  if (error) toast(error, { tone: "danger" });
+}
 async function newThread() {
   newQuestionRequested.value = true;
   await router.push({ path: "/rag" });
@@ -893,6 +897,7 @@ onBeforeUnmount(() => {
           @select="selectThread"
           @open="openThreadTurn"
           @new="newThread"
+          @removed="onThreadRemoved"
         />
       </div>
       <ResearchComposer
