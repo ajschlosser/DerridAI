@@ -38,6 +38,7 @@ import threading
 import time
 import unicodedata
 import uuid
+import zipfile
 from collections import Counter
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -215,6 +216,8 @@ from .corpus_record_quality import (
     iso_now,
 )
 from .corpus_record_restructure import (
+    normalize_source_units,
+    reconcile_redundant_active_source_roots,
     repair_record_source_topology,
     synchronize_record_source_projection,
 )
@@ -5707,6 +5710,186 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
     # Backward-compatible internal alias for older call sites in this source tree.
 
 
+    def create_unfinished_export(self, build_id: str) -> dict[str, Any]:
+        """Create an inspectable point-in-time archive without publishing it.
+
+        The archive bypasses publication readiness by design. It is explicitly not
+        a cELF publication and does not accept, reject, reconcile, or otherwise
+        change scholarly authority. Persisted and normalized SourceUnit views are
+        kept separate so inspection never hides storage-level topology.
+        """
+        with self._lock, self.repo._lock:
+            build = json.loads(json.dumps(self.repo.get_build(build_id)))
+            records = json.loads(json.dumps(self.repo.load_records(build_id)))
+            blocks = json.loads(
+                json.dumps(self.repo.load_blocks(str(build["asset_id"])))
+            )
+            source_unit_path = self.repo.build_source_units_path(build_id)
+            persisted_source_units: list[dict[str, Any]] = []
+            if source_unit_path.exists():
+                with source_unit_path.open("r", encoding="utf-8") as handle:
+                    persisted_source_units = [
+                        json.loads(line)
+                        for line in handle
+                        if line.strip()
+                    ]
+            source_units = normalize_source_units(
+                persisted_source_units,
+                blocks,
+                source_document_id=str(build["asset_id"]),
+            )
+            source_units = json.loads(json.dumps(source_units))
+            persisted_source_units = json.loads(
+                json.dumps(persisted_source_units)
+            )
+            retired_records = self.repo.load_checkpoint(
+                build_id,
+                "retired_records",
+                {},
+            )
+            evidence_remap_pending = self.repo.load_checkpoint(
+                build_id,
+                "evidence_remap_pending",
+                {},
+            )
+
+        reviewer_filter_applied = False
+        if current_reviewer.get():
+            # Binary FileResponse bodies bypass the ordinary JSON response
+            # scrubber, so blind second-opinion visibility must be applied before
+            # the archive is written.
+            from .response_filters import scrub_second_opinions
+
+            reviewer_filter_applied = scrub_second_opinions(
+                {
+                    "records": records,
+                    "retired_records": retired_records,
+                }
+            )
+
+        export_id = (
+            f"unfinished-{build_id.removeprefix('build-')}-{uuid.uuid4().hex[:8]}"
+        )
+        created_at = iso_now()
+        directory = self.repo.build_path(build_id).parent / "exports"
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{export_id}.zip"
+        temporary = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+
+        export_manifest = {
+            "artifact_kind": "unfinished_corpus_export",
+            "celf_publication": False,
+            "publication_ready": bool(
+                (build.get("publication_readiness") or {}).get("can_publish")
+            ),
+            "build_id": build_id,
+            "asset_id": build.get("asset_id"),
+            "created_at": created_at,
+            "record_count": len(records),
+            "source_block_count": len(blocks),
+            "source_unit_count": len(source_units),
+            "persisted_source_unit_count": len(persisted_source_units),
+            "source_unit_store_present": source_unit_path.exists(),
+            "reviewer_filter_applied": reviewer_filter_applied,
+            "build_status": build.get("status"),
+            "build_stage": build.get("stage"),
+            "validation": build.get("validation") or {},
+            "warning": (
+                "Inspection artifact only. This archive may contain unresolved, "
+                "rejected, incomplete, or non-conformant Records and is not an "
+                "immutable cELF publication."
+            ),
+        }
+        readme = """DerridAI unfinished corpus export
+
+This is a point-in-time inspection artifact, not a published corpus.
+
+Contents:
+- export_manifest.json: artifact identity, counts, and validation state
+- build.json: current build/workflow state
+- records.jsonl: every visible current Record, including pending/rejected/internal audit data
+- source_units.jsonl: normalized validation view of the current SourceUnit topology
+- source_units_persisted.jsonl: exact persisted SourceUnit rows (empty for legacy builds with no store)
+- source_blocks.jsonl: immutable extraction blocks used by the build
+- retired_records.json: structural-edit tombstones, when present
+- evidence_remap_pending.json: unresolved structural evidence remaps, when present
+
+Nothing in this archive is promoted, accepted, flattened, or marked cELF-conformant
+by the act of downloading it. Blind second-opinion values that the current reviewer
+is not permitted to see are filtered exactly as they are in the interactive review UI.
+"""
+
+        def jsonl(rows: list[dict[str, Any]]) -> str:
+            return "".join(
+                json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+                for row in rows
+            )
+
+        try:
+            with zipfile.ZipFile(
+                temporary,
+                "w",
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=6,
+            ) as archive:
+                archive.writestr(
+                    "export_manifest.json",
+                    json.dumps(
+                        export_manifest,
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                )
+                archive.writestr(
+                    "build.json",
+                    json.dumps(
+                        build,
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                )
+                archive.writestr("records.jsonl", jsonl(records))
+                archive.writestr("source_units.jsonl", jsonl(source_units))
+                archive.writestr(
+                    "source_units_persisted.jsonl",
+                    jsonl(persisted_source_units),
+                )
+                archive.writestr("source_blocks.jsonl", jsonl(blocks))
+                archive.writestr(
+                    "retired_records.json",
+                    json.dumps(
+                        retired_records,
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                )
+                archive.writestr(
+                    "evidence_remap_pending.json",
+                    json.dumps(
+                        evidence_remap_pending,
+                        ensure_ascii=False,
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                )
+                archive.writestr("README.txt", readme)
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+        source_stem = Path(str(build.get("source_filename") or "corpus")).stem
+        return {
+            "path": path,
+            "filename": f"{source_stem}.unfinished-corpus.zip",
+            "export_id": export_id,
+            "created_at": created_at,
+            "record_count": len(records),
+        }
+
+
     def preview_record(self, build_id: str, record_id: str) -> dict[str, Any]:
         records = self.repo.load_records(build_id)
         record = next((row for row in records if row.get("record_id") == record_id), None)
@@ -5883,6 +6066,32 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             accept_unreviewed
             and str(build.get("status") or "") not in {"queued", "running"}
         ):
+            reconciliation_id = f"publication-finalize-{uuid.uuid4().hex[:12]}"
+            # Compatibility-era stores can contain an immutable root left active
+            # beside exact replacement descendants. Retire that redundant root
+            # only when its descendants conserve the source text exactly. The
+            # root row and its audit history remain persisted.
+            with self._lock, self.repo._lock:
+                source_units = self.repo.load_source_units(build_id)
+                root_events = reconcile_redundant_active_source_roots(
+                    source_units,
+                    transaction_id=reconciliation_id,
+                )
+                if root_events:
+                    self.repo.save_source_units(build_id, source_units)
+                    current = self.repo.get_build(build_id)
+                    prior = [
+                        dict(item)
+                        for item in current.get(
+                            "source_topology_reconciliation_history"
+                        )
+                        or []
+                        if isinstance(item, dict)
+                    ]
+                    current["source_topology_reconciliation_history"] = (
+                        prior + root_events
+                    )[-200:]
+                    self.repo.save_build(current)
             build = self._reconcile_and_validate(build_id)
         records = self.repo.load_records(build_id)
         validation = build.get("validation") or {}
