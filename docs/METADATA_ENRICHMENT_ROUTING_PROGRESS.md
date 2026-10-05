@@ -1,6 +1,6 @@
 <!--
 This file is part of DerridAI, a cELF-compliant research workspace
-Copyright Ã‚Â© 2026  Aaron John Schlosser, PhD
+Copyright © 2026  Aaron John Schlosser, PhD
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -161,3 +161,11 @@ Final handoff: draft PR #517 is open at https://github.com/ajschlosser/DerridAI/
 - Full preflight was attempted with four workers and fail-fast regression. Backend lint, typechecking and syntax passed. The formatting gate cannot find this fresh clone's `web/node_modules`; the touched Markdown was separately formatted. Generated-artifact validation and backend regression are blocked by missing `chromadb`: fail-fast regression stops during collection of `test_audio_settings_and_topology.py`. Separate artifact tests report three GraphQL failures from that missing import and three passing catalog tests; schema staleness is not established by the failed import.
 - An earlier non-fail-fast full regression attempt reported a failure and reached approximately 23% before it was interrupted in favor of the explicit fail-fast diagnosis. It did not produce a completed suite summary and cannot establish baseline failure equivalence. Full regression remains unresolved, not accepted as passing. The implementation checkpoint is `b14bde49`; the checkpoint push uses `DERRIDAI_SKIP_PREFLIGHT=1` after the manual checks and recorded preflight failure.
 - The user superseded the prior usage stop condition and requested this checkpoint regardless of usage. Work ends at this coherent server-only routing checkpoint. Next: retrieval consolidation, calibrated policy and real-provider/reviewer-quality benchmark tuning, followed by an explicit production integration/reconciliation gate. No private benchmark case was selected, and no latency or reviewer-quality result is claimed.
+
+## PR #520 CI repair (2026-10-04)
+
+- Merged current master `ad28261f`, including the completed legacy-runtime retirement from PR #518, before revalidating this branch.
+- Updated the researcher text-policy wiring guard to read the canonical `domain/appBootstrap.ts` and `domain/researcherInputFilter.ts` modules directly now that `runtime.js` has been retired. This removes the stale collection-time dependency on the deleted compatibility file without changing policy behavior.
+- Restored the touched files' UTF-8 copyright marker after an earlier shell-encoding round trip. This is repository hygiene only; it does not alter candidate-routing semantics.
+
+- Integrated concurrent remote commit `da71a8ad`, preserving its researcher text-policy wiring repair and UTF-8 copyright cleanup alongside the routing checkpoint. Resolved the append-only progress conflict by retaining both checkpoint sections. Post-integration validation: 261 focused tests passed, including the researcher text-policy repair; full backend Ruff and touched-test lint passed. Earlier full backend mypy remains applicable because the integrated Python changes only restore copyright text. Full preflight/regression limitations above remain unresolved.
