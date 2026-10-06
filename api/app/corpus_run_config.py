@@ -64,6 +64,13 @@ class PipelineDefinitionRef(_StrictRunModel):
     version: int = Field(ge=1)
 
 
+class RunEnvelopeMigration(_StrictRunModel):
+    """Non-authoritative record of a deterministic run-envelope migration."""
+
+    source_format: Literal["derridai-corpus-processing"]
+    source_version: Literal[1]
+
+
 def _unknown_keys(payload: object, model: type[BaseModel]) -> list[str]:
     if not isinstance(payload, dict):
         return []
@@ -195,6 +202,7 @@ class CorpusRunEnvelopeV2(_StrictRunModel):
 
     format: Literal["derridai-corpus-run"]
     version: Literal[2]
+    migration: RunEnvelopeMigration | None = None
     source: SourceConfig = Field(default_factory=SourceConfig)
     pipeline: PipelineRunSelection
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
@@ -281,6 +289,10 @@ def migrate_v1_to_v2(
     return CorpusRunEnvelopeV2(
         format="derridai-corpus-run",
         version=2,
+        migration=RunEnvelopeMigration(
+            source_format="derridai-corpus-processing",
+            source_version=1,
+        ),
         source=config.source,
         pipeline=PipelineRunSelection(definition=pipeline.model_copy(deep=True)),
         processing=config.processing,
