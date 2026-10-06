@@ -75,7 +75,7 @@ import {
 import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./domain/appBootstrap";
-import { navigateTo, repaintAfterLocationChange } from "./domain/sharedNavigation";
+import { repaintAfterLocationChange } from "./domain/sharedNavigation";
 import { viewFromPath } from "./domain/viewPaths";
 import { triggerImport } from "./domain/sharedFileLifecycle";
 import { pauseRuntime } from "./domain/jobsPause";
@@ -418,13 +418,20 @@ function openCorpusFilePicker() {
   if (auth.isAdmin) corpusFileInput.value?.click();
 }
 
-function navigateNative(path: string, runtimeView?: string) {
+function syncSharedStateFromRoute() {
+  sharedUrlStateCodec.applyUrlState();
+  repaintAfterLocationChange();
+}
+
+function navigateNative(path: string) {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
-  // Only short-circuit when the runtime agrees with the router; a drifted runtime view must be allowed to resync.
-  if (current === target && (!runtimeView || sharedState.view === runtimeView)) return;
-  if (runtimeView) {
-    navigateTo(runtimeView, { href: target });
+  if (current === target) {
+    // The router remains authoritative even if compatibility state drifted.
+    // Re-derive that state from the settled URL instead of initiating a second
+    // forward-navigation path through sharedNavigation.navigateTo().
+    const expectedView = viewFromPath(router.currentRoute.value.path);
+    if (expectedView && sharedState.view !== expectedView) syncSharedStateFromRoute();
     return;
   }
   void router.push(target).catch(() => {
@@ -435,7 +442,7 @@ function navigateNative(path: string, runtimeView?: string) {
 function navigate(view: string) {
   const target = NAV_TARGETS[view];
   if (!target) return;
-  navigateNative(target.path, target.runtimeView);
+  navigateNative(target.path);
 }
 
 function openMobileNavigation() {
@@ -470,7 +477,10 @@ function searchCorpus(query: string) {
   sharedState.globalPage = 1;
   sharedState.storeSearchResults = [];
   sharedState.globalSearchMode = "traditional";
-  navigateTo("global");
+  // Encode the Search workspace URL directly from its state without first
+  // changing the compatibility view. Vue Router remains the navigation authority;
+  // the settled /search route then applies the same URL state back to the workspace.
+  navigateNative(sharedUrlStateCodec.urlFromState("global"));
 }
 
 function submitTopSearch() {
@@ -529,8 +539,8 @@ onMounted(async () => {
     void auth.loadStatus();
   });
   window.addEventListener("derridai:navigate-native", ((event: Event) => {
-    const detail = (event as CustomEvent<{ path?: string; runtimeView?: string }>).detail || {};
-    if (detail.path) navigateNative(detail.path, detail.runtimeView);
+    const detail = (event as CustomEvent<{ path?: string }>).detail || {};
+    if (detail.path) navigateNative(detail.path);
   }) as EventListener);
   window.addEventListener("keydown", (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -550,17 +560,15 @@ onBeforeUnmount(() => {
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
 });
 
-// The router is the authority on where the user is. When a navigation settles on a path that belongs to a different
-// runtime view (RouterLink, a deep link, a redirect) or comes from browser back/forward, pull the runtime along instead
-// of letting the two drift.
+// The router is the authority on where the user is. When navigation settles on a
+// different compatibility view, or comes from browser Back/Forward, derive the
+// shared workspace state from that settled URL rather than initiating navigation
+// from the compatibility layer.
 const runtimeLocationSync = createRuntimeLocationSync(router, {
   isStarted: () => runtimeStarted.value,
   viewForPath: (path) => viewFromPath(path),
   currentView: () => sharedState.view,
-  sync: () => {
-    sharedUrlStateCodec.applyUrlState();
-    repaintAfterLocationChange();
-  },
+  sync: syncSharedStateFromRoute,
 });
 
 watch(

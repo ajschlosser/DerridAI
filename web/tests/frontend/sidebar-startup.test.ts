@@ -497,19 +497,70 @@ describe("router and runtime stay in agreement", () => {
     wrapper.unmount();
   });
 
-  it("lets a sidebar click resync a runtime view that has drifted from the URL", async () => {
-    const { wrapper } = await signIn();
-    sharedState.view = "global"; // runtime drifted; the URL is still "/"
+  it("routes the shell search through Vue Router with shareable Search state", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+
+    const search = wrapper.get(".shell-command-search input");
+    await search.setValue("différance");
+    await wrapper.get(".shell-command-search").trigger("submit");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/search");
+    expect(router.currentRoute.value.query.ts).toBeTruthy();
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("routes canonical sidebar destinations through Vue Router before compatibility sync", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+
+    await pageButtons(wrapper)
+      .find((b) => b.text() === "Search")
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/search");
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("does not mutate compatibility navigation state when the router refuses a sidebar destination", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+    router.beforeEach((to) => (to.path === "/search" ? false : true));
+
+    await pageButtons(wrapper)
+      .find((b) => b.text() === "Search")
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(sharedState.view).toBe("home");
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("resyncs drifted compatibility state from the current route without a second navigation authority", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "global"; // compatibility state drifted; the route is still "/"
 
     await pageButtons(wrapper)
       .find((b) => b.text() === "Home")
       ?.trigger("click");
+    await flushPromises();
 
-    expect(navigation.navigateTo).toHaveBeenCalledWith("home", { href: "/" });
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 
-  it("ignores a click on the destination the runtime and router already agree on", async () => {
+  it("ignores a click on the destination the compatibility state and router already agree on", async () => {
     const { wrapper } = await signIn();
     sharedState.view = "home";
 
@@ -518,6 +569,7 @@ describe("router and runtime stay in agreement", () => {
       ?.trigger("click");
 
     expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

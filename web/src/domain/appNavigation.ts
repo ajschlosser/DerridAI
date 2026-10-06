@@ -38,28 +38,27 @@ export const CONTEXTUAL_NAV_IDS = new Set(["record", "relationships"]);
 
 export interface NavigationTarget {
   path: string;
-  runtimeView?: string;
 }
 
 export const NAV_TARGETS: Record<string, NavigationTarget> = {
-  home: { path: "/", runtimeView: "home" },
-  global: { path: "/search", runtimeView: "global" },
-  rag: { path: "/rag", runtimeView: "rag" },
-  faq: { path: "/faq", runtimeView: "faq" },
-  works: { path: "/works", runtimeView: "works" },
-  list: { path: "/records", runtimeView: "list" },
-  annotations: { path: "/annotations", runtimeView: "annotations" },
-  semanticmap: { path: "/semantic-map", runtimeView: "semanticmap" },
-  compare: { path: "/compare", runtimeView: "compare" },
-  vector: { path: "/databases", runtimeView: "vector" },
-  pdf: { path: "/corpus-builder", runtimeView: "pdf" },
+  home: { path: "/" },
+  global: { path: "/search" },
+  rag: { path: "/rag" },
+  faq: { path: "/faq" },
+  works: { path: "/works" },
+  list: { path: "/records" },
+  annotations: { path: "/annotations" },
+  semanticmap: { path: "/semantic-map" },
+  compare: { path: "/compare" },
+  vector: { path: "/databases" },
+  pdf: { path: "/corpus-builder" },
   sources: { path: "/sources" },
   responsecache: { path: "/system-data/overview" },
   pipelines: { path: "/pipelines" },
   metadatamemory: { path: "/metadata-memory" },
-  providers: { path: "/providers", runtimeView: "providers" },
-  schemas: { path: "/schemas", runtimeView: "schemas" },
-  config: { path: "/settings/overview", runtimeView: "config" },
+  providers: { path: "/providers" },
+  schemas: { path: "/schemas" },
+  config: { path: "/settings/overview" },
   users: { path: "/users" },
   roles: { path: "/roles" },
   languages: { path: "/locale" },
