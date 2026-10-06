@@ -192,6 +192,7 @@ const schemaFilterFields = computed<SearchFilterFieldOption[]>(() => {
     collectionFields: store?.filter_fields || [],
     availableFields: snapshot.value?.filter_fields.map((field) => field.key) || [],
     labels: (key) => snapshot.value?.filter_fields.find((field) => field.key === key)?.label || key,
+    database: databaseMode.value,
   });
 });
 const sortOptions = computed(() => {
@@ -511,6 +512,8 @@ function onFilterFieldChange() {
   newFilterValue.value = "";
 }
 function suggestionsFor(field: string) {
+  const descriptor = schemaFilterFields.value.find((item) => item.key === field);
+  if (descriptor?.controlledValues.length) return descriptor.controlledValues;
   return snapshot.value?.filter_suggestions[field] || [];
 }
 
