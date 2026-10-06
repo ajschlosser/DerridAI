@@ -245,60 +245,60 @@ describe("PdfCorpusBuilder characterization", () => {
     metadataSchemasApi.get.mockResolvedValue(defaultSchema);
   });
 
-  it("distinguishes another build from choosing another source", async () => {
-    const asset = {
-      asset_id: "asset-1",
-      filename: "Source.pdf",
-      media_kind: "pdf",
-      page_count: 1,
-      block_count: 1,
-      pages: [],
-    };
-    pdfCorpusApi.listAssets.mockResolvedValueOnce({ items: [asset] });
+  const sourceAsset = {
+    asset_id: "asset-1",
+    filename: "Source.pdf",
+    media_kind: "pdf",
+    page_count: 1,
+    block_count: 1,
+    pages: [],
+  };
+
+  function mockExistingBuild() {
+    pdfCorpusApi.listAssets.mockResolvedValueOnce({ items: [sourceAsset] });
     pdfCorpusApi.listBuilds.mockResolvedValueOnce({
-      items: [reviewBuild],
+      items: [{ ...reviewBuild }],
       total: 1,
       offset: 0,
       limit: 100,
     });
+    pdfCorpusApi.build.mockResolvedValueOnce({ ...reviewBuild });
+  }
 
-    const retain = await mountBuilder("?workspace=build&build=build-1", false, false, true);
-    const retainButtons = retain.findAllComponents({ name: "UiButton" });
-    const fromSource = retainButtons.find(
+  it("starts another build while retaining the selected source", async () => {
+    mockExistingBuild();
+    const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);
+    const buttons = wrapper.findAllComponents({ name: "UiButton" });
+    const fromSource = buttons.find(
       (button) => button.props("label") === "New build from this source",
     );
-    const chooseSource = retainButtons.find(
-      (button) => button.props("label") === "Choose another source",
-    );
     expect(fromSource).toBeTruthy();
-    expect(chooseSource).toBeTruthy();
 
     fromSource!.vm.$emit("click");
     await flushPromises();
 
-    expect(retain.router.currentRoute.value.query.workspace).toBe("setup");
-    expect(retain.router.currentRoute.value.query.build).toBeUndefined();
-    expect(retain.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
-    retain.unmount();
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
+    wrapper.unmount();
+  });
 
-    pdfCorpusApi.listAssets.mockResolvedValueOnce({ items: [asset] });
-    pdfCorpusApi.listBuilds.mockResolvedValueOnce({
-      items: [reviewBuild],
-      total: 1,
-      offset: 0,
-      limit: 100,
-    });
-    const change = await mountBuilder("?workspace=build&build=build-1", false, false, true);
-    const changeButtons = change.findAllComponents({ name: "UiButton" });
-    const chooseAnother = changeButtons.find(
+  it("clears the selected source when choosing another source", async () => {
+    mockExistingBuild();
+    const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);
+    const buttons = wrapper.findAllComponents({ name: "UiButton" });
+    const chooseAnother = buttons.find(
       (button) => button.props("label") === "Choose another source",
     );
+    expect(chooseAnother).toBeTruthy();
+
     chooseAnother!.vm.$emit("click");
     await flushPromises();
 
-    expect(change.router.currentRoute.value.query.workspace).toBe("setup");
-    expect(change.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("");
-    change.unmount();
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("");
+    wrapper.unmount();
   });
 
   it("loads the empty workspace and exposes the source/configuration workflow", async () => {
