@@ -330,16 +330,8 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       </button>
     </div>
 
-    <UiLoadingState
-      v-if="initialPending"
-      variant="skeleton"
-      :label="i18n.t('ui.loading')"
-    />
-    <UiLoadingState
-      v-else-if="refreshing"
-      variant="inline"
-      :label="i18n.t('loading.updating')"
-    />
+    <UiLoadingState v-if="initialPending" variant="skeleton" :label="i18n.t('ui.loading')" />
+    <UiLoadingState v-else-if="refreshing" variant="inline" :label="i18n.t('loading.updating')" />
     <div v-if="refreshError" class="ops-refresh-error" role="alert">
       <span>{{ refreshError }}</span>
       <button type="button" class="ops-btn" @click="refreshPanel()">
