@@ -347,14 +347,14 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       </button>
     </div>
 
-    <div v-if="!initialPending && empty" class="ops-empty">
+    <div v-if="!initialPending && !refreshError && empty" class="ops-empty">
       <span class="ops-empty-art" aria-hidden="true"><AppIcon name="history" /></span>
       <h3>{{ i18n.t("operations.panel.empty_title") }}</h3>
       <p>
         {{ i18n.t("operations.panel.empty_body") }}
       </p>
     </div>
-    <p v-else-if="!initialPending && filterEmpty" class="ops-empty-inline">
+    <p v-else-if="!initialPending && !refreshError && filterEmpty" class="ops-empty-inline">
       {{ i18n.t("operations.panel.empty_filtered") }}
     </p>
 
