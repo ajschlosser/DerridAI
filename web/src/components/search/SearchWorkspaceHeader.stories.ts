@@ -38,3 +38,18 @@ export const DatabaseScope: Story = { args: { scope: "database" } };
 export const Researcher: Story = {
   args: { scope: "database", researcher: true, canUseLoaded: false, totalLoaded: 0 },
 };
+
+export const Pending: Story = {
+  args: {
+    scope: null,
+    pending: true,
+    canUseLoaded: false,
+  },
+};
+export const Unavailable: Story = {
+  args: {
+    scope: null,
+    unavailable: true,
+    canUseLoaded: false,
+  },
+};

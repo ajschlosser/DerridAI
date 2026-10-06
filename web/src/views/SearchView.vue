@@ -757,15 +757,68 @@ onBeforeUnmount(() => {
     @wheel="forwardVerticalWheelToDocument"
   >
     <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
-    <section v-if="!snapshot && phase === 'error'" class="search-page-error">
-      <h1 id="search-page-title">{{ i18n.t("search.load_failed") }}</h1>
-      <p role="alert">{{ error }}</p>
-      <button type="button" class="btn" @click="load()">{{ i18n.t("ui.retry") }}</button>
-    </section>
-    <div v-else-if="!snapshot" class="search-page-loading">
-      <h1 id="search-page-title">{{ i18n.t("loading.search_frame") }}</h1>
-      <UiLoadingState :label="i18n.t('search.loading')" variant="skeleton" :skeleton-count="2" />
-    </div>
+    <template v-if="!snapshot">
+      <SearchWorkspaceHeader
+        :scope="null"
+        :pending="phase === 'pending'"
+        :unavailable="phase === 'error'"
+        :can-use-loaded="false"
+      />
+
+      <div
+        v-if="phase === 'error'"
+        class="info error search-workspace-status search-page-error"
+        role="alert"
+      >
+        <p>{{ error }}</p>
+        <button type="button" class="btn" @click="load()">{{ i18n.t("ui.retry") }}</button>
+      </div>
+
+      <section
+        class="search-command-surface search-command-placeholder"
+        :aria-label="i18n.t('search.search_controls')"
+      >
+        <form class="search-command-row" @submit.prevent>
+          <label class="search-command-input">
+            <span class="sr-only">{{ i18n.t("search.query") }}</span>
+            <AppIcon name="search" />
+            <input
+              type="search"
+              disabled
+              :placeholder="i18n.t('search.loading')"
+              autocomplete="off"
+            />
+          </label>
+          <button type="button" class="btn primary search-run-button" disabled>
+            <AppIcon name="search" />{{ i18n.t("ui.search") }}
+          </button>
+        </form>
+      </section>
+
+      <section
+        class="search-explorer-grid search-explorer-placeholder"
+        :aria-label="i18n.t('search.results')"
+        :aria-busy="phase === 'pending'"
+        data-search-loading
+      >
+        <div class="search-placeholder-region">
+          <UiLoadingState
+            v-if="phase === 'pending'"
+            :label="i18n.t('search.loading')"
+            variant="skeleton"
+            :skeleton-count="3"
+          />
+        </div>
+        <section class="search-results-panel search-placeholder-region">
+          <UiLoadingState
+            v-if="phase === 'pending'"
+            :label="i18n.t('search.loading')"
+            variant="skeleton"
+            :skeleton-count="4"
+          />
+        </section>
+      </section>
+    </template>
     <template v-else>
       <SearchWorkspaceHeader
         :scope="snapshot.scope"
@@ -1608,23 +1661,21 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .search-page-error {
-  min-height: 320px;
-  display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 12px;
-  text-align: center;
-}
-.search-page-loading {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-  padding-block: var(--space-4);
-}
-.search-page-error h1,
-.search-page-loading h1 {
   margin: 0;
-  font-family: Georgia, serif;
+}
+.search-command-placeholder input:disabled,
+.search-command-placeholder button:disabled {
+  cursor: not-allowed;
+}
+.search-placeholder-region {
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  padding: var(--space-4);
+}
+.search-results-panel.search-placeholder-region {
+  min-height: 320px;
 }
 .search-workspace-status,
 .search-results-status {

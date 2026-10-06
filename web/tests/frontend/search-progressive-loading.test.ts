@@ -186,12 +186,35 @@ describe("Search workspace loading boundaries", () => {
     await flushPromises();
 
     expect(wrapper.find("#search-page-title").exists()).toBe(true);
-    expect(wrapper.find(".ui-loading-state").exists()).toBe(true);
-    expect(wrapper.find(".search-results-panel").exists()).toBe(false);
+    expect(wrapper.find(".search-workspace-header").exists()).toBe(true);
+    expect(wrapper.find(".search-command-surface").exists()).toBe(true);
+    expect(wrapper.get("input[type='search']").attributes("disabled")).toBeDefined();
+    expect(wrapper.find("[data-search-loading]").exists()).toBe(true);
+    expect(wrapper.findAll(".search-scope-switch small").every((item) => item.text() === "—")).toBe(
+      true,
+    );
 
     read.resolve(snapshot());
     await flushPromises();
+    expect(wrapper.find("[data-search-loading]").exists()).toBe(false);
+    expect(wrapper.get("input[type='search']").attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".search-results-panel").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("keeps the search frame visible after a failed first read", async () => {
+    runtime.getSearchWorkspaceSnapshot.mockRejectedValueOnce(new Error("Search unavailable"));
+    const wrapper = await mountSearch();
+    await flushPromises();
+
+    expect(wrapper.find("#search-page-title").exists()).toBe(true);
+    expect(wrapper.find(".search-workspace-header").exists()).toBe(true);
+    expect(wrapper.find(".search-command-surface").exists()).toBe(true);
+    expect(wrapper.get("input[type='search']").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".search-page-error").attributes("role")).toBe("alert");
+    expect(wrapper.get(".search-page-error").text()).toContain("Search unavailable");
+    expect(wrapper.text()).not.toContain("No matching records");
+
     wrapper.unmount();
   });
 
