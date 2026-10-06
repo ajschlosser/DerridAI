@@ -136,6 +136,20 @@ describe("search filter schema", () => {
     expect(fields.some((field) => field.key === "conceptual_tension")).toBe(true);
   });
 
+  it("treats an empty legacy schema descriptor like no schema", () => {
+    const fields = resolveSearchFilterFields({
+      schema: { id: "default", name: "Default", fields: [] } as MetadataSchema,
+      availableFields: ["page_start", "conceptual_tension"],
+      database: false,
+    });
+    expect(fields.slice(0, 3).map((field) => field.key)).toEqual([
+      "work",
+      "document_author",
+      "year",
+    ]);
+    expect(fields.some((field) => field.key === "conceptual_tension")).toBe(true);
+  });
+
   it("uses schema-controlled boolean values to choose a closed select control", () => {
     const booleanSchema = {
       id: "boolean",
