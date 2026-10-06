@@ -138,7 +138,7 @@ describe("search filter schema", () => {
 
   it("treats an empty legacy schema descriptor like no schema", () => {
     const fields = resolveSearchFilterFields({
-      schema: { id: "default", name: "Default", fields: [] } as MetadataSchema,
+      schema: { id: "default", name: "Default", fields: [] } as unknown as MetadataSchema,
       availableFields: ["page_start", "conceptual_tension"],
       database: false,
     });
