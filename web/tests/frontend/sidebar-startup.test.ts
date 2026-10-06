@@ -512,6 +512,23 @@ describe("router and runtime stay in agreement", () => {
     wrapper.unmount();
   });
 
+  it("does not mutate compatibility navigation state when the router refuses a sidebar destination", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+    router.beforeEach((to) => (to.path === "/search" ? false : true));
+
+    await pageButtons(wrapper)
+      .find((b) => b.text() === "Search")
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(sharedState.view).toBe("home");
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
   it("resyncs drifted compatibility state from the current route without a second navigation authority", async () => {
     const { wrapper, router } = await signIn();
     sharedState.view = "global"; // compatibility state drifted; the route is still "/"
