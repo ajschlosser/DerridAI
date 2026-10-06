@@ -33,6 +33,7 @@ vi.mock("vue-router", () => ({
 
 import { systemApi } from "../../src/api/system";
 import SystemDataOverview from "../../src/components/system-data/SystemDataOverview.vue";
+import SystemDataAdvanced from "../../src/components/system-data/SystemDataAdvanced.vue";
 import SystemDataView from "../../src/views/SystemDataView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 
@@ -74,6 +75,46 @@ describe("System Data workspaces", () => {
       name: "system-data-advanced",
       query: {},
     });
+  });
+
+  it("retains internal vector collections while refresh is pending or fails", async () => {
+    const collections = [
+      {
+        name: "metadata-memory",
+        role: "system",
+        count: 7,
+        derived: false,
+      },
+    ];
+    const read = vi.spyOn(systemApi, "systemChromaCollections").mockResolvedValueOnce({
+      collections,
+    });
+
+    const wrapper = mount(SystemDataAdvanced);
+    await flushPromises();
+    expect(wrapper.text()).toContain("metadata-memory");
+    expect(wrapper.text()).toContain("Read-only query console");
+
+    let rejectRefresh!: (reason?: unknown) => void;
+    read.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+    await wrapper.get(".workspace-heading .btn").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("metadata-memory");
+    expect(wrapper.text()).toContain("Updating");
+
+    rejectRefresh(new Error("vector service offline"));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("metadata-memory");
+    expect(wrapper.text()).toContain("vector service offline");
+    expect(wrapper.text()).not.toContain("No internal vector collections are available.");
+    wrapper.unmount();
   });
 
   it("keeps healthy stores visible when one overview source fails", async () => {
