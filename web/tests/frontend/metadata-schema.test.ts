@@ -359,11 +359,12 @@ describe("the schema editor", () => {
   });
 
   it("withholds false empty/editor state while the schema catalog is unresolved", async () => {
-    let resolveList!: (value: { items: Array<Record<string, unknown>> }) => void;
+    type SchemaListResult = Awaited<ReturnType<typeof metadataSchemasApi.list>>;
+    let resolveList!: (value: SchemaListResult) => void;
     vi.spyOn(metadataSchemasApi, "list").mockImplementationOnce(
       () =>
-        new Promise((resolve) => {
-          resolveList = resolve as typeof resolveList;
+        new Promise<SchemaListResult>((resolve) => {
+          resolveList = resolve;
         }),
     );
     const w = mount(MetadataSchemaEditor, { attachTo: document.body });
