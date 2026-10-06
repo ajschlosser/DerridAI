@@ -41,6 +41,8 @@ const page = ref<SystemResponseCachePage>({
 });
 
 const error = ref("");
+const hasSuccessfulPage = ref(false);
+const shownPageKey = ref("");
 const query = ref(String(route.query.q || ""));
 const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
 const resultCount = computed(() =>
@@ -99,6 +101,14 @@ function pageParams(offset: number) {
   return { limit: page.value.limit || 25, offset, query: query.value };
 }
 const applied = ref(pageParams(requestedOffset.value));
+function pageKey(params = applied.value) {
+  return JSON.stringify(params);
+}
+const displayedPageIsCurrent = computed(
+  () => hasSuccessfulPage.value && shownPageKey.value === pageKey(),
+);
+const initialPending = computed(() => loading.value && !displayedPageIsCurrent.value);
+const refreshing = computed(() => loading.value && displayedPageIsCurrent.value);
 const pageQuery = useDataQuery(
   "response_library",
   () =>
@@ -113,6 +123,8 @@ watch(
   (next) => {
     if (next) {
       page.value = next;
+      hasSuccessfulPage.value = true;
+      shownPageKey.value = pageKey();
       error.value = "";
     }
   },
@@ -121,6 +133,12 @@ watch(
   () => pageQuery.error.value,
   (cause) => {
     if (cause) error.value = cause instanceof Error ? cause.message : String(cause);
+  },
+);
+watch(
+  () => pageQuery.isFetching.value,
+  (fetching) => {
+    if (fetching) error.value = "";
   },
 );
 async function load(offset = 0, updateRoute = true, push = false) {
@@ -246,27 +264,39 @@ watch(
       </button>
     </form>
 
-    <div v-if="error" class="state error" role="alert">
+    <div v-if="error && !displayedPageIsCurrent" class="state error" role="alert">
       <strong>{{ t("runtime.system_responses_failed", "Could not load saved responses.") }}</strong>
       <span>{{ error }}</span>
-      <button class="btn tiny" type="button" @click="load(page.offset)">
+      <button class="btn tiny" type="button" @click="load(requestedOffset)">
         {{ t("common.retry", "Retry") }}
       </button>
     </div>
-    <div v-else-if="loading" class="state" role="status">
+    <div v-else-if="initialPending" class="state" role="status">
       {{ t("runtime.system_responses_loading", "Loading saved responses…") }}
     </div>
-    <div v-else-if="page.exists === false" class="state">
-      {{ t("runtime.system_responses_absent", "The response cache has not been created yet.") }}
-    </div>
-    <div v-else-if="page.total === 0 && !query" class="state">
-      {{ t("runtime.system_responses_empty", "No saved responses yet.") }}
-    </div>
-    <div v-else-if="resultCount === 0" class="state">
-      {{ t("runtime.system_responses_no_matches", "No saved responses match this search.") }}
-    </div>
 
-    <template v-else>
+    <template v-else-if="displayedPageIsCurrent">
+      <div v-if="refreshing" class="state state-inline" role="status">
+        {{ t("loading.updating", "Updating…") }}
+      </div>
+      <div v-if="error" class="state error state-inline" role="alert">
+        <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+        <span>{{ error }}</span>
+        <button class="btn tiny" type="button" @click="load(page.offset)">
+          {{ t("common.retry", "Retry") }}
+        </button>
+      </div>
+      <div v-if="page.exists === false" class="state">
+        {{ t("runtime.system_responses_absent", "The response cache has not been created yet.") }}
+      </div>
+      <div v-else-if="page.total === 0 && !applied.query" class="state">
+        {{ t("runtime.system_responses_empty", "No saved responses yet.") }}
+      </div>
+      <div v-else-if="resultCount === 0" class="state">
+        {{ t("runtime.system_responses_no_matches", "No saved responses match this search.") }}
+      </div>
+
+      <template v-else>
       <div class="result-summary">
         {{
           i18n.tf("runtime.system_response_range", "{start}–{end} of {total} saved responses", {
@@ -332,6 +362,7 @@ watch(
           {{ t("common.next", "Next") }}
         </button>
       </footer>
+      </template>
     </template>
   </div>
 </template>
@@ -437,6 +468,9 @@ watch(
 }
 .state.error {
   color: var(--tone-danger-fg);
+}
+.state-inline {
+  padding-block: 10px;
 }
 .result-summary {
   color: var(--muted);
