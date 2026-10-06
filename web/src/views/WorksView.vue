@@ -223,6 +223,9 @@ function inspectorHandlers(work: string) {
 }
 const loadingTitle = computed(() => i18n.t("works.loading"));
 const loadingDetail = computed(() => i18n.t("works.checking_database"));
+const pendingFilters: WorksFilters = { needsReview: false, dbStatus: "", author: "" };
+const pendingSort: WorksSort = "title-asc";
+const pendingViewMode: WorksViewMode = "cards";
 
 async function boot() {
   loading.value = true;
@@ -421,7 +424,32 @@ onBeforeUnmount(() => {
       @create-site="openCreateSite"
     />
 
-    <section v-if="loading && !snapshot" class="card view-loading-card" aria-busy="true">
+    <WorksLibraryToolbar
+      v-if="!snapshot"
+      :mode="auth.isResearcher ? 'researcher' : 'admin'"
+      :query="query"
+      :sort="pendingSort"
+      :filters="pendingFilters"
+      :view-mode="pendingViewMode"
+      :authors="[]"
+      :total-works="0"
+      :visible-works="0"
+      :total-review="0"
+      :pending="loading"
+      :unavailable="Boolean(error)"
+      @query="applyQuery"
+      @sort="applyView({ sort: $event })"
+      @filters="applyFilters"
+      @view-mode="applyView({ viewMode: $event })"
+    />
+
+    <section
+      v-if="loading && !snapshot"
+      id="worksGrid"
+      class="works-library works-library-loading"
+      :aria-label="i18n.t('nav.works')"
+      aria-busy="true"
+    >
       <UiLoadingState
         :label="loadingTitle"
         :detail="loadingDetail"
@@ -778,6 +806,14 @@ onBeforeUnmount(() => {
 .works-library.list {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
+}
+.works-library-loading {
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 12rem;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
 }
 .works-empty {
   grid-column: 1 / -1;
