@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 import PdfExplorerSurface from "../components/PdfExplorerSurface.vue";
 import PdfCorpusBuilder from "../components/PdfCorpusBuilder.vue";
 import { useI18nStore } from "../stores/i18n";
@@ -34,8 +34,8 @@ const router = useRouter();
 const mode = computed<PdfWorkspaceDestination>(() =>
   route.meta.pdfMode === "explorer" ? "explorer" : "builder",
 );
-const rememberedBuilderQuery = ref<Record<string, unknown>>({});
-const rememberedExplorerQuery = ref<Record<string, unknown>>({});
+const rememberedBuilderQuery = ref<LocationQueryRaw>({});
+const rememberedExplorerQuery = ref<LocationQueryRaw>({});
 
 // Each sibling keeps its own addressable state. Capturing it before leaving
 // means the tabs can restore the previous Builder/Explorer context without
