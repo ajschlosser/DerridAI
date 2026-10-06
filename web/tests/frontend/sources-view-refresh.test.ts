@@ -71,7 +71,7 @@ describe("Sources view table refresh", () => {
     const wrapper = shallowMount(SourcesView);
     await flushPromises();
 
-    expect(wrapper.getComponent(SourceTable).exists()).toBe(true);
+    expect(wrapper.findComponent(SourceTable).exists()).toBe(true);
     expect(wrapper.getComponent(UiLoadingState).props("variant")).toBe("skeleton");
     expect(wrapper.find("[data-captures-empty]").exists()).toBe(false);
 
@@ -88,7 +88,7 @@ describe("Sources view table refresh", () => {
     const wrapper = shallowMount(SourcesView);
     await flushPromises();
 
-    expect(wrapper.getComponent(SourceTable).exists()).toBe(true);
+    expect(wrapper.findComponent(SourceTable).exists()).toBe(true);
     expect(wrapper.find("[data-captures-empty]").exists()).toBe(false);
     expect(wrapper.get(".captures [role='alert']").text()).toContain("Capture service unavailable");
 
