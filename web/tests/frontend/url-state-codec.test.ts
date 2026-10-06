@@ -24,6 +24,25 @@ import { createRuntimeState } from "../../src/state/runtimeState";
 describe("URL state codec", () => {
   afterEach(() => history.replaceState(null, "", "/"));
 
+  it("derives another view's URL without mutating the current compatibility view", () => {
+    const state = createRuntimeState() as unknown as Record<string, any>;
+    const codec = createUrlStateCodec({
+      state,
+      activeFile: () => null,
+      dbSearchWhere: () => ({}),
+      selectedIndex: () => 0,
+    });
+    state.view = "home";
+    state.globalSearch = "différance";
+    state.globalSearchMode = "traditional";
+
+    const href = codec.urlFromState("global");
+
+    expect(href.startsWith("/search?")).toBe(true);
+    expect(new URLSearchParams(href.split("?")[1]).has("ts")).toBe(true);
+    expect(state.view).toBe("home");
+  });
+
   it("round-trips the view, file and record through a URL with only read helpers", () => {
     const state = createRuntimeState() as unknown as Record<string, any>;
     state.files = [{ id: "f1" }];
