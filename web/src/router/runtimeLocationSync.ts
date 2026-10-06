@@ -18,21 +18,22 @@
 
 import type { Router } from "vue-router";
 
-// The router owns the URL; the legacy runtime follows it. This keeps the runtime's view and URL-encoded state (table
-// state in `ts=`, file, record, store) in step with every settled router navigation, replacing the runtime's own
-// `popstate` listener.
+// The router owns the URL; compatibility workspace state follows it. This keeps the
+// view and URL-encoded state (table state in `ts=`, file, record, store) aligned
+// with every settled router navigation without introducing a second navigation authority.
 export type RuntimeLocationSyncDeps = {
   isStarted: () => boolean;
   viewForPath: (path: string) => string | undefined;
   currentView: () => string;
-  /** Re-derive runtime state from the browser location and repaint. */
+  /** Re-derive compatibility workspace state from the browser location and repaint. */
   sync: () => void;
 };
 
 export function createRuntimeLocationSync(router: Router, deps: RuntimeLocationSyncDeps) {
   let popped = false;
-  // History navigation (browser back/forward) can change only URL state within one view, so it always resyncs. Other
-  // navigations resync only when they land on a different runtime view; the runtime itself caused the rest.
+  // History navigation (browser back/forward) can change only URL state within one
+  // view, so it always resyncs. Other navigations resync only when they land on a
+  // different compatibility view.
   const stopListening = router.options.history.listen((_to, _from, info) => {
     popped = info.type === "pop";
   });
