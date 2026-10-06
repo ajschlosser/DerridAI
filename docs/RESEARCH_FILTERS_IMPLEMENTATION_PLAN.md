@@ -577,7 +577,6 @@ Agents continuing this work should:
 9. update `docs/USER_GUIDE.md` once user-visible filter controls ship;
 10. update `docs/ARCHITECTURE.md` when the scope stage becomes part of the executable Research pipeline.
 
-
 ## Schema catalog / Phases 4–5 checkpoint (2026-10-05)
 
 Branch: `codex/research-filters-schema-coverage`, based on master `0f030f59f`.
