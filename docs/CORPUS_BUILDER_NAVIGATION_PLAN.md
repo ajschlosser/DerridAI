@@ -25,6 +25,8 @@ The next page-local slice moves Operations hydration into the Vue-owned Operatio
 
 System Data is now being converted to the same retained-refresh contract instead of using a single loading branch for every read. Advanced internal-vector inspection keeps a successful collection snapshot and read-only console mounted while a refresh runs or fails. Saved Responses and Metadata Examples distinguish the last successfully displayed query identity from the requested identity: same-query refreshes retain rows and show local Updating/stale feedback, while a changed search/filter/page shows a placeholder rather than relabeling old rows as the new results. Metadata-example counts are withheld until the requested filter identity succeeds, and record-detail state is cleared when its result identity changes.
 
+The Works workspace is the next page-local Phase 10 slice. Its route-owned page header and library toolbar now mount before the first authoritative Works snapshot. Search, sort, filter, and view controls remain visible but inert until the snapshot is known, so the page does not advertise false zero-result counts or an empty library while a required read is unresolved. The loading skeleton is scoped to the library region rather than replacing the workspace frame. A failed first read keeps the same toolbar geometry, marks it unavailable, and presents Retry without claiming the corpus contains no works. Existing populated snapshots continue to remain mounted during same-context updates.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
