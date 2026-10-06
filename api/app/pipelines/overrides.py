@@ -221,7 +221,7 @@ def resolve_pipeline_config(
     errors = [issue.message for issue in validation.issues if issue.level == "error"]
     if errors:
         raise ValueError(
-            "Effective Research pipeline configuration is invalid: " + "; ".join(errors)
+            "Effective pipeline configuration is invalid: " + "; ".join(errors)
         )
 
     return PipelineConfigResolution(
