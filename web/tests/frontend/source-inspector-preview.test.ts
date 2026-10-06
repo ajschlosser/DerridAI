@@ -79,7 +79,6 @@ describe("SourceInspector extracted-text preview", () => {
   );
 });
 
-
 describe("SourceInspector request identity", () => {
   beforeEach(() => setActivePinia(createPinia()));
   afterEach(() => vi.restoreAllMocks());
