@@ -54,10 +54,13 @@ export function useCorpusWorkspaceNavigation(options: CorpusWorkspaceNavigationO
     resolveWorkspace(requestedWorkspace.value, context.value, defaultWorkspace.value),
   );
 
-  async function switchWorkspace(workspace: CorpusWorkspace) {
+  async function switchWorkspace(
+    workspace: CorpusWorkspace,
+    navigation: "push" | "replace" = "push",
+  ) {
     if (!isWorkspaceAvailable(workspace, context.value)) return;
     const review = workspace === "review";
-    await router.push({
+    const location = {
       query: {
         ...route.query,
         workspace,
@@ -65,7 +68,9 @@ export function useCorpusWorkspaceNavigation(options: CorpusWorkspaceNavigationO
         record: review ? route.query.record : undefined,
         queue: review ? route.query.queue : undefined,
       },
-    });
+    };
+    if (navigation === "replace") await router.replace(location);
+    else await router.push(location);
   }
 
   return { requestedWorkspace, workspaceMode, defaultWorkspace, switchWorkspace };
