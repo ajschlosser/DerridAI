@@ -69,6 +69,21 @@ def _parser() -> argparse.ArgumentParser:
         help="Write the validated, secret-free configuration as JSON.",
     )
 
+    pipeline = commands.add_parser(
+        "pipeline",
+        help="Inspect the pipeline contract compiled into this DerridAI build.",
+    )
+    pipeline_commands = pipeline.add_subparsers(dest="pipeline_command", required=True)
+    capabilities = pipeline_commands.add_parser(
+        "capabilities",
+        help="Report pipeline contract and strategy versions.",
+    )
+    capabilities.add_argument(
+        "--json",
+        action="store_true",
+        help="Write the machine-readable pipeline capability identity.",
+    )
+
     corpus = commands.add_parser(
         "corpus",
         help="Build scholarly corpus artifacts.",
@@ -116,6 +131,29 @@ def _validate_config(path: Path, *, as_json: bool) -> int:
         print(json.dumps(config.public_snapshot(), ensure_ascii=False, sort_keys=True))
     else:
         print(f"Configuration is valid (version {config.version}).")
+    return int(ExitCode.OK)
+
+
+def _pipeline_capabilities(*, as_json: bool) -> int:
+    """Report the exact pipeline compatibility surface compiled into this build."""
+
+    from .pipelines.capabilities import pipeline_contract_identity
+
+    payload = pipeline_contract_identity()
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+    else:
+        print(
+            "Pipeline contract "
+            f"{payload['pipeline_contract_version']} "
+            f"(DerridAI {payload['application_version']})"
+        )
+        print(
+            "Minimum readable pipeline version: "
+            f"{payload['minimum_readable_pipeline_version']}"
+        )
+        for strategy_id, strategy in payload["strategies"].items():
+            print(f"{strategy_id} v{strategy['version']}")
     return int(ExitCode.OK)
 
 
@@ -186,6 +224,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "config" and args.config_command == "validate":
         return _validate_config(args.config, as_json=args.json)
+    if args.command == "pipeline" and args.pipeline_command == "capabilities":
+        return _pipeline_capabilities(as_json=args.json)
     if args.command == "corpus" and args.corpus_command == "build":
         return _build_corpus(args)
 
