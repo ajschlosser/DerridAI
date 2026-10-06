@@ -209,7 +209,7 @@ class CorpusRunEnvelopeV2(_StrictRunModel):
         ignoring a different portable definition or override.
         """
 
-        selected = self.effective(manager)
+        selected = self.pipeline.effective(manager)
         if selected.purpose != "corpus_metadata_enrichment":
             raise ValueError(
                 "The current headless corpus adapter requires a "
