@@ -21,11 +21,13 @@
 // changing a purpose, strategy or vocabulary (tests/test_pipeline_catalog_fixture.py fails until then).
 import contract from "./pipelineCatalogContract.json";
 import type {
+  PipelineContractIdentity,
   PipelinePurpose,
   PipelineStrategy,
   PipelineWorkflowVocabulary,
 } from "../../../types/pipelines";
 
+export const contractIdentity = contract.contract as unknown as PipelineContractIdentity;
 export const contractPurposes = contract.purposes as unknown as PipelinePurpose[];
 export const contractVocabulary = contract.vocabulary as unknown as PipelineWorkflowVocabulary;
 export const contractStrategies = contract.strategies as unknown as PipelineStrategy[];
