@@ -865,12 +865,12 @@ describe("Works progressive loading", () => {
     expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
     expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
     expect(wrapper.get(".works-toolbar-summary").text()).not.toContain("0 of 0");
-    expect(wrapper.find(".works-library-loading").exists()).toBe(true);
+    expect(wrapper.find("[data-works-loading]").exists()).toBe(true);
 
     finish();
     await flushPromises();
 
-    expect(wrapper.find(".works-library-loading").exists()).toBe(false);
+    expect(wrapper.find("[data-works-loading]").exists()).toBe(false);
     expect(wrapper.get("#worksSearch").attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".works-card").exists()).toBe(true);
     wrapper.unmount();
