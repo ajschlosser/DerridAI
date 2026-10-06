@@ -302,7 +302,8 @@ export type PipelineContractIdentity = {
 };
 
 export type PipelineCatalog = {
-  contract: PipelineContractIdentity;
+  /** Present on current servers; optional keeps clients readable against older catalogs. */
+  contract?: PipelineContractIdentity;
   purposes: PipelinePurpose[];
   vocabulary: PipelineWorkflowVocabulary;
   strategies: PipelineStrategy[];
