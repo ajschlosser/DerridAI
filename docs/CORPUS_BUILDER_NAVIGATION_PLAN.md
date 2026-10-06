@@ -6,6 +6,17 @@ This plan addresses the interaction friction observed in DerridAI's global navig
 
 The main implementation principle is to reduce the number of independent state authorities involved in one navigation action. Vue Router should own canonical application navigation. Corpus Builder should treat its route-backed state as one coherent snapshot rather than several loosely synchronized query parameters.
 
+## Implementation status
+
+The first implementation slice landed in PR #562. Phases 2–7 are implemented and covered by the merged frontend regression suite. The stale-chunk deployment-coherence fix described below also landed there.
+
+Phase 1 remains deliberately deferred. The attempted router-first sidebar conversion exposed that some canonical-looking destinations still rely on the compatibility runtime to mutate view state before Vue Router settles. That migration should follow the legacy-runtime retirement boundary rather than changing ownership opportunistically inside Corpus Builder work.
+
+Phases 8 and 9 are the active continuation:
+
+- **Phase 8:** remove stacked sticky page chrome, keep the phase header behavior consistent in Build and Review, and make the source-retention semantics of starting another build explicit.
+- **Phase 9:** retain reconcile-before-publish while eliminating redundant full build-list refreshes and duplicate publication actions.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
