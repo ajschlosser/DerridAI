@@ -531,10 +531,12 @@ watch(
   { flush: "post" },
 );
 
-onMounted(async () => {
-  await refresh();
+onMounted(() => {
+  // Operations owns its own initial refresh and retained-data state. Mount it
+  // immediately so the region is not held behind unrelated dashboard reads.
   mountOperationsPanelHost();
   window.addEventListener("derridai:dashboard-refresh", onDashboardRefreshRequested);
+  void refresh();
 });
 onBeforeUnmount(() => {
   window.removeEventListener("derridai:dashboard-refresh", onDashboardRefreshRequested);

@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
 import {
   ensureCompareLibrary,
@@ -33,6 +33,7 @@ import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import UiTabs from "../components/ui/UiTabs.vue";
@@ -65,6 +66,9 @@ const workspace = compare as unknown as {
   compareFilter?: string;
 };
 const library = ref<CompareLibraryOption[]>([]);
+const libraryLoading = ref(true);
+const libraryError = ref("");
+let libraryRequest = 0;
 const sourceA = ref<CompareSource>(
   workspace.compareSourceA === "scratch" || workspace.compareMode === "paste"
     ? "scratch"
@@ -117,6 +121,12 @@ const changedCount = computed(
 );
 const totalCount = computed(() => buildCompareRows(recordA.value, recordB.value, "all").length);
 const ready = computed(() => Boolean(recordA.value && recordB.value));
+const comparisonPending = computed(
+  () =>
+    !ready.value &&
+    libraryLoading.value &&
+    (sourceA.value === "library" || sourceB.value === "library"),
+);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -140,6 +150,22 @@ function persist() {
 }
 function refreshLibrary() {
   library.value = getCompareLibrary();
+}
+
+async function loadLibrary() {
+  const request = ++libraryRequest;
+  libraryLoading.value = true;
+  libraryError.value = "";
+  try {
+    await ensureCompareLibrary();
+    if (request !== libraryRequest) return;
+    refreshLibrary();
+  } catch (error) {
+    if (request !== libraryRequest) return;
+    libraryError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (request === libraryRequest) libraryLoading.value = false;
+  }
 }
 function loadIntoEditor(side: "A" | "B") {
   const key = side === "A" ? keyA.value : keyB.value;
@@ -203,10 +229,14 @@ function cite(side: "A" | "B", kind: "inline" | "full") {
 function statusFor(side: "A" | "B") {
   const parsed = side === "A" ? parsedA.value : parsedB.value;
   const source = side === "A" ? sourceA.value : sourceB.value;
-  if (source === "library")
+  const key = side === "A" ? keyA.value : keyB.value;
+  if (source === "library") {
+    if (libraryLoading.value && key)
+      return { tone: "neutral" as const, label: i18n.t("ui.loading") };
     return parsed.record
       ? { tone: "success" as const, label: t("compare.status.library", "Library record") }
       : { tone: "warning" as const, label: t("compare.status.pick", "Pick a record") };
+  }
   if (!(side === "A" ? pasteA.value : pasteB.value).trim())
     return { tone: "neutral" as const, label: t("compare.editor_empty", "Empty editor") };
   if (parsed.errorKey)
@@ -223,12 +253,13 @@ const newer = useNewerData();
 async function loadNewer() {
   newer.acknowledge();
   sharedState.storeRecords = [];
-  await ensureCompareLibrary();
-  refreshLibrary();
+  await loadLibrary();
 }
-onMounted(async () => {
-  await ensureCompareLibrary();
-  refreshLibrary();
+onMounted(() => {
+  void loadLibrary();
+});
+onBeforeUnmount(() => {
+  ++libraryRequest;
 });
 </script>
 <template>
@@ -324,6 +355,15 @@ onMounted(async () => {
           role="tabpanel"
           :hidden="(side === 'A' ? sourceA : sourceB) !== 'library'"
         >
+          <UiLoadingState
+            v-if="libraryLoading"
+            :variant="library.length ? 'inline' : 'skeleton'"
+            :label="i18n.t(library.length ? 'loading.updating' : 'ui.loading')"
+          />
+          <div v-if="libraryError" class="info error compare-library-error" role="alert">
+            <span>{{ libraryError }}</span>
+            <UiButton size="small" :label="i18n.t('ui.retry')" @click="loadLibrary" />
+          </div>
           <ComparePicker
             :model-value="side === 'A' ? keyA : keyB"
             :options="library"
@@ -331,12 +371,16 @@ onMounted(async () => {
             :placeholder="t('compare.picker_placeholder', 'Type record ID, work, author, or file…')"
             :selected-hint="t('compare.selected', 'Selected · {label}')"
             :empty-hint="
-              library.length
-                ? t('compare.library_help', 'Start typing to search loaded records.')
-                : t(
-                    'compare.library_empty',
-                    'Load JSONL files or browse the corpus database first.',
-                  )
+              libraryLoading && !library.length
+                ? i18n.t('ui.loading')
+                : libraryError && !library.length
+                  ? libraryError
+                  : library.length
+                    ? t('compare.library_help', 'Start typing to search loaded records.')
+                    : t(
+                        'compare.library_empty',
+                        'Load JSONL files or browse the corpus database first.',
+                      )
             "
             :no-matches="t('compare.no_matches', 'No matching records.')"
             :clear-label="t('ui.clear', 'Clear')"
@@ -444,7 +488,8 @@ onMounted(async () => {
           {{ t("compare.diff_all", "All fields") }}</label
         >
       </fieldset>
-      <div v-if="!ready" class="compare-empty">
+      <UiLoadingState v-if="comparisonPending" variant="skeleton" :label="i18n.t('ui.loading')" />
+      <div v-else-if="!ready" class="compare-empty">
         <b>{{ t("compare.need_two", "Two records are needed") }}</b>
         <span>{{
           auth.isResearcher
@@ -508,6 +553,13 @@ h2 {
   color: var(--muted);
   font-size: 0.875rem;
   line-height: 1.5;
+}
+.compare-library-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .compare-editor-actions {
   display: flex;

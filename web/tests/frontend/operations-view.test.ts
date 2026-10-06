@@ -20,11 +20,9 @@ import { describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 
 const calls = vi.hoisted(() => ({
-  refreshJobs: vi.fn(async () => undefined),
   mountOperationsPanelHost: vi.fn(),
   unmountOperationsPanel: vi.fn(),
 }));
-vi.mock("../../src/domain/jobsActions", () => ({ refreshJobs: calls.refreshJobs }));
 vi.mock("../../src/domain/operationsPanelHooks", () => ({
   mountOperationsPanelHost: calls.mountOperationsPanelHost,
 }));
@@ -35,12 +33,11 @@ vi.mock("../../src/domain/operationsPanelHost", () => ({
 import OperationsView from "../../src/views/OperationsView.vue";
 
 describe("OperationsView", () => {
-  it("refreshes jobs, then mounts the panel host, and unmounts it on leave", async () => {
+  it("mounts the panel host immediately and unmounts it on leave", async () => {
     const wrapper = mount(OperationsView);
-    await flushPromises();
-    expect(calls.refreshJobs).toHaveBeenCalledWith({ rerender: true });
-    expect(calls.mountOperationsPanelHost).toHaveBeenCalledTimes(1);
     expect(wrapper.find("#operationsPanelHost").exists()).toBe(true);
+    expect(calls.mountOperationsPanelHost).toHaveBeenCalledTimes(1);
+    await flushPromises();
     wrapper.unmount();
     expect(calls.unmountOperationsPanel).toHaveBeenCalledTimes(1);
   });

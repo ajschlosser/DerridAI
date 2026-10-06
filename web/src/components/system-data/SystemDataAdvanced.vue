@@ -28,7 +28,9 @@ import { useI18nStore } from "../../stores/i18n";
 
 const i18n = useI18nStore();
 const collections = ref<SystemChromaCollection[]>([]);
+const loaded = ref(false);
 const loading = ref(false);
+const loadError = ref("");
 const error = ref("");
 const command = ref("");
 const validation = ref<SystemChromaCommandResult | null>(null);
@@ -41,14 +43,16 @@ function t(key: string, fallback: string) {
 
 async function load() {
   loading.value = true;
-  error.value = "";
+  loadError.value = "";
   try {
-    collections.value = (await systemApi.systemChromaCollections()).collections || [];
-    if (!command.value && collections.value[0])
-      command.value = `get ${collections.value[0].name} --limit 10`;
+    const next = (await systemApi.systemChromaCollections()).collections || [];
+    collections.value = next;
+    loaded.value = true;
+    if (!command.value && next[0]) command.value = `get ${next[0].name} --limit 10`;
   } catch (cause) {
-    collections.value = [];
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    // A failed refresh must not turn previously loaded collections into a
+    // confirmed-empty state. Keep the last successful snapshot and mark it stale.
+    loadError.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     loading.value = false;
   }
@@ -106,19 +110,32 @@ onMounted(() => void load());
       </button>
     </header>
 
-    <div v-if="loading" class="state" role="status">
+    <div v-if="loading && !loaded" class="state" role="status">
       {{ t("runtime.system_checking_vectors", "Checking internal vector collections…") }}
     </div>
-    <div v-else-if="error && !collections.length" class="state error" role="alert">
+    <div v-else-if="loadError && !loaded" class="state error" role="alert">
       <strong>{{
         t("runtime.system_vector_unavailable", "Internal vector storage is unavailable.")
       }}</strong>
-      <span>{{ error }}</span>
+      <span>{{ loadError }}</span>
+      <button class="btn tiny" type="button" @click="load">
+        {{ t("common.retry", "Retry") }}
+      </button>
     </div>
     <div v-else-if="!collections.length" class="state">
       {{ t("runtime.system_no_internal_vectors", "No internal vector collections are available.") }}
     </div>
     <template v-else>
+      <div v-if="loading" class="state state-inline" role="status">
+        {{ t("loading.updating", "Updating…") }}
+      </div>
+      <div v-if="loadError" class="state error state-inline" role="alert">
+        <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+        <span>{{ loadError }}</span>
+        <button class="btn tiny" type="button" @click="load">
+          {{ t("common.retry", "Retry") }}
+        </button>
+      </div>
       <section class="collections" aria-labelledby="collections-title">
         <div class="section-heading">
           <div>
@@ -255,6 +272,9 @@ onMounted(() => void load());
 }
 .state.error {
   color: var(--tone-danger-fg);
+}
+.state-inline {
+  padding-block: 10px;
 }
 .collections,
 .console {

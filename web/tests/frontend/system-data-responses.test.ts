@@ -86,6 +86,75 @@ describe("System Data saved responses", () => {
     expect(wrapper.text()).toContain("What is différance?");
   });
 
+  it("retains the last successful page during a same-query refresh failure", async () => {
+    const wrapper = mount(SystemDataResponses, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain("What is différance?");
+
+    let rejectRefresh!: (reason?: unknown) => void;
+    vi.mocked(systemApi.responseCacheRecords).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("What is différance?");
+    expect(wrapper.text()).toContain("Updating");
+
+    rejectRefresh(new Error("response store offline"));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("What is différance?");
+    expect(wrapper.text()).toContain("response store offline");
+    expect(wrapper.text()).not.toContain("No saved responses yet.");
+    wrapper.unmount();
+  });
+
+  it("does not label the previous page as results for a new pending query", async () => {
+    const wrapper = mount(SystemDataResponses, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
+    await flushPromises();
+
+    let resolveSearch!: (value: Awaited<ReturnType<typeof systemApi.responseCacheRecords>>) => void;
+    vi.mocked(systemApi.responseCacheRecords).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSearch = resolve;
+        }),
+    );
+    await wrapper.get('input[type="search"]').setValue("new question");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("What is différance?");
+    expect(wrapper.text()).toContain("Loading saved responses");
+
+    resolveSearch({
+      exists: true,
+      total: 1,
+      count: 1,
+      query: "new question",
+      limit: 25,
+      offset: 0,
+      records: [
+        {
+          record_id: "rag-2",
+          question: "New response",
+        },
+      ],
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("New response");
+    wrapper.unmount();
+  });
+
   it("restores response search and pagination from the URL", async () => {
     routeQuery.q = "difference";
     routeQuery.offset = "25";

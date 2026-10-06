@@ -39,7 +39,7 @@ const compareLibrary = vi.hoisted(() => ({
         ? { record: records.b, label: "r-b" }
         : null,
   ),
-  ensureCompareLibrary: vi.fn(async () => undefined),
+  ensureCompareLibrary: vi.fn<() => Promise<void>>(async () => undefined),
 }));
 const clipboard = vi.hoisted(() => ({ copyJsonToClipboard: vi.fn(), copyCitation: vi.fn() }));
 vi.mock("../../src/domain/clipboardCopy", () => ({ ...clipboard }));
@@ -71,7 +71,46 @@ async function mountView() {
 
 describe("CompareView", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    compareLibrary.ensureCompareLibrary.mockResolvedValue(undefined);
+    compareLibrary.getCompareLibrary.mockReturnValue([
+      { value: "f::0", label: "tab.jsonl · r-a · Glas", search: "derrida" },
+      { value: "f::1", label: "tab.jsonl · r-b · Glas", search: "derrida" },
+    ]);
     Object.assign(compareState, createCompareState(), { compareA: "f::0" });
+  });
+
+  it("renders the comparison workspace while the record library is still loading", async () => {
+    let resolveLibrary!: () => void;
+    compareLibrary.ensureCompareLibrary.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveLibrary = resolve;
+        }),
+    );
+
+    const wrapper = await mountView();
+    expect(wrapper.get("#compare-title").text()).toBe("Compare");
+    expect(wrapper.findAllComponents({ name: "ComparePicker" })).toHaveLength(2);
+    expect(wrapper.text()).not.toContain("Load JSONL files or browse the corpus database first.");
+    expect(wrapper.text()).not.toContain("Two records are needed");
+    expect(wrapper.findAllComponents({ name: "UiLoadingState" }).length).toBeGreaterThan(0);
+
+    resolveLibrary();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Start typing to search loaded records.");
+    wrapper.unmount();
+  });
+
+  it("keeps the comparison controls available when the library read fails", async () => {
+    compareLibrary.ensureCompareLibrary.mockRejectedValueOnce(new Error("Library unavailable"));
+    const wrapper = await mountView();
+
+    expect(wrapper.findAllComponents({ name: "ComparePicker" })).toHaveLength(2);
+    expect(wrapper.findAll(".compare-library-error")).toHaveLength(2);
+    expect(wrapper.text()).toContain("Library unavailable");
+    expect(wrapper.text()).not.toContain("Load JSONL files or browse the corpus database first.");
+    wrapper.unmount();
   });
 
   it("loads a library record into the A editor so copies can be edited beside the original", async () => {

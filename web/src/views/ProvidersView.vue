@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { toast } from "../composables/notifications";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
@@ -41,7 +41,6 @@ import ProviderProfileCard from "../components/providers/ProviderProfileCard.vue
 import ProviderSaveBar from "../components/providers/ProviderSaveBar.vue";
 import ProviderBulkApply from "../components/providers/ProviderBulkApply.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
-import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import type { DiscoveredModel } from "../domain/providerModels";
 import { applyProfileFieldValues } from "../domain/providerBulkFields";
 
@@ -62,7 +61,6 @@ const profiles = ref<ProviderProfile[]>([]);
 const statuses = ref<Record<string, ProviderStatus>>({});
 const warmups = ref<Record<string, ProviderWarmup>>({});
 const defaultId = ref("");
-const loading = ref(true);
 const saving = ref(false);
 const error = ref("");
 const busy = ref<Record<string, string>>({});
@@ -224,10 +222,10 @@ watch(
   },
 );
 
-onMounted(() => {
-  refresh();
-  loading.value = false;
-});
+// Provider profiles/statuses are already local synchronous state. Read them during
+// setup so the first render contains the actual workspace instead of a one-frame
+// loading card that does not correspond to any asynchronous operation.
+refresh();
 </script>
 
 <template>
@@ -249,10 +247,7 @@ onMounted(() => {
       </template>
     </UiPageHeader>
     <div v-if="error" class="info error" role="alert">{{ error }}</div>
-    <section v-if="loading" class="card">
-      <UiLoadingState :label="i18n.t('ui.loading')" />
-    </section>
-    <p v-else-if="!profiles.length" class="providers-empty">{{ i18n.t("providers.empty") }}</p>
+    <p v-if="!profiles.length" class="providers-empty">{{ i18n.t("providers.empty") }}</p>
     <ul v-else class="provider-list" :aria-label="i18n.t('providers.list_label')">
       <ProviderProfileCard
         v-for="profile in profiles"
@@ -276,7 +271,7 @@ onMounted(() => {
         @remove="remove(profile)"
       />
     </ul>
-    <details v-if="!loading && profiles.length" class="provider-tools">
+    <details v-if="profiles.length" class="provider-tools">
       <summary>{{ i18n.t("providers.bulk_apply") }}</summary>
       <ProviderBulkApply :profiles="profiles" @apply="applyBulk" />
     </details>

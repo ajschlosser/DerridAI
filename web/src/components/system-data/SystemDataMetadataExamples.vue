@@ -41,6 +41,8 @@ const page = ref<SystemMetadataExemplarPage>({
 });
 
 const error = ref("");
+const hasSuccessfulPage = ref(false);
+const shownPageKey = ref("");
 const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
 const detail = ref<SystemMetadataExemplar | null>(null);
 const filters = ref({
@@ -85,6 +87,12 @@ function pageParams(offset: number) {
   return { ...filters.value, limit: page.value.limit, offset };
 }
 const applied = ref(pageParams(requestedOffset.value));
+function pageKey(params = applied.value) {
+  return JSON.stringify(params);
+}
+const displayedPageIsCurrent = computed(
+  () => hasSuccessfulPage.value && shownPageKey.value === pageKey(),
+);
 const pageQuery = useDataQuery(
   "metadata_exemplars",
   () => systemApi.systemMetadataExemplars(applied.value),
@@ -93,11 +101,15 @@ const pageQuery = useDataQuery(
   },
 );
 const loading = computed(() => pageQuery.isFetching.value);
+const initialPending = computed(() => loading.value && !displayedPageIsCurrent.value);
+const refreshing = computed(() => loading.value && displayedPageIsCurrent.value);
 watch(
   () => pageQuery.data.value,
   (next) => {
     if (next) {
       page.value = next;
+      hasSuccessfulPage.value = true;
+      shownPageKey.value = pageKey();
       error.value = "";
     }
   },
@@ -108,12 +120,24 @@ watch(
     if (cause) error.value = cause instanceof Error ? cause.message : String(cause);
   },
 );
+watch(
+  () => pageQuery.isFetching.value,
+  (fetching) => {
+    if (fetching) error.value = "";
+  },
+);
 async function load(offset = 0, updateRoute = true, push = false) {
   requestedOffset.value = offset;
   if (updateRoute) syncRoute(offset, push);
   const next = pageParams(offset);
-  if (JSON.stringify(next) === JSON.stringify(applied.value)) await pageQuery.refetch();
-  else applied.value = next;
+  if (JSON.stringify(next) === JSON.stringify(applied.value)) {
+    await pageQuery.refetch();
+  } else {
+    // A different filter/page identity must never present the previous rows as
+    // though they belong to the new request.
+    detail.value = null;
+    applied.value = next;
+  }
 }
 function filterLabel(key: string) {
   const labels: Record<string, string> = {
@@ -177,7 +201,9 @@ watch(
           }}
         </p>
       </div>
-      <strong>{{ page.count.toLocaleString() }}</strong>
+      <strong :aria-busy="!displayedPageIsCurrent">{{
+        displayedPageIsCurrent ? page.count.toLocaleString() : "—"
+      }}</strong>
     </header>
 
     <form class="filters" @submit.prevent="load(0)">
@@ -253,84 +279,103 @@ watch(
         >{{ scope }}: {{ message }}</span
       >
     </div>
-    <div v-if="error" class="state error" role="alert">
+    <div v-if="error && !displayedPageIsCurrent" class="state error" role="alert">
       <strong>{{ t("runtime.system_metadata_failed", "Could not load metadata examples.") }}</strong
       ><span>{{ error }}</span>
+      <button class="btn tiny" type="button" @click="load(requestedOffset)">
+        {{ t("common.retry", "Retry") }}
+      </button>
     </div>
-    <div v-else-if="loading" class="state" role="status">
+    <div v-else-if="initialPending" class="state" role="status">
       {{ t("runtime.system_metadata_loading", "Loading metadata examples…") }}
     </div>
-    <div v-else-if="!page.exists" class="state">
-      {{
-        t(
-          "runtime.system_metadata_not_built",
-          "The metadata exemplar index has not been built yet.",
-        )
-      }}
-    </div>
-    <div v-else-if="!page.rows.length" class="state">
-      {{
-        t(
-          "runtime.system_metadata_no_matches",
-          "The index is built, but no examples match these filters.",
-        )
-      }}
-    </div>
-    <template v-else>
-      <div class="example-list">
-        <button
-          v-for="item in page.rows"
-          :key="item.exemplar_id"
-          type="button"
-          class="example-row"
-          @click="detail = item"
-        >
-          <div>
-            <strong
-              >{{ item.field_name }} <span aria-hidden="true">→</span>
-              {{ valueText(item.field_value) }}</strong
-            >
-            <small
-              >{{ item.record_id
-              }}<template v-if="item.record_revision">
-                · revision {{ item.record_revision }}</template
-              ></small
-            >
-          </div>
-          <div class="badges">
-            <span>{{ item.kind }}</span
-            ><span v-if="item.assertion_status">{{ item.assertion_status }}</span>
-          </div>
-          <AppIcon name="chevron-right" />
+    <template v-else-if="displayedPageIsCurrent">
+      <div v-if="refreshing" class="state state-inline" role="status">
+        {{ t("loading.updating", "Updating…") }}
+      </div>
+      <div v-if="error" class="state error state-inline" role="alert">
+        <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+        <span>{{ error }}</span>
+        <button class="btn tiny" type="button" @click="load(page.offset)">
+          {{ t("common.retry", "Retry") }}
         </button>
       </div>
-      <footer class="pagination">
-        <span
-          >{{ page.offset + 1 }}–{{ Math.min(page.offset + page.rows.length, page.count) }} of
-          {{ page.count }}</span
-        >
-        <div>
+      <div v-if="!page.exists" class="state">
+        {{
+          t(
+            "runtime.system_metadata_not_built",
+            "The metadata exemplar index has not been built yet.",
+          )
+        }}
+      </div>
+      <div v-else-if="!page.rows.length" class="state">
+        {{
+          t(
+            "runtime.system_metadata_no_matches",
+            "The index is built, but no examples match these filters.",
+          )
+        }}
+      </div>
+      <template v-else>
+        <div class="example-list">
           <button
-            class="btn tiny"
+            v-for="item in page.rows"
+            :key="item.exemplar_id"
             type="button"
-            :disabled="page.offset <= 0"
-            @click="load(Math.max(0, page.offset - page.limit), true, true)"
+            class="example-row"
+            @click="detail = item"
           >
-            {{ t("common.previous", "Previous") }}
-          </button>
-          <button
-            class="btn tiny"
-            type="button"
-            :disabled="page.offset + page.rows.length >= page.count"
-            @click="load(page.offset + page.limit, true, true)"
-          >
-            {{ t("common.next", "Next") }}
+            <div>
+              <strong
+                >{{ item.field_name }} <span aria-hidden="true">→</span>
+                {{ valueText(item.field_value) }}</strong
+              >
+              <small
+                >{{ item.record_id
+                }}<template v-if="item.record_revision">
+                  · revision {{ item.record_revision }}</template
+                ></small
+              >
+            </div>
+            <div class="badges">
+              <span>{{ item.kind }}</span
+              ><span v-if="item.assertion_status">{{ item.assertion_status }}</span>
+            </div>
+            <AppIcon name="chevron-right" />
           </button>
         </div>
-      </footer>
+        <footer class="pagination">
+          <span
+            >{{ page.offset + 1 }}–{{ Math.min(page.offset + page.rows.length, page.count) }} of
+            {{ page.count }}</span
+          >
+          <div>
+            <button
+              class="btn tiny"
+              type="button"
+              :disabled="page.offset <= 0"
+              @click="load(Math.max(0, page.offset - page.limit), true, true)"
+            >
+              {{ t("common.previous", "Previous") }}
+            </button>
+            <button
+              class="btn tiny"
+              type="button"
+              :disabled="page.offset + page.rows.length >= page.count"
+              @click="load(page.offset + page.limit, true, true)"
+            >
+              {{ t("common.next", "Next") }}
+            </button>
+          </div>
+        </footer>
+      </template>
     </template>
 
-    <aside v-if="detail" class="detail-panel" aria-label="Metadata example details">
+    <aside
+      v-if="detail && displayedPageIsCurrent"
+      class="detail-panel"
+      aria-label="Metadata example details"
+    >
       <header>
         <div>
           <small>{{ t("runtime.system_metadata_example", "Metadata example") }}</small>
@@ -462,6 +507,9 @@ watch(
 }
 .state.error {
   color: var(--tone-danger-fg);
+}
+.state-inline {
+  padding-block: 10px;
 }
 .example-list {
   display: grid;

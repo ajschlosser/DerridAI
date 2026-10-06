@@ -17,14 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted } from "vue";
-import { refreshJobs } from "../domain/jobsActions";
+import { onBeforeUnmount, onMounted } from "vue";
 import { mountOperationsPanelHost } from "../domain/operationsPanelHooks";
 import { unmountOperationsPanel } from "../domain/operationsPanelHost";
 
-onMounted(async () => {
-  await refreshJobs({ rerender: true });
-  await nextTick();
+onMounted(() => {
+  // The panel owns its own initial refresh and renders a loading/retained-data
+  // state immediately. Mount it as soon as the route component is present
+  // instead of leaving the destination blank while job transport settles.
   mountOperationsPanelHost();
 });
 

@@ -21,6 +21,8 @@ import AxeBuilder from "@axe-core/playwright";
 
 const STORIES = [
   "mixed",
+  "pending",
+  "initial-failure",
   "empty",
   "many-running",
   "failures-only",
@@ -54,6 +56,19 @@ for (const story of STORIES) {
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
   });
 }
+
+test("initial loading and failure never claim that the queue is empty", async ({ page }) => {
+  await page.goto(url("pending"));
+  await expect(page.locator("#operationsPanel")).toBeVisible();
+  await expect(page.getByText("Nothing in flight")).toHaveCount(0);
+
+  await page.goto(url("initial-failure"));
+  await expect(page.locator(".ops-refresh-error")).toContainText(
+    "Could not reach the operations service.",
+  );
+  await expect(page.getByText("Nothing in flight")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
+});
 
 test("keyboard: every control is reachable, shows a visible focus ring, and filters work with Enter", async ({
   page,
