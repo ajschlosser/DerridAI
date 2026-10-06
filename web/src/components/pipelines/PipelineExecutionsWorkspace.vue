@@ -36,7 +36,7 @@ import type {
 
 export type { PipelineRunFilters };
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   runs: PipelineRunTrace[];
   pipelines: PipelineDefinition[];
   purposes: PipelinePurpose[];
@@ -51,7 +51,11 @@ const props = defineProps<{
   pending: boolean;
   refreshing: boolean;
   error: string;
-}>();
+}>(), {
+  pending: false,
+  refreshing: false,
+  error: "",
+});
 const emit = defineEmits<{
   select: [runId: string];
   apply: [filters: PipelineRunFilters];
