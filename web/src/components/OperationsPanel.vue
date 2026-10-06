@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import OperationRow from "./OperationRow.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 import { useI18nStore } from "../stores/i18n";
 import {
   classifyOperations,
@@ -53,6 +54,9 @@ const liveLabel = computed(() => {
 });
 
 const views = ref<OperationView[]>(props.bridge.snapshot());
+const initialPending = ref(views.value.length === 0);
+const refreshing = ref(views.value.length > 0);
+const refreshError = ref("");
 const now = ref(Date.now());
 const filter = ref<OperationFilter>("all");
 const showAllHistory = ref(false);
@@ -200,6 +204,7 @@ onMounted(() => {
   unsubscribe = props.bridge.subscribe(onChange);
   restartClock();
   window.addEventListener("beforeunload", flushOnLeave);
+  void refreshPanel();
 });
 onBeforeUnmount(() => {
   unsubscribe?.();
@@ -212,9 +217,23 @@ function flushOnLeave() {
   void commitPending();
 }
 
-async function refresh() {
-  await props.bridge.refresh();
-  announce(i18n.t("operations.panel.announce_updated"));
+async function refreshPanel(announceResult = false) {
+  const retained = views.value.length > 0;
+  if (retained) refreshing.value = true;
+  else initialPending.value = true;
+  refreshError.value = "";
+  try {
+    await props.bridge.refresh();
+    // Some bridges notify subscribers as part of refresh, but a direct snapshot keeps
+    // this component correct even when a transport refresh completes without emitting.
+    views.value = props.bridge.snapshot();
+    if (announceResult) announce(i18n.t("operations.panel.announce_updated"));
+  } catch (error) {
+    refreshError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    initialPending.value = false;
+    refreshing.value = false;
+  }
 }
 
 // ---- derived lists --------------------------------------------------------------------------
@@ -269,7 +288,13 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
         </p>
       </div>
       <div class="ops-head-actions">
-        <button type="button" class="ops-btn" id="refreshJobs" @click="refresh">
+        <button
+          type="button"
+          class="ops-btn"
+          id="refreshJobs"
+          :disabled="initialPending || refreshing"
+          @click="refreshPanel(true)"
+        >
           <AppIcon name="refresh" />{{ i18n.t("ui.refresh") }}
         </button>
         <button
@@ -305,14 +330,31 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       </button>
     </div>
 
-    <div v-if="empty" class="ops-empty">
+    <UiLoadingState
+      v-if="initialPending"
+      variant="skeleton"
+      :label="i18n.t('ui.loading')"
+    />
+    <UiLoadingState
+      v-else-if="refreshing"
+      variant="inline"
+      :label="i18n.t('loading.updating')"
+    />
+    <div v-if="refreshError" class="ops-refresh-error" role="alert">
+      <span>{{ refreshError }}</span>
+      <button type="button" class="ops-btn" @click="refreshPanel()">
+        {{ i18n.t("ui.retry") }}
+      </button>
+    </div>
+
+    <div v-if="!initialPending && empty" class="ops-empty">
       <span class="ops-empty-art" aria-hidden="true"><AppIcon name="history" /></span>
       <h3>{{ i18n.t("operations.panel.empty_title") }}</h3>
       <p>
         {{ i18n.t("operations.panel.empty_body") }}
       </p>
     </div>
-    <p v-else-if="filterEmpty" class="ops-empty-inline">
+    <p v-else-if="!initialPending && filterEmpty" class="ops-empty-inline">
       {{ i18n.t("operations.panel.empty_filtered") }}
     </p>
 
@@ -602,6 +644,19 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   outline: 3px solid var(--ops-accent) !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 2px var(--ops-surface);
+}
+.ops-refresh-error {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--ops-danger-fg);
+  border-radius: 12px;
+  background: var(--ops-danger-bg);
+  color: var(--ops-danger-fg);
+  font-size: 0.875rem;
 }
 .ops-undo {
   display: flex;
