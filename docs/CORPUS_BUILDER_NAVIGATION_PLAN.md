@@ -405,6 +405,7 @@ Add or update tests for:
 - build history pending/close behavior;
 - sticky header accessibility and focus visibility;
 - publication refresh counts and authoritative final state.
+- production-bundle navigation with a destination route chunk deliberately held or failed, asserting that URL/breadcrumb/loading shell commit before release and recovery occurs in place.
 
 A focused E2E workflow should cover:
 
