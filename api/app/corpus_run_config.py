@@ -279,6 +279,7 @@ def migrate_v1_to_v2(
     """
 
     return CorpusRunEnvelopeV2(
+        format="derridai-corpus-run",
         version=2,
         source=config.source,
         pipeline=PipelineRunSelection(definition=pipeline.model_copy(deep=True)),
