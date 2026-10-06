@@ -51,10 +51,11 @@ const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
 const works = useWorksWorkspace();
-const { snapshot, error } = works;
+const { snapshot, viewState, error } = works;
 const loading = ref(true);
-const query = ref("");
+const query = ref(viewState.value.query);
 let queryTimer = 0;
+let bootRequest = 0;
 const page = ref<HTMLElement | null>(null);
 const createSiteOpen = ref(false);
 const createSiteBusy = ref(false);
@@ -227,11 +228,18 @@ const loadingTitle = computed(() => i18n.t("works.loading"));
 const loadingDetail = computed(() => i18n.t("works.checking_database"));
 
 async function boot() {
+  const current = ++bootRequest;
   loading.value = true;
   const previousQuery = query.value;
-  await works.activate();
-  if (query.value === previousQuery) query.value = snapshot.value?.query || "";
-  loading.value = false;
+  try {
+    await works.activate();
+    if (current !== bootRequest) return;
+    if (query.value === previousQuery) {
+      query.value = snapshot.value?.query ?? viewState.value.query;
+    }
+  } finally {
+    if (current === bootRequest) loading.value = false;
+  }
 }
 
 function reload() {
@@ -367,8 +375,13 @@ watch(
 watch(
   () => auth.user,
   () => {
+    // Invalidate the view-level completion path as well as the composable read.
+    // Otherwise an older activation can clear the loading state while the new
+    // authorized identity is still hydrating.
+    bootRequest += 1;
     works.reset();
     if (auth.user) void boot();
+    else loading.value = false;
   },
   { deep: true },
 );
@@ -398,6 +411,7 @@ onMounted(() => {
   void boot();
 });
 onBeforeUnmount(() => {
+  bootRequest += 1;
   window.clearTimeout(queryTimer);
   wideQuery?.removeEventListener?.("change", syncWide);
 });
@@ -427,9 +441,9 @@ onBeforeUnmount(() => {
       v-if="!snapshot"
       :mode="auth.isResearcher ? 'researcher' : 'admin'"
       :query="query"
-      sort="title-asc"
-      :filters="{ needsReview: false, dbStatus: '', author: '' }"
-      view-mode="cards"
+      :sort="viewState.sort"
+      :filters="viewState.filters"
+      :view-mode="viewState.viewMode"
       :authors="[]"
       :total-works="0"
       :visible-works="0"

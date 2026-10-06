@@ -48,6 +48,10 @@ export const Filtered: Story = {
 export const Researcher: Story = { args: { mode: "researcher", totalReview: 0 } };
 export const Pending: Story = {
   args: {
+    query: "gla",
+    sort: "records-desc",
+    filters: { needsReview: true, dbStatus: "changed", author: "Jacques Derrida" },
+    viewMode: "list",
     authors: [],
     totalWorks: 0,
     visibleWorks: 0,
@@ -57,6 +61,10 @@ export const Pending: Story = {
 };
 export const Unavailable: Story = {
   args: {
+    query: "gla",
+    sort: "records-desc",
+    filters: { needsReview: true, dbStatus: "changed", author: "Jacques Derrida" },
+    viewMode: "list",
     authors: [],
     totalWorks: 0,
     visibleWorks: 0,
