@@ -77,31 +77,92 @@ export function claimStaleChunkRecovery(
   }
 }
 
+function normalizedScriptPath(src: string, base = window.location.origin): string {
+  try {
+    const url = new URL(src, base);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return src;
+  }
+}
+
+export function currentEntryScriptPath(doc: Document = document): string {
+  const script = doc.querySelector<HTMLScriptElement>('script[type="module"][src]');
+  const src = script?.getAttribute("src") || "";
+  return src ? normalizedScriptPath(src, doc.baseURI || window.location.origin) : "";
+}
+
+export function entryScriptPathFromHtml(html: string, base = window.location.origin): string {
+  const parsed = new DOMParser().parseFromString(html, "text/html");
+  const script = parsed.querySelector<HTMLScriptElement>('script[type="module"][src]');
+  const src = script?.getAttribute("src") || "";
+  return src ? normalizedScriptPath(src, base) : "";
+}
+
+/**
+ * A failed lazy import is only a deployment-staleness condition when the HTML
+ * currently served by nginx references a different entry bundle than the one
+ * that booted this tab. A transient network failure should keep the existing
+ * route-error UI instead of forcing a reload.
+ */
+export async function deploymentShellChanged(
+  fetcher: typeof fetch = window.fetch.bind(window),
+  doc: Document = document,
+): Promise<boolean> {
+  const currentEntry = currentEntryScriptPath(doc);
+  if (!currentEntry) return false;
+  try {
+    const response = await fetcher("/index.html", {
+      cache: "no-store",
+      headers: {
+        Accept: "text/html",
+        "Cache-Control": "no-cache",
+      },
+    });
+    if (!response.ok) return false;
+    const nextEntry = entryScriptPathFromHtml(await response.text(), doc.baseURI);
+    return Boolean(nextEntry && nextEntry !== currentEntry);
+  } catch {
+    return false;
+  }
+}
+
 function recoverOnce(): boolean {
   if (!claimStaleChunkRecovery(window.sessionStorage)) return false;
   window.location.reload();
   return true;
 }
 
+let recoveryCheck: Promise<boolean> | null = null;
+
+function recoverIfDeploymentChanged(): Promise<boolean> {
+  if (recoveryCheck) return recoveryCheck;
+  recoveryCheck = deploymentShellChanged()
+    .then((changed) => changed && recoverOnce())
+    .finally(() => {
+      recoveryCheck = null;
+    });
+  return recoveryCheck;
+}
+
 /**
- * Vite emits vite:preloadError when a lazy route chunk referenced by the
- * currently running bundle is gone. This commonly happens when a user keeps a
- * tab open while Docker replaces the frontend image. Reload once so nginx can
- * serve the current no-cache HTML shell and its matching chunk graph.
+ * Vite emits vite:preloadError when a lazy chunk cannot be loaded. Do not
+ * assume every such failure means a deployment changed: first compare the
+ * current tab's entry bundle with the no-cache HTML shell served by nginx.
  *
- * The router error hook is a fallback for browsers that surface the failed
- * dynamic import without the Vite preload event.
+ * The router error hook covers route imports; the Vite event also covers other
+ * lazy imports. Both share one in-flight deployment check and one guarded
+ * recovery reload.
  */
 export function installStaleChunkRecovery(router: Router): () => void {
   const onPreloadError = (event: Event) => {
-    const preload = event as VitePreloadErrorEvent;
-    if (recoverOnce()) event.preventDefault();
-    else if (preload.payload) console.error("Route asset reload failed", preload.payload);
+    const payload = (event as VitePreloadErrorEvent).payload;
+    if (!payload || isLikelyStaleModuleError(payload)) void recoverIfDeploymentChanged();
   };
   window.addEventListener("vite:preloadError", onPreloadError);
 
   const stopRouterError = router.onError((error) => {
-    if (isLikelyStaleModuleError(error)) recoverOnce();
+    if (isLikelyStaleModuleError(error)) void recoverIfDeploymentChanged();
   });
 
   return () => {
