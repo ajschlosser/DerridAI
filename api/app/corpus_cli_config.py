@@ -27,10 +27,13 @@ import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+if TYPE_CHECKING:
+    from .corpus_run_config import CorpusRunEnvelopeV2
 
 
 class _StrictConfigModel(BaseModel):
@@ -240,8 +243,32 @@ class CorpusProcessingConfig(_StrictConfigModel):
         return self.model_dump(mode="json")
 
 
-def load_processing_config(path: str | Path) -> CorpusProcessingConfig:
-    """Load and validate one YAML configuration file."""
+def parse_processing_config(
+    payload: object,
+) -> CorpusProcessingConfig | "CorpusRunEnvelopeV2":
+    """Validate an already-decoded corpus configuration by explicit format version."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("Corpus processing configuration must be a YAML mapping")
+
+    version = payload.get("version")
+    if version == 1:
+        return CorpusProcessingConfig.model_validate(payload)
+    if version == 2:
+        from .corpus_run_config import CorpusRunEnvelopeV2
+
+        return CorpusRunEnvelopeV2.model_validate(payload)
+    raise ValueError(
+        f"Unsupported corpus processing configuration version: {version!r}. "
+        "Supported versions are 1 and 2."
+    )
+
+
+def load_processing_config(
+    path: str | Path,
+) -> CorpusProcessingConfig | "CorpusRunEnvelopeV2":
+    """Load and validate one v1 or v2 YAML configuration file."""
+
     config_path = Path(path)
     try:
         payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -249,7 +276,17 @@ def load_processing_config(path: str | Path) -> CorpusProcessingConfig:
         raise ValueError(f"Unable to read configuration {config_path}: {exc}") from exc
     except yaml.YAMLError as exc:
         raise ValueError(f"Invalid YAML in {config_path}: {exc}") from exc
+    return parse_processing_config(payload)
 
-    if not isinstance(payload, dict):
-        raise ValueError("Corpus processing configuration must be a YAML mapping")
-    return CorpusProcessingConfig.model_validate(payload)
+
+def dump_processing_config_yaml(
+    config: CorpusProcessingConfig | "CorpusRunEnvelopeV2",
+) -> str:
+    """Serialize a validated, secret-free corpus configuration deterministically."""
+
+    return yaml.safe_dump(
+        config.public_snapshot(),
+        allow_unicode=True,
+        default_flow_style=False,
+        sort_keys=False,
+    )
