@@ -679,4 +679,54 @@ describe("System Data Pipeline Studio", () => {
     await flushPromises();
     expect(vi.mocked(pipelinesApi.catalog).mock.calls.length).toBe(before);
   });
+  it("renders the executions workspace before the first run page resolves", async () => {
+    let resolveRuns!: (value: Awaited<ReturnType<typeof pipelinesApi.runs>>) => void;
+    vi.mocked(pipelinesApi.runs).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRuns = resolve;
+        }),
+    );
+
+    const { wrapper } = await mountStudio({ section: "executions" });
+
+    expect(wrapper.text()).toContain("Execution history");
+    expect(wrapper.text()).toContain("Loading execution history");
+    expect(wrapper.text()).not.toContain("No executions match these filters.");
+
+    resolveRuns({
+      runs: [structuredClone(trace)],
+      limit: 25,
+      offset: 0,
+      total: 1,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("retrieve.chroma_similarity");
+    wrapper.unmount();
+  });
+
+  it("renders Operations navigation while operational health is still loading", async () => {
+    let resolveMetrics!: (value: Awaited<ReturnType<typeof pipelinesApi.metrics>>) => void;
+    vi.mocked(pipelinesApi.metrics).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveMetrics = resolve;
+        }),
+    );
+
+    const { wrapper } = await mountStudio({ section: "operations" });
+
+    expect(wrapper.get("#pipeline-operations-tab-health").exists()).toBe(true);
+    expect(wrapper.get("#pipeline-operations-tab-compare").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Loading operational health");
+
+    resolveMetrics(structuredClone(metrics));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Operational health");
+    wrapper.unmount();
+  });
+
+
 });
