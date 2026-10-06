@@ -17,6 +17,8 @@ Phases 8 and 9 are implemented in the continuation branch/PR #564:
 - **Phase 8:** stacked sticky page chrome is removed, the phase header behaves the same in Build and Review, and restart actions now distinguish retaining the current source from choosing another source.
 - **Phase 9:** reconcile-before-publish remains authoritative while publication reuses in-place build synchronization, avoids redundant full build-list reads, and aborts if the reviewer changes build context before publication begins.
 
+Phase 10 is the current continuation. The remaining high-friction navigation problem is not primarily Corpus Builder data fetching: every top-level route is registered as a Vue Router lazy component, so Vue Router waits for the destination JavaScript chunk before it commits the route. On a cold route this makes the old page remain visible for 1–3 seconds even though the destination could already show its shell and loading state. The route itself must commit immediately; module and data loading belong inside the destination page after that commit.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
@@ -89,6 +91,12 @@ The UI should distinguish:
 Published state exposes more than one Download JSONL action. Publication also performs several authoritative list/build refreshes around reconciliation and publication.
 
 Publication correctness must remain authoritative, but redundant UI actions and unnecessary repeated list reads should be reduced.
+
+### 11. Lazy route modules block the page transition itself
+
+Top-level routes currently use Vue Router lazy components such as `component: () => import("../views/ResearchView.vue")`. Vue Router resolves those component promises before committing the navigation. A cold chunk therefore leaves the previous page active while JavaScript is downloaded and evaluated, which makes ordinary navigation feel frozen.
+
+The route transition and the destination content load should be separate operations. Navigation should commit immediately to a lightweight synchronous route shell; that shell should progressively load the page module and then let the page progressively hydrate its own data. A slow route chunk or API read must never keep the user on the previous page.
 
 ## Deployment asset-coherence issue discovered during implementation
 
@@ -350,6 +358,38 @@ Files:
 - Publish blockers remain authoritative and directly actionable.
 - Published state is visible without redundant full refresh churn.
 
+## Phase 10 — Immediate navigation with progressive route loading
+
+### Scope
+
+Files:
+
+- `web/src/router/index.ts`
+- new progressive-route helper under `web/src/router/`
+- shared route loading/error UI under `web/src/components/shell/`
+- route/navigation tests
+- individual workspaces only where they still withhold their visible shell until data hydration completes
+
+### Work
+
+1. Keep each top-level Vue Router route component synchronous so the route, breadcrumb, active navigation item and page shell commit without waiting for a code-split chunk.
+2. Move the existing dynamic `import()` calls inside a shared progressive route wrapper.
+3. Render a destination-owned loading skeleton immediately while the page module downloads.
+4. Preserve one-shot stale-deployment recovery for missing hashed chunks.
+5. Show an inline retry/reload state for ordinary transient module-load failures after the route has already committed.
+6. Keep page-specific API/data hydration inside each destination. Audit pages that still hide their entire visible shell behind an initial `await` or all-or-nothing `Promise.all`, and convert those to header/controls-first progressive loading.
+7. Prefer intent preloading for likely destinations later, but do not make prefetch a correctness requirement for fast navigation.
+
+### Acceptance criteria
+
+- Clicking a top-level destination changes the canonical route and shell before its JavaScript chunk resolves.
+- The previous page is not retained merely because the destination chunk or API is slow.
+- A cold destination shows an immediate loading skeleton owned by the destination route.
+- Once the module is loaded, its page can continue loading data progressively without blocking route state.
+- A transient chunk failure is retryable without navigating back to the previous page.
+- A stale-deployment chunk failure still self-recovers through the existing guarded reload path.
+- Back/Forward has the same immediate-commit behavior.
+
 ## Testing strategy
 
 Add or update tests for:
@@ -387,6 +427,9 @@ The implementation should target:
 - no duplicate realtime subscription after sibling workspace reactivation;
 - no automatic lifecycle transition added to browser history unless it represents a deliberate user navigation;
 - no visible old/new build context mixture during build switching.
+- top-level route state, breadcrumbs and active navigation commit independently of destination chunk resolution;
+- route-module loading displays destination-owned progressive feedback instead of retaining the previous page;
+- destination API hydration is not a prerequisite for rendering that destination's page shell.
 
 ## Non-goals
 
@@ -412,5 +455,7 @@ The work should be committed in small reviewable slices:
 6. preserved sibling workspace state;
 7. atomic build switching and sticky/publish polish;
 8. final regression/E2E coverage and documentation update.
+9. immediate route commit + progressive page-module loading;
+10. workspace-by-workspace audit for any remaining all-or-nothing initial hydration.
 
 Each slice should leave tests green and avoid mixing unrelated UI refactors with navigation behavior.
