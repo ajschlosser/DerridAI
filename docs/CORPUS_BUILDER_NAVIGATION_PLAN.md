@@ -29,6 +29,10 @@ Pipeline Studio has also moved to region-owned hydration. Its catalog remains th
 
 The Works workspace is the next page-local Phase 10 slice. Its route-owned page header and library toolbar now mount before the first authoritative Works snapshot. Search, sort, filter, and view controls remain visible but inert until the snapshot is known, so the page does not advertise false zero-result counts or an empty library while a required read is unresolved. The loading skeleton is scoped to the library region rather than replacing the workspace frame. A failed first read keeps the same toolbar geometry, marks it unavailable, and presents Retry without claiming the corpus contains no works. Existing populated snapshots continue to remain mounted during same-context updates.
 
+Search is the next P1 page-local slice. Its title, scope header, query surface, and two-column explorer frame now mount before the first authoritative Search snapshot. Scope/view actions and the query input remain visible but inert until the snapshot is known, and unresolved counts are withheld rather than rendered as zero. First-read failure keeps the same frame and local Retry state instead of replacing the workspace. Existing retained-refresh and query-identity protections remain authoritative: same-context refreshes keep successful content mounted, access withdrawal clears retained content, superseded reads are ignored, and a newly submitted corpus-database query does not present rows from the previous query as current.
+
+A Research re-audit found that its current implementation already follows the same first-frame principle: the page header and composer mount before the workspace snapshot, optional run history and pipeline options hydrate independently, saved-answer loading is separate from workspace readiness, and failed refreshes retain the composer/draft. The remaining Research work is finer-grained session/evidence/result auditing rather than another page-wide loading rewrite.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
