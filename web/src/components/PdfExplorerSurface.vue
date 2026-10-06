@@ -21,7 +21,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import "../domain/appBootstrap";
 import { toast } from "../composables/notifications";
 import { openMessageDialog } from "../composables/messageDialog";
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { translateLegacyDom } from "../domain/legacyCompat";
 import {
   cleanPdfPageWithLlm,
@@ -425,25 +434,53 @@ function linkCurrentPdf() {
 // Some runtime code (unlinking a record, applying LLM cleanup results) still asks the PDF Explorer to refresh this
 // way; it used to call the legacy renderer directly, and now dispatches this event instead of reaching into a Vue
 // component -- the same bridge pattern already used for the dashboard.
+let explorerActive = true;
+let explorerListenersAttached = false;
+function attachExplorerListeners() {
+  if (explorerListenersAttached) return;
+  document.addEventListener("click", onDocumentClick);
+  window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  explorerListenersAttached = true;
+}
+function detachExplorerListeners() {
+  if (!explorerListenersAttached) return;
+  document.removeEventListener("click", onDocumentClick);
+  window.removeEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  explorerListenersAttached = false;
+}
 function onPdfExplorerRefreshRequested() {
-  void refresh();
+  if (explorerActive) void refresh();
 }
 
 watch(
   () => [corpusState.version, corpusState.activeFileId],
-  () => void refresh(),
+  () => {
+    if (explorerActive) void refresh();
+  },
   { flush: "post" },
 );
 
 onMounted(async () => {
   syncUrl({ replace: true });
   await refresh();
-  document.addEventListener("click", onDocumentClick);
-  window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  attachExplorerListeners();
+});
+onDeactivated(() => {
+  explorerActive = false;
+  detachExplorerListeners();
+});
+onActivated(() => {
+  if (explorerActive) return;
+  explorerActive = true;
+  attachExplorerListeners();
+  // The component stayed mounted, so refresh the lightweight mirrors/canvas
+  // without replaying PDF initialization or other cold-start work.
+  syncUrl({ replace: true });
+  void refresh();
 });
 onBeforeUnmount(() => {
-  document.removeEventListener("click", onDocumentClick);
-  window.removeEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  explorerActive = false;
+  detachExplorerListeners();
 });
 </script>
 
