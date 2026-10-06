@@ -20,7 +20,13 @@ import { ensureCorpusWorkspaceLoaded } from "../domain/sharedCorpusHydration";
 import { workDialogs } from "../domain/sharedWorkDialogs";
 import { worksWorkspace } from "../domain/sharedWorksWorkspace";
 import { state } from "../domain/sharedUrlState";
-import type { WorksDbStatusKind, WorksSnapshot, WorksSort, WorksViewMode } from "../types/works";
+import type {
+  WorksDbStatusKind,
+  WorksSnapshot,
+  WorksSort,
+  WorksViewMode,
+  WorksViewState,
+} from "../types/works";
 import { annotationsService } from "./annotations";
 import { requestCorpusFiles } from "./corpusFiles";
 
@@ -38,6 +44,7 @@ export interface WorksPrepareResult {
 
 export interface WorksService {
   getSnapshot(): WorksSnapshot | undefined;
+  getViewState(): WorksViewState;
   prepare(): Promise<WorksPrepareResult | undefined>;
   activate(onHydrated?: () => void): Promise<WorksPrepareResult | undefined>;
   setQuery(value: string): void;
@@ -70,6 +77,7 @@ export interface WorksService {
  */
 export const worksService: WorksService = {
   getSnapshot: () => worksWorkspace.getWorksWorkspaceSnapshot() as WorksSnapshot | undefined,
+  getViewState: () => worksWorkspace.getWorksViewState() as WorksViewState,
 
   prepare: () => worksWorkspace.prepareWorksWorkspace() as Promise<WorksPrepareResult | undefined>,
 

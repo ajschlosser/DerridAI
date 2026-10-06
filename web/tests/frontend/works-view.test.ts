@@ -122,6 +122,12 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
 const runtime = vi.hoisted(() => ({
   state: { view: "home" },
   getWorksWorkspaceSnapshot: vi.fn(),
+  getWorksViewState: vi.fn(() => ({
+    query: "",
+    sort: "title-asc",
+    filters: { needsReview: false, dbStatus: "", author: "" },
+    viewMode: "cards",
+  })),
   ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   prepareWorksWorkspace: vi.fn(async () => ({ error: "" })),
   getShellSnapshot: vi.fn(() => ({
@@ -832,6 +838,12 @@ describe("WorksView", () => {
 describe("Works progressive loading", () => {
   it("keeps the library controls and loading region mounted until a researcher snapshot arrives", async () => {
     setActivePinia(createPinia());
+    runtime.getWorksViewState.mockReturnValue({
+      query: "gla",
+      sort: "records-desc",
+      filters: { needsReview: false, dbStatus: "", author: "Jacques Derrida" },
+      viewMode: "list",
+    });
     useAuthStore().user = {
       id: 2,
       username: "reader",
@@ -848,6 +860,10 @@ describe("Works progressive loading", () => {
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(
       adminSnapshot({
         mode: "researcher",
+        query: "gla",
+        sort: "records-desc",
+        filters: { needsReview: false, dbStatus: "", author: "Jacques Derrida" },
+        viewMode: "list",
         capabilities: {
           canManageCorpus: false,
           canSync: false,
@@ -864,6 +880,10 @@ describe("Works progressive loading", () => {
     expect(wrapper.find(".empty").exists()).toBe(false);
     expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
     expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
+    expect((wrapper.get("#worksSearch").element as HTMLInputElement).value).toBe("gla");
+    expect((wrapper.get("#worksSort").element as HTMLSelectElement).value).toBe("records-desc");
+    const viewButtons = wrapper.findAll(".works-toolbar-views button");
+    expect(viewButtons[1]?.attributes("aria-pressed")).toBe("true");
     expect(wrapper.get(".works-toolbar-summary").text()).not.toContain("0 of 0");
     expect(wrapper.find("[data-works-loading]").exists()).toBe(true);
 
@@ -878,6 +898,12 @@ describe("Works progressive loading", () => {
 
   it("keeps the toolbar frame visible after a failed first read without claiming an empty library", async () => {
     setActivePinia(createPinia());
+    runtime.getWorksViewState.mockReturnValue({
+      query: "",
+      sort: "title-asc",
+      filters: { needsReview: false, dbStatus: "", author: "Jacques Derrida" },
+      viewMode: "cards",
+    });
     useAuthStore().user = {
       id: 2,
       username: "reader",
@@ -893,6 +919,7 @@ describe("Works progressive loading", () => {
     expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
     expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
     expect(wrapper.get(".works-toolbar-summary").text()).toContain("Unavailable");
+    expect(wrapper.get(".works-filter-chip").attributes("disabled")).toBeDefined();
     expect(wrapper.get("[role='alert']").text()).toContain("Works service unavailable");
     expect(wrapper.find(".empty").exists()).toBe(false);
     wrapper.unmount();

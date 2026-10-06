@@ -18,7 +18,7 @@
 
 import { onBeforeUnmount, ref } from "vue";
 import { worksService, type WorksViewPatch } from "../services/works";
-import type { WorksSnapshot } from "../types/works";
+import type { WorksSnapshot, WorksViewState } from "../types/works";
 
 /**
  * Vue orchestration for the Works workspace.
@@ -28,6 +28,7 @@ import type { WorksSnapshot } from "../types/works";
  */
 export function useWorksWorkspace() {
   const snapshot = ref<WorksSnapshot | null>(null);
+  const viewState = ref<WorksViewState>(worksService.getViewState());
   const error = ref("");
 
   let request = 0;
@@ -38,6 +39,7 @@ export function useWorksWorkspace() {
   function load() {
     const next = worksService.getSnapshot();
     if (next) snapshot.value = next;
+    viewState.value = worksService.getViewState();
   }
 
   async function read(operation: typeof worksService.prepare) {
@@ -100,6 +102,7 @@ export function useWorksWorkspace() {
   function reset() {
     request += 1;
     snapshot.value = null;
+    viewState.value = worksService.getViewState();
     error.value = "";
   }
 
@@ -171,6 +174,7 @@ export function useWorksWorkspace() {
 
   return {
     snapshot,
+    viewState,
     error,
     reset,
     load,

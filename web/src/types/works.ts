@@ -114,6 +114,17 @@ export interface WorksFilters {
   author: string;
 }
 
+/**
+ * URL/persistence-owned Works controls that are meaningful before the
+ * authoritative corpus/database snapshot has finished hydrating.
+ */
+export interface WorksViewState {
+  query: string;
+  sort: WorksSort;
+  filters: WorksFilters;
+  viewMode: WorksViewMode;
+}
+
 export type WorksIndexFreshnessState = "unavailable" | "empty" | "current" | "stale" | "unknown";
 
 /**
