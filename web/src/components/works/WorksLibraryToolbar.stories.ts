@@ -46,3 +46,21 @@ export const Filtered: Story = {
   },
 };
 export const Researcher: Story = { args: { mode: "researcher", totalReview: 0 } };
+export const Pending: Story = {
+  args: {
+    authors: [],
+    totalWorks: 0,
+    visibleWorks: 0,
+    totalReview: 0,
+    pending: true,
+  },
+};
+export const Unavailable: Story = {
+  args: {
+    authors: [],
+    totalWorks: 0,
+    visibleWorks: 0,
+    totalReview: 0,
+    unavailable: true,
+  },
+};
