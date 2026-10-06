@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ref } from "vue";
+import { ref, type Ref } from "vue";
+import type { CorpusBuild } from "../../src/api/corpus";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const publish = vi.fn();
@@ -30,11 +31,13 @@ const { useCorpusPublication } = await import(
   "../../src/features/corpus-builder/composables/useCorpusPublication"
 );
 
-function setup(beforePublish?: () => Promise<void>) {
+function setup(
+  beforePublish?: (currentBuild: Ref<CorpusBuild | null>) => Promise<void>,
+) {
   const setMessage = vi.fn();
   const refreshBuild = vi.fn(async () => {});
   const syncBuild = vi.fn();
-  const currentBuild = ref({ build_id: "build-1" } as never);
+  const currentBuild = ref<CorpusBuild | null>({ build_id: "build-1" } as CorpusBuild);
   const tf = vi.fn((key: string, values: Record<string, string | number>) =>
     [key, ...Object.values(values)].join("|"),
   );
@@ -45,7 +48,7 @@ function setup(beforePublish?: () => Promise<void>) {
     setMessage,
     refreshBuild,
     syncBuild,
-    beforePublish,
+    beforePublish: beforePublish ? () => beforePublish(currentBuild) : undefined,
     t: (key) => key,
     tf,
   });
@@ -102,12 +105,10 @@ describe("unreviewed corpus publication", () => {
   });
 
   it("does not publish a build that stopped being the active review context", async () => {
-    let currentBuild!: ReturnType<typeof setup>["currentBuild"];
-    const beforePublish = vi.fn(async () => {
-      currentBuild.value = { build_id: "build-2" } as never;
+    const beforePublish = vi.fn(async (currentBuild: Ref<CorpusBuild | null>) => {
+      currentBuild.value = { build_id: "build-2" } as CorpusBuild;
     });
     const harness = setup(beforePublish);
-    currentBuild = harness.currentBuild;
 
     const result = await harness.composable.publish();
 
