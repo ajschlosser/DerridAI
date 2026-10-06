@@ -114,6 +114,66 @@ def test_wikisource_and_gutenberg_page_markup_becomes_printed_pages():
     assert "20" not in " ".join(block["text"] for block in detection_blocks if block["type"] == "paragraph")
 
 
+def test_wikisource_proofreadpage_id_only_folios_become_printed_pages():
+    """French/legacy ProofreadPage markup often carries the folio only in id."""
+
+    page = ("Le texte transcrit continue sur cette page. " * 12).strip()
+    html = "".join(
+        (
+            '<span class="pagenum ws-pagenum" '
+            f'id="{folio}" '
+            f'title="Page:Ouvrage.djvu/{scan}">'
+            '<span class="pagenum-inner ws-noexport">​</span>'
+            "</span>"
+            f"<p>{page}</p>"
+        )
+        for scan, folio in ((31, 23), (32, 24), (33, 25), (34, 26))
+    )
+
+    text, _ = st.html_to_text(f"<html><body>{html}</body></html>")
+    blocks, pages = st.prose_to_blocks(
+        text,
+        extraction_method="html",
+        detection_out=(summary := {}),
+    )
+
+    assert summary["status"] == "detected"
+    assert [page["printed_page_label"] for page in pages[:4]] == ["23", "24", "25", "26"]
+    assert [
+        block["printed_page_label"]
+        for block in blocks
+        if block["type"] == "paragraph"
+    ][:4] == ["23", "24", "25", "26"]
+    # The scan position in the title is provenance, not the printed folio.
+    assert "31" not in {
+        page["printed_page_label"]
+        for page in pages
+        if page.get("printed_page_label")
+    }
+
+
+def test_wikisource_ws_pagenum_and_data_pagenum_variants_are_recognized():
+    page = ("A provider-specific page marker is followed by source text. " * 12).strip()
+    html = "".join(
+        (
+            '<span class="ws-pagenum ws-noexport" '
+            f'data-pagenum="{folio}" '
+            f'title="Page:Work.djvu/{scan}"></span>'
+            f"<p>{page}</p>"
+        )
+        for scan, folio in ((50, 40), (51, 41), (52, 42), (53, 43))
+    )
+
+    text, _ = st.html_to_text(f"<html><body>{html}</body></html>")
+    _blocks, pages = st.prose_to_blocks(
+        text,
+        extraction_method="html",
+        detection_out=(summary := {}),
+    )
+    assert summary["status"] == "detected"
+    assert [page["printed_page_label"] for page in pages[:4]] == ["40", "41", "42", "43"]
+
+
 def test_wikisource_proofreadpage_pagenumber_markup_becomes_printed_pages():
     page = ("A transcribed proofread page continues here. " * 12).strip()
     html = "".join(
