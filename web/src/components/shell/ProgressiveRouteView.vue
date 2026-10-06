@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { onBeforeUnmount, shallowRef, type Component } from "vue";
+import { onBeforeUnmount, onMounted, shallowRef, type Component } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import UiButton from "../ui/UiButton.vue";
 import UiLoadingState from "../ui/UiLoadingState.vue";
@@ -34,20 +34,60 @@ const i18n = useI18nStore();
 const resolvedComponent = shallowRef<Component | null>(null);
 const loadError = shallowRef<Error | null>(null);
 let requestVersion = 0;
+let revealReady = false;
+let pendingComponent: Component | null = null;
+let pendingError: Error | null = null;
+let firstFrame = 0;
+let secondFrame = 0;
+let fallbackTimer = 0;
+
+function revealPending() {
+  if (!revealReady) return;
+  if (pendingComponent) {
+    resolvedComponent.value = pendingComponent;
+    loadError.value = null;
+    return;
+  }
+  if (pendingError) loadError.value = pendingError;
+}
+
+/**
+ * Always give the committed destination shell one browser paint before mounting
+ * the real page. Even a cached module can have expensive synchronous setup; if
+ * it mounts in the same frame as navigation, that setup can make the old page
+ * appear to linger despite the route already being committed.
+ */
+function allowRevealAfterFirstPaint() {
+  const reveal = () => {
+    revealReady = true;
+    revealPending();
+  };
+  if (typeof window.requestAnimationFrame !== "function") {
+    fallbackTimer = window.setTimeout(reveal, 0);
+    return;
+  }
+  firstFrame = window.requestAnimationFrame(() => {
+    secondFrame = window.requestAnimationFrame(reveal);
+  });
+}
 
 async function load() {
   const version = ++requestVersion;
+  pendingComponent = null;
+  pendingError = null;
   loadError.value = null;
   try {
     const module = await props.loader();
     if (version !== requestVersion) return;
-    resolvedComponent.value =
+    pendingComponent =
       typeof module === "object" && module !== null && "default" in module
         ? module.default
         : (module as Component);
+    revealPending();
   } catch (error) {
     if (version !== requestVersion) return;
-    loadError.value = error instanceof Error ? error : new Error(String(error));
+    pendingError = error instanceof Error ? error : new Error(String(error));
+    revealPending();
   }
 }
 
@@ -55,8 +95,12 @@ function reloadPage() {
   window.location.reload();
 }
 
+onMounted(allowRevealAfterFirstPaint);
 onBeforeUnmount(() => {
   ++requestVersion;
+  if (firstFrame) window.cancelAnimationFrame(firstFrame);
+  if (secondFrame) window.cancelAnimationFrame(secondFrame);
+  if (fallbackTimer) window.clearTimeout(fallbackTimer);
 });
 
 void load();
