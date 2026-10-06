@@ -10,7 +10,7 @@ The main implementation principle is to reduce the number of independent state a
 
 The first implementation slice landed in PR #562. Phases 2–7 are implemented and covered by the merged frontend regression suite. The stale-chunk deployment-coherence fix described below also landed there.
 
-Phase 1 is now resumed after the legacy-runtime retirement completed on 2026-10-04. Canonical shell navigation (desktop sidebar, mobile navigation, command palette, top-bar destinations, and the shared `derridai:navigate-native` path bridge) now asks Vue Router to navigate first. The remaining compatibility workspace state follows the settled route through the existing location-sync path instead of initiating the forward navigation. Same-route clicks only repair drift by re-deriving compatibility state from the current URL; a router-refused navigation leaves that state untouched.
+Phase 1 is now implemented in PR #570 after the legacy-runtime retirement completed on 2026-10-04. Canonical shell navigation (desktop sidebar, mobile navigation, command palette, top-bar destinations, global shell search, and the shared `derridai:navigate-native` path bridge) asks Vue Router to navigate first. Search URLs are derived from the Search workspace state without first mutating the compatibility view, so shareable query state is preserved while the router remains authoritative. The remaining compatibility workspace state follows the settled route through the existing location-sync path instead of initiating the forward navigation. Same-route clicks only repair drift by re-deriving compatibility state from the current URL; a router-refused navigation leaves that state untouched.
 
 Phases 8 and 9 are implemented in the continuation branch/PR #564:
 
