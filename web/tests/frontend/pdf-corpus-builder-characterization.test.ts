@@ -340,7 +340,7 @@ describe("PdfCorpusBuilder characterization", () => {
   });
 
   it("hydrates a deep-linked review build without waiting for setup support reads", async () => {
-    let resolveAssets!: (value: { items: typeof sourceAsset[] }) => void;
+    let resolveAssets!: (value: { items: Array<typeof sourceAsset> }) => void;
     pdfCorpusApi.listAssets.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveAssets = resolve;
