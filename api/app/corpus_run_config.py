@@ -193,7 +193,7 @@ class CorpusRunEnvelopeV2(_StrictRunModel):
     registered pipeline strategies.
     """
 
-    format: Literal["derridai-corpus-run"] = "derridai-corpus-run"
+    format: Literal["derridai-corpus-run"]
     version: Literal[2]
     source: SourceConfig = Field(default_factory=SourceConfig)
     pipeline: PipelineRunSelection
