@@ -31,13 +31,14 @@ def parser() -> argparse.ArgumentParser:
     return command
 
 
-def _run(command: list[str]) -> None:
+def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     completed = subprocess.run(command, check=False, capture_output=True, text=True)
     if completed.returncode != 0:
         raise RuntimeError(
             f"Command failed ({completed.returncode}): {' '.join(command)}\n"
             f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
         )
+    return completed
 
 
 def main() -> int:
@@ -49,6 +50,17 @@ def main() -> int:
         raise FileNotFoundError(binary)
 
     _run([str(binary), "--version"])
+
+    reported = _run(
+        [str(binary), "pipeline", "capabilities", "--json"]
+    )
+    actual_contract = json.loads(reported.stdout)
+    expected_contract = manifest.get("pipeline_contract")
+    if actual_contract != expected_contract:
+        raise RuntimeError(
+            "Compiled binary pipeline capabilities differ from the source-tree "
+            "catalog recorded in its build manifest."
+        )
 
     with tempfile.TemporaryDirectory(prefix="derridai-cli-smoke-") as tmp:
         config = Path(tmp) / "corpus-processing.yaml"
