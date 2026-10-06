@@ -28,11 +28,18 @@ vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api }));
 let wrapper: ReturnType<typeof mount>;
 let state: ReturnType<typeof useLegacyThreadImport>;
 beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal("requestIdleCallback", undefined);
+  vi.stubGlobal("cancelIdleCallback", undefined);
   setActivePinia(createPinia());
   useAuthStore().user = { id: 1, role: "admin", capabilities: [] } as never;
   api.importLegacy.mockReset();
 });
-afterEach(() => wrapper?.unmount());
+afterEach(() => {
+  wrapper?.unmount();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 function start() {
   wrapper = mount(
     defineComponent({
@@ -49,6 +56,11 @@ it("automatically imports bounded batches and refreshes the Library", async () =
     .mockResolvedValueOnce({ created: 200, next_offset: 200, has_more: true })
     .mockResolvedValueOnce({ created: 1, next_offset: 201, has_more: false });
   start();
+  expect(api.importLegacy).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(750);
+  await flushPromises();
+  expect(api.importLegacy.mock.calls).toEqual([[0]]);
+  await vi.advanceTimersByTimeAsync(750);
   await flushPromises();
   expect(api.importLegacy.mock.calls).toEqual([[0], [200]]);
   expect(state.refreshKey.value).toBe(2);
@@ -59,6 +71,7 @@ it("automatically imports bounded batches and refreshes the Library", async () =
 it("keeps migration failure local and retries the same batch", async () => {
   api.importLegacy.mockRejectedValueOnce(new Error("Cache unavailable"));
   start();
+  await vi.advanceTimersByTimeAsync(750);
   await flushPromises();
   expect(state.error.value).toBe("Cache unavailable");
   expect(state.refreshKey.value).toBe(0);
@@ -78,7 +91,11 @@ it("ignores old-account completions and stops their next batch", async () => {
     )
     .mockResolvedValueOnce({ created: 0, next_offset: 0, has_more: false });
   start();
+  await vi.advanceTimersByTimeAsync(750);
+  expect(api.importLegacy.mock.calls).toEqual([[0]]);
   useAuthStore().user = { id: 2, role: "admin", capabilities: [] } as never;
+  await flushPromises();
+  await vi.advanceTimersByTimeAsync(750);
   await flushPromises();
   resolve({ created: 200, next_offset: 200, has_more: true });
   await flushPromises();

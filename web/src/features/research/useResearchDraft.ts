@@ -32,10 +32,37 @@ export interface ResearchDraftState {
   final: boolean;
 }
 
+const DRAFT_RENDER_INTERVAL_MS = 50;
+
 export function useResearchDraft() {
   const draft = ref<ResearchDraftState | null>(null);
   let unsubscribe: (() => void) | null = null;
   let lastSeq = -1;
+  let pendingText = "";
+  let renderTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function cancelRenderTimer() {
+    if (renderTimer !== undefined) clearTimeout(renderTimer);
+    renderTimer = undefined;
+  }
+
+  function flushPendingText() {
+    cancelRenderTimer();
+    if (!pendingText || !draft.value) {
+      pendingText = "";
+      return;
+    }
+    draft.value = { ...draft.value, text: draft.value.text + pendingText };
+    pendingText = "";
+  }
+
+  function scheduleRender() {
+    if (renderTimer !== undefined) return;
+    renderTimer = setTimeout(() => {
+      renderTimer = undefined;
+      flushPendingText();
+    }, DRAFT_RENDER_INTERVAL_MS);
+  }
 
   function stopFollowing() {
     unsubscribe?.();
@@ -45,22 +72,30 @@ export function useResearchDraft() {
   /** Start (or restart) streaming the draft for one job. Replaces any previously followed job. */
   function follow(jobId: string) {
     stopFollowing();
+    cancelRenderTimer();
+    pendingText = "";
     draft.value = { jobId, text: "", gap: false, final: false };
     lastSeq = -1;
     unsubscribe = realtime.subscribe(`job:${jobId}`, (event) => {
       if (event.type !== "llm.token" || draft.value?.jobId !== jobId) return;
       const generation = (event as GenerationEvent).payload.generation;
       if (draft.value.gap || draft.value.final) return; // already waiting for the final answer
+      if (generation.seq <= lastSeq) return; // out-of-order or duplicate delivery
+      lastSeq = generation.seq;
       if (generation.gap) {
+        flushPendingText();
         draft.value = { ...draft.value, gap: true };
         return;
       }
-      if (generation.seq <= lastSeq) return; // out-of-order or duplicate delivery
-      lastSeq = generation.seq;
-      draft.value = { ...draft.value, text: draft.value.text + generation.delta };
+      pendingText += generation.delta;
       if (generation.final) {
+        flushPendingText();
         draft.value = { ...draft.value, final: true };
         stopFollowing();
+      } else {
+        // Rendering every model token makes long generations produce hundreds
+        // of Vue updates. Preserve every delta but publish them in short batches.
+        scheduleRender();
       }
     });
   }
@@ -68,6 +103,8 @@ export function useResearchDraft() {
   /** Stop streaming and drop the draft (an authoritative result is available, or nothing is live). */
   function clear() {
     stopFollowing();
+    cancelRenderTimer();
+    pendingText = "";
     draft.value = null;
     lastSeq = -1;
   }

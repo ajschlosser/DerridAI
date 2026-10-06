@@ -19,7 +19,7 @@
 // Why: the streamed Research draft (docs/USER_GUIDE.md) is advisory only — it must stop
 // appending on a sequence gap, never regress on out-of-order delivery, and never leak one
 // job's tokens into another job's draft when the reviewer switches jobs mid-stream.
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { realtime } from "../../src/realtime";
 import type { EventHandler } from "../../src/realtime/client";
 import { useResearchDraft } from "../../src/features/research/useResearchDraft";
@@ -40,7 +40,10 @@ function generationEvent(
 }
 
 describe("useResearchDraft", () => {
-  it("accumulates deltas in order under the followed job's own topic", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("accumulates deltas in order under the followed job's own topic", async () => {
     const handlers = new Map<string, EventHandler>();
     const unsubscribe = vi.fn();
     vi.spyOn(realtime, "subscribe").mockImplementation((topic, handler) => {
@@ -55,6 +58,8 @@ describe("useResearchDraft", () => {
 
     handlers.get("job:job-1")!(generationEvent("job-1", { seq: 1, delta: "The trace " }));
     handlers.get("job:job-1")!(generationEvent("job-1", { seq: 2, delta: "is not a presence." }));
+    expect(draft.value?.text).toBe("");
+    await vi.advanceTimersByTimeAsync(50);
     expect(draft.value).toEqual({
       jobId: "job-1",
       text: "The trace is not a presence.",
@@ -65,7 +70,7 @@ describe("useResearchDraft", () => {
     vi.restoreAllMocks();
   });
 
-  it("ignores out-of-order or duplicate deliveries", () => {
+  it("ignores out-of-order or duplicate deliveries", async () => {
     const handlers = new Map<string, EventHandler>();
     vi.spyOn(realtime, "subscribe").mockImplementation((topic, handler) => {
       handlers.set(topic, handler);
@@ -78,7 +83,32 @@ describe("useResearchDraft", () => {
     handler(generationEvent("job-1", { seq: 2, delta: "second " }));
     handler(generationEvent("job-1", { seq: 1, delta: "first " })); // arrives late: dropped
     handler(generationEvent("job-1", { seq: 2, delta: "second again " })); // duplicate: dropped
+    await vi.advanceTimersByTimeAsync(50);
     expect(draft.value?.text).toBe("second ");
+
+    vi.restoreAllMocks();
+  });
+
+  it("coalesces token bursts into one short render interval", async () => {
+    const handlers = new Map<string, EventHandler>();
+    vi.spyOn(realtime, "subscribe").mockImplementation((topic, handler) => {
+      handlers.set(topic, handler);
+      return vi.fn();
+    });
+
+    const { draft, follow } = useResearchDraft();
+    follow("job-1");
+    const handler = handlers.get("job:job-1")!;
+    for (let seq = 1; seq <= 20; seq += 1)
+      handler(generationEvent("job-1", { seq, delta: String(seq) }));
+
+    expect(draft.value?.text).toBe("");
+    await vi.advanceTimersByTimeAsync(49);
+    expect(draft.value?.text).toBe("");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(draft.value?.text).toBe(
+      Array.from({ length: 20 }, (_, index) => String(index + 1)).join(""),
+    );
 
     vi.restoreAllMocks();
   });
