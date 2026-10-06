@@ -201,7 +201,7 @@ export function createUrlStateCodec(deps: UrlStateCodecDeps) {
       if (compressed) params.set("ts", compressed);
     }
     let path = viewPathMap[view] || "/";
-    // Route-native sub-workspaces share one legacy runtime view. Preserve the
+    // Route-native sub-workspaces can share one compatibility view. Preserve the
     // specific path the router owns so URL synchronization never collapses
     // Source Explorer, Settings sections, or System Data workspaces back to
     // their default sibling.
