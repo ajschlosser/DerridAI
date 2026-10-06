@@ -20,7 +20,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { defineComponent, h, type Component } from "vue";
 import { createMemoryHistory, createRouter, RouterView } from "vue-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { APP_ROUTES } from "../../src/router";
 import { progressiveRouteComponent } from "../../src/router/progressiveRoute";
 
@@ -43,6 +43,28 @@ const LoadedPage = defineComponent({
   name: "LoadedPage",
   setup: () => () => h("div", { "data-test": "loaded-page" }, "Loaded page"),
 });
+
+function controlAnimationFrames() {
+  let nextId = 0;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    const id = ++nextId;
+    callbacks.set(id, callback);
+    return id;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+    callbacks.delete(id);
+  });
+  return {
+    runFrame() {
+      const current = [...callbacks.entries()];
+      callbacks.clear();
+      for (const [, callback] of current) callback(performance.now());
+    },
+  };
+}
+
+afterEach(() => vi.restoreAllMocks());
 
 async function setup(loader: () => Promise<{ default: Component } | Component>) {
   const router = createRouter({
@@ -83,7 +105,8 @@ describe("progressive route components", () => {
     expect(new Set(systemData.map((route) => route.component)).size).toBe(1);
   });
 
-  it("commits navigation before the destination chunk resolves", async () => {
+  it("commits navigation and paints its shell before the destination chunk mounts", async () => {
+    const frames = controlAnimationFrames();
     const pending = deferred<{ default: Component }>();
     const { router, wrapper } = await setup(() => pending.promise);
 
@@ -97,12 +120,20 @@ describe("progressive route components", () => {
 
     pending.resolve({ default: LoadedPage });
     await flushPromises();
+    expect(wrapper.find('[data-test="loaded-page"]').exists()).toBe(false);
 
+    frames.runFrame();
+    await flushPromises();
+    expect(wrapper.find('[data-test="loaded-page"]').exists()).toBe(false);
+
+    frames.runFrame();
+    await flushPromises();
     expect(wrapper.get('[data-test="loaded-page"]').text()).toBe("Loaded page");
     wrapper.unmount();
   });
 
   it("lets a transient page-module failure retry without leaving the destination", async () => {
+    const frames = controlAnimationFrames();
     const loader = vi
       .fn<() => Promise<{ default: Component }>>()
       .mockRejectedValueOnce(new Error("temporary chunk failure"))
@@ -110,6 +141,9 @@ describe("progressive route components", () => {
     const { router, wrapper } = await setup(loader);
 
     await router.push("/slow");
+    await flushPromises();
+    frames.runFrame();
+    frames.runFrame();
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe("/slow");
