@@ -488,11 +488,7 @@ onBeforeUnmount(() => {
           {{ t("compare.diff_all", "All fields") }}</label
         >
       </fieldset>
-      <UiLoadingState
-        v-if="comparisonPending"
-        variant="skeleton"
-        :label="i18n.t('ui.loading')"
-      />
+      <UiLoadingState v-if="comparisonPending" variant="skeleton" :label="i18n.t('ui.loading')" />
       <div v-else-if="!ready" class="compare-empty">
         <b>{{ t("compare.need_two", "Two records are needed") }}</b>
         <span>{{
