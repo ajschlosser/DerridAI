@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import copy
-import time
 import functools
 import gc
 import hashlib
@@ -26,6 +25,7 @@ import logging
 import math
 import re
 import shutil
+import time
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -448,6 +448,10 @@ class ChromaStore:
         }
         self.embeddings = Embeddings()
         self._record_size_cache: dict[tuple[str, int, int], dict[str, int]] = {}
+        self._research_filter_cache: dict[
+            tuple[tuple[str, int], ...], tuple[float, dict[str, Any]]
+        ] = {}
+        self._research_filter_epoch = 0
 
     def default_embedding_spec(self) -> tuple[str, str | None]:
         """Resolve the server-owned default used when a collection omits a contract."""
