@@ -142,97 +142,97 @@ onMounted(() => void load());
         }}
       </div>
       <template v-else>
-      <section class="collections" aria-labelledby="collections-title">
-        <div class="section-heading">
-          <div>
-            <h3 id="collections-title">
-              {{ t("runtime.system_internal_vectors", "Internal vector collections") }}
-            </h3>
-            <p>
-              {{
-                t(
-                  "runtime.system_internal_vectors_roles",
-                  "Select a collection to prepare a valid read-only command.",
-                )
-              }}
-            </p>
-          </div>
-          <strong>{{ collections.length }}</strong>
-        </div>
-        <div class="collection-grid">
-          <button
-            v-for="item in collections"
-            :key="item.name"
-            type="button"
-            @click="choose(item.name)"
-          >
+        <section class="collections" aria-labelledby="collections-title">
+          <div class="section-heading">
             <div>
-              <strong>{{ item.name }}</strong
-              ><small
-                >{{ item.role || "system"
-                }}<template v-if="item.derived"> · derived</template></small
-              >
+              <h3 id="collections-title">
+                {{ t("runtime.system_internal_vectors", "Internal vector collections") }}
+              </h3>
+              <p>
+                {{
+                  t(
+                    "runtime.system_internal_vectors_roles",
+                    "Select a collection to prepare a valid read-only command.",
+                  )
+                }}
+              </p>
             </div>
-            <span>{{ item.count.toLocaleString() }}</span>
-          </button>
-        </div>
-      </section>
-
-      <section class="console" aria-labelledby="console-title">
-        <div class="section-heading">
-          <div>
-            <h3 id="console-title">
-              {{ t("runtime.system_chroma_console", "Read-only query console") }}
-            </h3>
-            <p>
-              {{
-                t(
-                  "runtime.system_chroma_examples",
-                  'Examples: get collection_name --limit 10 · query collection_name --text "responsibility" --n-results 8',
-                )
-              }}
-            </p>
+            <strong>{{ collections.length }}</strong>
           </div>
-          <span class="readonly"
-            ><AppIcon name="lock" /> {{ t("runtime.system_read_only", "Read only") }}</span
-          >
-        </div>
-        <label class="command-field"
-          ><span>{{ t("runtime.system_chroma_command", "Command") }}</span
-          ><textarea v-model="command" rows="4" spellcheck="false" />
-        </label>
-        <div class="console-actions">
-          <button class="btn" type="button" :disabled="busy || !command.trim()" @click="validate">
-            {{ t("runtime.system_validate_command", "Validate & explain") }}
-          </button>
-          <button
-            class="btn primary"
-            type="button"
-            :disabled="busy || !command.trim()"
-            @click="execute"
-          >
-            {{ t("runtime.system_run_command", "Run read-only query") }}
-          </button>
-        </div>
-        <div v-if="error" class="state error" role="alert">{{ error }}</div>
-        <div v-if="validation" class="explanation">
-          <AppIcon name="check" />
-          <div>
-            <strong>{{ t("runtime.system_command_valid", "Valid read-only command") }}</strong>
-            <p>{{ validation.explanation }}</p>
-            <small v-if="validation.embedding_provider"
-              >{{ t("runtime.system_embedding", "Embedding") }}: {{ validation.embedding_provider
-              }}<template v-if="validation.embedding_model">
-                / {{ validation.embedding_model }}</template
-              ></small
+          <div class="collection-grid">
+            <button
+              v-for="item in collections"
+              :key="item.name"
+              type="button"
+              @click="choose(item.name)"
+            >
+              <div>
+                <strong>{{ item.name }}</strong
+                ><small
+                  >{{ item.role || "system"
+                  }}<template v-if="item.derived"> · derived</template></small
+                >
+              </div>
+              <span>{{ item.count.toLocaleString() }}</span>
+            </button>
+          </div>
+        </section>
+  
+        <section class="console" aria-labelledby="console-title">
+          <div class="section-heading">
+            <div>
+              <h3 id="console-title">
+                {{ t("runtime.system_chroma_console", "Read-only query console") }}
+              </h3>
+              <p>
+                {{
+                  t(
+                    "runtime.system_chroma_examples",
+                    'Examples: get collection_name --limit 10 · query collection_name --text "responsibility" --n-results 8',
+                  )
+                }}
+              </p>
+            </div>
+            <span class="readonly"
+              ><AppIcon name="lock" /> {{ t("runtime.system_read_only", "Read only") }}</span
             >
           </div>
-        </div>
-        <details v-if="result?.result" class="result">
-          <summary>{{ t("runtime.system_query_results", "Query results") }}</summary>
-          <pre>{{ JSON.stringify(result.result, null, 2) }}</pre>
-        </details>
-      </section>
+          <label class="command-field"
+            ><span>{{ t("runtime.system_chroma_command", "Command") }}</span
+            ><textarea v-model="command" rows="4" spellcheck="false" />
+          </label>
+          <div class="console-actions">
+            <button class="btn" type="button" :disabled="busy || !command.trim()" @click="validate">
+              {{ t("runtime.system_validate_command", "Validate & explain") }}
+            </button>
+            <button
+              class="btn primary"
+              type="button"
+              :disabled="busy || !command.trim()"
+              @click="execute"
+            >
+              {{ t("runtime.system_run_command", "Run read-only query") }}
+            </button>
+          </div>
+          <div v-if="error" class="state error" role="alert">{{ error }}</div>
+          <div v-if="validation" class="explanation">
+            <AppIcon name="check" />
+            <div>
+              <strong>{{ t("runtime.system_command_valid", "Valid read-only command") }}</strong>
+              <p>{{ validation.explanation }}</p>
+              <small v-if="validation.embedding_provider"
+                >{{ t("runtime.system_embedding", "Embedding") }}: {{ validation.embedding_provider
+                }}<template v-if="validation.embedding_model">
+                  / {{ validation.embedding_model }}</template
+                ></small
+              >
+            </div>
+          </div>
+          <details v-if="result?.result" class="result">
+            <summary>{{ t("runtime.system_query_results", "Query results") }}</summary>
+            <pre>{{ JSON.stringify(result.result, null, 2) }}</pre>
+          </details>
+        </section>
       </template>
     </template>
   </div>
