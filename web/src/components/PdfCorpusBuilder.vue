@@ -143,6 +143,8 @@ const recordSourceWarningOpen = ref(false);
 const sourceProblemDialogBuildId = ref("");
 const selectedBuildId = ref("");
 const currentBuild = ref<CorpusBuild | null>(null);
+const openingBuildId = ref("");
+let buildSelectionRequest = 0;
 const {
   providerProfiles,
   serverProviderIds,
@@ -2278,27 +2280,52 @@ function openEnrichmentFromFinish() {
   metadataEnrichmentOpen.value = true;
 }
 async function chooseBuild(build: CorpusBuild) {
-  selectedBuildId.value = build.build_id;
-  selectedAssetId.value = build.asset_id;
-  selectedRecordId.value = "";
-  selectedRecord.value = null;
-  sourceBlocks.value = [];
-  reviewRecords.clear();
-  hydratedMetadataCount.value = 0;
-  reviewQueue.value = "all";
-  reviewRequested.value = false;
-  await router.replace({
-    query: {
-      ...route.query,
-      build: build.build_id,
-      record: undefined,
-      queue: undefined,
-    },
-  });
-  await refreshBuild();
-  await nextTick();
-  await refreshRecords(true);
-  if (buildRunning.value) startPolling();
+  if (build.build_id === selectedBuildId.value) return;
+  const request = ++buildSelectionRequest;
+  openingBuildId.value = build.build_id;
+  try {
+    // Resolve the next build before committing any of its identity into the
+    // workspace. This avoids frames where a new build id/source is displayed
+    // with the previous build's review state.
+    const nextBuild = await corpusBuilderApi.build(build.build_id);
+    if (request !== buildSelectionRequest) return;
+
+    stopPolling();
+    currentBuild.value = nextBuild;
+    selectedBuildId.value = nextBuild.build_id;
+    selectedAssetId.value = nextBuild.asset_id;
+    applyCorpusBuildRequest((nextBuild.request || {}) as Record<string, unknown>);
+    syncBuildInRail(nextBuild);
+
+    selectedRecordId.value = "";
+    selectedRecord.value = null;
+    sourceBlocks.value = [];
+    reviewRecords.clear();
+    hydratedMetadataCount.value = 0;
+    reviewQueue.value = "all";
+    reviewRequested.value = false;
+
+    await router.replace({
+      query: {
+        ...route.query,
+        build: nextBuild.build_id,
+        record: undefined,
+        queue: undefined,
+      },
+    });
+    if (request !== buildSelectionRequest) return;
+    await nextTick();
+    if (hasRecordTopology.value) await refreshRecords(true);
+    if (buildRunning.value) {
+      registerBuildOperation(nextBuild);
+      startPolling();
+    }
+  } catch (exc) {
+    if (request === buildSelectionRequest)
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    if (request === buildSelectionRequest) openingBuildId.value = "";
+  }
 }
 async function openPdfExplorer() {
   await router.push({
@@ -2573,8 +2600,9 @@ function viewCaptureSources(captureId: string) {
   );
 }
 watch(selectedAssetId, () => {
-  if (selectedAssetId.value) void refreshBuilds();
-  else configurationSection.value = "source";
+  if (selectedAssetId.value && currentBuild.value?.asset_id !== selectedAssetId.value)
+    void refreshBuilds();
+  else if (!selectedAssetId.value) configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
   sourceProblemDialogBuildId.value = "";
@@ -2753,6 +2781,7 @@ defineExpose({
           :builds="builds"
           :total="buildsTotal"
           :selected-build-id="selectedBuildId"
+          :pending-build-id="openingBuildId"
           @select="chooseBuild"
           @refresh="refreshBuilds"
         />
