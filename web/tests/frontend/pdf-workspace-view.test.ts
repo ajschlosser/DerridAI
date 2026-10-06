@@ -18,13 +18,7 @@
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import {
-  defineComponent,
-  onActivated,
-  onDeactivated,
-  onMounted,
-  onUnmounted,
-} from "vue";
+import { defineComponent, onActivated, onDeactivated, onMounted, onUnmounted } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { describe, expect, it } from "vitest";
 import PdfWorkspaceView from "../../src/views/PdfWorkspaceView.vue";
@@ -84,7 +78,9 @@ async function mountWorkspace() {
 }
 
 describe("PDF workspace sibling navigation", () => {
-  it("keeps Builder mounted while visiting Source Explorer and restores each route snapshot", async () => {
+  it(
+    "keeps Builder mounted while visiting Source Explorer and restores each route snapshot",
+    async () => {
     const { wrapper, router, builder, explorer } = await mountWorkspace();
     const tabs = () => wrapper.findAll(".pdf-mode-tabs button");
 
@@ -126,6 +122,7 @@ describe("PDF workspace sibling navigation", () => {
       pdfpage: "3",
     });
 
-    wrapper.unmount();
-  });
+      wrapper.unmount();
+    },
+  );
 });
