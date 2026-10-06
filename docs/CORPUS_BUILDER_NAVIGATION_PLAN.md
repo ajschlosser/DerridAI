@@ -12,10 +12,10 @@ The first implementation slice landed in PR #562. Phases 2–7 are implemented a
 
 Phase 1 remains deliberately deferred. The attempted router-first sidebar conversion exposed that some canonical-looking destinations still rely on the compatibility runtime to mutate view state before Vue Router settles. That migration should follow the legacy-runtime retirement boundary rather than changing ownership opportunistically inside Corpus Builder work.
 
-Phases 8 and 9 are the active continuation:
+Phases 8 and 9 are implemented in the continuation branch/PR #564:
 
-- **Phase 8:** remove stacked sticky page chrome, keep the phase header behavior consistent in Build and Review, and make the source-retention semantics of starting another build explicit.
-- **Phase 9:** retain reconcile-before-publish while eliminating redundant full build-list refreshes and duplicate publication actions.
+- **Phase 8:** stacked sticky page chrome is removed, the phase header behaves the same in Build and Review, and restart actions now distinguish retaining the current source from choosing another source.
+- **Phase 9:** reconcile-before-publish remains authoritative while publication reuses in-place build synchronization, avoids redundant full build-list reads, and aborts if the reviewer changes build context before publication begins.
 
 ## Current problems
 
