@@ -206,7 +206,8 @@ export function createUrlStateCodec(deps: UrlStateCodecDeps) {
     // Source Explorer, Settings sections, or System Data workspaces back to
     // their default sibling.
     if (
-      view === "pdf" && ["/corpus-builder", "/source-explorer"].includes(location.pathname)
+      view === "pdf" &&
+      ["/corpus-builder", "/source-explorer"].includes(location.pathname)
     ) {
       path = location.pathname;
     } else if (view === "config" && location.pathname.startsWith("/settings/")) {
