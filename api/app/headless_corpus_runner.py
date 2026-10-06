@@ -28,11 +28,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .corpus_cli_config import CorpusProcessingConfig
+from .corpus_run_config import CorpusRunEnvelopeV2
 from .corpus_output_profiles import atomic_copy, write_research_jsonl_zst
 from .metadata_schema import MetadataSchema
 
 RunProfile = Literal["research", "celf"]
 ProgressCallback = Callable[[dict[str, Any]], None]
+CorpusRunConfig = CorpusProcessingConfig | CorpusRunEnvelopeV2
 
 
 class HeadlessCorpusError(RuntimeError):
@@ -157,7 +159,7 @@ class HeadlessCorpusRunner:
 
     @staticmethod
     def _validated_request(
-        config: CorpusProcessingConfig,
+        config: CorpusRunConfig,
         asset_id: str,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         from .models import PdfCorpusBuildCreate
@@ -231,7 +233,7 @@ class HeadlessCorpusRunner:
     def run(
         self,
         source: str | Path,
-        config: CorpusProcessingConfig,
+        config: CorpusRunConfig,
         *,
         output: str | Path | None = None,
         force_profile: RunProfile | None = None,
@@ -240,6 +242,19 @@ class HeadlessCorpusRunner:
         source_path = Path(source).expanduser().resolve()
         if not source_path.is_file():
             raise SourceInputError(f"Source file does not exist: {source_path}")
+
+        # A v2 file names the pipeline it expects to execute. Validate that
+        # identity before reading or extracting a potentially large source. The
+        # current Corpus Builder still resolves this pipeline through its shared
+        # assignment registry, so a mismatch must fail rather than be ignored.
+        if isinstance(config, CorpusRunEnvelopeV2):
+            from .pipelines.manager import pipeline_manager
+
+            try:
+                config.validate_current_headless_execution(pipeline_manager)
+            except ValueError as exc:
+                raise PipelineExecutionError(str(exc)) from exc
+
         try:
             source_bytes = source_path.read_bytes()
         except OSError as exc:
