@@ -121,6 +121,53 @@ describe("System Data workspaces", () => {
     wrapper.unmount();
   });
 
+  it("shows the database directory before selected-table rows finish loading", async () => {
+    vi.spyOn(systemApi, "systemData").mockResolvedValue({
+      databases: [
+        {
+          name: "system",
+          backend: "sqlite",
+          tables: [
+            {
+              name: "jobs",
+              row_count: 1,
+              columns: [{ name: "id", primary_key: 1 }, { name: "status" }],
+            },
+          ],
+        },
+      ],
+    });
+    let resolveRows!: (value: Awaited<ReturnType<typeof systemApi.systemDataRows>>) => void;
+    vi.spyOn(systemApi, "systemDataRows").mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRows = resolve;
+        }),
+    );
+
+    const wrapper = mount(SystemDataDatabases);
+    await flushPromises();
+
+    expect(wrapper.find(".browser").exists()).toBe(true);
+    expect(wrapper.text()).toContain("jobs");
+    expect(wrapper.text()).toContain("Loading rows");
+    expect(wrapper.find(".data-table").exists()).toBe(false);
+
+    resolveRows({
+      database: "system",
+      name: "jobs",
+      row_count: 1,
+      columns: [{ name: "id", primary_key: 1 }, { name: "status" }],
+      rows: [{ id: "job-1", status: "completed" }],
+      offset: 0,
+      limit: 25,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("job-1");
+    wrapper.unmount();
+  });
+
   it("keeps healthy stores visible when one overview source fails", async () => {
     vi.spyOn(systemApi, "systemData").mockRejectedValue(new Error("sqlite offline"));
     vi.spyOn(systemApi, "responseCacheRecords").mockResolvedValue({
