@@ -2962,6 +2962,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.choose_pdf': 'Choisir un fichier source',
  'pdf_corpus.choose_persisted_pdf': 'Choisir une source enregistrée…',
  'pdf_corpus.choose_source_prompt': 'Choisissez une source pour continuer.',
+ 'pdf_corpus.choose_another_source': 'Choisir une autre source',
  'pdf_corpus.choose_value': 'Choisir une valeur…',
  'pdf_corpus.citation_issues': 'problème(s) de citation',
  'pdf_corpus.complete': 'Terminé',
