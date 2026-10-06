@@ -34,7 +34,7 @@ export function useCorpusPublication(options: {
   busy: Ref<string>;
   setMessage: (message: string, tone?: MessageTone) => void;
   refreshBuild: () => Promise<void>;
-  refreshBuilds: () => Promise<void>;
+  syncBuild?: (build: CorpusBuild) => void;
   beforePublish?: () => Promise<void>;
   t: (key: string, fallback?: string) => string;
   tf: (key: string, values: Record<string, string | number>) => string;
@@ -83,6 +83,7 @@ export function useCorpusPublication(options: {
       const reconciled = await corpusBuilderApi.reconcile(buildId);
       if (options.currentBuild.value?.build_id === buildId) {
         options.currentBuild.value = reconciled;
+        options.syncBuild?.(reconciled);
       }
 
       if (
@@ -90,10 +91,6 @@ export function useCorpusPublication(options: {
         reconciled.publication_readiness &&
         !reconciled.publication_readiness.can_publish
       ) {
-        // The reconciled build is already authoritative locally. Update the
-        // history rail once for the blocked outcome, but do not also perform
-        // this list read on the successful path where a final refresh follows.
-        await options.refreshBuilds();
         options.setMessage(options.t("pdf_corpus.publication_waiting_help"));
         return null;
       }
@@ -101,8 +98,10 @@ export function useCorpusPublication(options: {
       const result = await corpusBuilderApi.publish(buildId, {
         acceptUnreviewed: publishOptions.acceptUnreviewed,
       });
+      // One authoritative detail read attaches the publication snapshot and
+      // syncs the already-loaded build rail in place. Publication does not add
+      // or remove builds, so a second full list read is unnecessary.
       await options.refreshBuild();
-      await options.refreshBuilds();
       options.setMessage(
         publishOptions.acceptUnreviewed
           ? options.tf("pdf_corpus.published_unreviewed", {
