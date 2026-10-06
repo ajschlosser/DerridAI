@@ -19,7 +19,7 @@
 import { shallowRef } from "vue";
 import type { RouteLocationNormalized, Router } from "vue-router";
 
-/** Route-module feedback only. Data fetching stays with each workspace. */
+/** Fallback feedback for router-level delays. App page modules now load after route commit. */
 export function createRouteLoading(router: Router, delay = 180) {
   const destination = shallowRef<RouteLocationNormalized | null>(null);
   const failed = shallowRef<RouteLocationNormalized | null>(null);
