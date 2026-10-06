@@ -198,10 +198,10 @@ export function resolveSearchFilterFields(options: {
   if (options.database) return collection;
 
   const availableNames = options.availableFields || [];
-  if (!options.schema) {
-    // Older publications and test fixtures may not carry a schema descriptor.
-    // Preserve the historical built-in options there, while still admitting
-    // arbitrary observed fields. Schema-aware paths never use this list.
+  if (!options.schema?.fields?.length) {
+    // Older publications and test fixtures may not carry a usable schema
+    // descriptor. Preserve the historical built-in options there, while still
+    // admitting arbitrary observed fields. Schema-aware paths never use this list.
     return filterFieldsFromNames(
       [...(SEARCH_FILTER_FIELDS as string[]), ...availableNames],
       labels,
