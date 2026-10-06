@@ -133,7 +133,11 @@ const menuItems = computed<UiMenuItem[]>(() => [
       {{ t("pipelines.executions_loading", "Loading execution history…") }}
     </div>
 
-    <div v-else-if="error && !runs.length && !selectedRun" class="workspace-state error" role="alert">
+    <div
+      v-else-if="error && !runs.length && !selectedRun"
+      class="workspace-state error"
+      role="alert"
+    >
       <div>
         <strong>{{ t("pipelines.executions_failed", "Could not load execution history.") }}</strong>
         <p>{{ error }}</p>
@@ -145,7 +149,11 @@ const menuItems = computed<UiMenuItem[]>(() => [
       <div v-if="refreshing" class="workspace-state inline" role="status">
         {{ t("loading.updating", "Updating…") }}
       </div>
-      <div v-if="error && (runs.length || selectedRun)" class="workspace-state error inline" role="alert">
+      <div
+        v-if="error && (runs.length || selectedRun)"
+        class="workspace-state error inline"
+        role="alert"
+      >
         <div>
           <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
           <p>{{ error }}</p>
@@ -154,31 +162,31 @@ const menuItems = computed<UiMenuItem[]>(() => [
       </div>
 
       <div v-if="runs.length || selectedRun" class="pipeline-execution-layout">
-      <PipelineExecutionList
-        :runs="runs"
-        :pipelines="pipelines"
-        :purposes="purposes"
-        :vocabulary="vocabulary"
-        :selected-run-id="selectedRun?.run_id || ''"
-        :total="total"
-        :limit="limit || runs.length || 25"
-        :offset="offset"
-        @select="emit('select', $event)"
-        @page="emit('page', $event)"
-        @delete-run="emit('deleteRun', $event)"
-        @open-configuration="emit('openConfiguration', $event)"
-      />
-      <div v-if="selectedRun" class="pipeline-execution-inspector-scroll">
-        <PipelineExecutionInspector
-          :run="selectedRun"
+        <PipelineExecutionList
+          :runs="runs"
           :pipelines="pipelines"
           :purposes="purposes"
           :vocabulary="vocabulary"
-          :strategies="strategies"
+          :selected-run-id="selectedRun?.run_id || ''"
+          :total="total"
+          :limit="limit || runs.length || 25"
+          :offset="offset"
+          @select="emit('select', $event)"
+          @page="emit('page', $event)"
+          @delete-run="emit('deleteRun', $event)"
           @open-configuration="emit('openConfiguration', $event)"
         />
+        <div v-if="selectedRun" class="pipeline-execution-inspector-scroll">
+          <PipelineExecutionInspector
+            :run="selectedRun"
+            :pipelines="pipelines"
+            :purposes="purposes"
+            :vocabulary="vocabulary"
+            :strategies="strategies"
+            @open-configuration="emit('openConfiguration', $event)"
+          />
+        </div>
       </div>
-    </div>
 
       <div v-else class="empty-state">
         <AppIcon name="history" />
