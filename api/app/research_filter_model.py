@@ -22,7 +22,15 @@ import re
 from typing import Any, Literal
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+)
 
 from .config import settings
 from .research_filter_catalog import validate_catalog_filter
