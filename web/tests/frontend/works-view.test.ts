@@ -892,7 +892,7 @@ describe("Works progressive loading", () => {
 
     expect(wrapper.find("[data-works-loading]").exists()).toBe(false);
     expect(wrapper.get("#worksSearch").attributes("disabled")).toBeUndefined();
-    expect(wrapper.find(".works-card").exists()).toBe(true);
+    expect(wrapper.find("table.works-list").exists()).toBe(true);
     wrapper.unmount();
   });
 
