@@ -159,6 +159,9 @@ async function mountBuilder(
               CorpusBuilderWorkspaceHeader: {
                 template: '<header data-test="workspace-actions"><slot name="actions" /></header>',
               },
+              CorpusSetupWorkspace: {
+                template: '<section data-test="setup-workspace"><slot name="source" /></section>',
+              },
             }
           : {}),
       },
