@@ -63,6 +63,13 @@ describe("ProvidersView", () => {
     saved.mockClear();
   });
 
+  it("renders local provider state on the first frame without a loading gate", async () => {
+    const { wrapper } = await mountView();
+    expect(wrapper.findComponent({ name: "UiLoadingState" }).exists()).toBe(false);
+    expect(wrapper.get(".provider-title b").text()).toBe("Local Ollama");
+  });
+
+
   it("starts collapsed with no save bar, then reveals fields and saves only after an edit", async () => {
     const { wrapper } = await mountView();
     await flushPromises();
