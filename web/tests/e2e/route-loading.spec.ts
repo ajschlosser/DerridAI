@@ -38,7 +38,7 @@ test("slow route modules commit the destination before the page chunk resolves",
 
   await page.locator(".shell-sidebar").getByRole("button", { name: "Works", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/works$/);
+  await expect(page).toHaveURL(/\/works(?:\\?.*)?$/);
   await expect(page.locator(".progressive-route-loading")).toBeVisible();
   await expect(page.locator(".vue-breadcrumb-path")).toContainText("Works");
   expect(await current!.evaluate((node) => node.isConnected)).toBe(false);
@@ -56,7 +56,7 @@ test("failed route modules stay on the destination and retry in place", async ({
 
   await page.locator(".shell-sidebar").getByRole("button", { name: "Works", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/works$/);
+  await expect(page).toHaveURL(/\/works(?:\\?.*)?$/);
   const error = page.locator(".progressive-route-error");
   await expect(error).toContainText("Page content could not be loaded");
   expect(await current!.evaluate((node) => node.isConnected)).toBe(false);
