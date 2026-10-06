@@ -358,10 +358,18 @@ watch(
         <div v-else-if="tableInitialPending" class="state" role="status">
           {{ t("runtime.system_rows_loading", "Loading rows…") }}
         </div>
-        <div v-if="tableRefreshing && displayedTableIsCurrent" class="state state-inline" role="status">
+        <div
+          v-if="tableRefreshing && displayedTableIsCurrent"
+          class="state state-inline"
+          role="status"
+        >
           {{ t("loading.updating", "Updating…") }}
         </div>
-        <div v-if="tableError && displayedTableIsCurrent" class="state error state-inline" role="alert">
+        <div
+          v-if="tableError && displayedTableIsCurrent"
+          class="state error state-inline"
+          role="alert"
+        >
           <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
           <span>{{ tableError }}</span>
           <button class="btn tiny" type="button" @click="loadTable(requestedOffset)">
