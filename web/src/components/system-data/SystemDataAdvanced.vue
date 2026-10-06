@@ -177,7 +177,7 @@ onMounted(() => void load());
             </button>
           </div>
         </section>
-  
+
         <section class="console" aria-labelledby="console-title">
           <div class="section-heading">
             <div>
