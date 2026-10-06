@@ -395,7 +395,11 @@ defineExpose({ select, draft });
           </div>
           <div class="schema-status">
             <UiStatusBadge v-if="builtin" tone="info" :label="t('builtin', 'Built in')" />
-            <UiStatusBadge v-else-if="isNew" tone="warning" :label="t('unsaved', 'Not saved yet')" />
+            <UiStatusBadge
+              v-else-if="isNew"
+              tone="warning"
+              :label="t('unsaved', 'Not saved yet')"
+            />
             <UiStatusBadge
               v-else-if="dirty"
               tone="warning"
