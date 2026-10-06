@@ -383,6 +383,7 @@ Files:
 ### Acceptance criteria
 
 - Clicking a top-level destination changes the canonical route and shell before its JavaScript chunk resolves.
+- The committed destination shell receives a browser paint before a cached/heavy page module is allowed to mount, so synchronous setup work cannot visually hold the previous page in place.
 - The previous page is not retained merely because the destination chunk or API is slow.
 - A cold destination shows an immediate loading skeleton owned by the destination route.
 - Once the module is loaded, its page can continue loading data progressively without blocking route state.
@@ -429,6 +430,7 @@ The implementation should target:
 - no visible old/new build context mixture during build switching.
 - top-level route state, breadcrumbs and active navigation commit independently of destination chunk resolution;
 - route-module loading displays destination-owned progressive feedback instead of retaining the previous page;
+- cached page modules cannot skip the destination-shell paint and monopolize the navigation frame with synchronous setup;
 - destination API hydration is not a prerequisite for rendering that destination's page shell.
 
 ## Non-goals
