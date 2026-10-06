@@ -22,6 +22,7 @@ import AppIcon from "../AppIcon.vue";
 import PipelineExecutionFilters from "./PipelineExecutionFilters.vue";
 import PipelineExecutionInspector from "./PipelineExecutionInspector.vue";
 import PipelineExecutionList from "./PipelineExecutionList.vue";
+import UiButton from "../ui/UiButton.vue";
 import UiMenu, { type UiMenuItem } from "../ui/UiMenu.vue";
 import type { PipelineRunFilters } from "../../features/pipelines/composables/usePipelineStudioNavigation";
 import { useI18nStore } from "../../stores/i18n";
@@ -47,6 +48,9 @@ const props = defineProps<{
   limit: number;
   offset: number;
   filters: PipelineRunFilters;
+  pending: boolean;
+  refreshing: boolean;
+  error: string;
 }>();
 const emit = defineEmits<{
   select: [runId: string];
@@ -55,6 +59,7 @@ const emit = defineEmits<{
   deleteRun: [runId: string];
   clearHistory: [];
   openConfiguration: [key: string];
+  retry: [];
 }>();
 
 const i18n = useI18nStore();
@@ -124,7 +129,31 @@ const menuItems = computed<UiMenuItem[]>(() => [
       </template>
     </PipelineExecutionFilters>
 
-    <div v-if="runs.length || selectedRun" class="pipeline-execution-layout">
+    <div v-if="pending" class="workspace-state" role="status">
+      {{ t("pipelines.executions_loading", "Loading execution history…") }}
+    </div>
+
+    <div v-else-if="error && !runs.length && !selectedRun" class="workspace-state error" role="alert">
+      <div>
+        <strong>{{ t("pipelines.executions_failed", "Could not load execution history.") }}</strong>
+        <p>{{ error }}</p>
+      </div>
+      <UiButton :label="t('common.retry', 'Retry')" @click="emit('retry')" />
+    </div>
+
+    <div v-else>
+      <div v-if="refreshing" class="workspace-state inline" role="status">
+        {{ t("loading.updating", "Updating…") }}
+      </div>
+      <div v-if="error && (runs.length || selectedRun)" class="workspace-state error inline" role="alert">
+        <div>
+          <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+          <p>{{ error }}</p>
+        </div>
+        <UiButton :label="t('common.retry', 'Retry')" @click="emit('retry')" />
+      </div>
+
+      <div v-if="runs.length || selectedRun" class="pipeline-execution-layout">
       <PipelineExecutionList
         :runs="runs"
         :pipelines="pipelines"
@@ -151,15 +180,16 @@ const menuItems = computed<UiMenuItem[]>(() => [
       </div>
     </div>
 
-    <div v-else class="empty-state">
-      <AppIcon name="history" />
-      <div>
-        <strong>{{ t("pipelines.no_matching_runs", "No executions match these filters.") }}</strong>
-        <p>
-          {{
-            t("pipelines.no_runs_help", "New Research runs will appear here once they complete.")
-          }}
-        </p>
+      <div v-else class="empty-state">
+        <AppIcon name="history" />
+        <div>
+          <strong>{{ t("pipelines.no_matching_runs", "No executions match these filters.") }}</strong>
+          <p>
+            {{
+              t("pipelines.no_runs_help", "New Research runs will appear here once they complete.")
+            }}
+          </p>
+        </div>
       </div>
     </div>
   </section>
@@ -181,6 +211,27 @@ const menuItems = computed<UiMenuItem[]>(() => [
   color: var(--text-secondary);
   font-size: 0.875rem;
   line-height: var(--lh-normal);
+}
+.workspace-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 72px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  color: var(--text-secondary);
+}
+.workspace-state.inline {
+  min-height: 0;
+  padding-block: var(--space-2);
+}
+.workspace-state.error {
+  color: var(--tone-danger-fg);
+}
+.workspace-state p {
+  margin: 2px 0 0;
 }
 .pipeline-execution-layout {
   display: grid;
