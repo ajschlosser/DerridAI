@@ -31,9 +31,7 @@ const { useCorpusPublication } = await import(
   "../../src/features/corpus-builder/composables/useCorpusPublication"
 );
 
-function setup(
-  beforePublish?: (currentBuild: Ref<CorpusBuild | null>) => Promise<void>,
-) {
+function setup(beforePublish?: (currentBuild: Ref<CorpusBuild | null>) => Promise<void>) {
   const setMessage = vi.fn();
   const refreshBuild = vi.fn(async () => {});
   const syncBuild = vi.fn();
