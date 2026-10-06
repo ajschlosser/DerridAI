@@ -470,11 +470,11 @@ async function publishAndShow(options: { acceptUnreviewed?: boolean } = {}) {
   // publish() reconciles the persisted build before attempting publication. Even
   // when blockers remain, take the reviewer to the readiness workspace so the
   // resulting source/metadata findings are visible and actionable.
-  if (currentBuild.value) await switchWorkspace("publish");
+  if (currentBuild.value) await switchWorkspace("publish", "replace");
   return result;
 }
 
-async function reconcileAndOpenPublish() {
+async function reconcileAndOpenPublish(navigation: "push" | "replace" = "push") {
   const build = currentBuild.value;
   if (!build) return;
   const buildId = build.build_id;
@@ -486,7 +486,7 @@ async function reconcileAndOpenPublish() {
     if (currentBuild.value?.build_id !== buildId) return;
     currentBuild.value = reconciled;
     syncBuildInRail(reconciled);
-    await switchWorkspace("publish");
+    await switchWorkspace("publish", navigation);
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
@@ -730,7 +730,7 @@ async function startBuild(fromMetadataPrompt = false) {
     return;
   }
   await startBuildOperation();
-  if (currentBuild.value) await switchWorkspace("build");
+  if (currentBuild.value) await switchWorkspace("build", "replace");
 }
 async function continueBuildWithDocumentMetadata() {
   missingMetadataPromptOpen.value = false;
@@ -1026,7 +1026,7 @@ function returnToReadiness() {
   reviewRequested.value = false;
   reviewQueue.value = "all";
   recordQuery.value = "";
-  void reconcileAndOpenPublish();
+  void reconcileAndOpenPublish("replace");
 }
 let remediationAdvancing = false;
 watch(fixRemaining, async (remaining, previous) => {
