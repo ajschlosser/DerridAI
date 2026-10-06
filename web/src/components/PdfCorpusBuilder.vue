@@ -89,7 +89,10 @@ import { useCorpusMetadataReview } from "../features/corpus-builder/composables/
 import { useCorpusBoundaryReview } from "../features/corpus-builder/composables/useCorpusBoundaryReview";
 import { invalidRecordSizingFields } from "../features/corpus-builder/domain/recordSizing";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
-import { syncedReviewQuery } from "../features/corpus-builder/domain/workspace";
+import {
+  parseCorpusWorkspace,
+  syncedReviewQuery,
+} from "../features/corpus-builder/domain/workspace";
 import {
   editableRecordMetadata,
   evidenceCandidateFieldNames,
@@ -2638,15 +2641,17 @@ watch(
   () =>
     [
       String(route.query.build || ""),
+      parseCorpusWorkspace(route.query.workspace),
       parseReviewQueue(route.query.queue),
       String(route.query.record || ""),
     ] as const,
-  async ([buildId, queue, recordId]) => {
+  async ([buildId, workspace, queue, recordId]) => {
     if (!builderRouteActive.value) return;
     const request = ++routeReviewRequest;
+    const reviewing = workspace === "review";
     const buildChanged = Boolean(buildId && buildId !== selectedBuildId.value);
-    const queueChanged = Boolean(queue && queue !== reviewQueue.value);
-    const recordChanged = recordId !== selectedRecordId.value;
+    const queueChanged = reviewing && (queue || "all") !== reviewQueue.value;
+    const recordChanged = reviewing && recordId !== selectedRecordId.value;
 
     // Apply one route snapshot as one transaction. The old independent
     // build/queue/record watchers could each issue their own review read when
@@ -2659,18 +2664,24 @@ watch(
       sourceBlocks.value = [];
       reviewRecords.clear();
       hydratedMetadataCount.value = 0;
-      if (queue) {
+      if (reviewing) {
         settingReviewFilters = true;
-        reviewQueue.value = queue;
+        reviewQueue.value = queue || "all";
         settingReviewFilters = false;
       }
       await refreshBuild();
       if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
-      await refreshRecords(true, recordId);
-      if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+      if (reviewing && hasRecordTopology.value) {
+        await refreshRecords(true, recordId);
+        if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+      }
       if (buildRunning.value) startPolling();
       return;
     }
+
+    // Build and Publish do not consume queue/record route state. Clearing those
+    // query keys during a phase switch must not cause an unnecessary review read.
+    if (!reviewing) return;
 
     if (queueChanged) {
       settingReviewFilters = true;
@@ -2685,7 +2696,11 @@ watch(
 
     if (recordChanged && selectedBuildId.value) {
       await refreshRecords(false, recordId);
+      return;
     }
+
+    if (!reviewHydrated.value && selectedBuildId.value && hasRecordTopology.value)
+      await refreshRecords(false, recordId);
   },
 );
 watch(
