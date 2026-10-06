@@ -776,7 +776,7 @@ const { jsonlPreviewOpen, jsonlPreview, openJsonlPreview, publish } = useCorpusP
   busy,
   setMessage,
   refreshBuild,
-  refreshBuilds,
+  syncBuild: syncBuildInRail,
   beforePublish: () => recordSaveQueue.waitForAll(),
   t: (key, fallback) => i18n.t(key, fallback),
   tf: (key, values) => i18n.tf(key, values),
