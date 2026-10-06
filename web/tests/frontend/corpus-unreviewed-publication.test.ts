@@ -30,24 +30,26 @@ const { useCorpusPublication } = await import(
   "../../src/features/corpus-builder/composables/useCorpusPublication"
 );
 
-function setup() {
+function setup(beforePublish?: () => Promise<void>) {
   const setMessage = vi.fn();
   const refreshBuild = vi.fn(async () => {});
   const syncBuild = vi.fn();
+  const currentBuild = ref({ build_id: "build-1" } as never);
   const tf = vi.fn((key: string, values: Record<string, string | number>) =>
     [key, ...Object.values(values)].join("|"),
   );
   const composable = useCorpusPublication({
-    currentBuild: ref({ build_id: "build-1" } as never),
+    currentBuild,
     selectedRecord: ref(null),
     busy: ref(""),
     setMessage,
     refreshBuild,
     syncBuild,
+    beforePublish,
     t: (key) => key,
     tf,
   });
-  return { composable, setMessage, refreshBuild, syncBuild };
+  return { composable, currentBuild, setMessage, refreshBuild, syncBuild };
 }
 
 describe("unreviewed corpus publication", () => {
@@ -97,6 +99,23 @@ describe("unreviewed corpus publication", () => {
     expect(syncBuild).toHaveBeenCalledTimes(1);
     expect(refreshBuild).not.toHaveBeenCalled();
     expect(setMessage).toHaveBeenCalledWith("pdf_corpus.publication_waiting_help");
+  });
+
+  it("does not publish a build that stopped being the active review context", async () => {
+    let currentBuild!: ReturnType<typeof setup>["currentBuild"];
+    const beforePublish = vi.fn(async () => {
+      currentBuild.value = { build_id: "build-2" } as never;
+    });
+    const harness = setup(beforePublish);
+    currentBuild = harness.currentBuild;
+
+    const result = await harness.composable.publish();
+
+    expect(result).toBeNull();
+    expect(beforePublish).toHaveBeenCalledTimes(1);
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+    expect(harness.refreshBuild).not.toHaveBeenCalled();
   });
 
   it("keeps the normal publication path reviewed", async () => {
