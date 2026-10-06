@@ -497,6 +497,22 @@ describe("router and runtime stay in agreement", () => {
     wrapper.unmount();
   });
 
+  it("routes the shell search through Vue Router with shareable Search state", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+
+    const search = wrapper.get(".shell-command-search input");
+    await search.setValue("différance");
+    await wrapper.get(".shell-command-search").trigger("submit");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/search");
+    expect(router.currentRoute.value.query.ts).toBeTruthy();
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(sharedState.view).toBe("global");
+    wrapper.unmount();
+  });
+
   it("routes canonical sidebar destinations through Vue Router before compatibility sync", async () => {
     const { wrapper, router } = await signIn();
     sharedState.view = "home";
