@@ -128,7 +128,10 @@ import { recurringShortLines } from "../domain/textCleanup";
 import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import { pdfState } from "../state/workspaceState";
 import { getDefaultProviderProfileId } from "../domain/sharedProviderProfiles";
-import { queryForPdfWorkspace } from "../domain/pdfWorkspaceNavigation";
+import {
+  queryForPdfWorkspace,
+  queryForPdfWorkspaceTransition,
+} from "../domain/pdfWorkspaceNavigation";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -2300,7 +2303,7 @@ async function chooseBuild(build: CorpusBuild) {
 async function openPdfExplorer() {
   await router.push({
     name: "source-explorer",
-    query: queryForPdfWorkspace("explorer", route.query),
+    query: queryForPdfWorkspaceTransition("builder", "explorer", route.query),
   });
 }
 async function reanalyzeDocument() {
