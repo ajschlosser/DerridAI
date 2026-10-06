@@ -358,6 +358,75 @@ describe("the schema editor", () => {
     w.unmount();
   });
 
+  it("withholds false empty/editor state while the schema catalog is unresolved", async () => {
+    let resolveList!: (value: { items: Array<Record<string, unknown>> }) => void;
+    vi.spyOn(metadataSchemasApi, "list").mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveList = resolve as typeof resolveList;
+        }),
+    );
+    const w = mount(MetadataSchemaEditor, { attachTo: document.body });
+    await flushPromises();
+
+    expect(w.find(".ui-loading-state").exists()).toBe(true);
+    expect(w.findComponent({ name: "SchemaListTable" }).exists()).toBe(false);
+    expect(w.find(".schema-form fieldset").exists()).toBe(false);
+
+    resolveList({
+      items: [
+        {
+          id: "default",
+          name: "DerridAI scholarly default",
+          description: "",
+          builtin: true,
+          field_count: 23,
+          groups: [],
+          hash: "a",
+        },
+      ],
+    });
+    await flushPromises();
+
+    expect(w.findComponent({ name: "SchemaListTable" }).exists()).toBe(true);
+    expect(w.find(".schema-form fieldset").exists()).toBe(true);
+    w.unmount();
+  });
+
+  it("clears the old schema immediately and ignores a late superseded detail response", async () => {
+    let resolveNotes!: (value: MetadataSchema) => void;
+    vi.spyOn(metadataSchemasApi, "get")
+      .mockResolvedValueOnce(builtinSchema())
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveNotes = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(fictionBuiltinSchema());
+
+    const w = await mountEditor();
+    expect(w.text()).toContain("DerridAI scholarly default");
+
+    const rows = w.findAll("button.schema-name");
+    await rows.find((button) => button.text().includes("Reading notes"))!.trigger("click");
+    await flushPromises();
+
+    expect(w.text()).not.toContain("Editing schemaReading notes");
+    expect(w.find(".ui-loading-state").exists()).toBe(true);
+
+    await rows.find((button) => button.text().includes("Fiction"))!.trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("Fiction");
+
+    resolveNotes(schema());
+    await flushPromises();
+
+    expect(w.text()).toContain("Fiction");
+    expect(w.text()).not.toContain("Editing schemaReading notes");
+    w.unmount();
+  });
+
   it("shows the built-in schema read-only, with the locked core stated", async () => {
     const w = await mountEditor();
     expect(w.text()).toContain(

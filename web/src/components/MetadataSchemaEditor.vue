@@ -24,6 +24,7 @@ import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
 import UiInput from "./ui/UiInput.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 import UiTabs from "./ui/UiTabs.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import SchemaFieldsTable from "./metadata-schemas/SchemaFieldsTable.vue";
@@ -71,8 +72,15 @@ const selectedId = ref(props.initialSchemaId || "default");
 const draft = ref<MetadataSchema | null>(null);
 const savedHash = ref("");
 const error = ref("");
+const readError = ref("");
+const catalogLoading = ref(false);
+const catalogReady = ref(false);
+const detailLoading = ref(false);
+const requestedId = ref(props.initialSchemaId || "default");
 const notice = ref("");
 const busy = ref(false);
+let catalogRequestSerial = 0;
+let detailRequestSerial = 0;
 const isNew = ref(false);
 const tab = ref(VALID_TABS.has(props.initialTab) ? props.initialTab : "fields");
 
@@ -80,8 +88,10 @@ const builtin = computed(() => {
   if (isNew.value) return false;
   return summaries.value.some((item) => item.id === selectedId.value && item.builtin);
 });
-const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
-const readonly = computed(() => builtin.value || busy.value);
+const dirty = computed(
+  () => draft.value !== null && JSON.stringify(draft.value) !== savedHash.value,
+);
+const readonly = computed(() => builtin.value || busy.value || detailLoading.value);
 const tabs = computed(() => [
   { id: "fields", label: t("tab_fields", "Fields") },
   { id: "document", label: t("tab_document_fields", "Document fields") },
@@ -109,9 +119,22 @@ function load(schema: MetadataSchema, fresh = false) {
 const confirmDiscard = () =>
   !dirty.value || window.confirm(t("discard_changes", "Discard unsaved schema changes?"));
 async function refresh(keep?: string) {
-  summaries.value = (await metadataSchemasApi.list()).items;
-  const id = keep && summaries.value.some((s) => s.id === keep) ? keep : selectedId.value;
-  await select(summaries.value.some((s) => s.id === id) ? id : "default", true);
+  const request = ++catalogRequestSerial;
+  catalogLoading.value = true;
+  readError.value = "";
+  try {
+    const next = (await metadataSchemasApi.list()).items;
+    if (request !== catalogRequestSerial) return;
+    summaries.value = next;
+    catalogReady.value = true;
+    const id = keep && next.some((item) => item.id === keep) ? keep : requestedId.value;
+    await select(next.some((item) => item.id === id) ? id : "default", true);
+  } catch (exc) {
+    if (request !== catalogRequestSerial) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === catalogRequestSerial) catalogLoading.value = false;
+  }
 }
 async function select(id: string, force = false) {
   if (!force && id === selectedId.value && !isNew.value) return;
@@ -119,10 +142,38 @@ async function select(id: string, force = false) {
     emit("selection", selectedId.value);
     return;
   }
-  selectedId.value = id;
+
+  const request = ++detailRequestSerial;
+  const changesIdentity = isNew.value || id !== selectedId.value;
+  requestedId.value = id;
   notice.value = "";
-  load(await metadataSchemasApi.get(id));
-  emit("selection", id);
+  readError.value = "";
+  if (changesIdentity) {
+    selectedId.value = id;
+    draft.value = null;
+    savedHash.value = "";
+    isNew.value = false;
+  }
+  detailLoading.value = true;
+  try {
+    const next = await metadataSchemasApi.get(id);
+    if (request !== detailRequestSerial) return;
+    selectedId.value = id;
+    load(next);
+    emit("selection", id);
+  } catch (exc) {
+    if (request !== detailRequestSerial) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === detailRequestSerial) detailLoading.value = false;
+  }
+}
+async function retryRead() {
+  if (!catalogReady.value) {
+    await refresh(requestedId.value);
+    return;
+  }
+  await select(requestedId.value || selectedId.value || "default", true);
 }
 async function guarded<T>(work: () => Promise<T>): Promise<T | undefined> {
   busy.value = true;
@@ -247,7 +298,8 @@ watch(
   () => props.initialSchemaId,
   (value) => {
     const id = value || "default";
-    if (id === selectedId.value || !summaries.value.length) return;
+    requestedId.value = id;
+    if (id === selectedId.value || !catalogReady.value) return;
     void select(summaries.value.some((item) => item.id === id) ? id : "default");
   },
 );
@@ -285,112 +337,144 @@ defineExpose({ select, draft });
           size="small"
           icon="plus"
           button-class="new-schema"
-          :disabled="busy"
+          :disabled="busy || !catalogReady"
           :label="t('new_schema', 'New schema')"
           @click="newSchema"
         />
       </div>
+      <UiLoadingState
+        v-if="catalogLoading && !catalogReady"
+        variant="skeleton"
+        :skeleton-count="3"
+        :label="t('loading', 'Loading schemas…')"
+      />
+      <p v-if="readError && !catalogReady" class="schema-error" role="alert">
+        {{ readError }}
+        <button type="button" class="btn small" @click="retryRead">
+          {{ t("retry", "Retry") }}
+        </button>
+      </p>
       <SchemaListTable
+        v-if="catalogReady"
         :items="summaries"
         :selected-id="selectedId"
         :unsaved-name="isNew ? draft?.name || t('new_schema_name', 'New schema') : ''"
         @select="select($event)"
       />
+      <UiLoadingState
+        v-if="catalogLoading && catalogReady"
+        variant="inline"
+        :label="t('updating', 'Updating…')"
+      />
     </section>
 
-    <section v-if="draft" class="schema-form" :aria-label="t('editor', 'Schema editor')">
-      <p v-if="error" class="schema-error" role="alert">{{ error }}</p>
-      <p v-if="notice" class="schema-notice" role="status">{{ notice }}</p>
-      <p v-if="builtin" class="schema-note">
-        {{ t("builtin_help") }}
+    <section class="schema-form" :aria-label="t('editor', 'Schema editor')">
+      <p v-if="readError && catalogReady" class="schema-error" role="alert">
+        {{ readError }}
+        <button type="button" class="btn small" @click="retryRead">
+          {{ t("retry", "Retry") }}
+        </button>
       </p>
-
-      <header class="schema-bar">
-        <div class="schema-context">
-          <span>{{ t("editing_schema", "Editing schema") }}</span>
-          <strong>{{ draft.name }}</strong>
-        </div>
-        <div class="schema-status">
-          <UiStatusBadge v-if="builtin" tone="info" :label="t('builtin', 'Built in')" />
-          <UiStatusBadge v-else-if="isNew" tone="warning" :label="t('unsaved', 'Not saved yet')" />
-          <UiStatusBadge
-            v-else-if="dirty"
-            tone="warning"
-            :label="t('unsaved_changes', 'Unsaved changes')"
-          />
-          <UiStatusBadge v-else tone="success" :label="t('saved_state', 'Saved')" />
-          <UiTooltip :text="t('version_help')" trigger-mode="content" placement="bottom">
-            <span class="schema-version">
-              {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b>
-            </span>
-          </UiTooltip>
-        </div>
-        <div class="schema-actions">
-          <UiButton
-            icon="copy"
-            :label="t('duplicate', 'Duplicate')"
-            :disabled="busy"
-            @click="duplicate"
-          />
-          <UiButton
-            icon="download"
-            :label="t('export', 'Export')"
-            :disabled="busy || isNew"
-            @click="exportFile"
-          />
-          <UiButton
-            icon="trash"
-            :label="t('delete', 'Delete')"
-            :disabled="busy || builtin || isNew"
-            @click="remove"
-          />
-          <UiButton
-            variant="primary"
-            :label="t('save', 'Save schema')"
-            :disabled="busy || builtin || !dirty"
-            @click="save"
-          />
-        </div>
-      </header>
-
-      <fieldset :disabled="readonly" class="schema-identity">
-        <UiField :label="t('name', 'Name')" control-id="schema-name">
-          <UiInput id="schema-name" v-model="draft.name" maxlength="80" />
-        </UiField>
-        <UiField :label="t('description', 'Description')" control-id="schema-description">
-          <UiInput id="schema-description" v-model="draft.description" maxlength="600" />
-        </UiField>
-      </fieldset>
-
-      <UiTabs
-        v-model="tab"
-        :tabs="tabs"
-        :tablist-label="t('editor', 'Schema editor')"
-        id-prefix="schema"
+      <UiLoadingState
+        v-if="detailLoading && !draft"
+        variant="skeleton"
+        :skeleton-count="3"
+        :label="t('loading_schema', 'Loading schema…')"
       />
-      <div
-        :id="`schema-panel-${tab}`"
-        role="tabpanel"
-        :aria-labelledby="`schema-tab-${tab}`"
-        class="schema-panel"
-      >
-        <SchemaFieldsTable v-if="tab === 'fields'" :draft="draft" :readonly="readonly" />
-        <SchemaDocumentFieldsPanel
-          v-else-if="tab === 'document'"
-          :draft="draft"
-          :readonly="readonly"
+      <template v-if="draft">
+        <p v-if="error" class="schema-error" role="alert">{{ error }}</p>
+        <p v-if="notice" class="schema-notice" role="status">{{ notice }}</p>
+        <p v-if="builtin" class="schema-note">
+          {{ t("builtin_help") }}
+        </p>
+
+        <header class="schema-bar">
+          <div class="schema-context">
+            <span>{{ t("editing_schema", "Editing schema") }}</span>
+            <strong>{{ draft.name }}</strong>
+          </div>
+          <div class="schema-status">
+            <UiStatusBadge v-if="builtin" tone="info" :label="t('builtin', 'Built in')" />
+            <UiStatusBadge v-else-if="isNew" tone="warning" :label="t('unsaved', 'Not saved yet')" />
+            <UiStatusBadge
+              v-else-if="dirty"
+              tone="warning"
+              :label="t('unsaved_changes', 'Unsaved changes')"
+            />
+            <UiStatusBadge v-else tone="success" :label="t('saved_state', 'Saved')" />
+            <UiTooltip :text="t('version_help')" trigger-mode="content" placement="bottom">
+              <span class="schema-version">
+                {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b>
+              </span>
+            </UiTooltip>
+          </div>
+          <div class="schema-actions">
+            <UiButton
+              icon="copy"
+              :label="t('duplicate', 'Duplicate')"
+              :disabled="busy"
+              @click="duplicate"
+            />
+            <UiButton
+              icon="download"
+              :label="t('export', 'Export')"
+              :disabled="busy || isNew"
+              @click="exportFile"
+            />
+            <UiButton
+              icon="trash"
+              :label="t('delete', 'Delete')"
+              :disabled="busy || builtin || isNew"
+              @click="remove"
+            />
+            <UiButton
+              variant="primary"
+              :label="t('save', 'Save schema')"
+              :disabled="busy || builtin || !dirty"
+              @click="save"
+            />
+          </div>
+        </header>
+
+        <fieldset :disabled="readonly" class="schema-identity">
+          <UiField :label="t('name', 'Name')" control-id="schema-name">
+            <UiInput id="schema-name" v-model="draft.name" maxlength="80" />
+          </UiField>
+          <UiField :label="t('description', 'Description')" control-id="schema-description">
+            <UiInput id="schema-description" v-model="draft.description" maxlength="600" />
+          </UiField>
+        </fieldset>
+
+        <UiTabs
+          v-model="tab"
+          :tabs="tabs"
+          :tablist-label="t('editor', 'Schema editor')"
+          id-prefix="schema"
         />
-        <SchemaGroupsPanel v-else-if="tab === 'groups'" :draft="draft" :readonly="readonly" />
-        <SchemaPreviewPanel
-          v-else
-          :draft="draft"
-          :busy="busy"
-          :provider-profiles="props.providerProfiles"
-          :default-provider-id="props.defaultProviderId"
-          :run="runPreview"
-          @manage="emit('changed')"
-        />
-      </div>
+        <div
+          :id="`schema-panel-${tab}`"
+          role="tabpanel"
+          :aria-labelledby="`schema-tab-${tab}`"
+          class="schema-panel"
+        >
+          <SchemaFieldsTable v-if="tab === 'fields'" :draft="draft" :readonly="readonly" />
+          <SchemaDocumentFieldsPanel
+            v-else-if="tab === 'document'"
+            :draft="draft"
+            :readonly="readonly"
+          />
+          <SchemaGroupsPanel v-else-if="tab === 'groups'" :draft="draft" :readonly="readonly" />
+          <SchemaPreviewPanel
+            v-else
+            :draft="draft"
+            :busy="busy"
+            :provider-profiles="props.providerProfiles"
+            :default-provider-id="props.defaultProviderId"
+            :run="runPreview"
+            @manage="emit('changed')"
+          />
+        </div>
+      </template>
     </section>
   </div>
 </template>

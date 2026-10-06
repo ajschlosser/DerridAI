@@ -21,15 +21,20 @@ import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CorpusCaptureDialog from "../../src/components/capture/CorpusCaptureDialog.vue";
 import SourceTable from "../../src/components/sources/SourceTable.vue";
+import UiLoadingState from "../../src/components/ui/UiLoadingState.vue";
 import SourcesView from "../../src/views/SourcesView.vue";
 
 vi.mock("vue-router", () => ({
   useRoute: () => ({ query: {} }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
+const corpusApi = vi.hoisted(() => ({
+  listCaptures: vi.fn(async () => ({ items: [] })),
+}));
+
 vi.mock("../../src/api/corpus", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/api/corpus")>()),
-  corpusCaptureApi: { listCaptures: vi.fn(async () => ({ items: [] })) },
+  corpusCaptureApi: { listCaptures: corpusApi.listCaptures },
 }));
 
 async function openDialog() {
@@ -49,7 +54,80 @@ const settled = (status: string) => ({
 });
 
 describe("Sources view table refresh", () => {
-  beforeEach(() => setActivePinia(createPinia()));
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    corpusApi.listCaptures.mockReset();
+    corpusApi.listCaptures.mockResolvedValue({ items: [] });
+  });
+
+  it("keeps the source table usable while the capture list is still loading", async () => {
+    let resolveCaptures!: (value: { items: [] }) => void;
+    corpusApi.listCaptures.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCaptures = resolve;
+      }),
+    );
+
+    const wrapper = shallowMount(SourcesView);
+    await flushPromises();
+
+    expect(wrapper.findComponent(SourceTable).exists()).toBe(true);
+    expect(wrapper.getComponent(UiLoadingState).props("variant")).toBe("skeleton");
+    expect(wrapper.find("[data-captures-empty]").exists()).toBe(false);
+
+    resolveCaptures({ items: [] });
+    await flushPromises();
+
+    expect(wrapper.findComponent(UiLoadingState).exists()).toBe(false);
+    expect(wrapper.find("[data-captures-empty]").exists()).toBe(true);
+  });
+
+  it("keeps capture failure local and retries without replacing the source table", async () => {
+    corpusApi.listCaptures.mockRejectedValueOnce(new Error("Capture service unavailable"));
+
+    const wrapper = shallowMount(SourcesView);
+    await flushPromises();
+
+    expect(wrapper.findComponent(SourceTable).exists()).toBe(true);
+    expect(wrapper.find("[data-captures-empty]").exists()).toBe(false);
+    expect(wrapper.get(".captures [role='alert']").text()).toContain("Capture service unavailable");
+
+    corpusApi.listCaptures.mockResolvedValueOnce({ items: [] });
+    await wrapper.get("[data-action='retry-captures']").trigger("click");
+    await flushPromises();
+
+    expect(corpusApi.listCaptures).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".captures [role='alert']").exists()).toBe(false);
+    expect(wrapper.find("[data-captures-empty]").exists()).toBe(true);
+  });
+
+  it("drops hidden selection and inspector state when the table changes result identity", async () => {
+    const wrapper = await openDialog();
+    const table = wrapper.getComponent(SourceTable);
+
+    table.vm.$emit("loaded", {
+      items: [
+        {
+          source_document_id: "source-a",
+          title: "Source A",
+          capture_ids: [],
+        },
+      ],
+    });
+    table.vm.$emit("update:selected", ["source-a"]);
+    table.vm.$emit("inspect", "source-a");
+    await flushPromises();
+
+    expect(wrapper.find("[data-bulk='builder']").exists()).toBe(true);
+    expect(wrapper.getComponent({ name: "SourceInspector" }).props("sourceId")).toBe("source-a");
+
+    table.vm.$emit("displayed", []);
+    table.vm.$emit("update:selected", []);
+    await flushPromises();
+
+    expect(wrapper.find("[data-bulk='builder']").exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "SourceInspector" }).exists()).toBe(false);
+  });
 
   it.each(["complete", "partial", "failed", "cancelled", "interrupted"])(
     "reloads the table in place when a capture settles as %s",

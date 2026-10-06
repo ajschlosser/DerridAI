@@ -55,6 +55,8 @@ const copied = ref(false);
 const previewBlocks = ref<Array<{ block_id: string; text: string }>>([]);
 const previewLoading = ref(false);
 const previewError = ref("");
+let detailRequestSerial = 0;
+let previewRequestSerial = 0;
 
 const source = computed(() => props.detail || loaded.value);
 const catalog = computed<Record<string, unknown>>(() => source.value?.catalog_metadata || {});
@@ -186,37 +188,56 @@ function buildState(status: string) {
 }
 
 async function load() {
+  const serial = ++detailRequestSerial;
+  ++previewRequestSerial;
+  copied.value = false;
+  error.value = "";
+  previewError.value = "";
+  previewBlocks.value = [];
+
   if (props.detail || !props.sourceId) {
+    loaded.value = null;
+    loading.value = false;
     await loadPreview();
     return;
   }
+
+  // A new source identity must never inherit the previous source's facts while its read is pending.
+  loaded.value = null;
   loading.value = true;
-  error.value = "";
   try {
-    loaded.value = await sourceDocumentDetail(props.sourceId);
+    const next = await sourceDocumentDetail(props.sourceId);
+    if (serial !== detailRequestSerial) return;
+    loaded.value = next;
     await loadPreview();
   } catch (cause) {
+    if (serial !== detailRequestSerial) return;
     loaded.value = null;
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
-    loading.value = false;
+    if (serial === detailRequestSerial) loading.value = false;
   }
 }
 async function loadPreview() {
+  const serial = ++previewRequestSerial;
   const assetId = source.value?.asset_id;
   if (!assetId || !supportsTextPreview.value) {
     previewBlocks.value = [];
+    previewLoading.value = false;
     return;
   }
   previewLoading.value = true;
   previewError.value = "";
   try {
-    previewBlocks.value = await sourceDocumentPreview(assetId, 8);
+    const next = await sourceDocumentPreview(assetId, 8);
+    if (serial !== previewRequestSerial) return;
+    previewBlocks.value = next;
   } catch (cause) {
+    if (serial !== previewRequestSerial) return;
     previewBlocks.value = [];
     previewError.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
-    previewLoading.value = false;
+    if (serial === previewRequestSerial) previewLoading.value = false;
   }
 }
 async function copyHash() {
