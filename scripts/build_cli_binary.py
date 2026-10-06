@@ -45,6 +45,7 @@ from app.corpus_binary_manifest import (  # noqa: E402
     sha256_file,
     target_key,
 )
+from app.pipelines.capabilities import pipeline_contract_identity  # noqa: E402
 
 
 def parser() -> argparse.ArgumentParser:
@@ -125,6 +126,7 @@ def _write_manifest(
             if distribution_root.is_dir()
             else distribution_root.stat().st_size
         ),
+        "pipeline_contract": pipeline_contract_identity(),
     }
     manifest_path = output_dir / f"binary-manifest-{target}-{mode}.json"
     manifest_path.write_text(
