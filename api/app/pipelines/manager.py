@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from .capabilities import pipeline_contract_identity
 from .contracts import input_ports
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
@@ -313,6 +314,7 @@ class PipelineManager:
 
     def catalog(self) -> dict[str, Any]:
         return {
+            "contract": pipeline_contract_identity(self.service.registry),
             "purposes": purpose_catalog(self.service.registry),
             "vocabulary": workflow_vocabulary(),
             "strategies": self.service.strategies(),
