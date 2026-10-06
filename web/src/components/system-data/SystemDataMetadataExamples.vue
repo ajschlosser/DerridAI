@@ -317,61 +317,65 @@ watch(
         }}
       </div>
       <template v-else>
-      <div class="example-list">
-        <button
-          v-for="item in page.rows"
-          :key="item.exemplar_id"
-          type="button"
-          class="example-row"
-          @click="detail = item"
-        >
-          <div>
-            <strong
-              >{{ item.field_name }} <span aria-hidden="true">→</span>
-              {{ valueText(item.field_value) }}</strong
-            >
-            <small
-              >{{ item.record_id
-              }}<template v-if="item.record_revision">
-                · revision {{ item.record_revision }}</template
-              ></small
-            >
-          </div>
-          <div class="badges">
-            <span>{{ item.kind }}</span
-            ><span v-if="item.assertion_status">{{ item.assertion_status }}</span>
-          </div>
-          <AppIcon name="chevron-right" />
-        </button>
-      </div>
-      <footer class="pagination">
-        <span
-          >{{ page.offset + 1 }}–{{ Math.min(page.offset + page.rows.length, page.count) }} of
-          {{ page.count }}</span
-        >
-        <div>
+        <div class="example-list">
           <button
-            class="btn tiny"
+            v-for="item in page.rows"
+            :key="item.exemplar_id"
             type="button"
-            :disabled="page.offset <= 0"
-            @click="load(Math.max(0, page.offset - page.limit), true, true)"
+            class="example-row"
+            @click="detail = item"
           >
-            {{ t("common.previous", "Previous") }}
-          </button>
-          <button
-            class="btn tiny"
-            type="button"
-            :disabled="page.offset + page.rows.length >= page.count"
-            @click="load(page.offset + page.limit, true, true)"
-          >
-            {{ t("common.next", "Next") }}
+            <div>
+              <strong
+                >{{ item.field_name }} <span aria-hidden="true">→</span>
+                {{ valueText(item.field_value) }}</strong
+              >
+              <small
+                >{{ item.record_id
+                }}<template v-if="item.record_revision">
+                  · revision {{ item.record_revision }}</template
+                ></small
+              >
+            </div>
+            <div class="badges">
+              <span>{{ item.kind }}</span
+              ><span v-if="item.assertion_status">{{ item.assertion_status }}</span>
+            </div>
+            <AppIcon name="chevron-right" />
           </button>
         </div>
-      </footer>
+        <footer class="pagination">
+          <span
+            >{{ page.offset + 1 }}–{{ Math.min(page.offset + page.rows.length, page.count) }} of
+            {{ page.count }}</span
+          >
+          <div>
+            <button
+              class="btn tiny"
+              type="button"
+              :disabled="page.offset <= 0"
+              @click="load(Math.max(0, page.offset - page.limit), true, true)"
+            >
+              {{ t("common.previous", "Previous") }}
+            </button>
+            <button
+              class="btn tiny"
+              type="button"
+              :disabled="page.offset + page.rows.length >= page.count"
+              @click="load(page.offset + page.limit, true, true)"
+            >
+              {{ t("common.next", "Next") }}
+            </button>
+          </div>
+        </footer>
       </template>
     </template>
 
-    <aside v-if="detail && displayedPageIsCurrent" class="detail-panel" aria-label="Metadata example details">
+    <aside
+      v-if="detail && displayedPageIsCurrent"
+      class="detail-panel"
+      aria-label="Metadata example details"
+    >
       <header>
         <div>
           <small>{{ t("runtime.system_metadata_example", "Metadata example") }}</small>
