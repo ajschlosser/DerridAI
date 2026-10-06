@@ -269,6 +269,7 @@ onMounted(() => void loadCaptures());
           type="button"
           class="btn small"
           data-action="retry-captures"
+          :disabled="capturesLoading"
           @click="loadCaptures"
         >
           {{ i18n.t("common.retry") }}
@@ -286,16 +287,13 @@ onMounted(() => void loadCaptures());
           type="button"
           class="btn small"
           data-action="retry-captures"
+          :disabled="capturesLoading"
           @click="loadCaptures"
         >
           {{ i18n.t("common.retry") }}
         </button>
       </div>
-      <p
-        v-if="capturesReady && !captures.length"
-        class="sources-muted"
-        data-captures-empty
-      >
+      <p v-if="capturesReady && !captures.length" class="sources-muted" data-captures-empty>
         {{ i18n.t("sources.captures.none") }}
       </p>
       <ul v-if="capturesReady && captures.length" class="capture-list">
