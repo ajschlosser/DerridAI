@@ -49,6 +49,7 @@ from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
+from ..pipelines.portable import export_pipeline_document, parse_pipeline_document
 from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
 from ..pipelines.service import pipeline_hash
 from ..pipelines.store import pipeline_store
@@ -109,6 +110,49 @@ def pipeline_catalog(request: Request) -> dict[str, Any]:
 
     require_admin(request)
     return pipeline_manager.catalog()
+
+
+@router.get("/definitions/{pipeline_id}/{version}/export")
+def export_pipeline_definition(
+    pipeline_id: str,
+    version: int,
+    request: Request,
+) -> dict[str, Any]:
+    """Export one immutable pipeline with its exact compatibility requirements."""
+
+    require_admin(request)
+    pipeline = pipeline_manager.get_definition(pipeline_id, version)
+    if pipeline is None:
+        raise HTTPException(status_code=404, detail="Pipeline definition not found.")
+    return export_pipeline_document(
+        pipeline,
+        registry=pipeline_manager.service.registry,
+    ).model_dump(mode="json")
+
+
+@router.post("/definitions/import")
+def import_pipeline_definition(
+    body: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    """Validate a portable pipeline document without silently persisting it."""
+
+    require_admin(request)
+    try:
+        document = parse_pipeline_document(body, service=pipeline_manager.service)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    pipeline = document.pipeline
+    existing = pipeline_manager.get_definition(pipeline.pipeline_id, pipeline.version)
+    existing_hash = pipeline_hash(existing) if existing is not None else None
+    return {
+        "document": document.model_dump(mode="json"),
+        "pipeline": pipeline.model_dump(mode="json"),
+        "pipeline_hash": document.pipeline_hash,
+        "existing": existing is not None,
+        "same_as_existing": existing_hash == document.pipeline_hash if existing is not None else False,
+    }
 
 
 @router.get("/research-options")
