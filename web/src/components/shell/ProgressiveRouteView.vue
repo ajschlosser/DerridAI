@@ -125,6 +125,7 @@ void load();
     :skeleton-count="3"
     :label="i18n.t('loading.page_content')"
     :detail="i18n.t('loading.page_content_help')"
+    aria-busy="true"
   />
 </template>
 
