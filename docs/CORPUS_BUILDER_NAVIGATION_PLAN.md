@@ -78,6 +78,25 @@ Published state exposes more than one Download JSONL action. Publication also pe
 
 Publication correctness must remain authoritative, but redundant UI actions and unnecessary repeated list reads should be reduced.
 
+## Deployment asset-coherence issue discovered during implementation
+
+A separate navigation failure was reproduced from production-container logs: a long-lived browser tab can keep an older Vite entry bundle after the `web` container is rebuilt. When that old bundle later lazy-loads a route such as Providers, it requests the old hashed route chunk, which the replacement image no longer contains, producing a 404 such as:
+
+`GET /assets/ProvidersView-<old-hash>.js → 404`
+
+This is not route-state jank; it is a deployment/cache-coherence failure that makes navigation appear broken.
+
+The fix is part of this work and has two layers:
+
+1. nginx serves `index.html` with no-cache/no-store semantics while continuing to serve content-hashed `/assets/` files as long-lived immutable resources.
+2. the frontend installs one-shot stale-chunk recovery for Vite preload/dynamic-import failures. A long-lived tab reloads once to obtain the current HTML/chunk graph, with a sessionStorage guard preventing reload loops.
+
+Acceptance criteria:
+- a newly loaded page cannot reuse an old HTML shell after a web-image replacement;
+- an already-open tab self-recovers once when a lazy route references a removed chunk;
+- ordinary API/application errors never trigger a reload;
+- repeated stale-chunk failures within the recovery window do not create a reload loop.
+
 ## Implementation phases
 
 ## Phase 1 — Router-first global navigation
