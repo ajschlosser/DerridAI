@@ -30,13 +30,13 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from .corpus_citations import _citation_strings
 from .field_assertions import (
     create_unresolved_assertion,
     current_assertion_by_name,
     migrate_record_assertions,
     project_record_assertions,
 )
-from .rag import _citation_strings
 from .text_noise import DEFAULT_NOISE_THRESHOLD
 from .text_noise import median_score as median_text_noise
 from .text_noise import threshold_from_records as record_noise_threshold
