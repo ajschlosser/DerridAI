@@ -18,6 +18,7 @@
 
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { progressiveRouteComponent } from "./progressiveRoute";
 
 const systemDataRoute = (
   path: string,
@@ -27,7 +28,7 @@ const systemDataRoute = (
 ): RouteRecordRaw => ({
   path,
   name,
-  component: () => import("../views/SystemDataView.vue"),
+  component: progressiveRouteComponent(() => import("../views/SystemDataView.vue")),
   meta: {
     view: "systemdata",
     navId: "responsecache",
@@ -46,7 +47,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/",
     name: "home",
-    component: () => import("../views/DashboardView.vue"),
+    component: progressiveRouteComponent(() => import("../views/DashboardView.vue")),
     meta: {
       view: "home",
       navId: "home",
@@ -59,7 +60,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/search",
     name: "global",
-    component: () => import("../views/SearchView.vue"),
+    component: progressiveRouteComponent(() => import("../views/SearchView.vue")),
     meta: {
       view: "global",
       navId: "global",
@@ -73,7 +74,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/rag",
     name: "rag",
-    component: () => import("../views/ResearchView.vue"),
+    component: progressiveRouteComponent(() => import("../views/ResearchView.vue")),
     meta: {
       view: "rag",
       navId: "rag",
@@ -86,7 +87,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/faq",
     name: "faq",
-    component: () => import("../views/ResponseFaqView.vue"),
+    component: progressiveRouteComponent(() => import("../views/ResponseFaqView.vue")),
     meta: {
       view: "faq",
       navId: "faq",
@@ -101,7 +102,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/works",
     name: "works",
-    component: () => import("../views/WorksView.vue"),
+    component: progressiveRouteComponent(() => import("../views/WorksView.vue")),
     meta: {
       view: "works",
       navId: "works",
@@ -115,7 +116,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/records",
     name: "list",
-    component: () => import("../views/RecordsView.vue"),
+    component: progressiveRouteComponent(() => import("../views/RecordsView.vue")),
     meta: {
       view: "list",
       navId: "list",
@@ -130,7 +131,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/record",
     name: "record",
-    component: () => import("../views/RecordView.vue"),
+    component: progressiveRouteComponent(() => import("../views/RecordView.vue")),
     meta: {
       view: "record",
       navId: "record",
@@ -148,7 +149,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/relationships",
     name: "relationships",
-    component: () => import("../views/RelationshipBrowserView.vue"),
+    component: progressiveRouteComponent(() => import("../views/RelationshipBrowserView.vue")),
     meta: {
       view: "relationships",
       navId: "record",
@@ -166,7 +167,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/annotations",
     name: "annotations",
-    component: () => import("../views/AnnotationsView.vue"),
+    component: progressiveRouteComponent(() => import("../views/AnnotationsView.vue")),
     meta: {
       view: "annotations",
       navId: "annotations",
@@ -180,7 +181,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/semantic-map",
     name: "semanticmap",
-    component: () => import("../views/SemanticMapView.vue"),
+    component: progressiveRouteComponent(() => import("../views/SemanticMapView.vue")),
     meta: {
       view: "semanticmap",
       navId: "semanticmap",
@@ -194,7 +195,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/compare",
     name: "compare",
-    component: () => import("../views/CompareView.vue"),
+    component: progressiveRouteComponent(() => import("../views/CompareView.vue")),
     meta: {
       view: "compare",
       navId: "compare",
@@ -208,7 +209,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/databases",
     name: "vector",
-    component: () => import("../views/VectorStoresView.vue"),
+    component: progressiveRouteComponent(() => import("../views/VectorStoresView.vue")),
     meta: {
       view: "vector",
       navId: "vector",
@@ -222,7 +223,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/corpus-builder",
     name: "corpus-builder",
-    component: () => import("../views/PdfWorkspaceView.vue"),
+    component: progressiveRouteComponent(() => import("../views/PdfWorkspaceView.vue")),
     meta: {
       view: "pdf",
       navId: "pdf",
@@ -237,7 +238,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/source-explorer",
     name: "source-explorer",
-    component: () => import("../views/PdfWorkspaceView.vue"),
+    component: progressiveRouteComponent(() => import("../views/PdfWorkspaceView.vue")),
     meta: {
       view: "pdf",
       navId: "pdf",
@@ -264,7 +265,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/sources",
     name: "sources",
-    component: () => import("../views/SourcesView.vue"),
+    component: progressiveRouteComponent(() => import("../views/SourcesView.vue")),
     meta: {
       view: "sources",
       navId: "sources",
@@ -336,7 +337,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/pipelines",
     name: "pipelines",
-    component: () => import("../views/PipelineStudioView.vue"),
+    component: progressiveRouteComponent(() => import("../views/PipelineStudioView.vue")),
     meta: {
       view: "responsecache",
       navId: "pipelines",
@@ -351,7 +352,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/metadata-memory",
     name: "metadatamemory",
-    component: () => import("../views/MetadataMemoryView.vue"),
+    component: progressiveRouteComponent(() => import("../views/MetadataMemoryView.vue")),
     meta: {
       view: "metadatamemory",
       navId: "metadatamemory",
@@ -366,7 +367,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/providers",
     name: "providers",
-    component: () => import("../views/ProvidersView.vue"),
+    component: progressiveRouteComponent(() => import("../views/ProvidersView.vue")),
     meta: {
       view: "providers",
       navId: "providers",
@@ -381,7 +382,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/schemas",
     name: "schemas",
-    component: () => import("../views/MetadataSchemasView.vue"),
+    component: progressiveRouteComponent(() => import("../views/MetadataSchemasView.vue")),
     meta: {
       view: "schemas",
       navId: "schemas",
@@ -405,7 +406,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/settings/:section",
     name: "settings-section",
-    component: () => import("../views/SettingsView.vue"),
+    component: progressiveRouteComponent(() => import("../views/SettingsView.vue")),
     meta: {
       view: "config",
       navId: "config",
@@ -419,7 +420,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/users",
     name: "users",
-    component: () => import("../views/UsersView.vue"),
+    component: progressiveRouteComponent(() => import("../views/UsersView.vue")),
     meta: {
       view: "users",
       navId: "users",
@@ -434,7 +435,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/roles",
     name: "roles",
-    component: () => import("../views/RolesView.vue"),
+    component: progressiveRouteComponent(() => import("../views/RolesView.vue")),
     meta: {
       view: "roles",
       navId: "roles",
@@ -456,7 +457,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/locale",
     name: "languages",
-    component: () => import("../views/LanguagesView.vue"),
+    component: progressiveRouteComponent(() => import("../views/LanguagesView.vue")),
     meta: {
       view: "languages",
       navId: "languages",
@@ -471,7 +472,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/operations",
     name: "operations",
-    component: () => import("../views/OperationsView.vue"),
+    component: progressiveRouteComponent(() => import("../views/OperationsView.vue")),
     meta: {
       view: "operations",
       navId: "operations",
@@ -484,7 +485,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/help",
     name: "help",
-    component: () => import("../views/HelpCenterView.vue"),
+    component: progressiveRouteComponent(() => import("../views/HelpCenterView.vue")),
     meta: {
       view: "help",
       navId: "help",
