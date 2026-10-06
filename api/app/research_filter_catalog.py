@@ -1,5 +1,5 @@
 # This file is part of DerridAI, a cELF-compliant research workspace
-# Copyright Â© 2026  Aaron John Schlosser, PhD
+# Copyright © 2026  Aaron John Schlosser, PhD
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -91,7 +91,7 @@ def indexed_filter_inventory(collections: list[Any]) -> dict[str, Any]:
             if len(rows) < PAGE_SIZE:
                 break
     catalog = []
-    for key, slot in sorted(fields.items()):
+    for _key, slot in sorted(fields.items()):
         kinds = slot.pop("types")
         slot["type"] = next(iter(kinds)) if len(kinds) == 1 else "any"
         slot["values"] = list(slot["values"].values())
