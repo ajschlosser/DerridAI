@@ -112,12 +112,28 @@ describe("search filter schema", () => {
     });
   });
 
-  it("falls back to collection filter fields when no schema is associated", () => {
+  it("uses collection filter fields as the database capability when no schema is associated", () => {
     const fields = resolveSearchFilterFields({
       collectionFields: ["stance", "work"],
       availableFields: ["needs_review"],
+      database: true,
     });
     expect(fields.map((field) => field.key)).toEqual(["stance", "work"]);
+  });
+
+  it("keeps the legacy built-in ordering only for schema-less loaded records", () => {
+    const fields = resolveSearchFilterFields({
+      collectionFields: ["concepts", "work"],
+      availableFields: ["page_start", "conceptual_tension"],
+      database: false,
+    });
+    expect(fields.slice(0, 4).map((field) => field.key)).toEqual([
+      "work",
+      "document_author",
+      "year",
+      "document_language",
+    ]);
+    expect(fields.some((field) => field.key === "conceptual_tension")).toBe(true);
   });
 
   it("uses schema-controlled boolean values to choose a closed select control", () => {
