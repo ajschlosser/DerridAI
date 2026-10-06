@@ -31,6 +31,7 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'loading.stale': "La mise à jour a échoué. Le contenu précédemment chargé est affiché.",
  'loading.record_frame': "Notice",
  'loading.search_frame': "Recherche",
+ 'loading.unavailable': "Indisponible",
  'common.apply': 'Appliquer',
  'common.cancel': 'Annuler',
  'common.clear': 'Effacer',

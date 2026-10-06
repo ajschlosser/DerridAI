@@ -1994,8 +1994,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3312,8 +3312,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3470,8 +3470,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3888,8 +3888,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -3962,8 +3962,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -4239,8 +4239,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 0,
-          "maximum": 1
+          "minimum": 0.0,
+          "maximum": 1.0
         },
         {
           "name": "limit",
@@ -4248,8 +4248,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
@@ -4390,8 +4390,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1,
-          "maximum": 1000
+          "minimum": 1.0,
+          "maximum": 1000.0
         }
       ],
       "outputs": [
