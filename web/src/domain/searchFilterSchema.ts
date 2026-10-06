@@ -22,43 +22,109 @@ import type { MetadataSchema, SchemaField } from "../api/metadataSchemas";
 const STORAGE_KEY = "derridai.search.filterSchema.v1";
 const DEFAULT_SCHEMA_ID = "default";
 
-export type FilterFieldKind = SchemaField["type"] | "text";
+export type FilterFieldKind = "text" | "number" | "boolean" | "choice" | "list";
+export type FilterFieldCardinality = "scalar" | "collection";
+export type FilterInputKind = "text" | "number" | "select";
 
 export interface SearchFilterFieldOption {
   key: string;
   label: string;
   kind: FilterFieldKind;
+  cardinality: FilterFieldCardinality;
+  controlledValues: string[];
+  strict: boolean;
+  input: FilterInputKind;
+  fieldId?: string;
+  semanticCompatibilityId?: string;
+  /** False when the active database collection does not index this field for filtering. */
+  filterable: boolean;
+}
+
+function kindForSchemaField(field: SchemaField): FilterFieldKind {
+  if (field.type === "repeatable" || field.type === "list") return "list";
+  return field.type || "text";
+}
+
+function controlledValues(field: SchemaField): string[] {
+  const values = (field.values || [])
+    .map((item) => String(item?.value || "").trim())
+    .filter(Boolean);
+  if (field.type === "boolean" && !values.length) return ["true", "false"];
+  return values;
+}
+
+function inputForField(kind: FilterFieldKind, values: string[], strict: boolean): FilterInputKind {
+  if (kind === "number") return "number";
+  if (kind === "boolean" || (strict && values.length)) return "select";
+  return "text";
+}
+
+/** Structural/audit fields are not ordinary metadata filter candidates. */
+export function isSearchFilterFieldName(name: string): boolean {
+  return Boolean(
+    name &&
+      !name.startsWith("__") &&
+      !SEARCH_AUTOCOMPLETE_EXCLUDED.has(name) &&
+      name !== "field_assertions" &&
+      name !== "current_field_assertions",
+  );
 }
 
 export function filterFieldsFromSchema(
   schema: MetadataSchema | null | undefined,
+  options: { filterableNames?: Iterable<string> | null } = {},
 ): SearchFilterFieldOption[] {
-  const fields = schema?.fields || [];
-  return fields
+  const filterableNames =
+    options.filterableNames == null ? null : new Set([...options.filterableNames].map(String));
+  return (schema?.fields || [])
     .filter(
       (field) =>
-        field.name && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field.name) && !field.name.startsWith("__"),
+        isSearchFilterFieldName(field.name) &&
+        (filterableNames == null || filterableNames.has(field.name)),
     )
-    .map((field) => ({
-      key: field.name,
-      label: field.label || field.name,
-      kind: field.type || "text",
-    }));
+    .map((field) => {
+      const kind = kindForSchemaField(field);
+      const values = controlledValues(field);
+      const strict = Boolean(field.strict);
+      return {
+        key: field.name,
+        label: field.label || field.name,
+        kind,
+        cardinality: kind === "list" ? "collection" : "scalar",
+        controlledValues: values,
+        strict,
+        input: inputForField(kind, values, strict),
+        fieldId: field.field_id || undefined,
+        semanticCompatibilityId: field.semantic_compatibility_id || undefined,
+        filterable: true,
+      };
+    });
 }
 
 export function filterFieldsFromNames(
   names: string[],
   labels: (key: string) => string = (key) => key,
 ): SearchFilterFieldOption[] {
-  return [
-    ...new Set(
-      names.filter(
-        (name) => name && !name.startsWith("__") && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(name),
-      ),
-    ),
-  ].map((key) => ({ key, label: labels(key), kind: kindForLegacyField(key) }));
+  return [...new Set(names.filter(isSearchFilterFieldName))].map((key) => {
+    const kind = kindForLegacyField(key);
+    const values = kind === "boolean" ? ["true", "false"] : [];
+    return {
+      key,
+      label: labels(key),
+      kind,
+      cardinality: kind === "list" ? "collection" : "scalar",
+      controlledValues: values,
+      strict: kind === "boolean",
+      input: inputForField(kind, values, kind === "boolean"),
+      filterable: true,
+    };
+  });
 }
 
+/**
+ * Compatibility-only type inference for records that predate schema descriptors.
+ * New behavior should use SchemaField.type/cardinality instead of adding names here.
+ */
 export function kindForLegacyField(field: string): FilterFieldKind {
   if (
     [
@@ -108,58 +174,97 @@ export function kindForLegacyField(field: string): FilterFieldKind {
 }
 
 /**
- * Prefer the corpus-associated or user-chosen schema. If neither yields fields,
- * use collection-declared filter fields, then the built-in Search field list.
+ * Prefer schema descriptors. Database Search also intersects them with the
+ * collection's declared filter-field capability so the UI cannot offer a
+ * schema field the active index cannot execute.
+ *
+ * Built-in names are retained only as a schema-less legacy fallback.
  */
 export function resolveSearchFilterFields(options: {
   schema?: MetadataSchema | null;
   collectionFields?: string[];
   availableFields?: string[];
   labels?: (key: string) => string;
+  database?: boolean;
 }): SearchFilterFieldOption[] {
   const labels = options.labels || ((key: string) => key);
-  const fromSchema = filterFieldsFromSchema(options.schema);
+  const collectionFields = options.collectionFields || [];
+  const fromSchema = filterFieldsFromSchema(options.schema, {
+    filterableNames: options.database ? collectionFields : null,
+  });
   if (fromSchema.length) return fromSchema;
-  const collection = filterFieldsFromNames(options.collectionFields || [], labels);
-  if (collection.length) return collection;
-  return filterFieldsFromNames(
-    [...(SEARCH_FILTER_FIELDS as string[]), ...(options.availableFields || [])],
-    labels,
-  );
+
+  const collection = filterFieldsFromNames(collectionFields, labels);
+  if (options.database) return collection;
+
+  const availableNames = options.availableFields || [];
+  if (!options.schema?.fields?.length) {
+    // Older publications and test fixtures may not carry a usable schema
+    // descriptor. Preserve the historical built-in options there, while still
+    // admitting arbitrary observed fields. Schema-aware paths never use this list.
+    return filterFieldsFromNames(
+      [...(SEARCH_FILTER_FIELDS as string[]), ...availableNames],
+      labels,
+    );
+  }
+
+  const available = filterFieldsFromNames(availableNames, labels);
+  if (available.length) return available;
+
+  return filterFieldsFromNames(SEARCH_FILTER_FIELDS as string[], labels);
+}
+
+export function filterValueSuggestions(
+  field: SearchFilterFieldOption | null | undefined,
+  observed: string[] = [],
+): string[] {
+  const controlled = field?.controlledValues || [];
+  if ((field?.strict || field?.kind === "boolean") && controlled.length) return [...controlled];
+  return [
+    ...new Set([...controlled, ...observed].map((value) => String(value).trim()).filter(Boolean)),
+  ];
 }
 
 export function filterOpsForKind(
   kind: FilterFieldKind,
   options: { database?: boolean; method?: string } = {},
 ): Array<[string, string, string]> {
-  const numeric = kind === "number";
-  const collection = kind === "list";
-  const base = numeric
-    ? ([
-        ["eq", "search.operator_eq", "equals"],
-        ["neq", "search.operator_neq", "not equal"],
-        ["gte", "search.operator_gte", "at least"],
-        ["lte", "search.operator_lte", "at most"],
-        ["empty", "search.operator_empty", "is empty"],
-        ["notempty", "search.operator_notempty", "is not empty"],
-      ] as Array<[string, string, string]>)
-    : collection
-      ? ([
-          ["has", "search.operator_has", "contains"],
-          ["nhas", "search.operator_nhas", "does not contain"],
-          ["eq", "search.operator_eq", "equals"],
-          ["neq", "search.operator_neq", "not equal"],
-          ["empty", "search.operator_empty", "is empty"],
-          ["notempty", "search.operator_notempty", "is not empty"],
-        ] as Array<[string, string, string]>)
-      : ([
-          ["eq", "search.operator_eq", "equals"],
-          ["neq", "search.operator_neq", "not equal"],
-          ["has", "search.operator_has", "contains"],
-          ["nhas", "search.operator_nhas", "does not contain"],
-          ["empty", "search.operator_empty", "is empty"],
-          ["notempty", "search.operator_notempty", "is not empty"],
-        ] as Array<[string, string, string]>);
+  let base: Array<[string, string, string]>;
+  if (kind === "number") {
+    base = [
+      ["eq", "search.operator_eq", "equals"],
+      ["neq", "search.operator_neq", "not equal"],
+      ["gte", "search.operator_gte", "at least"],
+      ["lte", "search.operator_lte", "at most"],
+      ["empty", "search.operator_empty", "is empty"],
+      ["notempty", "search.operator_notempty", "is not empty"],
+    ];
+  } else if (kind === "list") {
+    base = [
+      ["has", "search.operator_has", "contains"],
+      ["nhas", "search.operator_nhas", "does not contain"],
+      ["eq", "search.operator_eq", "equals"],
+      ["neq", "search.operator_neq", "not equal"],
+      ["empty", "search.operator_empty", "is empty"],
+      ["notempty", "search.operator_notempty", "is not empty"],
+    ];
+  } else if (kind === "boolean" || kind === "choice") {
+    base = [
+      ["eq", "search.operator_eq", "equals"],
+      ["neq", "search.operator_neq", "not equal"],
+      ["empty", "search.operator_empty", "is empty"],
+      ["notempty", "search.operator_notempty", "is not empty"],
+    ];
+  } else {
+    base = [
+      ["eq", "search.operator_eq", "equals"],
+      ["neq", "search.operator_neq", "not equal"],
+      ["has", "search.operator_has", "contains"],
+      ["nhas", "search.operator_nhas", "does not contain"],
+      ["empty", "search.operator_empty", "is empty"],
+      ["notempty", "search.operator_notempty", "is not empty"],
+    ];
+  }
   if (options.database) {
     const allowed = options.method === "filter" ? ["eq", "has"] : ["eq"];
     return base.filter(([op]) => allowed.includes(op));
@@ -195,56 +300,10 @@ export function chosenFilterSchemaId(options: { store: string; associatedId?: st
   return loadFilterSchemaOverride(options.store) || options.associatedId || DEFAULT_SCHEMA_ID;
 }
 
-const NUMERIC_FILTER_FIELDS = new Set([
-  "page_start",
-  "page_end",
-  "year",
-  "publication_year",
-  "text_length",
-  "extraction_quality",
-  "attribution_confidence",
-  "semantic_classification_confidence",
-]);
-const COLLECTION_FILTER_FIELDS = new Set([
-  "topics",
-  "concepts",
-  "persons",
-  "works_referenced",
-  "institutions_referenced",
-  "locations_referenced",
-  "events_referenced",
-  "groups_referenced",
-  "languages_referenced",
-  "document_language",
-  "quoted_speaker",
-  "quotation_chain",
-]);
-
+/**
+ * Compatibility adapter for legacy callers that only provide a storage name.
+ * Schema-aware Search uses filterOpsForKind with the resolved field descriptor.
+ */
 export function filterOpsForField(field: string): [string, string][] {
-  if (NUMERIC_FILTER_FIELDS.has(field))
-    return [
-      ["eq", "equals"],
-      ["neq", "not equal"],
-      ["gte", "greater than or equal"],
-      ["lte", "less than or equal"],
-      ["empty", "is empty"],
-      ["notempty", "is not empty"],
-    ];
-  if (COLLECTION_FILTER_FIELDS.has(field))
-    return [
-      ["has", "contains"],
-      ["nhas", "does not contain"],
-      ["eq", "equals exactly"],
-      ["neq", "does not equal"],
-      ["empty", "is empty"],
-      ["notempty", "is not empty"],
-    ];
-  return [
-    ["eq", "equals"],
-    ["neq", "not equal"],
-    ["has", "contains"],
-    ["nhas", "does not contain"],
-    ["empty", "is empty"],
-    ["notempty", "is not empty"],
-  ];
+  return filterOpsForKind(kindForLegacyField(field)).map(([op, , fallback]) => [op, fallback]);
 }

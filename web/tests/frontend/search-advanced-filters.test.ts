@@ -21,7 +21,18 @@ import { mount } from "@vue/test-utils";
 import SearchAdvancedFilters from "../../src/components/search/SearchAdvancedFilters.vue";
 
 const base = {
-  fields: [{ key: "work", label: "Work", kind: "text" as const }],
+  fields: [
+    {
+      key: "work",
+      label: "Work",
+      kind: "text" as const,
+      cardinality: "scalar" as const,
+      controlledValues: [],
+      strict: false,
+      input: "text" as const,
+      filterable: true,
+    },
+  ],
   schemas: [
     {
       id: "default",
@@ -68,5 +79,64 @@ describe("Search advanced filters", () => {
     const wrapper = mount(SearchAdvancedFilters, { props: { ...base, filters: [] } });
     await wrapper.get(".search-add-filter").trigger("click");
     expect(wrapper.emitted("add")).toHaveLength(1);
+  });
+
+  it("renders strict controlled fields as selects", () => {
+    const wrapper = mount(SearchAdvancedFilters, {
+      props: {
+        ...base,
+        filters: [],
+        fields: [
+          {
+            key: "role_alias",
+            label: "Role",
+            kind: "choice" as const,
+            cardinality: "scalar" as const,
+            controlledValues: ["author", "critic"],
+            strict: true,
+            input: "select" as const,
+            filterable: true,
+          },
+        ],
+        field: "role_alias",
+        value: "author",
+        suggestions: ["author", "critic"],
+      },
+    });
+    const control = wrapper.get(".search-filter-value-control");
+    expect(control.element.tagName).toBe("SELECT");
+    expect(control.findAll("option").map((option) => option.attributes("value"))).toEqual([
+      "",
+      "author",
+      "critic",
+    ]);
+  });
+
+  it("renders numeric schema fields with numeric input semantics", () => {
+    const wrapper = mount(SearchAdvancedFilters, {
+      props: {
+        ...base,
+        filters: [],
+        fields: [
+          {
+            key: "conceptual_score",
+            label: "Conceptual score",
+            kind: "number" as const,
+            cardinality: "scalar" as const,
+            controlledValues: [],
+            strict: false,
+            input: "number" as const,
+            filterable: true,
+          },
+        ],
+        field: "conceptual_score",
+        value: "0.7",
+        suggestions: [],
+      },
+    });
+    const control = wrapper.get(".search-filter-value-control");
+    expect(control.element.tagName).toBe("INPUT");
+    expect(control.attributes("type")).toBe("number");
+    expect(control.attributes("step")).toBe("any");
   });
 });

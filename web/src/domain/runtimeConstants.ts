@@ -111,19 +111,10 @@ export const TABLE_DEFAULTS = {
 
 export const SEARCH_LOADED_COLUMNS = ["__db_status", "work", "page_start", "needs_review", "text"];
 
-export const SEARCH_FACET_FIELDS = [
-  "work",
-  "needs_review",
-  "__db_status",
-  "document_author",
-  "quoted_speaker",
-  "speaker",
-  "position_holder",
-  "discourse_role",
-  "document_language",
-  "topics",
-  "concepts",
-];
+/**
+ * Schema-less compatibility fallback only. Schema-aware Search derives its
+ * runtime filter/facet universe from MetadataSchema and collection capabilities.
+ */
 export const SEARCH_FILTER_FIELDS = [
   "work",
   "document_author",
