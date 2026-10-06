@@ -18,7 +18,10 @@ from __future__ import annotations
 
 import pytest
 from app.chroma_store import encode_metadata
-from app.research_filter_catalog import indexed_filter_inventory, validate_catalog_filter
+from app.research_filter_catalog import (
+    indexed_filter_inventory,
+    validate_catalog_filter,
+)
 from app.research_filter_model import validate_model_proposal
 
 
@@ -126,10 +129,11 @@ def test_inventory_cache_is_invalidated_after_success_and_partial_failure():
 
 def test_model_endpoint_enforces_approved_profile_and_surfaces_failures(monkeypatch):
     from types import SimpleNamespace
-    from fastapi import HTTPException
+
     from app import content_filter, http_auth, research_filter_model
-    from app.system_store import system_store
     from app.routers import research_filters as routes
+    from app.system_store import system_store
+    from fastapi import HTTPException
     monkeypatch.setattr(http_auth, "request_user", lambda request: SimpleNamespace(role="researcher"))
     monkeypatch.setattr(content_filter, "enforce_researcher_text", lambda value: None)
     monkeypatch.setattr(system_store, "researcher_profile", lambda key: None)
