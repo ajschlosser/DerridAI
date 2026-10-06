@@ -209,6 +209,49 @@ describe("Operations panel semantics", () => {
       .trigger("click");
     expect(filtered.wrapper.get(".ops-empty-inline").text()).toContain("No operations match");
   });
+
+  it("withholds the empty-state claim while the initial refresh is still pending", async () => {
+    setActivePinia(createPinia());
+    const fake = makeBridge([]);
+    let resolveRefresh!: () => void;
+    fake.bridge.refresh.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    const wrapper = mount(OperationsPanel, {
+      props: { bridge: fake.bridge },
+      attachTo: document.body,
+      global: { stubs: { TransitionGroup: false } },
+    });
+    mountedPanels.push(wrapper);
+    await flushPromises();
+
+    expect(wrapper.find(".ops-empty").exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "UiLoadingState" }).exists()).toBe(true);
+
+    resolveRefresh();
+    await flushPromises();
+    expect(wrapper.get(".ops-empty h3").text()).toBe("Nothing in flight");
+  });
+
+  it("retains known operations when an initial refresh fails", async () => {
+    setActivePinia(createPinia());
+    const fake = makeBridge([running()]);
+    fake.bridge.refresh.mockRejectedValueOnce(new Error("Transport offline"));
+    const wrapper = mount(OperationsPanel, {
+      props: { bridge: fake.bridge },
+      attachTo: document.body,
+      global: { stubs: { TransitionGroup: false } },
+    });
+    mountedPanels.push(wrapper);
+    await flushPromises();
+
+    expect(wrapper.findAll("li.ops-row")).toHaveLength(1);
+    expect(wrapper.get(".ops-refresh-error").text()).toContain("Transport offline");
+    expect(wrapper.find(".ops-empty").exists()).toBe(false);
+  });
 });
 
 describe("filters", () => {
