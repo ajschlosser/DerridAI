@@ -31,6 +31,7 @@ from app.corpus_run_config import (
     CorpusRunEnvelopeV2,
     migrate_v1_to_v2,
 )
+from app.pipelines.capabilities import pipeline_contract_requirement
 from app.pipelines.defaults import built_in_pipeline
 from app.pipelines.models import PipelineConfigOverrideSet, PipelineDefinition
 from app.pipelines.service import PipelineService, pipeline_hash
@@ -106,10 +107,11 @@ def test_v2_requires_explicit_format():
 
 def test_v2_pipeline_selection_requires_exactly_one_definition_or_reference():
     pipeline = _metadata_pipeline().model_dump(mode="json")
+    contract = pipeline_contract_requirement(_metadata_pipeline()).model_dump(mode="json")
     base = {
         "format": "derridai-corpus-run",
         "version": 2,
-        "pipeline": {},
+        "pipeline": {"contract": contract},
     }
 
     with pytest.raises(ValidationError, match="exactly one"):
@@ -117,6 +119,7 @@ def test_v2_pipeline_selection_requires_exactly_one_definition_or_reference():
 
     both = copy.deepcopy(base)
     both["pipeline"] = {
+        "contract": contract,
         "definition": pipeline,
         "ref": {
             "pipeline_id": pipeline["pipeline_id"],
