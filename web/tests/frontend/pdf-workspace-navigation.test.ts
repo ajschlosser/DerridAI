@@ -17,7 +17,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { queryForPdfWorkspace } from "../../src/domain/pdfWorkspaceNavigation";
+import {
+  queryForPdfWorkspace,
+  queryForPdfWorkspaceTransition,
+} from "../../src/domain/pdfWorkspaceNavigation";
 
 describe("PDF workspace route-state boundaries", () => {
   const mixed = {
@@ -43,12 +46,31 @@ describe("PDF workspace route-state boundaries", () => {
     });
   });
 
-  it("keeps only Source Explorer state when entering Explorer", () => {
+  it("keeps only Source Explorer state within Explorer", () => {
     expect(queryForPdfWorkspace("explorer", mixed)).toEqual({
       record: "record-42",
       file: "local-file",
       pdfpage: "12",
       ts: "compressed-table-state",
+    });
+  });
+
+  it("drops the ambiguous record key when crossing between Builder and Explorer", () => {
+    expect(queryForPdfWorkspaceTransition("builder", "explorer", mixed)).toEqual({
+      file: "local-file",
+      pdfpage: "12",
+      ts: "compressed-table-state",
+    });
+    expect(
+      queryForPdfWorkspaceTransition("explorer", "builder", {
+        ...mixed,
+        record: "7",
+      }),
+    ).toEqual({
+      workspace: "review",
+      build: "build-1",
+      queue: "metadata",
+      sources: "source-a,source-b",
     });
   });
 
