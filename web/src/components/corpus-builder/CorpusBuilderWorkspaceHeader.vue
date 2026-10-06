@@ -64,9 +64,8 @@ const progressLabel = computed(() => {
     total: props.recordCount.toLocaleString(),
   });
 });
-type WorkspacePhaseId = "setup" | "build_review" | "publish";
 interface WorkspacePhase {
-  id: WorkspacePhaseId;
+  id: CorpusWorkspace;
   available: boolean;
   state: CorpusWorkflowStep["state"];
   target: CorpusWorkspace;
@@ -76,49 +75,22 @@ function internalStep(id: CorpusWorkspace) {
   return props.steps.find((step) => step.id === id);
 }
 
-const phases = computed<WorkspacePhase[]>(() => {
-  const setup = internalStep("setup");
-  const build = internalStep("build");
-  const review = internalStep("review");
-  const publish = internalStep("publish");
-  const buildReviewCurrent = props.workspace === "build" || props.workspace === "review";
-  const buildReviewAvailable = Boolean(build?.available || review?.available);
-  const buildReviewComplete = build?.state === "complete" && review?.state === "complete";
-  const buildReviewState: CorpusWorkflowStep["state"] = buildReviewCurrent
-    ? "current"
-    : buildReviewComplete
-      ? "complete"
-      : buildReviewAvailable
-        ? "available"
-        : "unavailable";
-
-  return [
-    {
-      id: "setup",
-      available: setup?.available ?? true,
-      state: props.workspace === "setup" ? "current" : setup?.state || "available",
-      target: "setup",
-    },
-    {
-      id: "build_review",
-      available: buildReviewAvailable,
-      state: buildReviewState,
-      // Keep the current internal workspace when the grouped phase is already active.
-      // From Setup/Publish, prefer Review once Records exist; otherwise land on Build.
-      target: buildReviewCurrent ? props.workspace : review?.available ? "review" : "build",
-    },
-    {
-      id: "publish",
-      available: publish?.available ?? false,
-      state: props.workspace === "publish" ? "current" : publish?.state || "unavailable",
-      target: "publish",
-    },
-  ];
-});
-const buildAvailable = computed(() => Boolean(internalStep("build")?.available));
-const reviewAvailable = computed(() => Boolean(internalStep("review")?.available));
-const buildReviewActive = computed(
-  () => props.workspace === "build" || props.workspace === "review",
+/**
+ * Keep the workflow's shape stable. Hiding Review inside a temporary Build/Review
+ * group made the navigation move underneath the user as the build progressed.
+ * The domain already models four workspaces, so render those four workspaces
+ * directly and let availability/state communicate what can be entered.
+ */
+const phases = computed<WorkspacePhase[]>(() =>
+  (["setup", "build", "review", "publish"] as const).map((id) => {
+    const step = internalStep(id);
+    return {
+      id,
+      target: id,
+      available: id === "setup" ? (step?.available ?? true) : Boolean(step?.available),
+      state: props.workspace === id ? "current" : step?.state || "unavailable",
+    };
+  }),
 );
 
 function phaseLabel(phase: WorkspacePhase) {
@@ -193,29 +165,6 @@ function phaseLabel(phase: WorkspacePhase) {
             </button>
           </li>
         </ol>
-        <div
-          v-if="buildReviewActive"
-          class="workspace-subnav"
-          role="group"
-          :aria-label="i18n.t('pdf_corpus.workspace.build_review')"
-        >
-          <button
-            type="button"
-            :aria-pressed="workspace === 'build'"
-            :disabled="!buildAvailable"
-            @click="emit('workspace', 'build')"
-          >
-            {{ i18n.t("pdf_corpus.workspace.build") }}
-          </button>
-          <button
-            type="button"
-            :aria-pressed="workspace === 'review'"
-            :disabled="!reviewAvailable"
-            @click="emit('workspace', 'review')"
-          >
-            {{ i18n.t("pdf_corpus.workspace.review") }}
-          </button>
-        </div>
       </nav>
     </div>
     <div class="corpus-workspace-actions">
@@ -421,23 +370,6 @@ function phaseLabel(phase: WorkspacePhase) {
 .workspace-mode-nav button[data-state="complete"] .step-mark {
   color: var(--tone-ok-fg);
 }
-.workspace-subnav {
-  display: inline-flex;
-  gap: 2px;
-  margin-inline-start: var(--space-2);
-  padding: 2px;
-  border-inline-start: 1px solid var(--border-subtle);
-  vertical-align: middle;
-}
-.workspace-subnav button {
-  min-height: 30px;
-  padding-inline: var(--space-2);
-  font-size: var(--fs-xs);
-}
-.workspace-subnav button[aria-pressed="true"] {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-}
 .step-mark {
   display: inline-grid;
   inline-size: 1.25rem;
@@ -478,20 +410,41 @@ function phaseLabel(phase: WorkspacePhase) {
 @media (max-width: 760px) {
   .corpus-workspace-header {
     position: static;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
   .corpus-workspace-header.sticky {
     position: static;
   }
+  .contextual .corpus-workspace-identity {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-mode-nav {
+    inline-size: 100%;
+    min-width: 0;
+  }
+  .workspace-mode-nav .workspace-phase-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    inline-size: 100%;
+    box-sizing: border-box;
+  }
+  .workspace-mode-nav button {
+    inline-size: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    padding-inline: var(--space-2);
+  }
+  .corpus-workspace-context strong {
+    max-width: 100%;
+  }
+  .corpus-workspace-progress {
+    min-width: 0;
+    inline-size: min(100%, 20rem);
+  }
   .corpus-workspace-actions {
     justify-content: flex-start;
-  }
-  .workspace-subnav {
-    display: flex;
-    width: fit-content;
-    margin: var(--space-1) 0 0;
-    border-inline-start: 0;
   }
 }
 </style>

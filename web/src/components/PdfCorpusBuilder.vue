@@ -17,7 +17,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   corpusBuilderApi,
@@ -80,7 +89,10 @@ import { useCorpusMetadataReview } from "../features/corpus-builder/composables/
 import { useCorpusBoundaryReview } from "../features/corpus-builder/composables/useCorpusBoundaryReview";
 import { invalidRecordSizingFields } from "../features/corpus-builder/domain/recordSizing";
 import { corpusReviewCommandFromKeydown } from "../features/corpus-builder/domain/reviewCommands";
-import { syncedReviewQuery } from "../features/corpus-builder/domain/workspace";
+import {
+  parseCorpusWorkspace,
+  syncedReviewQuery,
+} from "../features/corpus-builder/domain/workspace";
 import {
   editableRecordMetadata,
   evidenceCandidateFieldNames,
@@ -128,10 +140,15 @@ import { recurringShortLines } from "../domain/textCleanup";
 import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import { pdfState } from "../state/workspaceState";
 import { getDefaultProviderProfileId } from "../domain/sharedProviderProfiles";
+import {
+  queryForPdfWorkspace,
+  queryForPdfWorkspaceTransition,
+} from "../domain/pdfWorkspaceNavigation";
 
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
+const builderRouteActive = computed(() => route.meta.pdfMode !== "explorer");
 const builds = ref<CorpusBuild[]>([]);
 const buildsTotal = ref(0);
 const corpusProfiles = ref<Array<Record<string, unknown>>>([]);
@@ -139,6 +156,8 @@ const recordSourceWarningOpen = ref(false);
 const sourceProblemDialogBuildId = ref("");
 const selectedBuildId = ref("");
 const currentBuild = ref<CorpusBuild | null>(null);
+const openingBuildId = ref("");
+let buildSelectionRequest = 0;
 const {
   providerProfiles,
   serverProviderIds,
@@ -185,6 +204,20 @@ const sourceBlocks = ref<SourceBlock[]>([]);
 const selectedEvidenceField = ref("");
 const selectedPdfPage = ref(1);
 const reviewQueue = ref<ReviewQueue>("all");
+const REVIEW_QUEUE_IDS: readonly ReviewQueue[] = [
+  "all",
+  "ready",
+  "issues",
+  "metadata",
+  "topology",
+  "source",
+  "accepted",
+  "rejected",
+] as const;
+function parseReviewQueue(value: unknown): ReviewQueue | "" {
+  const queue = String(Array.isArray(value) ? value[0] : (value ?? "")) as ReviewQueue;
+  return REVIEW_QUEUE_IDS.includes(queue) ? queue : "";
+}
 // Set when a Finish blocker sends the reviewer into the "all" queue, which
 // otherwise looks identical to the Finish workspace.
 const reviewRequested = ref(false);
@@ -470,11 +503,11 @@ async function publishAndShow(options: { acceptUnreviewed?: boolean } = {}) {
   // publish() reconciles the persisted build before attempting publication. Even
   // when blockers remain, take the reviewer to the readiness workspace so the
   // resulting source/metadata findings are visible and actionable.
-  if (currentBuild.value) await switchWorkspace("publish");
+  if (currentBuild.value) await switchWorkspace("publish", "replace");
   return result;
 }
 
-async function reconcileAndOpenPublish() {
+async function reconcileAndOpenPublish(navigation: "push" | "replace" = "push") {
   const build = currentBuild.value;
   if (!build) return;
   const buildId = build.build_id;
@@ -486,7 +519,7 @@ async function reconcileAndOpenPublish() {
     if (currentBuild.value?.build_id !== buildId) return;
     currentBuild.value = reconciled;
     syncBuildInRail(reconciled);
-    await switchWorkspace("publish");
+    await switchWorkspace("publish", navigation);
   } catch (exc) {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   } finally {
@@ -730,7 +763,7 @@ async function startBuild(fromMetadataPrompt = false) {
     return;
   }
   await startBuildOperation();
-  if (currentBuild.value) await switchWorkspace("build");
+  if (currentBuild.value) await switchWorkspace("build", "replace");
 }
 async function continueBuildWithDocumentMetadata() {
   missingMetadataPromptOpen.value = false;
@@ -1026,7 +1059,7 @@ function returnToReadiness() {
   reviewRequested.value = false;
   reviewQueue.value = "all";
   recordQuery.value = "";
-  void reconcileAndOpenPublish();
+  void reconcileAndOpenPublish("replace");
 }
 let remediationAdvancing = false;
 watch(fixRemaining, async (remaining, previous) => {
@@ -2145,13 +2178,8 @@ async function refreshAll() {
     refreshAssets(),
     refreshBuilds(),
   ]);
-  const requestedQueue = String(route.query.queue || "") as ReviewQueue;
-  if (
-    ["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"].includes(
-      requestedQueue,
-    )
-  )
-    reviewQueue.value = requestedQueue;
+  const requestedQueue = parseReviewQueue(route.query.queue);
+  if (requestedQueue) reviewQueue.value = requestedQueue;
   await refreshBuild();
   await ensureReviewHydrated(String(route.query.record || ""));
   // A second post-paint hydration closes the lifecycle race where build.json is
@@ -2274,30 +2302,58 @@ function openEnrichmentFromFinish() {
   metadataEnrichmentOpen.value = true;
 }
 async function chooseBuild(build: CorpusBuild) {
-  selectedBuildId.value = build.build_id;
-  selectedAssetId.value = build.asset_id;
-  selectedRecordId.value = "";
-  selectedRecord.value = null;
-  sourceBlocks.value = [];
-  reviewRecords.clear();
-  hydratedMetadataCount.value = 0;
-  reviewQueue.value = "all";
-  reviewRequested.value = false;
-  await router.replace({
-    query: {
-      ...route.query,
-      build: build.build_id,
-      record: undefined,
-      queue: undefined,
-    },
-  });
-  await refreshBuild();
-  await nextTick();
-  await refreshRecords(true);
-  if (buildRunning.value) startPolling();
+  if (build.build_id === selectedBuildId.value) return;
+  const request = ++buildSelectionRequest;
+  openingBuildId.value = build.build_id;
+  try {
+    // Resolve the next build before committing any of its identity into the
+    // workspace. This avoids frames where a new build id/source is displayed
+    // with the previous build's review state.
+    const nextBuild = await corpusBuilderApi.build(build.build_id);
+    if (request !== buildSelectionRequest) return;
+
+    stopPolling();
+    currentBuild.value = nextBuild;
+    selectedBuildId.value = nextBuild.build_id;
+    selectedAssetId.value = nextBuild.asset_id;
+    applyCorpusBuildRequest((nextBuild.request || {}) as Record<string, unknown>);
+    syncBuildInRail(nextBuild);
+
+    selectedRecordId.value = "";
+    selectedRecord.value = null;
+    sourceBlocks.value = [];
+    reviewRecords.clear();
+    hydratedMetadataCount.value = 0;
+    reviewQueue.value = "all";
+    reviewRequested.value = false;
+
+    await router.replace({
+      query: {
+        ...route.query,
+        build: nextBuild.build_id,
+        record: undefined,
+        queue: undefined,
+      },
+    });
+    if (request !== buildSelectionRequest) return;
+    await nextTick();
+    if (hasRecordTopology.value) await refreshRecords(true);
+    if (buildRunning.value) {
+      registerBuildOperation(nextBuild);
+      startPolling();
+    }
+  } catch (exc) {
+    if (request === buildSelectionRequest)
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  } finally {
+    if (request === buildSelectionRequest) openingBuildId.value = "";
+  }
 }
 async function openPdfExplorer() {
-  await router.push({ name: "source-explorer", query: route.query });
+  await router.push({
+    name: "source-explorer",
+    query: queryForPdfWorkspaceTransition("builder", "explorer", route.query),
+  });
 }
 async function reanalyzeDocument() {
   if (!currentBuild.value) return;
@@ -2551,7 +2607,10 @@ const queuedSourceIds = computed(() =>
 async function queueSources(ids: string[]) {
   await refreshAssets();
   await router.replace({
-    query: { ...route.query, mode: "builder", sources: ids.join(",") || undefined },
+    query: {
+      ...queryForPdfWorkspace("builder", route.query),
+      sources: ids.join(",") || undefined,
+    },
   });
   configurationSection.value = "source";
 }
@@ -2563,8 +2622,9 @@ function viewCaptureSources(captureId: string) {
   );
 }
 watch(selectedAssetId, () => {
-  if (selectedAssetId.value) void refreshBuilds();
-  else configurationSection.value = "source";
+  if (selectedAssetId.value && currentBuild.value?.asset_id !== selectedAssetId.value)
+    void refreshBuilds();
+  else if (!selectedAssetId.value) configurationSection.value = "source";
 });
 watch(selectedBuildId, () => {
   sourceProblemDialogBuildId.value = "";
@@ -2576,52 +2636,83 @@ watch(
   },
   { immediate: true },
 );
+let routeReviewRequest = 0;
+let applyingReviewRoute = false;
 watch(
-  () => route.query.build,
-  async (value) => {
-    const buildId = String(value || "");
-    if (!buildId || buildId === selectedBuildId.value) return;
-    selectedBuildId.value = buildId;
-    selectedRecordId.value = "";
-    selectedRecord.value = null;
-    sourceBlocks.value = [];
-    const requestedQueue = String(route.query.queue || "") as ReviewQueue;
-    if (
-      ["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"].includes(
-        requestedQueue,
-      )
-    )
-      reviewQueue.value = requestedQueue;
-    await refreshBuild();
-    await refreshRecords(true, String(route.query.record || ""));
-    if (buildRunning.value) startPolling();
-  },
-);
-watch(
-  () => route.query.queue,
-  (value) => {
-    const queue = String(value || "") as ReviewQueue;
-    if (
-      ["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"].includes(
-        queue,
-      ) &&
-      queue !== reviewQueue.value
-    )
-      reviewQueue.value = queue;
-  },
-);
-watch(
-  () => route.query.record,
-  async (value) => {
-    const id = String(value || "");
-    if (!id || id === selectedRecordId.value) return;
-    await refreshRecords(false, id);
+  () =>
+    [
+      String(route.query.build || ""),
+      parseCorpusWorkspace(route.query.workspace),
+      parseReviewQueue(route.query.queue),
+      String(route.query.record || ""),
+    ] as const,
+  async ([buildId, workspace, queue, recordId]) => {
+    if (!builderRouteActive.value) return;
+    const request = ++routeReviewRequest;
+    applyingReviewRoute = true;
+    try {
+      const reviewing = workspace === "review";
+      const buildChanged = Boolean(buildId && buildId !== selectedBuildId.value);
+      const queueChanged = reviewing && (queue || "all") !== reviewQueue.value;
+      const recordChanged = reviewing && recordId !== selectedRecordId.value;
+
+      // Apply one route snapshot as one transaction. The old independent
+      // build/queue/record watchers could each issue their own review read when
+      // Back/Forward changed several query fields at once.
+      if (buildChanged) {
+        stopPolling();
+        selectedBuildId.value = buildId;
+        selectedRecordId.value = "";
+        selectedRecord.value = null;
+        sourceBlocks.value = [];
+        reviewRecords.clear();
+        hydratedMetadataCount.value = 0;
+        if (reviewing) {
+          settingReviewFilters = true;
+          reviewQueue.value = queue || "all";
+          settingReviewFilters = false;
+        }
+        await refreshBuild();
+        if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+        if (reviewing && hasRecordTopology.value) {
+          await refreshRecords(true, recordId);
+          if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+        }
+        if (buildRunning.value) startPolling();
+        return;
+      }
+
+      // Build and Publish do not consume queue/record route state. Clearing those
+      // query keys during a phase switch must not cause an unnecessary review read.
+      if (!reviewing) return;
+
+      if (queueChanged) {
+        settingReviewFilters = true;
+        reviewQueue.value = queue || "all";
+        settingReviewFilters = false;
+        selectedRecordId.value = "";
+        selectedRecord.value = null;
+        recordOffset.value = 0;
+        await refreshRecords(false, recordId);
+        return;
+      }
+
+      if (recordChanged && selectedBuildId.value) {
+        await refreshRecords(false, recordId);
+        return;
+      }
+
+      if (!reviewHydrated.value && selectedBuildId.value && hasRecordTopology.value)
+        await refreshRecords(false, recordId);
+    } finally {
+      if (request === routeReviewRequest) applyingReviewRoute = false;
+    }
   },
 );
 watch(
   [selectedBuildId, reviewQueue, selectedRecordId, () => route.query.workspace],
   () => {
-    if (!selectedBuildId.value) return;
+    if (applyingReviewRoute || !builderRouteActive.value || !selectedBuildId.value) return;
     const query = syncedReviewQuery(route.query, {
       buildId: selectedBuildId.value,
       queue: reviewQueue.value,
@@ -2696,8 +2787,26 @@ watch(
   },
   { flush: "post" },
 );
-onMounted(() => {
+let reviewShortcutAttached = false;
+let suspendedByWorkspace = false;
+function attachReviewShortcut() {
+  if (reviewShortcutAttached) return;
   window.addEventListener("keydown", reviewShortcut);
+  reviewShortcutAttached = true;
+}
+function detachReviewShortcut() {
+  if (!reviewShortcutAttached) return;
+  window.removeEventListener("keydown", reviewShortcut);
+  reviewShortcutAttached = false;
+}
+function cancelReviewHydrationRetry() {
+  if (reviewHydrationRetryTimer === undefined) return;
+  window.clearTimeout(reviewHydrationRetryTimer);
+  reviewHydrationRetryTimer = undefined;
+}
+
+onMounted(() => {
+  attachReviewShortcut();
   restoreBuilderDraft();
   void loadSchemaChoices();
   void refreshAll()
@@ -2706,12 +2815,33 @@ onMounted(() => {
     })
     .catch((exc) => setMessage(exc instanceof Error ? exc.message : String(exc), "error"));
 });
+onDeactivated(() => {
+  suspendedByWorkspace = true;
+  ++routeReviewRequest;
+  ++sourceBlockRequestVersion;
+  detachReviewShortcut();
+  cancelReviewHydrationRetry();
+  stopPolling();
+});
+onActivated(() => {
+  if (!suspendedByWorkspace) return;
+  suspendedByWorkspace = false;
+  attachReviewShortcut();
+  // KeepAlive preserves the expensive review/setup state. Reconcile only the
+  // selected build before resuming realtime instead of repeating refreshAll().
+  if (!selectedBuildId.value) return;
+  void refreshBuild()
+    .then(async () => {
+      if (!builderRouteActive.value) return;
+      if (hasRecordTopology.value && !reviewHydrated.value)
+        await ensureReviewHydrated(String(route.query.record || selectedRecordId.value || ""));
+      if (buildRunning.value) startPolling();
+    })
+    .catch((exc) => setMessage(exc instanceof Error ? exc.message : String(exc), "error"));
+});
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", reviewShortcut);
-  if (reviewHydrationRetryTimer !== undefined) {
-    window.clearTimeout(reviewHydrationRetryTimer);
-    reviewHydrationRetryTimer = undefined;
-  }
+  detachReviewShortcut();
+  cancelReviewHydrationRetry();
   stopPolling();
 });
 defineExpose({
@@ -2743,11 +2873,12 @@ defineExpose({
           :builds="builds"
           :total="buildsTotal"
           :selected-build-id="selectedBuildId"
+          :pending-build-id="openingBuildId"
           @select="chooseBuild"
           @refresh="refreshBuilds"
         />
         <a
-          v-if="currentBuild?.publication"
+          v-if="currentBuild?.publication && workspaceMode !== 'publish'"
           class="btn primary"
           :href="corpusBuilderApi.publicationUrl(currentBuild.publication.publication_id)"
           >{{ i18n.t("pdf_corpus.download_jsonl") }}</a

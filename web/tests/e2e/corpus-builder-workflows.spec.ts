@@ -96,34 +96,30 @@ test.describe("Corpus Builder composed workflow", () => {
     await expectWcag2AA(page, ".corpus-workspace-header");
   });
 
-  test("the header navigation shows the three researcher-facing phases and current phase", async ({
-    page,
-  }) => {
+  test("the header navigation keeps all four workflow phases visible", async ({ page }) => {
     const states = [
       ["corpus-builder-workflow-workspace-header--empty-workspace", "Setup"],
-      ["corpus-builder-workflow-workspace-header--active-build", "Build & review"],
+      ["corpus-builder-workflow-workspace-header--active-build", "Review"],
       ["corpus-builder-workflow-workspace-header--published", "Publish"],
     ];
     for (const [id, label] of states) {
       await page.goto(story(id));
       const nav = page.locator(".workspace-mode-nav");
-      await expect(nav.locator(".workspace-phase-list").getByRole("button")).toHaveCount(3);
+      await expect(nav.locator(".workspace-phase-list").getByRole("button")).toHaveCount(4);
+      await expect(nav.getByRole("button", { name: /Setup/ })).toBeVisible();
+      await expect(nav.getByRole("button", { name: /Build/ })).toBeVisible();
+      await expect(nav.getByRole("button", { name: /Review/ })).toBeVisible();
+      await expect(nav.getByRole("button", { name: /Publish/ })).toBeVisible();
       const current = nav.locator('[aria-current="step"]');
       await expect(current).toBeVisible();
       await expect(current).toContainText(label);
       await expectWcag2AA(page, ".corpus-workspace-header");
     }
 
-    await page.goto(story("corpus-builder-workflow-workspace-header--active-build"));
-    const subnav = page.locator(".workspace-subnav");
-    await expect(subnav.getByRole("button")).toHaveCount(2);
-    await expect(subnav.getByRole("button", { name: "Review" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
     await page.goto(story("corpus-builder-workflow-workspace-header--empty-workspace"));
-    await expect(page.getByRole("button", { name: /^Build & review/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Build/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Review/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /^Publish/ })).toBeDisabled();
   });
 
   test("document structure remains usable in the narrow laptop composition", async ({ page }) => {

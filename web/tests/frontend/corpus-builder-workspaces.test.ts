@@ -298,7 +298,7 @@ describe("setup state", () => {
 describe("workspace header", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("presents three user-facing phases while keeping Build and Review directly navigable", async () => {
+  it("keeps all four workflow phases visible and directly navigable", async () => {
     const wrapper = mount(CorpusBuilderWorkspaceHeader, {
       props: {
         sourceFilename: "Of Grammatology.pdf",
@@ -316,17 +316,18 @@ describe("workspace header", () => {
       },
     });
     const phases = wrapper.findAll(".workspace-phase-list > li > button");
-    expect(phases).toHaveLength(3);
+    expect(phases).toHaveLength(4);
     expect(phases[0].text()).toContain("✓");
-    expect(phases[1].text()).toContain("Build & review");
-    expect(phases[1].get(".step-mark").text()).toBe("2");
-    expect(phases[1].attributes("aria-current")).toBe("step");
-    expect(phases[2].attributes("disabled")).toBeDefined();
+    expect(phases[1].text()).toContain("✓");
+    expect(phases[1].text()).toContain("Build");
+    expect(phases[2].text()).toContain("Review");
+    expect(phases[2].get(".step-mark").text()).toBe("3");
+    expect(phases[2].attributes("aria-current")).toBe("step");
+    expect(phases[3].text()).toContain("Publish");
+    expect(phases[3].attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".workspace-subnav").exists()).toBe(false);
 
-    const subnav = wrapper.findAll(".workspace-subnav button");
-    expect(subnav).toHaveLength(2);
-    expect(subnav[1].attributes("aria-pressed")).toBe("true");
-    await subnav[0].trigger("click");
+    await phases[1].trigger("click");
     expect(wrapper.emitted("workspace")).toEqual([["build"]]);
 
     expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
@@ -354,16 +355,20 @@ describe("build history menu", () => {
       { build_id: "b2", source_filename: "Two.pdf", status: "ready", progress: 1, record_count: 8 },
     ] as never[];
     const wrapper = mount(CorpusBuildHistoryMenu, {
-      props: { builds, selectedBuildId: "b2", total: 2 },
+      props: { builds, selectedBuildId: "b2", pendingBuildId: "b1", total: 2 },
     });
+    const details = wrapper.get("details");
+    (details.element as HTMLDetailsElement).open = true;
     const rows = wrapper.findAll(".history-row");
     expect(rows[1].attributes("aria-current")).toBe("true");
+    expect(rows[0].attributes("aria-busy")).toBe("true");
     expect(rows[1].find(".selected-mark").exists()).toBe(true);
     expect(rows[0].find(".selected-mark").exists()).toBe(false);
     expect(rows[0].text()).toContain("50%");
     expect(rows[0].text()).toContain("3");
     expect(rows[0].get(".dot").attributes("data-tone")).toBe("warning");
     await rows[0].trigger("click");
+    expect((details.element as HTMLDetailsElement).open).toBe(false);
     expect(wrapper.emitted("select")?.[0]?.[0]).toMatchObject({ build_id: "b1" });
   });
 });

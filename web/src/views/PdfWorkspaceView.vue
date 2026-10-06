@@ -17,23 +17,46 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter, type LocationQueryRaw } from "vue-router";
 import PdfExplorerSurface from "../components/PdfExplorerSurface.vue";
 import PdfCorpusBuilder from "../components/PdfCorpusBuilder.vue";
 import { useI18nStore } from "../stores/i18n";
+import {
+  queryForPdfWorkspace,
+  queryForPdfWorkspaceTransition,
+  type PdfWorkspaceDestination,
+} from "../domain/pdfWorkspaceNavigation";
 
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
-const mode = computed<"explorer" | "builder">(() =>
+const mode = computed<PdfWorkspaceDestination>(() =>
   route.meta.pdfMode === "explorer" ? "explorer" : "builder",
 );
+const rememberedBuilderQuery = ref<LocationQueryRaw>({});
+const rememberedExplorerQuery = ref<LocationQueryRaw>({});
 
-async function setMode(next: "explorer" | "builder") {
+// Each sibling keeps its own addressable state. Capturing it before leaving
+// means the tabs can restore the previous Builder/Explorer context without
+// leaking one workspace's query semantics into the other workspace's URL.
+watch(
+  [mode, () => route.query] as const,
+  ([currentMode, query]) => {
+    const snapshot = queryForPdfWorkspace(currentMode, query);
+    if (currentMode === "builder") rememberedBuilderQuery.value = snapshot;
+    else rememberedExplorerQuery.value = snapshot;
+  },
+  { immediate: true },
+);
+
+async function setMode(next: PdfWorkspaceDestination) {
   if (next === mode.value) return;
-  const query = { ...route.query };
-  delete query.mode;
+  const remembered =
+    next === "builder" ? rememberedBuilderQuery.value : rememberedExplorerQuery.value;
+  const query = Object.keys(remembered).length
+    ? remembered
+    : queryForPdfWorkspaceTransition(mode.value, next, route.query);
   await router.push({
     name: next === "explorer" ? "source-explorer" : "corpus-builder",
     query,
@@ -69,8 +92,10 @@ onBeforeUnmount(() => window.removeEventListener("derridai:pdf-builder", openBui
       </button>
       <span>{{ i18n.t("pdf_workspace.help") }}</span>
     </nav>
-    <PdfCorpusBuilder v-if="mode === 'builder'" />
-    <PdfExplorerSurface v-else />
+    <KeepAlive>
+      <PdfCorpusBuilder v-if="mode === 'builder'" />
+      <PdfExplorerSurface v-else />
+    </KeepAlive>
   </div>
 </template>
 
