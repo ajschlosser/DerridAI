@@ -497,7 +497,7 @@ describe("router and runtime stay in agreement", () => {
     wrapper.unmount();
   });
 
-  it("lets a sidebar click resync a runtime view that has drifted from the URL", async () => {
+  it("lets a sidebar click repair runtime drift without legacy forward navigation", async () => {
     const { wrapper } = await signIn();
     sharedState.view = "global"; // runtime drifted; the URL is still "/"
 
@@ -505,7 +505,23 @@ describe("router and runtime stay in agreement", () => {
       .find((b) => b.text() === "Home")
       ?.trigger("click");
 
-    expect(navigation.navigateTo).toHaveBeenCalledWith("home", { href: "/" });
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("routes sidebar destinations through Vue Router instead of the legacy navigation bridge", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+
+    await pageButtons(wrapper)
+      .find((b) => b.text() === "Search")
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/search");
+    expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 
@@ -518,6 +534,7 @@ describe("router and runtime stay in agreement", () => {
       ?.trigger("click");
 
     expect(navigation.navigateTo).not.toHaveBeenCalled();
+    expect(navigation.repaintAfterLocationChange).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });
