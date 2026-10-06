@@ -135,7 +135,10 @@ def start_research_run(
                 selection.record.pop("updates", None)
 
         if body.filter_plan is not None:
-            from .research_filters import ResearchFilterPreviewRequest, preview_research_filter
+            from .research_filters import (
+                ResearchFilterPreviewRequest,
+                preview_research_filter,
+            )
 
             preview = preview_research_filter(ResearchFilterPreviewRequest(
                 collection=body.source_collection, locales=body.locales,
