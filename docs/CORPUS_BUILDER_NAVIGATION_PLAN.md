@@ -69,6 +69,7 @@ Page-level navigation should use one stable sticky contextual header with consis
 `Start new build` preserves the selected source and persisted setup state. This is useful, but the label implies a clean slate.
 
 The UI should distinguish:
+
 - New build from this source
 - Choose another source
 
@@ -92,6 +93,7 @@ The fix is part of this work and has two layers:
 2. the frontend installs one-shot stale-chunk recovery for Vite preload/dynamic-import failures. A long-lived tab reloads once to obtain the current HTML/chunk graph, with a sessionStorage guard preventing reload loops.
 
 Acceptance criteria:
+
 - a newly loaded page cannot reuse an old HTML shell after a web-image replacement;
 - an already-open tab self-recovers once when a lazy route references a removed chunk;
 - ordinary API/application errors never trigger a reload;
@@ -104,6 +106,7 @@ Acceptance criteria:
 ### Scope
 
 Files:
+
 - `web/src/App.vue`
 - `web/src/domain/appNavigation.ts`
 - relevant shell/navigation tests
@@ -129,6 +132,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/features/corpus-builder/composables/useCorpusWorkspaceNavigation.ts`
 - `web/src/components/PdfCorpusBuilder.vue`
 - workspace navigation tests
@@ -141,6 +145,7 @@ Files:
    - automatic return to publication readiness;
    - automatic workflow progression;
    - other application-driven phase changes.
+
 3. Keep `push` for user-clicked phase navigation.
 4. Add browser-history regression tests.
 
@@ -155,6 +160,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue`
 - `web/src/features/corpus-builder/domain/workspace.ts`
 - Storybook and frontend tests
@@ -179,6 +185,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/views/PdfWorkspaceView.vue`
 - `web/src/components/PdfCorpusBuilder.vue`
 - route/query helper module
@@ -204,6 +211,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/views/PdfWorkspaceView.vue`
 - `web/src/components/PdfCorpusBuilder.vue`
 - `web/src/components/PdfExplorerSurface.vue`
@@ -220,6 +228,7 @@ Files:
    - expanded setup section;
    - pane sizes;
    - scroll position where practical.
+
 5. Ensure background work that should continue independently of the page remains server-owned.
 
 ### Acceptance criteria
@@ -233,6 +242,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/components/PdfCorpusBuilder.vue`
 - new composable under `web/src/features/corpus-builder/composables/`
 - route-state/domain tests
@@ -246,6 +256,7 @@ Files:
    - queue changed → refresh queue once;
    - record changed → load/select record only;
    - workspace-only change → no unnecessary record reload.
+
 4. Add request-generation protection so stale async results cannot overwrite newer navigation.
 5. Keep local-to-route synchronization centralized and idempotent.
 
@@ -261,6 +272,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/components/PdfCorpusBuilder.vue`
 - `web/src/components/CorpusBuildHistoryMenu.vue`
 - relevant tests
@@ -284,6 +296,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/views/PdfWorkspaceView.vue`
 - `web/src/components/corpus-builder/CorpusBuilderWorkspaceHeader.vue`
 - Corpus Builder styles and tests
@@ -307,6 +320,7 @@ Files:
 ### Scope
 
 Files:
+
 - `web/src/features/corpus-builder/composables/useCorpusPublication.ts`
 - `web/src/components/corpus-builder/CorpusPublishWorkspace.vue`
 - publication tests
