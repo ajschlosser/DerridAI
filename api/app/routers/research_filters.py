@@ -16,15 +16,15 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
 from threading import BoundedSemaphore
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from ..rag import _resolve_search_collections
-from ..research_filter_preview import preview_filter_plan
 from ..research_filter_catalog import validate_catalog_filter
+from ..research_filter_preview import preview_filter_plan
 from ..research_semantics import source_author, source_work_label
 from ..services import store
 
@@ -129,12 +129,12 @@ _model_slot = BoundedSemaphore(1)
 
 @router.post("/api/research/filters/resolve")
 def resolve_research_filter(body: ResearchFilterResolveRequest, request: Request) -> dict[str, Any]:
-    from ..research_filter_model import resolve_with_local_model
     import httpx
 
-    from ..http_auth import request_user
-    from ..system_store import system_store
     from ..content_filter import enforce_researcher_text
+    from ..http_auth import request_user
+    from ..research_filter_model import resolve_with_local_model
+    from ..system_store import system_store
 
     user = request_user(request)
     profile = system_store.researcher_profile(body.provider_profile_id) if body.provider_profile_id else None
