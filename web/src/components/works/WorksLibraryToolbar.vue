@@ -33,6 +33,8 @@ const props = defineProps<{
   totalWorks: number;
   visibleWorks: number;
   totalReview: number;
+  /** Initial workspace reads keep the toolbar mounted but inert until its authoritative snapshot is known. */
+  pending?: boolean;
 }>();
 const emit = defineEmits<{
   query: [value: string];
@@ -59,6 +61,7 @@ const sorts = computed<Array<{ value: WorksSort; label: string; admin?: boolean 
 ]);
 const statusKinds = WORKS_DB_STATUSES;
 const summary = computed(() => {
+  if (props.pending) return i18n.t("works.loading");
   const base = i18n.tf("works.result_summary", {
     visible: props.visibleWorks.toLocaleString(i18n.locale),
     total: props.totalWorks.toLocaleString(i18n.locale),
@@ -75,7 +78,7 @@ function clearFilters() {
 </script>
 
 <template>
-  <div class="works-toolbar-shell">
+  <div class="works-toolbar-shell" :aria-busy="props.pending || undefined">
     <div class="works-toolbar-row">
       <div class="search works-toolbar-search">
         <input
@@ -84,6 +87,7 @@ function clearFilters() {
           :value="props.query"
           :aria-label="i18n.t('works.search_label')"
           :placeholder="admin ? i18n.t('works.filter_title') : i18n.t('research.filter_works')"
+          :disabled="props.pending"
           @input="emit('query', ($event.target as HTMLInputElement).value)"
         />
       </div>
@@ -94,6 +98,7 @@ function clearFilters() {
         :label="i18n.t('works.filters')"
         :count="activeFilterCount"
         :expanded="filtersOpen"
+        :disabled="props.pending"
         @click="filtersOpen = !filtersOpen"
       />
       <label class="works-toolbar-field">
@@ -102,6 +107,7 @@ function clearFilters() {
           id="worksSort"
           class="control compact-select"
           :value="props.sort"
+          :disabled="props.pending"
           @change="emit('sort', ($event.target as HTMLSelectElement).value as WorksSort)"
         >
           <option
@@ -118,12 +124,14 @@ function clearFilters() {
           size="small"
           :label="i18n.t('works.view_cards')"
           :pressed="props.viewMode === 'cards'"
+          :disabled="props.pending"
           @click="emit('viewMode', 'cards')"
         />
         <UiButton
           size="small"
           :label="i18n.t('works.view_list')"
           :pressed="props.viewMode === 'list'"
+          :disabled="props.pending"
           @click="emit('viewMode', 'list')"
         />
       </div>
@@ -140,6 +148,7 @@ function clearFilters() {
         <input
           type="checkbox"
           :checked="props.filters.needsReview"
+          :disabled="props.pending"
           @change="emit('filters', { needsReview: ($event.target as HTMLInputElement).checked })"
         />
         <span>{{ i18n.t("works.filter_needs_review") }}</span>
@@ -149,6 +158,7 @@ function clearFilters() {
         <select
           class="control compact-select"
           :value="props.filters.dbStatus"
+          :disabled="props.pending"
           @change="
             emit('filters', {
               dbStatus: ($event.target as HTMLSelectElement).value as WorksDbStatusKind | '',
@@ -166,6 +176,7 @@ function clearFilters() {
         <select
           class="control compact-select"
           :value="props.filters.author"
+          :disabled="props.pending"
           @change="emit('filters', { author: ($event.target as HTMLSelectElement).value })"
         >
           <option value="">{{ i18n.t("works.filter_any") }}</option>
@@ -178,7 +189,7 @@ function clearFilters() {
         size="small"
         variant="ghost"
         :label="i18n.t('works.filters_clear')"
-        :disabled="!activeFilterCount"
+        :disabled="props.pending || !activeFilterCount"
         @click="clearFilters"
       />
     </div>
@@ -222,6 +233,7 @@ function clearFilters() {
         size="small"
         variant="ghost"
         :label="i18n.t('works.filters_clear')"
+        :disabled="props.pending"
         @click="clearFilters"
       />
     </div>
