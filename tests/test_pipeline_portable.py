@@ -18,8 +18,6 @@
 
 from __future__ import annotations
 
-import copy
-
 import pytest
 from app.pipelines.capabilities import (
     PipelineContractRequirement,
@@ -32,7 +30,7 @@ from app.pipelines.portable import (
     export_pipeline_document,
     parse_pipeline_document,
 )
-from app.pipelines.service import PipelineService, pipeline_hash
+from app.pipelines.service import pipeline_hash
 from pydantic import ValidationError
 
 
