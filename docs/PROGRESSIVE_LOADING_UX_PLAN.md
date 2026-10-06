@@ -47,7 +47,9 @@ Operations no longer waits for an external jobs refresh before mounting its page
 
 Compare now mounts both record panes, source tabs, editors, and actions before the record library finishes hydrating. Library loading and failure are local to the library source region, request completions are ignored after unmount, and the page withholds both the "library empty" and "two records are needed" claims while a required library read is still pending. Scratch/editor comparison remains usable independently of that read.
 
-Focused unit regressions cover unresolved initial Operations refresh, retained Operations content after refresh failure, Compare controls during a deliberately held library read, and library failure without replacing the workspace. This is a page-local progressive-loading checkpoint, not completion of the remaining route inventory or the cross-route cold/warm/back-navigation and geometry matrix.
+Providers was re-audited against its actual data contract. Profile/status initialization is synchronous local application state, not an asynchronous read, so the one-frame loading card was misleading rather than protective. The view now reads that state during component setup and renders the actual provider workspace on the first frame; remote test/warm/save operations retain their existing per-action busy/error states.
+
+Focused unit regressions cover unresolved initial Operations refresh, retained Operations content after refresh failure, Compare controls during a deliberately held library read, library failure without replacing the workspace, and first-frame Providers rendering. This is a page-local progressive-loading checkpoint, not completion of the remaining route inventory or the cross-route cold/warm/back-navigation and geometry matrix.
 
 ## Findings and coverage
 
