@@ -33,7 +33,7 @@ import type {
   PipelineWorkflowVocabulary,
 } from "../../types/pipelines";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   operation: PipelineOperationsSection;
   pipelines: PipelineDefinition[];
   metrics: PipelineOperationalMetrics | null;
@@ -43,7 +43,11 @@ const props = defineProps<{
   metricsPending: boolean;
   metricsRefreshing: boolean;
   metricsError: string;
-}>();
+}>(), {
+  metricsPending: false,
+  metricsRefreshing: false,
+  metricsError: "",
+});
 const emit = defineEmits<{
   "update:operation": [section: PipelineOperationsSection];
   viewExecutions: [category: string];
