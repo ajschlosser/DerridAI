@@ -2171,13 +2171,16 @@ function scheduleReviewHydrationRetry() {
   }, 250);
 }
 
-async function refreshAll() {
-  await Promise.all([
-    refreshProviders(),
-    refreshCorpusProfiles(),
-    refreshAssets(),
-    refreshBuilds(),
-  ]);
+async function refreshSetupDependencies() {
+  await Promise.all([refreshProviders(), refreshCorpusProfiles(), refreshAssets()]);
+}
+
+async function hydrateRouteContext() {
+  // Build identity is the route-critical dependency. Do not make a deep-linked
+  // Build/Review/Publish workspace wait for provider/profile/source-list reads that
+  // are primarily needed by Setup. The selected source can resolve later when the
+  // asset catalog arrives; review topology is addressed by build ID.
+  await refreshBuilds();
   const requestedQueue = parseReviewQueue(route.query.queue);
   if (requestedQueue) reviewQueue.value = requestedQueue;
   await refreshBuild();
@@ -2187,6 +2190,18 @@ async function refreshAll() {
   // one retry alive and cancel it with the component so an old Corpus Builder cannot
   // keep issuing review/source reads after navigation or test teardown.
   scheduleReviewHydrationRetry();
+}
+
+async function refreshAll() {
+  // Start Setup support reads immediately, but keep them off the critical path for
+  // restoring a route-backed build. Their failure is local to the setup/supporting
+  // regions and should not prevent an already-addressable build from opening.
+  const setupRefresh = refreshSetupDependencies().catch((exc) => {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  });
+  await hydrateRouteContext();
+  if (buildRunning.value) startPolling();
+  await setupRefresh;
 }
 // Reading the record in context is a per-browser preference.
 const showRecordContext = ref(true);
@@ -2821,11 +2836,9 @@ onMounted(() => {
   attachReviewShortcut();
   restoreBuilderDraft();
   void loadSchemaChoices();
-  void refreshAll()
-    .then(() => {
-      if (buildRunning.value) startPolling();
-    })
-    .catch((exc) => setMessage(exc instanceof Error ? exc.message : String(exc), "error"));
+  void refreshAll().catch((exc) =>
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
+  );
 });
 onDeactivated(() => {
   suspendedByWorkspace = true;
