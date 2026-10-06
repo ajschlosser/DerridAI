@@ -355,16 +355,20 @@ describe("build history menu", () => {
       { build_id: "b2", source_filename: "Two.pdf", status: "ready", progress: 1, record_count: 8 },
     ] as never[];
     const wrapper = mount(CorpusBuildHistoryMenu, {
-      props: { builds, selectedBuildId: "b2", total: 2 },
+      props: { builds, selectedBuildId: "b2", pendingBuildId: "b1", total: 2 },
     });
+    const details = wrapper.get("details");
+    (details.element as HTMLDetailsElement).open = true;
     const rows = wrapper.findAll(".history-row");
     expect(rows[1].attributes("aria-current")).toBe("true");
+    expect(rows[0].attributes("aria-busy")).toBe("true");
     expect(rows[1].find(".selected-mark").exists()).toBe(true);
     expect(rows[0].find(".selected-mark").exists()).toBe(false);
     expect(rows[0].text()).toContain("50%");
     expect(rows[0].text()).toContain("3");
     expect(rows[0].get(".dot").attributes("data-tone")).toBe("warning");
     await rows[0].trigger("click");
+    expect((details.element as HTMLDetailsElement).open).toBe(false);
     expect(wrapper.emitted("select")?.[0]?.[0]).toMatchObject({ build_id: "b1" });
   });
 });
