@@ -41,6 +41,11 @@ from .corpus_cli_config import (
     PublicationConfig,
     SourceConfig,
 )
+from .pipelines.capabilities import (
+    PipelineContractRequirement,
+    assert_pipeline_contract_compatible,
+    pipeline_contract_requirement,
+)
 from .pipelines.models import (
     InputBinding,
     PipelineConfigOverrideSet,
@@ -123,8 +128,9 @@ def _reject_unknown_pipeline_fields(value: object) -> object:
 
 
 class PipelineRunSelection(_StrictRunModel):
-    """One exact executable pipeline plus optional bounded configuration overrides."""
+    """One exact executable pipeline plus its frozen compatibility requirement."""
 
+    contract: PipelineContractRequirement
     definition: PipelineDefinition | None = None
     ref: PipelineDefinitionRef | None = None
     overrides: PipelineConfigOverrideSet | None = None
@@ -169,6 +175,11 @@ class PipelineRunSelection(_StrictRunModel):
                     f"Pipeline {self.ref.pipeline_id}@{self.ref.version} was not found."
                 )
 
+        assert_pipeline_contract_compatible(
+            definition,
+            self.contract,
+            manager.service.registry,
+        )
         validation = manager.service.validate(definition)
         errors = [
             issue.message
@@ -297,7 +308,10 @@ def migrate_v1_to_v2(
             source_version=1,
         ),
         source=config.source,
-        pipeline=PipelineRunSelection(definition=pipeline.model_copy(deep=True)),
+        pipeline=PipelineRunSelection(
+            contract=pipeline_contract_requirement(pipeline),
+            definition=pipeline.model_copy(deep=True),
+        ),
         processing=config.processing,
         metadata=config.metadata,
         enrichment=config.enrichment,
