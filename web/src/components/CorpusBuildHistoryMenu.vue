@@ -17,15 +17,22 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
+import { ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import { corpusStatusTone } from "../features/corpus-builder/domain/workflowPresentation";
 import { useI18nStore } from "../stores/i18n";
 import UiButton from "./ui/UiButton.vue";
-withDefaults(defineProps<{ builds: CorpusBuild[]; selectedBuildId?: string; total?: number }>(), {
-  selectedBuildId: "",
-  total: 0,
-});
+withDefaults(
+  defineProps<{
+    builds: CorpusBuild[];
+    selectedBuildId?: string;
+    pendingBuildId?: string;
+    total?: number;
+  }>(),
+  { selectedBuildId: "", pendingBuildId: "", total: 0 },
+);
 const emit = defineEmits<{ select: [build: CorpusBuild]; refresh: [] }>();
+const root = ref<HTMLDetailsElement | null>(null);
 const i18n = useI18nStore();
 function statusLabel(build: CorpusBuild) {
   if (build.publication) return i18n.t("pdf_corpus.status.published_snapshot");
@@ -46,10 +53,16 @@ function formatDate(value?: string | null) {
     return value;
   }
 }
+function selectBuild(build: CorpusBuild) {
+  // Selection immediately dismisses the popover; the parent can keep the
+  // current workspace stable while it resolves the next authoritative build.
+  root.value?.removeAttribute("open");
+  emit("select", build);
+}
 </script>
 <template>
-  <details class="history-menu">
-    <summary class="btn">
+  <details ref="root" class="history-menu">
+    <summary class="btn" :aria-busy="pendingBuildId ? 'true' : undefined">
       {{ i18n.t("pdf_corpus.builds") }} <span class="count">{{ total }}</span>
     </summary>
     <div
@@ -80,7 +93,9 @@ function formatDate(value?: string | null) {
           class="history-row"
           :class="{ active: build.build_id === selectedBuildId }"
           :aria-current="build.build_id === selectedBuildId ? 'true' : undefined"
-          @click="emit('select', build)"
+          :aria-busy="build.build_id === pendingBuildId ? 'true' : undefined"
+          :data-pending="build.build_id === pendingBuildId ? 'true' : undefined"
+          @click="selectBuild(build)"
         >
           <span
             class="dot"
