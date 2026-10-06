@@ -205,10 +205,7 @@ export function createUrlStateCodec(deps: UrlStateCodecDeps) {
     // specific path the router owns so URL synchronization never collapses
     // Source Explorer, Settings sections, or System Data workspaces back to
     // their default sibling.
-    if (
-      view === "pdf" &&
-      ["/corpus-builder", "/source-explorer"].includes(location.pathname)
-    ) {
+    if (view === "pdf" && ["/corpus-builder", "/source-explorer"].includes(location.pathname)) {
       path = location.pathname;
     } else if (view === "config" && location.pathname.startsWith("/settings/")) {
       path = location.pathname;
