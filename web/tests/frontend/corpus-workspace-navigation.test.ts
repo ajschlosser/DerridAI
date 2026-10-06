@@ -25,7 +25,13 @@ import { useCorpusWorkspaceNavigation } from "../../src/features/corpus-builder/
 async function harness(query: Record<string, string> = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: "/corpus-builder", name: "corpus-builder", component: { template: "<div />" } }],
+    routes: [
+      {
+        path: "/corpus-builder",
+        name: "corpus-builder",
+        component: { template: "<div />" },
+      },
+    ],
   });
   await router.push({ name: "corpus-builder", query });
   await router.isReady();
@@ -57,8 +63,9 @@ describe("Corpus Builder workspace navigation history", () => {
     const push = vi.spyOn(router, "push");
     const replace = vi.spyOn(router, "replace");
 
-    await (wrapper.vm as unknown as { switchWorkspace: (workspace: string) => Promise<void> })
-      .switchWorkspace("review");
+    await (
+      wrapper.vm as unknown as { switchWorkspace: (workspace: string) => Promise<void> }
+    ).switchWorkspace("review");
 
     expect(push).toHaveBeenCalledTimes(1);
     expect(replace).not.toHaveBeenCalled();
