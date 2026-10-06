@@ -421,10 +421,14 @@ function openCorpusFilePicker() {
 function navigateNative(path: string, runtimeView?: string) {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
-  // Only short-circuit when the runtime agrees with the router; a drifted runtime view must be allowed to resync.
-  if (current === target && (!runtimeView || sharedState.view === runtimeView)) return;
-  if (runtimeView) {
-    navigateTo(runtimeView, { href: target });
+  if (current === target) {
+    // Canonical navigation is router-first. The only same-route work left here
+    // is repairing compatibility runtime drift without manufacturing a second
+    // navigation authority.
+    if (runtimeView && sharedState.view !== runtimeView) {
+      sharedUrlStateCodec.applyUrlState();
+      repaintAfterLocationChange();
+    }
     return;
   }
   void router.push(target).catch(() => {
