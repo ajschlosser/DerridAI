@@ -297,71 +297,71 @@ watch(
       </div>
 
       <template v-else>
-      <div class="result-summary">
-        {{
-          i18n.tf("runtime.system_response_range", "{start}–{end} of {total} saved responses", {
-            start: page.offset + 1,
-            end: Math.min(page.offset + page.records.length, resultCount),
-            total: resultCount.toLocaleString(),
-          })
-        }}
-      </div>
-      <div class="data-table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t("runtime.system_question", "Question") }}</th>
-              <th>{{ t("runtime.system_created", "Created") }}</th>
-              <th>{{ t("runtime.system_provider_model", "Provider / model") }}</th>
-              <th>{{ t("runtime.system_grade", "Grade") }}</th>
-              <th>
-                <span class="sr-only">{{ t("common.actions", "Actions") }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="record in page.records" :key="String(record.record_id || record.id)">
-              <td class="question-cell">{{ formatValue(record.question) }}</td>
-              <td>{{ formatDate(record.created_at || record.timestamp) }}</td>
-              <td>{{ provider(record) }}</td>
-              <td>
-                <span class="status-pill">{{ grade(record) }}</span>
-              </td>
-              <td class="row-actions">
-                <button class="btn tiny" type="button" @click="openLibrary(record)">
-                  {{ t("runtime.system_library", "Library") }}
-                </button>
-                <button
-                  class="icon-btn danger-text"
-                  type="button"
-                  :aria-label="t('runtime.system_delete_response_confirm', 'Delete response')"
-                  @click="remove(record)"
-                >
-                  <AppIcon name="trash" />
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <footer class="pagination">
-        <button
-          class="btn tiny"
-          type="button"
-          :disabled="loading || page.offset <= 0"
-          @click="load(Math.max(0, page.offset - page.limit), true, true)"
-        >
-          {{ t("common.previous", "Previous") }}
-        </button>
-        <button
-          class="btn tiny"
-          type="button"
-          :disabled="loading || page.offset + page.records.length >= resultCount"
-          @click="load(page.offset + page.limit, true, true)"
-        >
-          {{ t("common.next", "Next") }}
-        </button>
-      </footer>
+        <div class="result-summary">
+          {{
+            i18n.tf("runtime.system_response_range", "{start}–{end} of {total} saved responses", {
+              start: page.offset + 1,
+              end: Math.min(page.offset + page.records.length, resultCount),
+              total: resultCount.toLocaleString(),
+            })
+          }}
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ t("runtime.system_question", "Question") }}</th>
+                <th>{{ t("runtime.system_created", "Created") }}</th>
+                <th>{{ t("runtime.system_provider_model", "Provider / model") }}</th>
+                <th>{{ t("runtime.system_grade", "Grade") }}</th>
+                <th>
+                  <span class="sr-only">{{ t("common.actions", "Actions") }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="record in page.records" :key="String(record.record_id || record.id)">
+                <td class="question-cell">{{ formatValue(record.question) }}</td>
+                <td>{{ formatDate(record.created_at || record.timestamp) }}</td>
+                <td>{{ provider(record) }}</td>
+                <td>
+                  <span class="status-pill">{{ grade(record) }}</span>
+                </td>
+                <td class="row-actions">
+                  <button class="btn tiny" type="button" @click="openLibrary(record)">
+                    {{ t("runtime.system_library", "Library") }}
+                  </button>
+                  <button
+                    class="icon-btn danger-text"
+                    type="button"
+                    :aria-label="t('runtime.system_delete_response_confirm', 'Delete response')"
+                    @click="remove(record)"
+                  >
+                    <AppIcon name="trash" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="pagination">
+          <button
+            class="btn tiny"
+            type="button"
+            :disabled="loading || page.offset <= 0"
+            @click="load(Math.max(0, page.offset - page.limit), true, true)"
+          >
+            {{ t("common.previous", "Previous") }}
+          </button>
+          <button
+            class="btn tiny"
+            type="button"
+            :disabled="loading || page.offset + page.records.length >= resultCount"
+            @click="load(page.offset + page.limit, true, true)"
+          >
+            {{ t("common.next", "Next") }}
+          </button>
+        </footer>
       </template>
     </template>
   </div>
