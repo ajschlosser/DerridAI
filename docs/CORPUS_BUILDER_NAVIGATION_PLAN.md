@@ -17,7 +17,9 @@ Phases 8 and 9 are implemented in the continuation branch/PR #564:
 - **Phase 8:** stacked sticky page chrome is removed, the phase header behaves the same in Build and Review, and restart actions now distinguish retaining the current source from choosing another source.
 - **Phase 9:** reconcile-before-publish remains authoritative while publication reuses in-place build synchronization, avoids redundant full build-list reads, and aborts if the reviewer changes build context before publication begins.
 
-Phase 10 is the current continuation. The remaining high-friction navigation problem is not primarily Corpus Builder data fetching: every top-level route is registered as a Vue Router lazy component, so Vue Router waits for the destination JavaScript chunk before it commits the route. On a cold route this makes the old page remain visible for 1–3 seconds even though the destination could already show its shell and loading state. The route itself must commit immediately; module and data loading belong inside the destination page after that commit.
+Phase 10's route-commit slice landed in PR #565. Top-level routes now commit through synchronous progressive route entries, so URL/history, breadcrumbs, active navigation, and a destination-owned loading frame can update before the destination JavaScript chunk resolves. Stale-deployment recovery remains guarded and ordinary chunk failures recover in the committed destination.
+
+The current Phase 10 continuation is page-local hydration. Corpus Builder now prioritizes route-critical restoration: build discovery, the route-addressed build snapshot, and requested review topology hydrate without waiting for Setup-supporting provider, corpus-profile, or source-catalog reads. Those supporting reads begin immediately and continue in parallel. This keeps a deep-linked Build/Review/Publish workspace from being held behind unrelated Setup data while preserving the same authoritative build and review reads. The remaining work is the workspace-by-workspace audit for pages and regions that still gate useful shells or independent content on all-or-nothing initial hydration.
 
 ## Current problems
 
