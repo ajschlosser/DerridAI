@@ -46,12 +46,8 @@ from .pipelines.capabilities import (
     assert_pipeline_contract_compatible,
     pipeline_contract_requirement,
 )
-from .pipelines.models import (
-    InputBinding,
-    PipelineConfigOverrideSet,
-    PipelineDefinition,
-    PipelineStageDefinition,
-)
+from .pipelines.models import PipelineConfigOverrideSet, PipelineDefinition
+from .pipelines.portable import reject_unknown_pipeline_fields
 from .pipelines.overrides import resolve_pipeline_config
 from .pipelines.service import pipeline_hash
 
@@ -76,57 +72,6 @@ class RunEnvelopeMigration(_StrictRunModel):
     source_version: Literal[1]
 
 
-def _unknown_keys(payload: object, model: type[BaseModel]) -> list[str]:
-    if not isinstance(payload, dict):
-        return []
-    return sorted(set(payload) - set(model.model_fields))
-
-
-def _reject_unknown_pipeline_fields(value: object) -> object:
-    """Apply strict import semantics without changing native pipeline persistence.
-
-    Historical native PipelineDefinition rows predate a global extra-forbid
-    policy. The portable run envelope is stricter: unknown executable fields are
-    rejected at this transport boundary rather than being discarded by Pydantic.
-    """
-
-    if not isinstance(value, dict):
-        return value
-
-    unknown = _unknown_keys(value, PipelineDefinition)
-    if unknown:
-        raise ValueError(
-            "Unknown pipeline definition field(s): " + ", ".join(unknown)
-        )
-
-    stages = value.get("stages")
-    if isinstance(stages, list):
-        for index, stage in enumerate(stages):
-            stage_unknown = _unknown_keys(stage, PipelineStageDefinition)
-            if stage_unknown:
-                raise ValueError(
-                    f"Unknown pipeline stage field(s) at stages[{index}]: "
-                    + ", ".join(stage_unknown)
-                )
-            if not isinstance(stage, dict):
-                continue
-            inputs = stage.get("inputs")
-            if not isinstance(inputs, dict):
-                continue
-            for port_name, bindings in inputs.items():
-                if not isinstance(bindings, list):
-                    continue
-                for binding_index, binding in enumerate(bindings):
-                    binding_unknown = _unknown_keys(binding, InputBinding)
-                    if binding_unknown:
-                        raise ValueError(
-                            "Unknown pipeline input-binding field(s) at "
-                            f"stages[{index}].inputs[{port_name!r}][{binding_index}]: "
-                            + ", ".join(binding_unknown)
-                        )
-    return value
-
-
 class PipelineRunSelection(_StrictRunModel):
     """One exact executable pipeline plus its frozen compatibility requirement."""
 
@@ -138,7 +83,7 @@ class PipelineRunSelection(_StrictRunModel):
     @field_validator("definition", mode="before")
     @classmethod
     def reject_unknown_definition_fields(cls, value: object) -> object:
-        return _reject_unknown_pipeline_fields(value)
+        return reject_unknown_pipeline_fields(value)
 
     @model_validator(mode="after")
     def validate_selection(self) -> "PipelineRunSelection":
