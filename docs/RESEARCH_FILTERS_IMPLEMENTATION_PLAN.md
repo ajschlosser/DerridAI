@@ -451,6 +451,8 @@ Deliverables:
 
 ### Phase 4 — deterministic natural-language filters
 
+Status: implemented (`web/src/domain/researchInstructionFilters.ts`, `ResearchScopeSuggestions.vue`, `POST /api/research/filters/inventory`). Interpretation is local and proposal-only: a phrase becomes a hard filter only after the researcher presses "Add to filter", and a confirmed plan is sent with `source: deterministic_natural_language`. Works/authors resolve from a bounded, names-only inventory (500 works; fetched lazily once instructions are non-empty and cached per collection); field keys resolve through the collection's catalog, so an undeclared field yields an unresolved note instead of a proposal. Gaps: speaker values are taken literally from the wording (`verified: false`; there is no speaker inventory); "language is …" is reported as unsupported because language values are not inventoried; a named author resolves to that author's works, as the existing named-scope safeguard does, and is not treated as a speaker; EN phrases plus a small FR subset; the inventory endpoint runs `work_stats` (a collection scan, as the named-scope safeguard already does per run), so a cheaper cached inventory is a follow-up.
+
 Deliverables:
 
 - bounded phrase grammar;

@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 import ResearchFilterEditor from "./ResearchFilterEditor.vue";
+import ResearchScopeSuggestions from "./ResearchScopeSuggestions.vue";
 import type { ResearchFilterChange } from "./ResearchFilterEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type {
@@ -68,6 +69,7 @@ const emit = defineEmits<{
   "update:prompt": [value: string];
   "update:instructions": [value: string];
   "update:filterExpression": [value: string];
+  scopeAccepted: [];
   filterChange: [value: ResearchFilterChange];
   "update:sourceCollection": [value: string];
   "update:providerProfileId": [value: string];
@@ -212,6 +214,15 @@ function pickHistory(item: Record<string, unknown>) {
         :placeholder="i18n.t('research.instructions_placeholder')"
         @input="emit('update:instructions', ($event.target as HTMLTextAreaElement).value)"
       ></textarea>
+      <ResearchScopeSuggestions
+        :instructions="instructions"
+        :filter-expression="filterExpression"
+        :collection="sourceCollection"
+        :fields="selectedStore?.filter_fields || []"
+        :disabled="!(canDraft ?? canConfigure)"
+        @update:filter-expression="emit('update:filterExpression', $event)"
+        @accepted="emit('scopeAccepted')"
+      />
     </details>
 
     <details class="research-instructions-disclosure">

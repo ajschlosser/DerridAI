@@ -40,12 +40,24 @@ export type ResearchFilterPreview = {
   warnings: ResearchFilterDiagnostic[];
 };
 
+export type ResearchFilterInventory = {
+  works: Array<{ work: string; authors: string[] }>;
+  truncated: boolean;
+};
+
 /** Non-mutating server check of a filter against a collection's declared filter fields. */
 export const researchFiltersApi = {
   preview: (body: ResearchFilterPreviewRequest, signal?: AbortSignal) =>
     apiRequest<ResearchFilterPreview>("/api/research/filters/preview", {
       method: "POST",
       body: JSON.stringify({ source: "explicit", ...body }),
+      signal,
+    }),
+  /** Work/author names (no passages) used to resolve named scopes in instructions. */
+  inventory: (body: { collection: string; locales?: string[] }, signal?: AbortSignal) =>
+    apiRequest<ResearchFilterInventory>("/api/research/filters/inventory", {
+      method: "POST",
+      body: JSON.stringify(body),
       signal,
     }),
 };
