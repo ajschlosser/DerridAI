@@ -718,8 +718,8 @@ describe("System Data Pipeline Studio", () => {
 
     const { wrapper } = await mountStudio({ section: "operations" });
 
-    expect(wrapper.get("#pipeline-operations-tab-health").exists()).toBe(true);
-    expect(wrapper.get("#pipeline-operations-tab-compare").exists()).toBe(true);
+    expect(wrapper.find("#pipeline-operations-tab-health").exists()).toBe(true);
+    expect(wrapper.find("#pipeline-operations-tab-compare").exists()).toBe(true);
     expect(wrapper.text()).toContain("Loading operational health");
 
     resolveMetrics(structuredClone(metrics));
