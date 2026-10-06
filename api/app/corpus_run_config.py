@@ -139,10 +139,13 @@ class PipelineRunSelection(_StrictRunModel):
         if (self.definition is None) == (self.ref is None):
             raise ValueError("pipeline must contain exactly one of definition or ref")
 
-        pipeline_id = (
-            self.definition.pipeline_id if self.definition is not None else self.ref.pipeline_id
-        )
-        version = self.definition.version if self.definition is not None else self.ref.version
+        if self.definition is not None:
+            pipeline_id = self.definition.pipeline_id
+            version = self.definition.version
+        else:
+            assert self.ref is not None
+            pipeline_id = self.ref.pipeline_id
+            version = self.ref.version
         if self.overrides is not None and not self.overrides.empty:
             if (
                 self.overrides.pipeline_id != pipeline_id
