@@ -107,8 +107,6 @@ function pageKey(params = applied.value) {
 const displayedPageIsCurrent = computed(
   () => hasSuccessfulPage.value && shownPageKey.value === pageKey(),
 );
-const initialPending = computed(() => loading.value && !displayedPageIsCurrent.value);
-const refreshing = computed(() => loading.value && displayedPageIsCurrent.value);
 const pageQuery = useDataQuery(
   "response_library",
   () =>
@@ -118,6 +116,8 @@ const pageQuery = useDataQuery(
   },
 );
 const loading = computed(() => pageQuery.isFetching.value);
+const initialPending = computed(() => loading.value && !displayedPageIsCurrent.value);
+const refreshing = computed(() => loading.value && displayedPageIsCurrent.value);
 watch(
   () => pageQuery.data.value,
   (next) => {
