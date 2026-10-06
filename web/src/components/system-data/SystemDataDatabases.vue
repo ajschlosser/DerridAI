@@ -249,18 +249,17 @@ watch(
     <div v-else-if="catalogLoading && !catalogLoaded" class="state" role="status">
       {{ t("runtime.system_database_loading", "Loading system databases…") }}
     </div>
-    <template v-else-if="catalogLoaded">
-      <div v-if="catalogLoading" class="state state-inline" role="status">
-        {{ t("loading.updating", "Updating…") }}
-      </div>
-      <div v-if="catalogError" class="state error state-inline" role="alert">
-        <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
-        <span>{{ catalogError }}</span>
-        <button class="btn tiny" type="button" @click="loadDatabases">
-          {{ t("common.retry", "Retry") }}
-        </button>
-      </div>
-      <div class="browser">
+    <div v-if="catalogLoading && catalogLoaded" class="state state-inline" role="status">
+      {{ t("loading.updating", "Updating…") }}
+    </div>
+    <div v-if="catalogError && catalogLoaded" class="state error state-inline" role="alert">
+      <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+      <span>{{ catalogError }}</span>
+      <button class="btn tiny" type="button" @click="loadDatabases">
+        {{ t("common.retry", "Retry") }}
+      </button>
+    </div>
+    <div v-if="catalogLoaded" class="browser">
       <aside class="directory">
         <div class="database-switcher">
           <button
@@ -359,21 +358,20 @@ watch(
         <div v-else-if="tableInitialPending" class="state" role="status">
           {{ t("runtime.system_rows_loading", "Loading rows…") }}
         </div>
-        <template v-else-if="displayedTableIsCurrent">
-          <div v-if="tableRefreshing" class="state state-inline" role="status">
-            {{ t("loading.updating", "Updating…") }}
-          </div>
-          <div v-if="tableError" class="state error state-inline" role="alert">
-            <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
-            <span>{{ tableError }}</span>
-            <button class="btn tiny" type="button" @click="loadTable(requestedOffset)">
-              {{ t("common.retry", "Retry") }}
-            </button>
-          </div>
-          <div v-if="!page?.rows.length" class="state">
-            {{ t("runtime.system_table_empty", "This table is empty.") }}
-          </div>
-          <template v-else>
+        <div v-if="tableRefreshing && displayedTableIsCurrent" class="state state-inline" role="status">
+          {{ t("loading.updating", "Updating…") }}
+        </div>
+        <div v-if="tableError && displayedTableIsCurrent" class="state error state-inline" role="alert">
+          <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+          <span>{{ tableError }}</span>
+          <button class="btn tiny" type="button" @click="loadTable(requestedOffset)">
+            {{ t("common.retry", "Retry") }}
+          </button>
+        </div>
+        <div v-if="displayedTableIsCurrent && !page?.rows.length" class="state">
+          {{ t("runtime.system_table_empty", "This table is empty.") }}
+        </div>
+        <template v-if="displayedTableIsCurrent && page?.rows.length">
           <div class="data-table-wrap">
             <table class="data-table">
               <thead>
@@ -435,11 +433,9 @@ watch(
               </button>
             </div>
           </footer>
-          </template>
         </template>
       </section>
-      </div>
-    </template>
+    </div>
 
     <aside
       v-if="detail && displayedTableIsCurrent"
