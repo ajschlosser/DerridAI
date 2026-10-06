@@ -2201,7 +2201,7 @@ async function refreshAll() {
   });
   await hydrateRouteContext();
   if (buildRunning.value) startPolling();
-  await setupRefresh;
+  void setupRefresh;
 }
 // Reading the record in context is a per-browser preference.
 const showRecordContext = ref(true);
