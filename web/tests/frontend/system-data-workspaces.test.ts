@@ -23,16 +23,18 @@ import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
-const route = { name: "system-data-metadata", query: {} };
+const replace = vi.fn();
+const route = { name: "system-data-metadata", query: {} as Record<string, string> };
 
 vi.mock("vue-router", () => ({
   RouterLink: { props: ["to"], template: "<a><slot /></a>" },
   useRoute: () => route,
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }));
 
 import { systemApi } from "../../src/api/system";
 import SystemDataOverview from "../../src/components/system-data/SystemDataOverview.vue";
+import SystemDataDatabases from "../../src/components/system-data/SystemDataDatabases.vue";
 import SystemDataAdvanced from "../../src/components/system-data/SystemDataAdvanced.vue";
 import SystemDataView from "../../src/views/SystemDataView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -43,6 +45,8 @@ describe("System Data workspaces", () => {
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
     push.mockReset();
+    replace.mockReset();
+    for (const key of Object.keys(route.query)) delete route.query[key];
   });
 
   it("restores the selected workspace from the URL and writes navigation back to it", async () => {
