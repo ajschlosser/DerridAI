@@ -103,6 +103,80 @@ describe("System Data metadata examples", () => {
     wrapper.unmount();
   });
 
+  it("retains reviewed exemplars during a same-filter refresh failure", async () => {
+    const wrapper = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
+    await flushPromises();
+    expect(wrapper.text()).toContain("Levinas");
+
+    let rejectRefresh!: (reason?: unknown) => void;
+    vi.mocked(systemApi.systemMetadataExemplars).mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+    await wrapper.get("form.filters").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Levinas");
+    expect(wrapper.text()).toContain("Updating");
+
+    rejectRefresh(new Error("exemplar projection offline"));
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Levinas");
+    expect(wrapper.text()).toContain("exemplar projection offline");
+    expect(wrapper.text()).not.toContain("no examples match");
+    wrapper.unmount();
+  });
+
+  it("withholds previous exemplars and counts when a new filter identity is pending", async () => {
+    const wrapper = mount(SystemDataMetadataExamples, {
+      global: { plugins: [[VueQueryPlugin, { queryClient }]] },
+    });
+    await flushPromises();
+
+    let resolveFilter!: (
+      value: Awaited<ReturnType<typeof systemApi.systemMetadataExemplars>>,
+    ) => void;
+    vi.mocked(systemApi.systemMetadataExemplars).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFilter = resolve;
+        }),
+    );
+    const selects = wrapper.findAll(".filters select");
+    await selects[1].setValue("positive");
+    await wrapper.get("form.filters").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("Levinas");
+    expect(wrapper.get(".workspace-heading > strong").text()).toBe("—");
+    expect(wrapper.text()).toContain("Loading metadata examples");
+
+    resolveFilter({
+      exists: true,
+      count: 0,
+      limit: 25,
+      offset: 0,
+      facets: {
+        fields: ["position_holder"],
+        kinds: ["positive"],
+        languages: ["en"],
+        scopes: ["build-1"],
+        schemas: ["derrida"],
+      },
+      rows: [],
+    });
+    await flushPromises();
+
+    expect(wrapper.get(".workspace-heading > strong").text()).toBe("0");
+    expect(wrapper.text()).toContain("no examples match");
+    wrapper.unmount();
+  });
+
   it("passes field and language filters through the System Data API", async () => {
     const wrapper = mount(SystemDataMetadataExamples, {
       global: { plugins: [[VueQueryPlugin, { queryClient }]] },
