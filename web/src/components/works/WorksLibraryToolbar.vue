@@ -96,7 +96,7 @@ function clearFilters() {
         />
       </div>
       <UiButton
-        v-if="admin || props.authors.length"
+        v-if="admin || props.authors.length || props.filters.author"
         size="small"
         icon="filter"
         :label="i18n.t('works.filters')"
@@ -207,6 +207,7 @@ function clearFilters() {
         v-if="admin && props.filters.needsReview"
         type="button"
         class="works-filter-chip"
+        :disabled="controlsDisabled"
         @click="emit('filters', { needsReview: false })"
       >
         <span>{{ i18n.t("works.filter_needs_review") }}</span>
@@ -217,6 +218,7 @@ function clearFilters() {
         v-if="admin && props.filters.dbStatus"
         type="button"
         class="works-filter-chip"
+        :disabled="controlsDisabled"
         @click="emit('filters', { dbStatus: '' })"
       >
         <span>{{ i18n.t(`works.db_status_${props.filters.dbStatus}`) }}</span>
@@ -227,6 +229,7 @@ function clearFilters() {
         v-if="props.filters.author"
         type="button"
         class="works-filter-chip"
+        :disabled="controlsDisabled"
         @click="emit('filters', { author: '' })"
       >
         <span>{{ props.filters.author }}</span>
@@ -315,6 +318,10 @@ function clearFilters() {
 .works-filter-chip:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+.works-filter-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 .works-toolbar-summary {
   margin: 0;
