@@ -91,7 +91,10 @@ async function load() {
   }
 }
 
-function reloadPage() {
+function retryPage() {
+  // Browsers may cache a failed ES-module fetch for the life of the document,
+  // so invoking the same dynamic import again is not a reliable network retry.
+  // Reload the already-committed destination instead of navigating back.
   window.location.reload();
 }
 
@@ -114,8 +117,7 @@ void load();
       <p>{{ i18n.t("loading.page_content_failed_help") }}</p>
     </div>
     <div class="progressive-route-actions">
-      <UiButton :label="i18n.t('ui.retry')" size="small" @click="load" />
-      <UiButton :label="i18n.t('loading.reload_page')" size="small" @click="reloadPage" />
+      <UiButton :label="i18n.t('ui.retry')" size="small" @click="retryPage" />
     </div>
   </section>
   <UiLoadingState
