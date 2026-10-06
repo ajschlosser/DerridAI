@@ -2200,8 +2200,27 @@ async function refreshAll() {
     setMessage(exc instanceof Error ? exc.message : String(exc), "error");
   });
   await hydrateRouteContext();
+  const hydratedBuildId = String(currentBuild.value?.build_id || "");
+  const hydratedAssetId = String(currentBuild.value?.asset_id || "");
   if (buildRunning.value) startPolling();
-  void setupRefresh;
+
+  // refreshAssets() historically settled before refreshBuild(), so the build's
+  // source selection won if the catalog changed underneath it. Preserve that
+  // final-state invariant without putting the catalog back on the route-critical
+  // path. Do not overwrite a researcher who has already moved into Setup or
+  // selected another build while the support reads were still pending.
+  void setupRefresh.then(() => {
+    if (
+      !hydratedBuildId ||
+      !hydratedAssetId ||
+      workspaceMode.value === "setup" ||
+      selectedBuildId.value !== hydratedBuildId ||
+      currentBuild.value?.build_id !== hydratedBuildId ||
+      currentBuild.value?.asset_id !== hydratedAssetId
+    )
+      return;
+    selectedAssetId.value = hydratedAssetId;
+  });
 }
 // Reading the record in context is a per-browser preference.
 const showRecordContext = ref(true);
