@@ -36,11 +36,16 @@ const search = ref(String(route.query.q || ""));
 const page = ref<(SystemDataTable & { rows: DataRow[]; offset: number; limit: number }) | null>(
   null,
 );
-const loading = ref(false);
+const catalogLoaded = ref(false);
+const catalogLoading = ref(false);
 const tableLoading = ref(false);
-const error = ref("");
+const catalogError = ref("");
 const tableError = ref("");
 const detail = ref<DataRow | null>(null);
+const requestedOffset = ref(Math.max(0, Number(route.query.offset) || 0));
+const shownTableIdentity = ref("");
+let catalogRequest = 0;
+let tableRequest = 0;
 
 const database = computed(() =>
   databases.value.find((item) => item.name === selectedDatabase.value),
@@ -56,6 +61,14 @@ const table = computed(() =>
 const columns = computed(() => page.value?.columns || table.value?.columns || []);
 const visibleColumns = computed(() => columns.value.slice(0, 6));
 const totalRows = computed(() => table.value?.row_count || 0);
+function tableIdentity(offset = requestedOffset.value) {
+  return JSON.stringify([selectedDatabase.value, selectedTable.value, offset]);
+}
+const displayedTableIsCurrent = computed(
+  () => Boolean(page.value) && shownTableIdentity.value === tableIdentity(),
+);
+const tableInitialPending = computed(() => tableLoading.value && !displayedTableIsCurrent.value);
+const tableRefreshing = computed(() => tableLoading.value && displayedTableIsCurrent.value);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -90,21 +103,29 @@ function cell(value: unknown) {
 }
 
 async function loadDatabases() {
-  loading.value = true;
-  error.value = "";
+  const request = ++catalogRequest;
+  catalogLoading.value = true;
+  catalogError.value = "";
   try {
-    databases.value = (await systemApi.systemData()).databases || [];
+    const next = (await systemApi.systemData()).databases || [];
+    if (request !== catalogRequest) return;
+    databases.value = next;
+    catalogLoaded.value = true;
     if (!databases.value.some((item) => item.name === selectedDatabase.value))
       selectedDatabase.value = databases.value[0]?.name || "";
     if (!database.value?.tables.some((item) => item.name === selectedTable.value))
       selectedTable.value = database.value?.tables[0]?.name || "";
     applyRequestedTable();
-    const requestedOffset = Math.max(0, Number(route.query.offset) || 0);
-    if (selectedTable.value) await loadTable(requestedOffset, false);
+    requestedOffset.value = Math.max(0, Number(route.query.offset) || 0);
+    // The database directory is useful as soon as the catalog succeeds. Start
+    // row hydration independently so a slow table read cannot hold the whole
+    // workspace behind its loading state.
+    if (selectedTable.value) void loadTable(requestedOffset.value, false);
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    if (request !== catalogRequest) return;
+    catalogError.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
-    loading.value = false;
+    if (request === catalogRequest) catalogLoading.value = false;
   }
 }
 // A link such as ?table=semantic_memory_outbox opens that table in whichever database holds it.
@@ -131,31 +152,41 @@ function syncRoute(offset = page.value?.offset || 0) {
 
 async function loadTable(offset = 0, updateRoute = true) {
   if (!selectedDatabase.value || !selectedTable.value) return;
+  requestedOffset.value = offset;
   if (updateRoute) syncRoute(offset);
+  const identity = tableIdentity(offset);
+  const request = ++tableRequest;
+  const retained = shownTableIdentity.value === identity && Boolean(page.value);
   tableLoading.value = true;
   tableError.value = "";
-  detail.value = null;
+  if (!retained) detail.value = null;
   try {
-    page.value = await systemApi.systemDataRows(
+    const next = await systemApi.systemDataRows(
       selectedDatabase.value,
       selectedTable.value,
       25,
       offset,
     );
+    if (request !== tableRequest || identity !== tableIdentity()) return;
+    page.value = next;
+    shownTableIdentity.value = identity;
   } catch (cause) {
+    if (request !== tableRequest || identity !== tableIdentity()) return;
     tableError.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
-    tableLoading.value = false;
+    if (request === tableRequest) tableLoading.value = false;
   }
 }
 function chooseDatabase(name: string) {
   selectedDatabase.value = name;
   selectedTable.value = databases.value.find((item) => item.name === name)?.tables[0]?.name || "";
   search.value = "";
+  requestedOffset.value = 0;
   void loadTable(0);
 }
 function chooseTable(name: string) {
   selectedTable.value = name;
+  requestedOffset.value = 0;
   void loadTable(0);
 }
 
@@ -175,7 +206,7 @@ watch(
       nextDb === selectedDatabase.value &&
       nextTable === selectedTable.value &&
       nextQuery === search.value &&
-      nextOffset === Number(page.value?.offset || 0)
+      nextOffset === requestedOffset.value
     )
       return;
     if (databases.value.some((item) => item.name === nextDb)) selectedDatabase.value = nextDb;
@@ -183,6 +214,7 @@ watch(
     applyRequestedTable();
     if (nextTable && database.value?.tables.some((item) => item.name === nextTable))
       selectedTable.value = nextTable;
+    requestedOffset.value = nextOffset;
     void loadTable(nextOffset, false);
   },
 );
@@ -202,19 +234,33 @@ watch(
           }}
         </p>
       </div>
-      <button class="btn" type="button" :disabled="loading" @click="loadDatabases">
+      <button class="btn" type="button" :disabled="catalogLoading" @click="loadDatabases">
         <AppIcon name="refresh" /> {{ t("common.refresh", "Refresh") }}
       </button>
     </header>
 
-    <div v-if="error" class="state error" role="alert">
+    <div v-if="catalogError && !catalogLoaded" class="state error" role="alert">
       <strong>{{ t("runtime.system_database_failed", "Could not load system databases.") }}</strong
-      ><span>{{ error }}</span>
+      ><span>{{ catalogError }}</span>
+      <button class="btn tiny" type="button" @click="loadDatabases">
+        {{ t("common.retry", "Retry") }}
+      </button>
     </div>
-    <div v-else-if="loading" class="state" role="status">
+    <div v-else-if="catalogLoading && !catalogLoaded" class="state" role="status">
       {{ t("runtime.system_database_loading", "Loading system databases…") }}
     </div>
-    <div v-else class="browser">
+    <template v-else-if="catalogLoaded">
+      <div v-if="catalogLoading" class="state state-inline" role="status">
+        {{ t("loading.updating", "Updating…") }}
+      </div>
+      <div v-if="catalogError" class="state error state-inline" role="alert">
+        <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+        <span>{{ catalogError }}</span>
+        <button class="btn tiny" type="button" @click="loadDatabases">
+          {{ t("common.retry", "Retry") }}
+        </button>
+      </div>
+      <div class="browser">
       <aside class="directory">
         <div class="database-switcher">
           <button
@@ -303,17 +349,31 @@ watch(
           }}</span>
         </div>
 
-        <div v-if="tableError" class="state error">
+        <div v-if="tableError && !displayedTableIsCurrent" class="state error" role="alert">
           <strong>{{ t("runtime.system_table_failed", "Could not load this table.") }}</strong
           ><span>{{ tableError }}</span>
+          <button class="btn tiny" type="button" @click="loadTable(requestedOffset)">
+            {{ t("common.retry", "Retry") }}
+          </button>
         </div>
-        <div v-else-if="tableLoading" class="state">
+        <div v-else-if="tableInitialPending" class="state" role="status">
           {{ t("runtime.system_rows_loading", "Loading rows…") }}
         </div>
-        <div v-else-if="!page?.rows.length" class="state">
-          {{ t("runtime.system_table_empty", "This table is empty.") }}
-        </div>
-        <template v-else>
+        <template v-else-if="displayedTableIsCurrent">
+          <div v-if="tableRefreshing" class="state state-inline" role="status">
+            {{ t("loading.updating", "Updating…") }}
+          </div>
+          <div v-if="tableError" class="state error state-inline" role="alert">
+            <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+            <span>{{ tableError }}</span>
+            <button class="btn tiny" type="button" @click="loadTable(requestedOffset)">
+              {{ t("common.retry", "Retry") }}
+            </button>
+          </div>
+          <div v-if="!page?.rows.length" class="state">
+            {{ t("runtime.system_table_empty", "This table is empty.") }}
+          </div>
+          <template v-else>
           <div class="data-table-wrap">
             <table class="data-table">
               <thead>
@@ -375,11 +435,17 @@ watch(
               </button>
             </div>
           </footer>
+          </template>
         </template>
       </section>
-    </div>
+      </div>
+    </template>
 
-    <aside v-if="detail" class="detail-panel" aria-label="Row details">
+    <aside
+      v-if="detail && displayedTableIsCurrent"
+      class="detail-panel"
+      aria-label="Row details"
+    >
       <header>
         <div>
           <small>{{ selectedDatabase }} / {{ selectedTable }}</small>
@@ -445,6 +511,9 @@ watch(
 }
 .state.error {
   color: var(--tone-danger-fg);
+}
+.state-inline {
+  padding-block: 10px;
 }
 .browser {
   display: grid;
