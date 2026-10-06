@@ -64,8 +64,8 @@ from .concurrency import (
 )
 from .config import APP_VERSION as APP_VERSION
 from .config import settings
-from .corpus_citations import _citation_strings
 from .corpus_build_lifecycle import BuildLifecycleMixin
+from .corpus_citations import _citation_strings
 from .corpus_editorial_memory import EditorialMemoryMixin
 from .corpus_enrichment_helpers import (
     _enrichment_pass_indices as _enrichment_pass_indices,
