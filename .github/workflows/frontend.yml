@@ -109,6 +109,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          ./web/node_modules/.bin/prettier web/src/components/pipelines/PipelineExecutionsWorkspace.vue \
+            --write --config web/.prettierrc --ignore-path .prettierignore
+          echo "=== PRETTIER DIFF: PipelineExecutionsWorkspace.vue ==="
+          git diff -- web/src/components/pipelines/PipelineExecutionsWorkspace.vue
+          echo "=== END PRETTIER DIFF ==="
+          exit 1
+
           if [ "$EVENT_NAME" = "workflow_dispatch" ] || [ -z "$BASE_SHA" ] || [[ "$BASE_SHA" =~ ^0+$ ]]; then
             BACKEND=true
             FRONTEND=true
