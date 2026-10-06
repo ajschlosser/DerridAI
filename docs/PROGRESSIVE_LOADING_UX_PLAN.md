@@ -40,7 +40,6 @@ The change does not weaken build authority or review provenance: the build list 
 
 This document is based on inspection of the current route inventory, views, shared loading/query infrastructure, and representative nested components. It is not a browser timing or visual audit; the validation pass below is required before implementation is considered complete. No application behavior changes are included in this documentation change.
 
-
 ### Operations and Compare workspace checkpoint — 2026-10-06
 
 Operations no longer waits for an external jobs refresh before mounting its page content. The Vue Operations panel owns the initial refresh: an unresolved first read shows region-shaped loading feedback rather than a confirmed-empty message, a refresh over known operations retains those rows, and transport failure stays local with Retry. Because the same panel is embedded on Home, the dashboard now mounts that region before its unrelated dashboard refresh completes.
