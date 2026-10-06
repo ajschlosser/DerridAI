@@ -21,6 +21,8 @@ Phase 10's route-commit slice landed in PR #565. Top-level routes now commit thr
 
 The current Phase 10 continuation is page-local hydration. Corpus Builder now prioritizes route-critical restoration: build discovery, the route-addressed build snapshot, and requested review topology hydrate without waiting for Setup-supporting provider, corpus-profile, or source-catalog reads. Those supporting reads begin immediately and continue in parallel. This keeps a deep-linked Build/Review/Publish workspace from being held behind unrelated Setup data while preserving the same authoritative build and review reads. The remaining work is the workspace-by-workspace audit for pages and regions that still gate useful shells or independent content on all-or-nothing initial hydration.
 
+The next page-local slice moves Operations hydration into the Vue-owned Operations panel itself. The Operations route now mounts its panel immediately instead of waiting for a jobs refresh before any destination content can appear. The panel distinguishes an unresolved first read from a confirmed empty queue, retains known operations while refreshing, and exposes a local retry state if the transport fails. The Home dashboard also mounts its Operations region independently of its unrelated dashboard refresh. Compare now renders both comparison panes and their controls before its record-library hydration completes, with loading/error state local to the library region and without prematurely claiming the library or comparison is empty.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
