@@ -1,4 +1,137 @@
 {
+  "contract": {
+    "pipeline_contract_version": 1,
+    "minimum_readable_pipeline_version": 1,
+    "application_version": "0.82.0",
+    "strategies": {
+      "context.research_thread": {
+        "version": 1
+      },
+      "fallback.metadata_precedents_lexical": {
+        "version": 1
+      },
+      "filter.metadata_scope": {
+        "version": 1
+      },
+      "filter.research_scope": {
+        "version": 1
+      },
+      "fusion.metadata_hybrid": {
+        "version": 1
+      },
+      "fusion.rrf": {
+        "version": 1
+      },
+      "llm.boundary_classification": {
+        "version": 1
+      },
+      "llm.closed_choice_evidence": {
+        "version": 1
+      },
+      "llm.document_manifest": {
+        "version": 1
+      },
+      "llm.generate_answer": {
+        "version": 1
+      },
+      "llm.grade_rag": {
+        "version": 1
+      },
+      "llm.reviewer_evidence_choice": {
+        "version": 1
+      },
+      "llm.structured_metadata": {
+        "version": 1
+      },
+      "llm.text_touchup": {
+        "version": 1
+      },
+      "normalize.collection_relevance": {
+        "version": 1
+      },
+      "pack.evidence_context": {
+        "version": 1
+      },
+      "pack.metadata_precedents": {
+        "version": 1
+      },
+      "query.evidence_field": {
+        "version": 1
+      },
+      "query.passthrough": {
+        "version": 1
+      },
+      "query.research_contextualize": {
+        "version": 1
+      },
+      "query.research_decompose": {
+        "version": 1
+      },
+      "rerank.cross_encoder": {
+        "version": 1
+      },
+      "rerank.lexical_fallback": {
+        "version": 1
+      },
+      "retrieve.chroma_similarity": {
+        "version": 1
+      },
+      "retrieve.claim_memory": {
+        "version": 1
+      },
+      "retrieve.lexical_bm25": {
+        "version": 1
+      },
+      "retrieve.memory_lexical_fallback": {
+        "version": 1
+      },
+      "retrieve.metadata_exemplars": {
+        "version": 1
+      },
+      "retrieve.response_memory": {
+        "version": 1
+      },
+      "retrieve.selected_evidence": {
+        "version": 1
+      },
+      "retrieve.source_cosine": {
+        "version": 1
+      },
+      "retrieve.store_filter": {
+        "version": 1
+      },
+      "retrieve.store_keyword": {
+        "version": 1
+      },
+      "retrieve.token_overlap": {
+        "version": 1
+      },
+      "select.memory_hints": {
+        "version": 1
+      },
+      "select.metadata_quotas": {
+        "version": 1
+      },
+      "select.mmr": {
+        "version": 1
+      },
+      "select.source_diversity": {
+        "version": 1
+      },
+      "select.top_k": {
+        "version": 1
+      },
+      "validate.citation_binding": {
+        "version": 1
+      },
+      "validate.evidence_support": {
+        "version": 1
+      },
+      "validate.provenance": {
+        "version": 1
+      }
+    }
+  },
   "purposes": [
     {
       "purpose_id": "research",
@@ -1861,8 +1994,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
@@ -3179,8 +3312,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
@@ -3337,8 +3470,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
@@ -3755,8 +3888,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
@@ -3829,8 +3962,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
@@ -4106,8 +4239,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 0.0,
-          "maximum": 1.0
+          "minimum": 0,
+          "maximum": 1
         },
         {
           "name": "limit",
@@ -4115,8 +4248,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
@@ -4257,8 +4390,8 @@
           "required": false,
           "multiple": false,
           "accepts_constant": true,
-          "minimum": 1.0,
-          "maximum": 1000.0
+          "minimum": 1,
+          "maximum": 1000
         }
       ],
       "outputs": [
