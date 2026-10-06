@@ -69,7 +69,6 @@ describe("ProvidersView", () => {
     expect(wrapper.get(".provider-title b").text()).toBe("Local Ollama");
   });
 
-
   it("starts collapsed with no save bar, then reveals fields and saves only after an edit", async () => {
     const { wrapper } = await mountView();
     await flushPromises();
