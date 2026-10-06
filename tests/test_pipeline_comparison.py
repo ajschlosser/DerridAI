@@ -352,14 +352,15 @@ def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
     } == {"Jacques Derrida", "Emmanuel Levinas"}
 
 
-def test_research_filter_wins_over_explicit_named_work_seed() -> None:
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_research_filter_wins_over_explicit_named_work_seed(version) -> None:
     request = RAGRunRequest(
         prompt=(
             "Explain the relation between alterity and trace. "
             "Cite Derrida and Levinas explicitly."
         ),
         pipeline_id="research.balanced",
-        pipeline_version=1,
+        pipeline_version=version,
         source_collection="corpus",
         locales=["en"],
         search_types=["lexical"],
@@ -384,6 +385,12 @@ def test_research_filter_wins_over_explicit_named_work_seed() -> None:
     )
 
     assert [item["record"]["record_id"] for item in result["evidence"]] == ["d1"]
+    scope_stages = [stage for stage in result["stages"] if stage["name"] == "research_scope"]
+    assert bool(scope_stages) == (version == 3)
+    if scope_stages:
+        assert scope_stages[0]["detail"]["active"] is True
+        assert scope_stages[0]["detail"]["metadata_fields"] == ["work"]
+
     assert result["retrieval"]["filter_plan"]["metadata_filter"] == {
         "work": {"$ne": "Totality and Infinity"}
     }
@@ -395,11 +402,12 @@ def test_research_filter_wins_over_explicit_named_work_seed() -> None:
     assert levinas_scope["matched"] is False
 
 
-def test_filtered_run_labels_pinned_evidence_exemption() -> None:
+@pytest.mark.parametrize("version", [1, 3])
+def test_filtered_run_labels_pinned_evidence_exemption(version) -> None:
     base = dict(
         prompt="Explain the trace.",
         pipeline_id="research.balanced",
-        pipeline_version=1,
+        pipeline_version=version,
         source_collection="corpus",
         locales=["en"],
         search_types=["lexical"],

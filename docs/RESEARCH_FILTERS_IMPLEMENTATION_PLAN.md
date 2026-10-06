@@ -482,6 +482,8 @@ This phase is optional and must not block deterministic explicit filters.
 
 ### Phase 6 — Pipeline Studio scope stage
 
+Status: first executable checkpoint implemented. `filter.research_scope` is registered with typed query ports; new immutable Research v3 definitions place it between query transformation and every retrieval route. The compiler rejects bypasses, duplicates and incorrect ordering. Existing v1/v2 definitions remain unchanged. The runtime revalidates filters before candidate generation and emits bounded scope diagnostics without filter values/source text; pinned evidence retains its explicit exception. The constrained Research adapter still does not honour arbitrary port rewiring. Dedicated filtered benchmark fixtures and full wiring migration remain outstanding. Validation: 151 targeted backend checks passed using temporary dependencies and a stubbed Chroma import; 10 Pipeline Studio frontend checks passed. One workflow UI suite could not load because the existing dependency installation lacks `@tanstack/vue-query`. Changed Python files and the repository-wide backend lint passed Ruff. Full preflight was attempted but is not green: the environment lacks mypy, pytest-xdist and Strawberry, while the frontend dependency installation is incomplete. The Pipeline Studio catalog artifact check passed independently. No live Chroma, browser, Docker or release-readiness claim.
+
 Deliverables:
 
 - registered Research scope strategy;

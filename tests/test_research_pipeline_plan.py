@@ -203,3 +203,36 @@ def test_research_fallbacks_follow_declared_edges() -> None:
     )
     assert plan.rerank_fallback("unavailable") is None
     assert plan.rerank_fallback("error") is None
+
+
+@pytest.mark.parametrize("pipeline_id", ["research.current", "research.balanced"])
+def test_scoped_research_preserves_historical_pipelines(pipeline_id) -> None:
+    for version in (1, 2):
+        assert (
+            compile_research_pipeline(
+                built_in_pipeline(pipeline_id, version)
+            ).scope_stage_id
+            is None
+        )
+    pipeline = built_in_pipeline(pipeline_id, 3)
+    plan = compile_research_pipeline(pipeline)
+    assert plan.scope_stage_id == "scope"
+    stages = {stage.id: stage for stage in pipeline.stages}
+    assert stages["query"].next == ["scope"]
+    assert set(stages["scope"].next) == {plan.semantic_stage_id, plan.lexical_stage_id}
+
+
+@pytest.mark.parametrize("mutation", ["bypass", "late", "duplicate", "disabled"])
+def test_research_scope_rejects_bypass_and_wrong_order(mutation) -> None:
+    data = built_in_pipeline("research.current", 3).model_dump(mode="json")
+    stages = {stage["id"]: stage for stage in data["stages"]}
+    if mutation == "bypass":
+        stages["query"]["next"].append("semantic")
+    elif mutation == "late":
+        stages["scope"]["next"] = ["fusion"]
+    elif mutation == "duplicate":
+        data["stages"].append({"id": "scope2", "strategy": "filter.research_scope"})
+    else:
+        stages["scope"]["enabled"] = False
+    with pytest.raises(ValueError):
+        compile_research_pipeline(PipelineDefinition.model_validate(data))

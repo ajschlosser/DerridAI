@@ -41,7 +41,12 @@ from .pipelines.research import (
     resolve_research_runtime_settings,
 )
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
-from .research_filters import combine_metadata_filters, metadata_filter_fields
+from .research_filters import (
+    combine_metadata_filters,
+    metadata_filter_fields,
+    normalize_document_filter,
+    normalize_metadata_filter,
+)
 from .research_followup import (
     GENERATION_CONTRACT,
     QUERY_CONTRACT,
@@ -1594,9 +1599,14 @@ def run_rag_pipeline(
     if not request.skip_retrieval and not effective_search_types:
         raise ValueError("The selected Research pipeline has no usable retrieval route.")
 
+    scope_started = time.perf_counter()
     filter_plan = request.filter_plan
-    metadata_filter = filter_plan.metadata_filter if filter_plan else None
-    document_filter = filter_plan.document_filter if filter_plan else None
+    metadata_filter = normalize_metadata_filter(
+        filter_plan.metadata_filter if filter_plan else None
+    )
+    document_filter = normalize_document_filter(
+        filter_plan.document_filter if filter_plan else None
+    )
     filter_detail: dict[str, Any] = {
         "source": filter_plan.source if filter_plan else None,
         "metadata_filter": metadata_filter,
@@ -1604,13 +1614,32 @@ def run_rag_pipeline(
         "metadata_fields": sorted(metadata_filter_fields(metadata_filter)),
     }
 
+    scope_seconds = time.perf_counter() - scope_started
     selected_candidates = _selected_evidence_candidates(request, store)
     if metadata_filter or document_filter:
         # Pinned evidence is user-curated and is not removed by the retrieval
         # filter; record the exception so audit views can label it.
         filter_detail["selected_evidence_exempt_count"] = len(selected_candidates)
+    if pipeline_plan.scope_stage_id:
+        stages.append(
+            {
+                "name": "research_scope",
+                "seconds": round(scope_seconds, 6),
+                "detail": {
+                    "active": bool(metadata_filter or document_filter),
+                    "source": filter_detail["source"],
+                    "metadata_fields": filter_detail["metadata_fields"],
+                    "document_filter_active": bool(document_filter),
+                    "selected_evidence_exempt_count": filter_detail.get(
+                        "selected_evidence_exempt_count", 0
+                    ),
+                },
+            }
+        )
     if request.skip_retrieval and not selected_candidates:
-        raise ValueError("Selected-evidence-only RAG requires at least one selected evidence record.")
+        raise ValueError(
+            "Selected-evidence-only RAG requires at least one selected evidence record."
+        )
     if not request.skip_retrieval and not str(request.source_collection or "").strip():
         raise ValueError("Select a source collection when retrieval is enabled.")
 

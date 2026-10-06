@@ -1150,6 +1150,30 @@ BUILT_IN_PIPELINES += tuple(
 )
 
 
+def _scoped_research(pipeline: PipelineDefinition) -> PipelineDefinition:
+    # Preserve historical definitions and their hashes.
+    data = pipeline.model_dump(mode="json")
+    data["version"] = 3
+    query = next(stage for stage in data["stages"] if stage["id"] == "query")
+    data["stages"].insert(
+        data["stages"].index(query) + 1,
+        {
+            "id": "scope",
+            "strategy": "filter.research_scope",
+            "next": query["next"],
+        },
+    )
+    query["next"] = ["scope"]
+    return PipelineDefinition.model_validate(data)
+
+
+BUILT_IN_PIPELINES += tuple(
+    _scoped_research(pipeline)
+    for pipeline in BUILT_IN_PIPELINES
+    if pipeline.purpose == "research" and pipeline.version == 2
+)
+
+
 BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="corpus_metadata_enrichment",
@@ -1189,7 +1213,7 @@ BUILT_IN_ASSIGNMENTS: tuple[PipelineAssignment, ...] = (
     PipelineAssignment(
         feature="research",
         pipeline_id="research.current",
-        pipeline_version=2,
+        pipeline_version=3,
         source="built_in",
         override_allowed=True,
     ),

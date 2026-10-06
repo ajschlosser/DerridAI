@@ -188,6 +188,18 @@ def build_research_trace(
             )
         )
 
+    if plan.scope_stage_id:
+        scope_stage = stage_payloads.get("research_scope") or {}
+        trace_stages.append(
+            trace_stage(
+                plan.scope_stage_id,
+                strategy_for(plan.scope_stage_id),
+                elapsed_seconds=scope_stage.get("seconds"),
+                parameters=scope_stage.get("detail") or {},
+                status="completed" if scope_stage else "skipped",
+            )
+        )
+
     if plan.semantic_stage_id:
         trace_stages.append(
             trace_stage(
