@@ -679,6 +679,7 @@ describe("System Data Pipeline Studio", () => {
     await flushPromises();
     expect(vi.mocked(pipelinesApi.catalog).mock.calls.length).toBe(before);
   });
+
   it("renders the executions workspace before the first run page resolves", async () => {
     let resolveRuns!: (value: Awaited<ReturnType<typeof pipelinesApi.runs>>) => void;
     vi.mocked(pipelinesApi.runs).mockImplementationOnce(
@@ -727,6 +728,4 @@ describe("System Data Pipeline Studio", () => {
     expect(wrapper.text()).toContain("Operational health");
     wrapper.unmount();
   });
-
-
 });
