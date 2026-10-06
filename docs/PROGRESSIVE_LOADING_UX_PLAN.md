@@ -32,6 +32,12 @@ Corpus Builder/Source Explorer and the System Data sibling routes deliberately s
 
 This fixes route-module blocking only. It does not claim that every workspace has completed its region-by-region data-hydration conversion; the inventory below remains the authority for those page-local boundaries.
 
+### Corpus Builder route-critical hydration checkpoint — 2026-10-06
+
+Corpus Builder now restores a route-addressed build and its requested review topology independently of Setup-supporting provider, corpus-profile, and source-catalog reads. Those supporting reads still begin at mount, but they no longer sit in the prerequisite `Promise.all` ahead of `refreshBuild()` and review hydration. A deep link to Build, Review, or Publish can therefore establish its authoritative build context while slower Setup data continues to hydrate.
+
+The change does not weaken build authority or review provenance: the build list still resolves the selected build, `refreshBuild()` remains the authoritative build snapshot, and review hydration still follows that selected build. It also does not claim that source preview or every Corpus Builder region is progressively hydrated; those finer boundaries remain open. A focused frontend regression holds the asset-list read unresolved and requires the requested review build and queue to hydrate before that support read completes.
+
 This document is based on inspection of the current route inventory, views, shared loading/query infrastructure, and representative nested components. It is not a browser timing or visual audit; the validation pass below is required before implementation is considered complete. No application behavior changes are included in this documentation change.
 
 ## Findings and coverage
