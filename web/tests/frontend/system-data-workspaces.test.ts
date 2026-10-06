@@ -168,6 +168,85 @@ describe("System Data workspaces", () => {
     wrapper.unmount();
   });
 
+  it("retains current rows during same-table refresh and withholds them for another table", async () => {
+    vi.spyOn(systemApi, "systemData").mockResolvedValue({
+      databases: [
+        {
+          name: "system",
+          backend: "sqlite",
+          tables: [
+            { name: "jobs", row_count: 1, columns: [{ name: "id", primary_key: 1 }] },
+            { name: "annotations", row_count: 1, columns: [{ name: "id", primary_key: 1 }] },
+          ],
+        },
+      ],
+    });
+    const rows = vi.spyOn(systemApi, "systemDataRows").mockResolvedValueOnce({
+      database: "system",
+      name: "jobs",
+      row_count: 1,
+      columns: [{ name: "id", primary_key: 1 }],
+      rows: [{ id: "job-1" }],
+      offset: 0,
+      limit: 25,
+    });
+
+    const wrapper = mount(SystemDataDatabases);
+    await flushPromises();
+    expect(wrapper.text()).toContain("job-1");
+
+    let rejectRefresh!: (reason?: unknown) => void;
+    rows.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+    await wrapper
+      .findAll(".table-row button")
+      .find((button) => button.text().includes("jobs"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("job-1");
+    expect(wrapper.text()).toContain("Updating");
+
+    rejectRefresh(new Error("rows offline"));
+    await flushPromises();
+    expect(wrapper.text()).toContain("job-1");
+    expect(wrapper.text()).toContain("rows offline");
+
+    let resolveAnnotations!: (value: Awaited<ReturnType<typeof systemApi.systemDataRows>>) => void;
+    rows.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAnnotations = resolve;
+        }),
+    );
+    await wrapper
+      .findAll(".table-row button")
+      .find((button) => button.text().includes("annotations"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("job-1");
+    expect(wrapper.text()).toContain("Loading rows");
+
+    resolveAnnotations({
+      database: "system",
+      name: "annotations",
+      row_count: 1,
+      columns: [{ name: "id", primary_key: 1 }],
+      rows: [{ id: "annotation-1" }],
+      offset: 0,
+      limit: 25,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("annotation-1");
+    wrapper.unmount();
+  });
+
   it("keeps healthy stores visible when one overview source fails", async () => {
     vi.spyOn(systemApi, "systemData").mockRejectedValue(new Error("sqlite offline"));
     vi.spyOn(systemApi, "responseCacheRecords").mockResolvedValue({
