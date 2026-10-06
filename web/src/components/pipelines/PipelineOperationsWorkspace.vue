@@ -21,6 +21,7 @@ import { computed } from "vue";
 import PipelineBenchmarkWorkspace from "./PipelineBenchmarkWorkspace.vue";
 import PipelineComparisonWorkspace from "./PipelineComparisonWorkspace.vue";
 import PipelineOperationsSummary from "./PipelineOperationsSummary.vue";
+import UiButton from "../ui/UiButton.vue";
 import UiTabs from "../ui/UiTabs.vue";
 import type { PipelineOperationsSection } from "../../features/pipelines/composables/usePipelineStudioNavigation";
 import { useI18nStore } from "../../stores/i18n";
@@ -39,12 +40,16 @@ const props = defineProps<{
   strategies: PipelineStrategy[];
   purposes: PipelinePurpose[];
   vocabulary: PipelineWorkflowVocabulary;
+  metricsPending?: boolean;
+  metricsRefreshing?: boolean;
+  metricsError?: string;
 }>();
 const emit = defineEmits<{
   "update:operation": [section: PipelineOperationsSection];
   viewExecutions: [category: string];
   viewStrategy: [strategyId: string];
   openPipeline: [key: string];
+  retryMetrics: [];
 }>();
 
 const i18n = useI18nStore();
@@ -88,6 +93,42 @@ const tabs = computed(() => [
           @open-pipeline="emit('openPipeline', $event)"
         />
       </KeepAlive>
+      <div
+        v-if="props.operation === 'health' && props.metricsPending"
+        class="operation-state"
+        role="status"
+      >
+        {{ t("pipelines.health_loading", "Loading operational health…") }}
+      </div>
+      <div
+        v-else-if="props.operation === 'health' && props.metricsError && !metrics"
+        class="operation-state error"
+        role="alert"
+      >
+        <div>
+          <strong>{{ t("pipelines.health_failed", "Could not load operational health.") }}</strong>
+          <p>{{ props.metricsError }}</p>
+        </div>
+        <UiButton :label="t('common.retry', 'Retry')" @click="emit('retryMetrics')" />
+      </div>
+      <div
+        v-if="props.operation === 'health' && props.metricsRefreshing && metrics"
+        class="operation-state inline"
+        role="status"
+      >
+        {{ t("loading.updating", "Updating…") }}
+      </div>
+      <div
+        v-if="props.operation === 'health' && props.metricsError && metrics"
+        class="operation-state error inline"
+        role="alert"
+      >
+        <div>
+          <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
+          <p>{{ props.metricsError }}</p>
+        </div>
+        <UiButton :label="t('common.retry', 'Retry')" @click="emit('retryMetrics')" />
+      </div>
       <PipelineOperationsSummary
         v-if="props.operation === 'health' && metrics"
         :metrics="metrics"
@@ -105,5 +146,26 @@ const tabs = computed(() => [
 .pipeline-operations {
   display: grid;
   gap: var(--space-4);
+}
+.operation-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 72px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  color: var(--text-secondary);
+}
+.operation-state.inline {
+  min-height: 0;
+  padding-block: var(--space-2);
+}
+.operation-state.error {
+  color: var(--tone-danger-fg);
+}
+.operation-state p {
+  margin: 2px 0 0;
 }
 </style>

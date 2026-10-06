@@ -83,6 +83,9 @@ const meta = {
     total: runs.length,
     limit: 25,
     offset: 0,
+    pending: false,
+    refreshing: false,
+    error: "",
   },
 } satisfies Meta<typeof PipelineExecutionsWorkspace>;
 

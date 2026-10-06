@@ -59,20 +59,31 @@ export function usePipelineStudioData(nav: {
     { detail: () => ["runs", nav.runFilters.value, nav.runOffset.value] },
   );
 
-  // Keep the last good page while a new key loads so the table never blanks during a refetch.
-  const runs = ref<PipelineRunTrace[]>([]);
-  const runTotal = ref(0);
+  // Bind retained execution rows to the query identity that produced them. Same-key
+  // refreshes may keep useful rows visible, but changing filters/page must never relabel
+  // the previous result set as though it belonged to the new request.
+  const requestedRunsIdentity = computed(() =>
+    JSON.stringify([nav.runFilters.value, nav.runOffset.value]),
+  );
+  const shownRunsIdentity = ref("");
+  const retainedRuns = ref<PipelineRunTrace[]>([]);
+  const retainedRunTotal = ref(0);
   watch(
     () => runsQuery.data.value,
     (page) => {
       if (!page) return;
-      runs.value = page.runs || [];
-      runTotal.value = page.total ?? runs.value.length;
+      retainedRuns.value = page.runs || [];
+      retainedRunTotal.value = page.total ?? retainedRuns.value.length;
+      shownRunsIdentity.value = requestedRunsIdentity.value;
     },
     { immediate: true },
   );
+  const runsAreCurrent = computed(() => shownRunsIdentity.value === requestedRunsIdentity.value);
+  const runs = computed(() => (runsAreCurrent.value ? retainedRuns.value : []));
+  const runTotal = computed(() => (runsAreCurrent.value ? retainedRunTotal.value : 0));
 
-  // A selected trace that is not on the current page is fetched on its own.
+  // A selected trace that is not on the current page is fetched on its own. Do not use
+  // retained rows from another filter/page identity to satisfy that selection.
   const offPage = computed(
     () =>
       Boolean(nav.selectedRunId.value) &&
@@ -93,7 +104,7 @@ export function usePipelineStudioData(nav: {
   watch(
     [runs, () => focusQuery.isError.value, () => nav.selectedRunId.value],
     () => {
-      if (!runsQuery.data.value) return;
+      if (!runsAreCurrent.value || !runsQuery.data.value) return;
       if (!nav.selectedRunId.value && runs.value.length)
         nav.selectedRunId.value = runs.value[0].run_id;
       else if (offPage.value && focusQuery.isError.value)
@@ -102,10 +113,8 @@ export function usePipelineStudioData(nav: {
     { immediate: true },
   );
 
-  const error = computed(() => {
-    const failure = catalogQuery.error.value || metricsQuery.error.value || runsQuery.error.value;
-    return failure ? (failure instanceof Error ? failure.message : String(failure)) : "";
-  });
+  const messageFor = (failure: unknown) =>
+    failure ? (failure instanceof Error ? failure.message : String(failure)) : "";
 
   /** Read everything again now (after a local mutation); realtime covers other writers. */
   async function reload() {
@@ -114,12 +123,25 @@ export function usePipelineStudioData(nav: {
 
   return {
     catalog: computed(() => catalogQuery.data.value ?? null),
+    catalogPending: computed(() => catalogQuery.isPending.value),
+    catalogRefreshing: computed(
+      () => catalogQuery.isFetching.value && Boolean(catalogQuery.data.value),
+    ),
+    catalogError: computed(() => messageFor(catalogQuery.error.value)),
     metrics: computed(() => metricsQuery.data.value ?? null),
+    metricsPending: computed(() => metricsQuery.isFetching.value && !metricsQuery.data.value),
+    metricsRefreshing: computed(
+      () => metricsQuery.isFetching.value && Boolean(metricsQuery.data.value),
+    ),
+    metricsError: computed(() => messageFor(metricsQuery.error.value)),
     runs,
     runTotal,
     focusedRun,
-    loading: computed(() => catalogQuery.isPending.value),
-    error,
+    runsPending: computed(() => runsQuery.isFetching.value && !runsAreCurrent.value),
+    runsRefreshing: computed(() => runsQuery.isFetching.value && runsAreCurrent.value),
+    runsError: computed(() => messageFor(runsQuery.error.value)),
+    reloadRuns: () => runsQuery.refetch(),
+    reloadMetrics: () => metricsQuery.refetch(),
     reload,
   };
 }
