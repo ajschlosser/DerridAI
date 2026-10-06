@@ -80,11 +80,12 @@ export function useCorpusPublication(options: {
       // complete authoritative corpus state. Publication should never race a
       // background save or rely on counters/validation left over from the run.
       await options.beforePublish?.();
+      if (options.currentBuild.value?.build_id !== buildId) return null;
+
       const reconciled = await corpusBuilderApi.reconcile(buildId);
-      if (options.currentBuild.value?.build_id === buildId) {
-        options.currentBuild.value = reconciled;
-        options.syncBuild?.(reconciled);
-      }
+      if (options.currentBuild.value?.build_id !== buildId) return null;
+      Object.assign(options.currentBuild.value, reconciled);
+      options.syncBuild?.(options.currentBuild.value);
 
       if (
         !publishOptions.acceptUnreviewed &&
@@ -100,8 +101,10 @@ export function useCorpusPublication(options: {
       });
       // One authoritative detail read attaches the publication snapshot and
       // syncs the already-loaded build rail in place. Publication does not add
-      // or remove builds, so a second full list read is unnecessary.
-      await options.refreshBuild();
+      // or remove builds, so a second full list read is unnecessary. If the
+      // reviewer navigated to another build during the request, leave that
+      // newly selected build alone rather than refreshing it as a side effect.
+      if (options.currentBuild.value?.build_id === buildId) await options.refreshBuild();
       options.setMessage(
         publishOptions.acceptUnreviewed
           ? options.tf("pdf_corpus.published_unreviewed", {
