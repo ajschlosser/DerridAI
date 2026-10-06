@@ -61,8 +61,16 @@ let resizeObserver: ResizeObserver | null = null;
 let lastRenderedPage = 0;
 let lastRenderedWidth = 0;
 const zoom = ref(1);
+/**
+ * The page number that the canvas actually represents. This intentionally
+ * differs from props.page while a new page is requested: retained pixels
+ * must never be announced or overlaid as the new page before rendering commits.
+ */
+const displayedPage = ref(0);
 const pageBlocks = computed(() =>
-  props.blocks.filter((block) => Number(block.page) === Number(props.page)),
+  displayedPage.value
+    ? props.blocks.filter((block) => Number(block.page) === Number(displayedPage.value))
+    : [],
 );
 const evidenceSet = computed(() => new Set(props.evidenceBlockIds.map(String)));
 function boxStyle(block: SourceBlock) {
@@ -98,6 +106,12 @@ async function destroyDocument() {
   renderGeneration += 1;
   lastRenderedPage = 0;
   lastRenderedWidth = 0;
+  displayedPage.value = 0;
+  const node = canvas.value;
+  if (node) {
+    node.width = 0;
+    node.height = 0;
+  }
   await cancelRender().catch(() => {});
   const task = loadingTask;
   const doc = pdfDocument;
@@ -160,6 +174,7 @@ async function renderPage() {
     const outputScale = Math.min(2, window.devicePixelRatio || 1);
     const node = canvas.value;
     if (!node) return;
+    if (safePage !== displayedPage.value) displayedPage.value = 0;
     node.width = Math.floor(viewport.width * outputScale);
     node.height = Math.floor(viewport.height * outputScale);
     node.style.width = `${Math.floor(viewport.width)}px`;
@@ -177,6 +192,7 @@ async function renderPage() {
       renderTask = null;
       lastRenderedPage = safePage;
       lastRenderedWidth = available;
+      displayedPage.value = safePage;
     }
   } catch (exc: unknown) {
     if (
@@ -252,7 +268,14 @@ onBeforeUnmount(async () => {
       :aria-busy="loading ? 'true' : 'false'"
       :style="{ maxWidth: `${props.maxWidth}px` }"
     >
-      <canvas ref="canvas" :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', { page })"></canvas>
+      <canvas
+        ref="canvas"
+        :aria-label="
+          displayedPage
+            ? i18n.tf('pdf_corpus.pdf_page_canvas', { page: displayedPage })
+            : i18n.t('pdf_corpus.pdf_loading')
+        "
+      ></canvas>
       <div v-if="showSourceBoxes" class="block-overlay" aria-hidden="true">
         <span
           v-for="block in pageBlocks"
@@ -264,8 +287,8 @@ onBeforeUnmount(async () => {
       </div>
       <slot name="overlay"></slot>
     </div>
-    <p class="viewer-caption">
-      {{ i18n.tf("pdf_corpus.pdf_highlight_help", { page }) }}
+    <p v-if="displayedPage" class="viewer-caption">
+      {{ i18n.tf("pdf_corpus.pdf_highlight_help", { page: displayedPage }) }}
     </p>
   </section>
 </template>
