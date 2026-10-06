@@ -86,7 +86,9 @@ class DocumentManifestModel(BaseModel):
 
 
 
-class BoundaryChangeModel(BaseModel):
+class ScholarlyBoundaryChangeModel(BaseModel):
+    """Profile-specific change flags for the legacy single-boundary response."""
+
     model_config = ConfigDict(extra="forbid")
     speaker: bool = False
     position_holder: bool = False
@@ -97,14 +99,13 @@ class BoundaryChangeModel(BaseModel):
     argumentative_move: bool = False
 
 
-
 class BoundaryDecisionModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
     after_block_id: str
     decision: Literal["split", "keep", "uncertain"] = "uncertain"
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     reason: str = ""
-    change: BoundaryChangeModel = Field(default_factory=BoundaryChangeModel)
+    change: ScholarlyBoundaryChangeModel = Field(default_factory=ScholarlyBoundaryChangeModel)
 
 
 
@@ -187,10 +188,42 @@ class MetadataResponseModel(BaseModel):
 
 
 
-BoundaryDimension = Literal[
+# These are segmentation signals for the built-in Derrida scholarly profile, not
+# universal metadata fields. Keeping the transport type profile-specific prevents
+# arbitrary schema fields from silently becoming segmentation dimensions.
+ScholarlyBoundaryDimension = Literal[
     "speaker", "position_holder", "stance", "target", "quotation_frame",
     "discourse_role", "argumentative_move",
 ]
+
+SCHOLARLY_SEGMENTATION_DIMENSIONS: tuple[ScholarlyBoundaryDimension, ...] = (
+    "speaker",
+    "position_holder",
+    "stance",
+    "target",
+    "quotation_frame",
+    "discourse_role",
+    "argumentative_move",
+)
+
+
+def segmentation_dimensions_for_profile(profile: dict[str, Any]) -> tuple[str, ...]:
+    """Return the explicitly configured segmentation semantics for one corpus profile.
+
+    Segmentation roles are part of a profile contract, not a projection of the
+    MetadataSchema. A custom metadata field therefore cannot become a boundary
+    signal merely because it shares a name or group with a scholarly field.
+    """
+    contract = profile.get("segmentation_contract")
+    if not isinstance(contract, dict):
+        raise ValueError("Corpus profile is missing its segmentation_contract.")
+    dimensions = contract.get("boundary_dimensions")
+    if not isinstance(dimensions, list) or not dimensions:
+        raise ValueError("Corpus profile segmentation_contract has no boundary_dimensions.")
+    normalized = tuple(str(value).strip() for value in dimensions if str(value).strip())
+    if len(normalized) != len(dimensions) or len(set(normalized)) != len(normalized):
+        raise ValueError("Corpus profile segmentation boundary_dimensions must be unique non-empty names.")
+    return normalized
 
 
 
@@ -199,7 +232,7 @@ class BatchBoundaryDecisionModel(BaseModel):
     after: str = Field(min_length=1, max_length=200)
     decision: Literal["split", "keep"]
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
-    changes: list[BoundaryDimension] = Field(default_factory=list, max_length=7)
+    changes: list[ScholarlyBoundaryDimension] = Field(default_factory=list, max_length=7)
 
 
 
@@ -334,7 +367,10 @@ CORPUS_PROFILES: dict[str, dict[str, Any]] = {
         "name": "Derrida scholarly corpus v12",
         "version": 12,
         "description": "Testy Titmouse: reviewer-owned document structure outranks semantic inference, closed-vocabulary LLM output is normalized with raw provenance retained, and field-level LLM participation remains auditable.",
-        "boundary_dimensions": ["speaker", "position_holder", "stance", "target", "quotation_frame", "discourse_role", "argumentative_move"],
+        "segmentation_contract": {
+            "profile": "derrida_scholarly",
+            "boundary_dimensions": list(SCHOLARLY_SEGMENTATION_DIMENSIONS),
+        },
         "discourse_roles": DISCOURSE_ROLES,
         "region_types": REGION_TYPES,
         "required_metadata_fields": list(HYBRID_REQUIRED_FIELDS),

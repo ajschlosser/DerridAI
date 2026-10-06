@@ -145,7 +145,7 @@ Status values are **not started**, **in progress**, **blocked**, and **complete*
 | Inventory and guardrails                    | complete    | this document, tests added per workstream                                              | Production hard-coding is classified as structural, compatibility-only, default-schema definition, or migration target.                                                     |
 | Semantic Content Graph semantic-ID routing  | complete    | `api/app/semantic_content_graph.py`, `api/app/metadata_schema.py`, graph tests         | Graph node/edge projection discovers scholarly roles through schema semantic compatibility identities; renamed schema fields with the same semantics behave like built-ins. |
 | Backend compatibility constants containment | complete    | `api/app/corpus_metadata.py`, `api/app/corpus_review_queue.py`, callers                | Legacy constants no longer determine the runtime universe; remaining uses are compatibility/default-profile characterization and are documented as such.                    |
-| Segmentation/profile semantics              | not started | `api/app/corpus_models.py`, segmentation/profile code                                  | Profile-specific segmentation signals are owned by an explicit profile contract rather than presented as universal metadata fields.                                         |
+| Segmentation/profile semantics              | complete    | `api/app/corpus_models.py`, segmentation/profile code                                  | Profile-specific segmentation signals are owned by an explicit profile contract rather than presented as universal metadata fields.                                         |
 | Record/touch-up/RAG transport               | complete    | `web/src/domain/recordPayloads.ts`, backend request models/adapters                    | Schema-authorized fields are transported from pinned schema/assertion metadata; adding or renaming an ordinary field does not require a transport whitelist edit.           |
 | Work-metadata scope handling                | complete    | `web/src/domain/workMetadata.ts`                                                       | Record-vs-document/work exclusion follows schema scope/field identity rather than a negative list of scholarly field names.                                                 |
 | Record Inspector and edit layouts           | complete    | `web/src/domain/inspectorLayout.ts`, `recordDialogs.ts`, Record edit/bulk components   | Groups/order/control metadata come from schema/group/UI descriptors, with built-in ordering only as a fallback.                                                             |
@@ -196,6 +196,8 @@ Status values are **not started**, **in progress**, **blocked**, and **complete*
 6. Add tests proving a new schema field appears in review facets/edit policy without changing a Python constant.
 
 #### Phase 3 — profile-specific segmentation
+
+Implemented: the Derrida scholarly profile now owns an explicit `segmentation_contract`; the remaining single-boundary and batch transports are explicitly scholarly-profile-specific rather than generic metadata models; and boundary prompt wording is generated from the profile contract while preserving the v9 prompt text. Regression coverage proves that an unrelated custom field such as `conceptual_tension` cannot become a segmentation signal.
 
 1. Separate segmentation-change signals from generic record metadata.
 2. Define the scholarly/default profile's segmentation semantic roles explicitly.
