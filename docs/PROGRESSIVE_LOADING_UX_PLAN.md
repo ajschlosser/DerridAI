@@ -26,7 +26,7 @@ Navigating to a page should reveal its title, layout, and useful controls immedi
 
 ### Route-commit checkpoint — 2026-10-06
 
-Top-level route-module loading no longer owns navigation completion. Each application route now commits through a synchronous progressive entry component; breadcrumbs, active navigation state, URL/history and the destination loading frame can update before the destination JavaScript chunk resolves. The code-split view module loads inside that committed route. Ordinary module-load failures expose in-place Retry/Reload, while the existing stale-deployment recovery remains responsible for replaced hashed chunks.
+Top-level route-module loading no longer owns navigation completion. Each application route now commits through a synchronous progressive entry component; breadcrumbs, active navigation state, URL/history and the destination loading frame can update before the destination JavaScript chunk resolves. The code-split view module loads inside that committed route. The wrapper starts the chunk read immediately but deliberately gives the destination skeleton a browser paint before mounting the real page, so even a cached module with expensive synchronous setup cannot make the previous page appear to linger. Ordinary module-load failures expose in-place Retry/Reload, while the existing stale-deployment recovery remains responsible for replaced hashed chunks.
 
 Corpus Builder/Source Explorer and the System Data sibling routes deliberately share their progressive entry object so this change does not turn sibling navigation into a remount boundary. A focused router regression keeps a destination chunk unresolved and requires `router.currentRoute` plus the destination skeleton to update before that promise settles.
 
