@@ -34,7 +34,7 @@ export function useCorpusPublication(options: {
   busy: Ref<string>;
   setMessage: (message: string, tone?: MessageTone) => void;
   refreshBuild: () => Promise<void>;
-  refreshBuilds: () => Promise<void>;
+  syncBuild?: (build: CorpusBuild) => void;
   beforePublish?: () => Promise<void>;
   t: (key: string, fallback?: string) => string;
   tf: (key: string, values: Record<string, string | number>) => string;
@@ -80,20 +80,18 @@ export function useCorpusPublication(options: {
       // complete authoritative corpus state. Publication should never race a
       // background save or rely on counters/validation left over from the run.
       await options.beforePublish?.();
+      if (options.currentBuild.value?.build_id !== buildId) return null;
+
       const reconciled = await corpusBuilderApi.reconcile(buildId);
-      if (options.currentBuild.value?.build_id === buildId) {
-        options.currentBuild.value = reconciled;
-      }
+      if (options.currentBuild.value?.build_id !== buildId) return null;
+      Object.assign(options.currentBuild.value, reconciled);
+      options.syncBuild?.(options.currentBuild.value);
 
       if (
         !publishOptions.acceptUnreviewed &&
         reconciled.publication_readiness &&
         !reconciled.publication_readiness.can_publish
       ) {
-        // The reconciled build is already authoritative locally. Update the
-        // history rail once for the blocked outcome, but do not also perform
-        // this list read on the successful path where a final refresh follows.
-        await options.refreshBuilds();
         options.setMessage(options.t("pdf_corpus.publication_waiting_help"));
         return null;
       }
@@ -101,8 +99,12 @@ export function useCorpusPublication(options: {
       const result = await corpusBuilderApi.publish(buildId, {
         acceptUnreviewed: publishOptions.acceptUnreviewed,
       });
-      await options.refreshBuild();
-      await options.refreshBuilds();
+      // One authoritative detail read attaches the publication snapshot and
+      // syncs the already-loaded build rail in place. Publication does not add
+      // or remove builds, so a second full list read is unnecessary. If the
+      // reviewer navigated to another build during the request, leave that
+      // newly selected build alone rather than refreshing it as a side effect.
+      if (options.currentBuild.value?.build_id === buildId) await options.refreshBuild();
       options.setMessage(
         publishOptions.acceptUnreviewed
           ? options.tf("pdf_corpus.published_unreviewed", {

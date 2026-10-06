@@ -63,7 +63,7 @@ flowchart LR
 
 ## Workspace model
 
-The researcher-facing flow is **Setup → Build & review → Publish**. Internally the route-backed workspace state remains `setup | build | review | publish`, so deep links and state transitions stay explicit. Build and Review can be active concurrently once Record topology exists; the UI must not imply that all enrichment has to finish before review begins.
+The researcher-facing flow is **Setup → Build → Review → Publish**. The visible phases map directly to the route-backed workspace state `setup | build | review | publish`, so deep links, browser history and state transitions stay explicit. Build and Review can still be active concurrently once Record topology exists; the UI must not imply that all enrichment has to finish before review begins.
 
 ## Folder map
 

@@ -336,7 +336,7 @@ test.describe("at a wide desktop", () => {
     await page
       .locator(".record-review-pane textarea")
       .fill("A draft before starting another build.");
-    await page.getByRole("button", { name: "Start new build", exact: true }).click();
+    await page.getByRole("button", { name: "New build from this source", exact: true }).click();
     await expect(page).toHaveURL(/workspace=setup/);
     await expect(page.getByRole("dialog", { name: "Leave this unsaved review?" })).toHaveCount(0);
     expect(

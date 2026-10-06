@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { ref } from "vue";
+import { ref, type Ref } from "vue";
+import type { CorpusBuild } from "../../src/api/corpus";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const publish = vi.fn();
@@ -30,24 +31,26 @@ const { useCorpusPublication } = await import(
   "../../src/features/corpus-builder/composables/useCorpusPublication"
 );
 
-function setup() {
+function setup(beforePublish?: (currentBuild: Ref<CorpusBuild | null>) => Promise<void>) {
   const setMessage = vi.fn();
   const refreshBuild = vi.fn(async () => {});
-  const refreshBuilds = vi.fn(async () => {});
+  const syncBuild = vi.fn();
+  const currentBuild = ref<CorpusBuild | null>({ build_id: "build-1" } as CorpusBuild);
   const tf = vi.fn((key: string, values: Record<string, string | number>) =>
     [key, ...Object.values(values)].join("|"),
   );
   const composable = useCorpusPublication({
-    currentBuild: ref({ build_id: "build-1" } as never),
+    currentBuild,
     selectedRecord: ref(null),
     busy: ref(""),
     setMessage,
     refreshBuild,
-    refreshBuilds,
+    syncBuild,
+    beforePublish: beforePublish ? () => beforePublish(currentBuild) : undefined,
     t: (key) => key,
     tf,
   });
-  return { composable, setMessage, refreshBuild, refreshBuilds };
+  return { composable, currentBuild, setMessage, refreshBuild, syncBuild };
 }
 
 describe("unreviewed corpus publication", () => {
@@ -71,11 +74,11 @@ describe("unreviewed corpus publication", () => {
       unreviewed_record_count: 2,
       unreviewed_accepted_field_count: 5,
     });
-    const { composable, setMessage, refreshBuild, refreshBuilds } = setup();
+    const { composable, setMessage, refreshBuild, syncBuild } = setup();
     await composable.publish({ acceptUnreviewed: true });
     expect(publish).toHaveBeenCalledWith("build-1", { acceptUnreviewed: true });
+    expect(syncBuild).toHaveBeenCalledTimes(1);
     expect(refreshBuild).toHaveBeenCalledTimes(1);
-    expect(refreshBuilds).toHaveBeenCalledTimes(1);
     expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published_unreviewed|3|2|5");
   });
 
@@ -87,16 +90,31 @@ describe("unreviewed corpus publication", () => {
         blockers: [{ code: "source_validation", count: 1 }],
       },
     });
-    const { composable, setMessage, refreshBuild, refreshBuilds } = setup();
+    const { composable, setMessage, refreshBuild, syncBuild } = setup();
 
     const result = await composable.publish();
 
     expect(result).toBeNull();
     expect(reconcile).toHaveBeenCalledWith("build-1");
     expect(publish).not.toHaveBeenCalled();
+    expect(syncBuild).toHaveBeenCalledTimes(1);
     expect(refreshBuild).not.toHaveBeenCalled();
-    expect(refreshBuilds).toHaveBeenCalledTimes(1);
     expect(setMessage).toHaveBeenCalledWith("pdf_corpus.publication_waiting_help");
+  });
+
+  it("does not publish a build that stopped being the active review context", async () => {
+    const beforePublish = vi.fn(async (currentBuild: Ref<CorpusBuild | null>) => {
+      currentBuild.value = { build_id: "build-2" } as CorpusBuild;
+    });
+    const harness = setup(beforePublish);
+
+    const result = await harness.composable.publish();
+
+    expect(result).toBeNull();
+    expect(beforePublish).toHaveBeenCalledTimes(1);
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+    expect(harness.refreshBuild).not.toHaveBeenCalled();
   });
 
   it("keeps the normal publication path reviewed", async () => {

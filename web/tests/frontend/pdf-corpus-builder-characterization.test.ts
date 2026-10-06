@@ -118,7 +118,12 @@ const defaultSchema = {
   fields: [],
 };
 
-async function mountBuilder(query = "", renderManifest = false, renderReview = false) {
+async function mountBuilder(
+  query = "",
+  renderManifest = false,
+  renderReview = false,
+  renderHeaderActions = false,
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useI18nStore().dictionary = {};
@@ -136,9 +141,11 @@ async function mountBuilder(query = "", renderManifest = false, renderReview = f
     attachTo: document.body,
     global: {
       plugins: [pinia, router],
-      stubs: renderManifest
-        ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
-        : renderReview
+      stubs: {
+        ...(renderManifest
+          ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
+          : {}),
+        ...(renderReview
           ? {
               CorpusReviewWorkspace: {
                 template: '<div><slot name="header" /><slot name="inspector" /></div>',
@@ -146,7 +153,18 @@ async function mountBuilder(query = "", renderManifest = false, renderReview = f
               CorpusReviewHeader: { template: '<div><slot name="run-status" /></div>' },
               CorpusReviewInspector: { template: "<div><slot /></div>" },
             }
-          : {},
+          : {}),
+        ...(renderHeaderActions
+          ? {
+              CorpusBuilderWorkspaceHeader: {
+                template: '<header data-test="workspace-actions"><slot name="actions" /></header>',
+              },
+              CorpusSetupWorkspace: {
+                template: '<section data-test="setup-workspace"><slot name="source" /></section>',
+              },
+            }
+          : {}),
+      },
     },
   });
   await flushPromises();
@@ -225,6 +243,62 @@ describe("PdfCorpusBuilder characterization", () => {
       ],
     });
     metadataSchemasApi.get.mockResolvedValue(defaultSchema);
+  });
+
+  const sourceAsset = {
+    asset_id: "asset-1",
+    filename: "Source.pdf",
+    media_kind: "pdf",
+    page_count: 1,
+    block_count: 1,
+    pages: [],
+  };
+
+  function mockExistingBuild() {
+    pdfCorpusApi.listAssets.mockResolvedValueOnce({ items: [sourceAsset] });
+    pdfCorpusApi.listBuilds.mockResolvedValueOnce({
+      items: [{ ...reviewBuild }],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    pdfCorpusApi.build.mockResolvedValueOnce({ ...reviewBuild });
+  }
+
+  it("starts another build while retaining the selected source", async () => {
+    mockExistingBuild();
+    const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);
+    const buttons = wrapper.findAllComponents({ name: "UiButton" });
+    const fromSource = buttons.find(
+      (button) => button.props("label") === "New build from this source",
+    );
+    expect(fromSource).toBeTruthy();
+
+    fromSource!.vm.$emit("click");
+    await flushPromises();
+
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
+    wrapper.unmount();
+  });
+
+  it("clears the selected source when choosing another source", async () => {
+    mockExistingBuild();
+    const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);
+    const buttons = wrapper.findAllComponents({ name: "UiButton" });
+    const chooseAnother = buttons.find(
+      (button) => button.props("label") === "Choose another source",
+    );
+    expect(chooseAnother).toBeTruthy();
+
+    chooseAnother!.vm.$emit("click");
+    await flushPromises();
+
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("");
+    wrapper.unmount();
   });
 
   it("loads the empty workspace and exposes the source/configuration workflow", async () => {

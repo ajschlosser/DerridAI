@@ -36,7 +36,6 @@ const props = withDefaults(
     acceptedCount?: number;
     workspace?: CorpusWorkspace;
     steps?: CorpusWorkflowStep[];
-    sticky?: boolean;
   }>(),
   {
     sourceFilename: "",
@@ -47,7 +46,6 @@ const props = withDefaults(
     acceptedCount: 0,
     workspace: "setup",
     steps: () => [],
-    sticky: true,
   },
 );
 
@@ -99,7 +97,7 @@ function phaseLabel(phase: WorkspacePhase) {
 </script>
 
 <template>
-  <header class="corpus-workspace-header" :class="{ contextual, sticky }">
+  <header class="corpus-workspace-header" :class="{ contextual }">
     <div class="corpus-workspace-identity">
       <span class="eyebrow">{{ i18n.t("pdf_corpus.eyebrow") }}</span>
       <div class="corpus-workspace-title-row">
@@ -184,10 +182,6 @@ function phaseLabel(phase: WorkspacePhase) {
   padding: var(--space-3) 0;
   background: color-mix(in srgb, var(--surface-canvas) 94%, transparent);
   backdrop-filter: blur(16px);
-}
-.corpus-workspace-header.sticky {
-  position: sticky;
-  top: var(--ref-topbar, 60px);
 }
 .corpus-workspace-header.contextual {
   align-items: center;
@@ -412,9 +406,6 @@ function phaseLabel(phase: WorkspacePhase) {
     position: static;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
-  }
-  .corpus-workspace-header.sticky {
-    position: static;
   }
   .contextual .corpus-workspace-identity {
     display: grid;
