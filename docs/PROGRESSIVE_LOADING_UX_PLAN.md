@@ -40,6 +40,15 @@ The change does not weaken build authority or review provenance: the build list 
 
 This document is based on inspection of the current route inventory, views, shared loading/query infrastructure, and representative nested components. It is not a browser timing or visual audit; the validation pass below is required before implementation is considered complete. No application behavior changes are included in this documentation change.
 
+
+### Operations and Compare workspace checkpoint — 2026-10-06
+
+Operations no longer waits for an external jobs refresh before mounting its page content. The Vue Operations panel owns the initial refresh: an unresolved first read shows region-shaped loading feedback rather than a confirmed-empty message, a refresh over known operations retains those rows, and transport failure stays local with Retry. Because the same panel is embedded on Home, the dashboard now mounts that region before its unrelated dashboard refresh completes.
+
+Compare now mounts both record panes, source tabs, editors, and actions before the record library finishes hydrating. Library loading and failure are local to the library source region, request completions are ignored after unmount, and the page withholds both the "library empty" and "two records are needed" claims while a required library read is still pending. Scratch/editor comparison remains usable independently of that read.
+
+Focused unit regressions cover unresolved initial Operations refresh, retained Operations content after refresh failure, Compare controls during a deliberately held library read, and library failure without replacing the workspace. This is a page-local progressive-loading checkpoint, not completion of the remaining route inventory or the cross-route cold/warm/back-navigation and geometry matrix.
+
 ## Findings and coverage
 
 Paths below are relative to `web/src/`. Priorities reflect workflow impact and breadth of the blocking pattern, not measured latency. P0 is shared groundwork; P1 covers the main research workflow; P2 covers remaining workspaces and administration.
