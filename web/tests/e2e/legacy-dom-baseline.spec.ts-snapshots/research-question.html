@@ -63,6 +63,25 @@
 <textarea id="researchInstructions" placeholder="Optional constraints on framing, comparison, citation, or answer form." value="">
 </textarea>
 </details>
+<details class="research-instructions-disclosure">
+<summary>Retrieval scope filter<span>Optional</span>
+</summary>
+<section class="research-filter-editor" aria-labelledby="research-filter-<id>-title">
+<h3 id="research-filter-<id>-title">Retrieval scope filter</h3>
+<p class="note">Optional. Limits which Records can be retrieved, before ranking. Pinned evidence is never removed by this filter.</p>
+<label class="research-filter-label" for="research-filter-<id>">Filter expression</label>
+<textarea id="research-filter-<id>" class="research-filter-input" rows="2" spellcheck="false" autocomplete="off" placeholder="work = &quot;Of Grammatology&quot; and page_start &gt;= 100" aria-invalid="false" aria-describedby="research-filter-help-<id> research-filter-status-<id>" value="">
+</textarea>
+<p id="research-filter-help-<id>" class="note">This collection declares no filter fields.</p>
+<div class="research-filter-suggestions">
+<span>Suggestions</span>
+<button type="button" class="btn" aria-label="Insert document">document</button>
+</div>
+<div id="research-filter-status-<id>" class="research-filter-status" role="status" aria-live="polite">
+<p>No filter. Research searches the whole collection.</p>
+</div>
+</section>
+</details>
 <fieldset class="research-compose-context">
 <legend class="sr-only">Research context</legend>
 <div class="research-pipeline-action research-pipeline-context">
@@ -140,7 +159,7 @@
 </span>
 </footer>
 </section>
-<div class="research-workspace-grid research-result-presentation">
+<div class="research-workspace-grid research-result-presentation" id="research-selected-run" tabindex="-1" role="region" aria-label="Answer">
 <section class="research-answer-workspace card" aria-live="polite">
 <div class="research-answer-empty">
 <div aria-hidden="true">∴</div>
