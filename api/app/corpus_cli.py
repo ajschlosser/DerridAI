@@ -29,7 +29,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from .config import APP_VERSION
-from .corpus_cli_config import load_processing_config
+from .corpus_cli_config import dump_processing_config_yaml, load_processing_config
 
 
 class ExitCode(IntEnum):
@@ -67,6 +67,17 @@ def _parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Write the validated, secret-free configuration as JSON.",
+    )
+
+    migrate = config_commands.add_parser(
+        "migrate",
+        help="Migrate legacy v1 YAML to the canonical v2 corpus-run envelope.",
+    )
+    migrate.add_argument("--config", required=True, type=Path)
+    migrate.add_argument(
+        "--output",
+        type=Path,
+        help="Write migrated YAML here instead of stdout.",
     )
 
     pipeline = commands.add_parser(
@@ -131,6 +142,57 @@ def _validate_config(path: Path, *, as_json: bool) -> int:
         print(json.dumps(config.public_snapshot(), ensure_ascii=False, sort_keys=True))
     else:
         print(f"Configuration is valid (version {config.version}).")
+    return int(ExitCode.OK)
+
+
+def _migrate_config(path: Path, *, output: Path | None) -> int:
+    """Migrate one legacy v1 file without inventing pipeline identity."""
+
+    try:
+        config = load_processing_config(path)
+    except (ValueError, ValidationError) as exc:
+        print(f"Configuration error: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    if config.version != 1:
+        print(
+            "Configuration error: config migrate currently accepts v1 input only.",
+            file=sys.stderr,
+        )
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    from .corpus_run_config import migrate_v1_to_v2
+    from .pipelines.manager import pipeline_manager
+    from .pipelines.models import PipelineDefinition
+
+    try:
+        resolved = pipeline_manager.resolve("corpus_metadata_enrichment")
+        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+        migrated = migrate_v1_to_v2(config, pipeline=pipeline)
+        rendered = dump_processing_config_yaml(migrated)
+    except (KeyError, ValueError, ValidationError) as exc:
+        print(f"Configuration migration failed: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    if output is None:
+        sys.stdout.write(rendered)
+        return int(ExitCode.OK)
+
+    destination = output.expanduser().resolve()
+    temporary = destination.with_name(f".{destination.name}.tmp")
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(rendered, encoding="utf-8")
+        temporary.replace(destination)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        print(f"Configuration migration failed: {exc}", file=sys.stderr)
+        return int(ExitCode.OUTPUT_IO)
+
+    print(destination)
     return int(ExitCode.OK)
 
 
@@ -224,6 +286,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "config" and args.config_command == "validate":
         return _validate_config(args.config, as_json=args.json)
+    if args.command == "config" and args.config_command == "migrate":
+        return _migrate_config(args.config, output=args.output)
     if args.command == "pipeline" and args.pipeline_command == "capabilities":
         return _pipeline_capabilities(as_json=args.json)
     if args.command == "corpus" and args.corpus_command == "build":
