@@ -170,7 +170,7 @@ export function createUrlStateCodec(deps: UrlStateCodecDeps) {
       if (Number.isFinite(+value.p)) state.faqPage = Math.max(1, +value.p);
     }
   }
-  function urlFromState() {
+  function urlFromState(view = state.view) {
     const url = new URL(location.href);
     const params = url.searchParams;
     for (const key of [
@@ -194,26 +194,25 @@ export function createUrlStateCodec(deps: UrlStateCodecDeps) {
     if (state.storePage > 1) params.set("dbpage", String(state.storePage));
     if (state.storeBrowseMode && state.storeBrowseMode !== "works")
       params.set("browse", state.storeBrowseMode);
-    if (state.view === "pdf" && state.pdf.page > 1) params.set("pdfpage", String(state.pdf.page));
-    const tableState = currentTableUrlState();
+    if (view === "pdf" && state.pdf.page > 1) params.set("pdfpage", String(state.pdf.page));
+    const tableState = currentTableUrlState(view);
     if (tableState) {
       const compressed = compressUrlState(tableState);
       if (compressed) params.set("ts", compressed);
     }
-    let path = viewPathMap[state.view] || "/";
+    let path = viewPathMap[view] || "/";
     // Route-native sub-workspaces share one legacy runtime view. Preserve the
     // specific path the router owns so URL synchronization never collapses
     // Source Explorer, Settings sections, or System Data workspaces back to
     // their default sibling.
     if (
-      state.view === "pdf" &&
-      ["/corpus-builder", "/source-explorer"].includes(location.pathname)
+      view === "pdf" && ["/corpus-builder", "/source-explorer"].includes(location.pathname)
     ) {
       path = location.pathname;
-    } else if (state.view === "config" && location.pathname.startsWith("/settings/")) {
+    } else if (view === "config" && location.pathname.startsWith("/settings/")) {
       path = location.pathname;
     } else if (
-      state.view === "responsecache" &&
+      view === "responsecache" &&
       (location.pathname.startsWith("/system-data/") || location.pathname === "/pipelines")
     ) {
       path = location.pathname;
