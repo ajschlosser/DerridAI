@@ -39,6 +39,8 @@ Metadata Schemas has also been reworked around result identity rather than one u
 
 Home now participates in the same region-owned readiness model. Its shell, hero, search surface, quick settings, and Operations host mount immediately; corpus overview/Works metrics wait for the authoritative store/work read, recent activity waits for annotations independently, and the record preview has its own readiness state. Unresolved reads no longer render synthetic zero counts, “no works,” “no activity,” or “no record” claims. Same-context failures retain known region data with local stale feedback and Retry where the underlying read can fail.
 
+The Corpus Builder/Source Explorer re-audit also closed the remaining source-preview identity edge case. Builder and Explorer already preserve sibling state with `KeepAlive`, keep route-query namespaces separate, and the Builder's route-critical hydration is independent of Setup support reads. The PDF evidence canvas now tracks the page it has actually rendered rather than binding accessibility text and block overlays directly to the newly requested page. During a page transition retained pixels are either still identified as the old page or temporarily unlabelled as page content while the canvas is replaced; only a completed render commits the new page identity.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
