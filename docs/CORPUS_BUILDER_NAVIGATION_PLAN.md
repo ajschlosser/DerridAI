@@ -37,6 +37,8 @@ A Research re-audit found that its current implementation already follows the sa
 
 Metadata Schemas has also been reworked around result identity rather than one undifferentiated editor state. The schema catalog now has an explicit first-read/refresh/error state, schema detail reads are generation-guarded, and choosing a different schema clears the previous draft before the new identity resolves. A late response from an older selection cannot replace the current schema. Mutations still use the editor's existing busy gate, so background catalog/detail reads are not confused with saves, imports, previews, or deletes.
 
+Home now participates in the same region-owned readiness model. Its shell, hero, search surface, quick settings, and Operations host mount immediately; corpus overview/Works metrics wait for the authoritative store/work read, recent activity waits for annotations independently, and the record preview has its own readiness state. Unresolved reads no longer render synthetic zero counts, “no works,” “no activity,” or “no record” claims. Same-context failures retain known region data with local stale feedback and Retry where the underlying read can fail.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
