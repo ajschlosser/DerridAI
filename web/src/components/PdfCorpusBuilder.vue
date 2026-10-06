@@ -2915,7 +2915,7 @@ defineExpose({
             @click="startNewBuildSetup"
           />
           <UiButton
-            :label="i18n.t('pdf_corpus.choose_pdf')"
+            :label="i18n.t('pdf_corpus.choose_another_source')"
             variant="ghost"
             :disabled="busy !== ''"
             @click="chooseAnotherSourceSetup"
