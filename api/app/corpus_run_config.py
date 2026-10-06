@@ -47,8 +47,8 @@ from .pipelines.capabilities import (
     pipeline_contract_requirement,
 )
 from .pipelines.models import PipelineConfigOverrideSet, PipelineDefinition
-from .pipelines.portable import reject_unknown_pipeline_fields
 from .pipelines.overrides import resolve_pipeline_config
+from .pipelines.portable import reject_unknown_pipeline_fields
 from .pipelines.service import pipeline_hash
 
 
@@ -86,7 +86,7 @@ class PipelineRunSelection(_StrictRunModel):
         return reject_unknown_pipeline_fields(value)
 
     @model_validator(mode="after")
-    def validate_selection(self) -> "PipelineRunSelection":
+    def validate_selection(self) -> PipelineRunSelection:
         if (self.definition is None) == (self.ref is None):
             raise ValueError("pipeline must contain exactly one of definition or ref")
 
