@@ -18,11 +18,19 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 # Progressive loading UX plan
 
-Status: implementation in progress; first Works/Record pilot checkpoint below. Source audit: 2026-10-02, `origin/master` at `ab2b097a` (application 0.81.0).
+Status: implementation in progress; route-commit checkpoint added 2026-10-06, with earlier workspace checkpoints below. Source audit began 2026-10-02 at `origin/master` `ab2b097a`.
 
 ## Outcome
 
 Navigating to a page should reveal its title, layout, and useful controls immediately after its route module is available. Data should fill the relevant regions independently. Refreshing a populated page should preserve its content, scroll, selection, and drafts, with a small status beside the region being updated. A slow secondary request should not hold the entire workspace hostage.
+
+### Route-commit checkpoint — 2026-10-06
+
+Top-level route-module loading no longer owns navigation completion. Each application route now commits through a synchronous progressive entry component; breadcrumbs, active navigation state, URL/history and the destination loading frame can update before the destination JavaScript chunk resolves. The code-split view module loads inside that committed route. The wrapper starts the chunk read immediately but deliberately gives the destination skeleton a browser paint before mounting the real page, so even a cached module with expensive synchronous setup cannot make the previous page appear to linger. Ordinary module-load failures keep the destination committed and expose explicit recovery. Retry reloads that destination because browsers may cache a failed ES-module fetch for the lifetime of the document; the existing stale-deployment recovery remains responsible for replaced hashed chunks.
+
+Corpus Builder/Source Explorer and the System Data sibling routes deliberately share their progressive entry object so this change does not turn sibling navigation into a remount boundary. A focused router regression keeps a destination chunk unresolved and requires `router.currentRoute` plus the destination skeleton to update before that promise settles.
+
+This fixes route-module blocking only. It does not claim that every workspace has completed its region-by-region data-hydration conversion; the inventory below remains the authority for those page-local boundaries.
 
 This document is based on inspection of the current route inventory, views, shared loading/query infrastructure, and representative nested components. It is not a browser timing or visual audit; the validation pass below is required before implementation is considered complete. No application behavior changes are included in this documentation change.
 

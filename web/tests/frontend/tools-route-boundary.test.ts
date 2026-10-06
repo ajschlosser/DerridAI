@@ -20,13 +20,16 @@ import { describe, expect, it } from "vitest";
 import PdfWorkspaceView from "../../src/views/PdfWorkspaceView.vue";
 import VectorStoresView from "../../src/views/VectorStoresView.vue";
 import router from "../../src/router";
+import { progressiveRouteLoaderFor } from "../../src/router/progressiveRoute";
 
 async function resolvedRouteComponent(path: string): Promise<unknown> {
   const route = router.resolve(path);
   const component = route.matched[0]?.components?.default;
-  expect(typeof component).toBe("function");
+  expect(typeof component).toBe("object");
 
-  const loaded = await (component as () => Promise<unknown>)();
+  const loader = progressiveRouteLoaderFor(component);
+  expect(loader).toBeTypeOf("function");
+  const loaded = await loader!();
   if (loaded && typeof loaded === "object" && "default" in loaded) {
     return (loaded as { default: unknown }).default;
   }
@@ -34,11 +37,11 @@ async function resolvedRouteComponent(path: string): Promise<unknown> {
 }
 
 describe("Tools route boundaries", () => {
-  it("routes PDF tools directly to the lazy-loaded Vue-owned workspace", async () => {
+  it("routes PDF tools through the progressive Vue-owned workspace", async () => {
     expect(await resolvedRouteComponent("/corpus-builder")).toBe(PdfWorkspaceView);
   });
 
-  it("routes vector tools directly to the lazy-loaded Vue-owned workspace", async () => {
+  it("routes vector tools through the progressive Vue-owned workspace", async () => {
     expect(await resolvedRouteComponent("/databases")).toBe(VectorStoresView);
   });
 });
