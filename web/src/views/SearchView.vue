@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
+import { label as compatibilityFieldLabel } from "../domain/sharedRecordHelpers";
 import { updateSearchQuery } from "../domain/sharedSearchQuery";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
@@ -194,7 +195,7 @@ const schemaFilterFields = computed<SearchFilterFieldOption[]>(() => {
     availableFields: snapshot.value?.filter_fields.map((field) => field.key) || [],
     labels: (key) =>
       snapshot.value?.filter_fields.find((field) => field.key === key)?.label ||
-      i18n.t(`field.${key}`, key),
+      compatibilityFieldLabel(key),
     database: databaseMode.value,
   });
 });
