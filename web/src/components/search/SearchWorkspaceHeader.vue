@@ -102,7 +102,12 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
           :content-focusable="false"
           placement="bottom"
         >
-          <button type="button" class="btn soft" :disabled="controlsDisabled" @click="emit('share')">
+          <button
+            type="button"
+            class="btn soft"
+            :disabled="controlsDisabled"
+            @click="emit('share')"
+          >
             <AppIcon name="copy" />{{ i18n.t("search.copy_link") }}
           </button>
         </UiTooltip>

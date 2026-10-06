@@ -251,7 +251,8 @@ describe("Search workspace loading boundaries", () => {
     await router.push("/search?page=3");
     await flushPromises();
 
-    expect(wrapper.find(".search-results-panel").exists()).toBe(false);
+    expect(wrapper.find(".search-results-table").exists()).toBe(false);
+    expect(wrapper.find("[data-search-loading]").exists()).toBe(true);
     expect(wrapper.get(".search-page-error").text()).toContain("Forbidden");
     wrapper.unmount();
   });
@@ -262,8 +263,8 @@ describe("Search workspace loading boundaries", () => {
     const wrapper = await mountSearch();
     await flushPromises();
 
-    runtime.getSearchWorkspaceSnapshot.mockResolvedValueOnce(
-      snapshot({ layout: "cards", results: [result("NEW")], total: 1 }),
+    runtime.getSearchWorkspaceSnapshot.mockImplementation(() =>
+      Promise.resolve(snapshot({ layout: "cards", results: [result("NEW")], total: 1 })),
     );
     await router.push("/search?page=4");
     await flushPromises();
