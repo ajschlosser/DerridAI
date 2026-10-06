@@ -20,7 +20,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mockBackend } from "./support/mock-backend";
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
-test("slow route modules keep the current page and expose a destination status", async ({
+test("slow route modules commit the destination before the page chunk resolves", async ({
   page,
 }) => {
   await mockBackend(page, { role: "admin" });
@@ -35,26 +35,35 @@ test("slow route modules keep the current page and expose a destination status",
     await route.continue();
   });
   const current = await page.locator("#appContent main").elementHandle();
+
   await page.locator(".shell-sidebar").getByRole("button", { name: "Works", exact: true }).click();
-  await expect(page.locator(".route-navigation-feedback")).toContainText("Opening Works");
-  expect(await current!.evaluate((node) => node.isConnected)).toBe(true);
+
+  await expect(page).toHaveURL(/\/works$/);
+  await expect(page.locator(".progressive-route-loading")).toBeVisible();
+  await expect(page.locator(".vue-breadcrumb-path")).toContainText("Works");
+  expect(await current!.evaluate((node) => node.isConnected)).toBe(false);
+  await expect(page.locator(".route-navigation-feedback")).toHaveCount(0);
+
   release();
   await expect(page.locator("#works-page-title")).toBeVisible();
-  await expect(page.locator(".route-navigation-feedback")).toHaveCount(0);
 });
-test("failed route modules keep the current page and offer reload recovery", async ({ page }) => {
+test("failed route modules stay on the destination and retry in place", async ({ page }) => {
   await mockBackend(page, { role: "admin" });
   await page.goto(APP);
   await expect(page.locator("#appContent main")).toBeVisible();
   await page.route("**/assets/WorksView-*.js", (route) => route.abort("failed"));
   const current = await page.locator("#appContent main").elementHandle();
+
   await page.locator(".shell-sidebar").getByRole("button", { name: "Works", exact: true }).click();
-  const notice = page.locator(".route-navigation-feedback");
-  await expect(notice).toContainText("Could not open Works");
-  expect(await current!.evaluate((node) => node.isConnected)).toBe(true);
-  await expect(notice.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+
+  await expect(page).toHaveURL(/\/works$/);
+  const error = page.locator(".progressive-route-error");
+  await expect(error).toContainText("Page content could not be loaded");
+  expect(await current!.evaluate((node) => node.isConnected)).toBe(false);
+  await expect(error.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+
   await page.unroute("**/assets/WorksView-*.js");
-  await notice.getByRole("button", { name: "Reload page", exact: true }).click();
+  await error.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.locator("#works-page-title")).toBeVisible();
 });
 for (const scheme of ["light", "dark"] as const) {
