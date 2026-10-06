@@ -139,7 +139,9 @@ const menuItems = computed<UiMenuItem[]>(() => [
       role="alert"
     >
       <div>
-        <strong>{{ t("pipelines.executions_failed", "Could not load execution history.") }}</strong>
+        <strong>{{
+          t("pipelines.executions_failed", "Could not load execution history.")
+        }}</strong>
         <p>{{ error }}</p>
       </div>
       <UiButton :label="t('common.retry', 'Retry')" @click="emit('retry')" />
