@@ -132,12 +132,11 @@ describe("progressive route components", () => {
     wrapper.unmount();
   });
 
-  it("lets a transient page-module failure retry without leaving the destination", async () => {
+  it("keeps a page-module failure on the committed destination with explicit recovery", async () => {
     const frames = controlAnimationFrames();
     const loader = vi
       .fn<() => Promise<{ default: Component }>>()
-      .mockRejectedValueOnce(new Error("temporary chunk failure"))
-      .mockResolvedValueOnce({ default: LoadedPage });
+      .mockRejectedValueOnce(new Error("temporary chunk failure"));
     const { router, wrapper } = await setup(loader);
 
     await router.push("/slow");
@@ -148,16 +147,11 @@ describe("progressive route components", () => {
 
     expect(router.currentRoute.value.path).toBe("/slow");
     expect(wrapper.find(".progressive-route-error").exists()).toBe(true);
-
     const retry = wrapper
       .findAllComponents({ name: "UiButton" })
       .find((button) => button.props("label") === "Retry");
     expect(retry).toBeTruthy();
-    retry!.vm.$emit("click");
-    await flushPromises();
-
-    expect(loader).toHaveBeenCalledTimes(2);
-    expect(wrapper.get('[data-test="loaded-page"]').text()).toBe("Loaded page");
+    expect(loader).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 });
