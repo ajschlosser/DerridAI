@@ -22,6 +22,7 @@ import { useRoute, useRouter } from "vue-router";
 import PdfExplorerSurface from "../components/PdfExplorerSurface.vue";
 import PdfCorpusBuilder from "../components/PdfCorpusBuilder.vue";
 import { useI18nStore } from "../stores/i18n";
+import { queryForPdfWorkspace } from "../domain/pdfWorkspaceNavigation";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -32,11 +33,9 @@ const mode = computed<"explorer" | "builder">(() =>
 
 async function setMode(next: "explorer" | "builder") {
   if (next === mode.value) return;
-  const query = { ...route.query };
-  delete query.mode;
   await router.push({
     name: next === "explorer" ? "source-explorer" : "corpus-builder",
-    query,
+    query: queryForPdfWorkspace(next, route.query),
   });
 }
 
