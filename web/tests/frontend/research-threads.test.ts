@@ -109,11 +109,12 @@ beforeEach(() => {
 afterEach(() => {
   mounted.splice(0).forEach((wrapper) => wrapper.unmount());
   client.clear();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
-function browser(id = "a") {
+function browser(id = "a", jobId = "job-a") {
   const wrapper = mount(ResearchThreadBrowser, {
-    props: { threadId: id, jobId: "job-a" },
+    props: { threadId: id, jobId },
     global: {
       plugins: [[VueQueryPlugin, { queryClient: client }]],
       stubs: { UiDialog: { template: `<div role="dialog"><slot/><slot name="footer"/></div>` } },
@@ -154,6 +155,14 @@ describe("Research thread shell", () => {
           .filter((item) => item.find(".thread-answer-text").exists());
     const first = articles[0],
       second = articles[1];
+    for (const article of [first, second]) {
+      expect(article.find(".research-result-presentation").exists()).toBe(false);
+      const inspect = article
+        .findAll("details")
+        .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
+      (inspect.element as HTMLDetailsElement).open = true;
+      await inspect.trigger("toggle");
+    }
     await first.findAll(".research-evidence-index button")[1].trigger("click");
     expect(first.find(".research-evidence-inspector").text()).toContain(
       "Exact passage /api/jobs/job-a 1",
@@ -249,6 +258,58 @@ describe("Research thread shell", () => {
     expect(turns[1].text()).toContain("Answer /api/jobs/job-b");
     expect(turns[1].text()).toContain("Citation /api/jobs/job-b");
   });
+  it("does not refetch immutable turn results when thread summaries change", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    expect(wrapper.text()).toContain("Answer /api/jobs/job-a");
+    jobs.read.mockClear();
+    await client.invalidateQueries({ queryKey: ["data", "research_threads"] });
+    await flushPromises();
+    expect(jobs.read).not.toHaveBeenCalled();
+    expect(wrapper.text()).toContain("Answer /api/jobs/job-a");
+  });
+
+  it("keeps long threads bounded until evidence inspection is opened", async () => {
+    const detail = thread("a");
+    detail.turns = Array.from({ length: 20 }, (_, index) => ({
+      ...thread(String(index)).turns[0],
+      turn_id: `a-${index + 1}`,
+      thread_id: "a",
+      ordinal: index + 1,
+      user_question: `Question ${index + 1}`,
+    }));
+    api.get.mockResolvedValue(detail);
+    jobs.read.mockImplementation(async (path: string) => ({
+      id: path.split("/").pop(),
+      status: "completed",
+      result: {
+        answer: `Answer ${path}`,
+        evidence: Array.from({ length: 24 }, (_, index) => ({
+          evidence_id: `E${index}`,
+          inline_citation: `Citation ${index}`,
+          record: { record_id: `${path}-${index}`, text: `Evidence ${index}` },
+        })),
+      },
+    }));
+
+    const wrapper = browser();
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledTimes(20);
+    expect(wrapper.findAll(".research-result-presentation")).toHaveLength(0);
+
+    await client.invalidateQueries({ queryKey: ["data", "research_threads"] });
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledTimes(20);
+
+    const firstTurn = wrapper.findAll("article[aria-labelledby]")[0];
+    const inspect = firstTurn
+      .findAll("details")
+      .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
+    (inspect.element as HTMLDetailsElement).open = true;
+    await inspect.trigger("toggle");
+    expect(wrapper.findAll(".research-result-presentation")).toHaveLength(1);
+  });
+
   it("clears a revoked inline answer while preserving its durable question", async () => {
     const wrapper = browser();
     await flushPromises();
@@ -259,7 +320,22 @@ describe("Research thread shell", () => {
     expect(wrapper.text()).not.toContain("Answer /api/jobs/job-a");
     expect(wrapper.text()).toContain("Question a");
   });
+  it("does not open a second draft stream for the live job already selected in Research", async () => {
+    const handlers = new Map<string, EventHandler>();
+    vi.spyOn(realtime, "subscribe").mockImplementation((topic, handler) => {
+      handlers.set(topic, handler);
+      return vi.fn();
+    });
+    const detail = thread("a");
+    detail.turns[0].status = "running";
+    api.get.mockResolvedValue(detail);
+    browser("a", "job-a");
+    await flushPromises();
+    expect(handlers.has("job:job-a")).toBe(false);
+  });
+
   it("binds previews to the active turn, clears on switches, and replaces with the completed answer", async () => {
+    vi.useFakeTimers();
     const handlers = new Map<string, EventHandler>();
     const stop = vi.fn();
     vi.spyOn(realtime, "subscribe").mockImplementation((topic, handler) => {
@@ -282,6 +358,7 @@ describe("Research thread shell", () => {
       payload: { generation: { seq: 1, delta: "Unverified preview", gap: false, final: false } },
     } as const;
     oldHandler(event);
+    await vi.advanceTimersByTimeAsync(50);
     await flushPromises();
     expect(wrapper.findAll("article[aria-labelledby]")[0].text()).not.toContain(
       "Unverified preview",
@@ -310,6 +387,7 @@ describe("Research thread shell", () => {
     useAuthStore().user = null;
     await flushPromises();
     expect(wrapper.text()).not.toContain("Answer /api/jobs/job-c");
+    vi.useRealTimers();
   });
   it("does not read answers for incomplete turns", async () => {
     const detail = thread("a");
