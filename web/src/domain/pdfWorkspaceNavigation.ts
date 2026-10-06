@@ -26,6 +26,8 @@
  * Keep these allow-lists deliberately small. Add a key only when both its
  * owner and restoration semantics are clear.
  */
+import type { LocationQueryRaw } from "vue-router";
+
 const BUILDER_QUERY_KEYS = new Set(["workspace", "build", "queue", "record", "sources"]);
 const EXPLORER_QUERY_KEYS = new Set(["file", "record", "pdfpage", "ts"]);
 
@@ -34,11 +36,11 @@ export type PdfWorkspaceDestination = "builder" | "explorer";
 export function queryForPdfWorkspace(
   destination: PdfWorkspaceDestination,
   query: Record<string, unknown>,
-): Record<string, unknown> {
+): LocationQueryRaw {
   const allowed = destination === "builder" ? BUILDER_QUERY_KEYS : EXPLORER_QUERY_KEYS;
   return Object.fromEntries(
     Object.entries(query).filter(([key, value]) => allowed.has(key) && value !== undefined),
-  );
+  ) as LocationQueryRaw;
 }
 
 /**
@@ -50,7 +52,7 @@ export function queryForPdfWorkspaceTransition(
   source: PdfWorkspaceDestination,
   destination: PdfWorkspaceDestination,
   query: Record<string, unknown>,
-): Record<string, unknown> {
+): LocationQueryRaw {
   if (source === destination) return queryForPdfWorkspace(destination, query);
   const crossing = { ...query };
   delete crossing.record;
