@@ -216,6 +216,8 @@ async function rawMarkup(
       .replace(/\bui-tooltip-\d+\b/g, "ui-tooltip-<id>")
       // Vue component instance ids are intentionally unstable across route-owned mounts.
       .replace(/\bresearch-filter-v-\d+\b/g, "research-filter-<id>")
+      .replace(/\bresearch-filter-help-v-\d+\b/g, "research-filter-help-<id>")
+      .replace(/\bresearch-filter-status-v-\d+\b/g, "research-filter-status-<id>")
       .replace(/\b\d{1,2}\/\d{1,2}\/\d{4},? \d{1,2}:\d{2}(:\d{2})?( [AP]M)?/g, "<date>")
   );
 }
