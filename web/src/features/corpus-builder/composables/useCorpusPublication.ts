@@ -84,13 +84,16 @@ export function useCorpusPublication(options: {
       if (options.currentBuild.value?.build_id === buildId) {
         options.currentBuild.value = reconciled;
       }
-      await options.refreshBuilds();
 
       if (
         !publishOptions.acceptUnreviewed &&
         reconciled.publication_readiness &&
         !reconciled.publication_readiness.can_publish
       ) {
+        // The reconciled build is already authoritative locally. Update the
+        // history rail once for the blocked outcome, but do not also perform
+        // this list read on the successful path where a final refresh follows.
+        await options.refreshBuilds();
         options.setMessage(options.t("pdf_corpus.publication_waiting_help"));
         return null;
       }
