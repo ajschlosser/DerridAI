@@ -370,23 +370,6 @@ function phaseLabel(phase: WorkspacePhase) {
 .workspace-mode-nav button[data-state="complete"] .step-mark {
   color: var(--tone-ok-fg);
 }
-.workspace-subnav {
-  display: inline-flex;
-  gap: 2px;
-  margin-inline-start: var(--space-2);
-  padding: 2px;
-  border-inline-start: 1px solid var(--border-subtle);
-  vertical-align: middle;
-}
-.workspace-subnav button {
-  min-height: 30px;
-  padding-inline: var(--space-2);
-  font-size: var(--fs-xs);
-}
-.workspace-subnav button[aria-pressed="true"] {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-}
 .step-mark {
   display: inline-grid;
   inline-size: 1.25rem;
@@ -427,20 +410,41 @@ function phaseLabel(phase: WorkspacePhase) {
 @media (max-width: 760px) {
   .corpus-workspace-header {
     position: static;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
   .corpus-workspace-header.sticky {
     position: static;
   }
+  .contextual .corpus-workspace-identity {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .workspace-mode-nav {
+    inline-size: 100%;
+    min-width: 0;
+  }
+  .workspace-mode-nav .workspace-phase-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    inline-size: 100%;
+    box-sizing: border-box;
+  }
+  .workspace-mode-nav button {
+    inline-size: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+    padding-inline: var(--space-2);
+  }
+  .corpus-workspace-context strong {
+    max-width: 100%;
+  }
+  .corpus-workspace-progress {
+    min-width: 0;
+    inline-size: min(100%, 20rem);
+  }
   .corpus-workspace-actions {
     justify-content: flex-start;
-  }
-  .workspace-subnav {
-    display: flex;
-    width: fit-content;
-    margin: var(--space-1) 0 0;
-    border-inline-start: 0;
   }
 }
 </style>
