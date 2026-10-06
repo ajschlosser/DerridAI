@@ -59,6 +59,7 @@ import {
   chosenFilterSchemaId,
   defaultFilterSchemaId,
   filterOpsForKind,
+  filterValueSuggestions,
   resolveSearchFilterFields,
   saveFilterSchemaOverride,
   type SearchFilterFieldOption,
@@ -192,6 +193,7 @@ const schemaFilterFields = computed<SearchFilterFieldOption[]>(() => {
     collectionFields: store?.filter_fields || [],
     availableFields: snapshot.value?.filter_fields.map((field) => field.key) || [],
     labels: (key) => snapshot.value?.filter_fields.find((field) => field.key === key)?.label || key,
+    database: databaseMode.value,
   });
 });
 const sortOptions = computed(() => {
@@ -344,7 +346,7 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
     !newFilterField.value ||
     !schemaFilterFields.value.some((field) => field.key === newFilterField.value)
   )
-    newFilterField.value = schemaFilterFields.value[0]?.key || next.filter_fields[0]?.key || "work";
+    newFilterField.value = schemaFilterFields.value[0]?.key || next.filter_fields[0]?.key || "";
 }
 function applyQuery(value: string) {
   query.value = value;
@@ -499,7 +501,7 @@ async function changeFilterSchema(id: string) {
   );
   await loadSchema(filterSchemaId.value);
   if (!schemaFilterFields.value.some((field) => field.key === newFilterField.value))
-    newFilterField.value = schemaFilterFields.value[0]?.key || "work";
+    newFilterField.value = schemaFilterFields.value[0]?.key || "";
 }
 function filterOps(field: string) {
   const kind = schemaFilterFields.value.find((item) => item.key === field)?.kind || "text";
@@ -511,7 +513,8 @@ function onFilterFieldChange() {
   newFilterValue.value = "";
 }
 function suggestionsFor(field: string) {
-  return snapshot.value?.filter_suggestions[field] || [];
+  const descriptor = schemaFilterFields.value.find((item) => item.key === field);
+  return filterValueSuggestions(descriptor, snapshot.value?.filter_suggestions[field] || []);
 }
 
 async function resultAction(result: SearchResult, action: string) {
