@@ -118,7 +118,12 @@ const defaultSchema = {
   fields: [],
 };
 
-async function mountBuilder(query = "", renderManifest = false, renderReview = false) {
+async function mountBuilder(
+  query = "",
+  renderManifest = false,
+  renderReview = false,
+  renderHeaderActions = false,
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useI18nStore().dictionary = {};
@@ -136,9 +141,11 @@ async function mountBuilder(query = "", renderManifest = false, renderReview = f
     attachTo: document.body,
     global: {
       plugins: [pinia, router],
-      stubs: renderManifest
-        ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
-        : renderReview
+      stubs: {
+        ...(renderManifest
+          ? { CorpusBuildWorkspace: { template: '<div><slot name="manifest" /></div>' } }
+          : {}),
+        ...(renderReview
           ? {
               CorpusReviewWorkspace: {
                 template: '<div><slot name="header" /><slot name="inspector" /></div>',
@@ -146,7 +153,15 @@ async function mountBuilder(query = "", renderManifest = false, renderReview = f
               CorpusReviewHeader: { template: '<div><slot name="run-status" /></div>' },
               CorpusReviewInspector: { template: "<div><slot /></div>" },
             }
-          : {},
+          : {}),
+        ...(renderHeaderActions
+          ? {
+              CorpusBuilderWorkspaceHeader: {
+                template: '<header data-test="workspace-actions"><slot name="actions" /></header>',
+              },
+            }
+          : {}),
+      },
     },
   });
   await flushPromises();
@@ -225,6 +240,62 @@ describe("PdfCorpusBuilder characterization", () => {
       ],
     });
     metadataSchemasApi.get.mockResolvedValue(defaultSchema);
+  });
+
+  it("distinguishes another build from choosing another source", async () => {
+    const asset = {
+      asset_id: "asset-1",
+      filename: "Source.pdf",
+      media_kind: "pdf",
+      page_count: 1,
+      block_count: 1,
+      pages: [],
+    };
+    pdfCorpusApi.listAssets.mockResolvedValueOnce({ items: [asset] });
+    pdfCorpusApi.listBuilds.mockResolvedValueOnce({
+      items: [reviewBuild],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+
+    const retain = await mountBuilder("?workspace=build&build=build-1", false, false, true);
+    const retainButtons = retain.findAllComponents({ name: "UiButton" });
+    const fromSource = retainButtons.find(
+      (button) => button.props("label") === "New build from this source",
+    );
+    const chooseSource = retainButtons.find(
+      (button) => button.props("label") === "Choose another source",
+    );
+    expect(fromSource).toBeTruthy();
+    expect(chooseSource).toBeTruthy();
+
+    fromSource!.vm.$emit("click");
+    await flushPromises();
+
+    expect(retain.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(retain.router.currentRoute.value.query.build).toBeUndefined();
+    expect(retain.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
+    retain.unmount();
+
+    pdfCorpusApi.listAssets.mockResolvedValueOnce({ items: [asset] });
+    pdfCorpusApi.listBuilds.mockResolvedValueOnce({
+      items: [reviewBuild],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    const change = await mountBuilder("?workspace=build&build=build-1", false, false, true);
+    const changeButtons = change.findAllComponents({ name: "UiButton" });
+    const chooseAnother = changeButtons.find(
+      (button) => button.props("label") === "Choose another source",
+    );
+    chooseAnother!.vm.$emit("click");
+    await flushPromises();
+
+    expect(change.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(change.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("");
+    change.unmount();
   });
 
   it("loads the empty workspace and exposes the source/configuration workflow", async () => {
