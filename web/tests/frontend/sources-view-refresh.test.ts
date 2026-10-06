@@ -101,6 +101,35 @@ describe("Sources view table refresh", () => {
     expect(wrapper.find("[data-captures-empty]").exists()).toBe(true);
   });
 
+
+  it("drops hidden selection and inspector state when the table changes result identity", async () => {
+    const wrapper = await openDialog();
+    const table = wrapper.getComponent(SourceTable);
+
+    table.vm.$emit("loaded", {
+      items: [
+        {
+          source_document_id: "source-a",
+          title: "Source A",
+          capture_ids: [],
+        },
+      ],
+    });
+    table.vm.$emit("update:selected", ["source-a"]);
+    table.vm.$emit("inspect", "source-a");
+    await flushPromises();
+
+    expect(wrapper.find("[data-bulk='builder']").exists()).toBe(true);
+    expect(wrapper.getComponent({ name: "SourceInspector" }).props("sourceId")).toBe("source-a");
+
+    table.vm.$emit("displayed", []);
+    table.vm.$emit("update:selected", []);
+    await flushPromises();
+
+    expect(wrapper.find("[data-bulk='builder']").exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "SourceInspector" }).exists()).toBe(false);
+  });
+
   it.each(["complete", "partial", "failed", "cancelled", "interrupted"])(
     "reloads the table in place when a capture settles as %s",
     async (status) => {

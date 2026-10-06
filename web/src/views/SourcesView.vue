@@ -121,6 +121,12 @@ async function loadCaptures() {
     capturesLoading.value = false;
   }
 }
+function onDisplayed(rows: SourceRow[]) {
+  visibleRows.value = rows;
+  if (inspected.value && !rows.some((row) => row.source_document_id === inspected.value)) {
+    inspected.value = "";
+  }
+}
 function onLoaded(response: SourceListResponse) {
   visibleRows.value = response.items;
 }
@@ -449,6 +455,7 @@ onMounted(() => void loadCaptures());
           :initial-filters="initialCapture ? { capture_id: initialCapture } : {}"
           :page-size="50"
           @inspect="inspected = $event"
+          @displayed="onDisplayed"
           @loaded="onLoaded"
         />
         <SourceInspector
