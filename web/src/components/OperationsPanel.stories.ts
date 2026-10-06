@@ -47,11 +47,14 @@ const base: OperationView = {
 };
 const op = (over: Partial<OperationView>): OperationView => ({ ...base, ...over });
 
-function bridgeFor(jobs: OperationView[]): OperationsBridge {
+function bridgeFor(
+  jobs: OperationView[],
+  refresh: () => Promise<void> = async () => {},
+): OperationsBridge {
   return {
     snapshot: () => jobs.map((job) => ({ ...job })),
     subscribe: () => () => {},
-    refresh: async () => {},
+    refresh,
     openDetails: () => {},
     openResult: () => {},
     cancel: async () => {},
@@ -155,6 +158,18 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Mixed: Story = {};
+export const Pending: Story = {
+  args: {
+    bridge: bridgeFor([], () => new Promise<void>(() => {})),
+  },
+};
+export const InitialFailure: Story = {
+  args: {
+    bridge: bridgeFor([], async () => {
+      throw new Error("Could not reach the operations service.");
+    }),
+  },
+};
 export const Empty: Story = { args: { bridge: bridgeFor([]) } };
 export const ManyRunning: Story = {
   args: {
