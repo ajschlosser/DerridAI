@@ -121,6 +121,12 @@ const changedCount = computed(
 );
 const totalCount = computed(() => buildCompareRows(recordA.value, recordB.value, "all").length);
 const ready = computed(() => Boolean(recordA.value && recordB.value));
+const comparisonPending = computed(
+  () =>
+    !ready.value &&
+    libraryLoading.value &&
+    (sourceA.value === "library" || sourceB.value === "library"),
+);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
@@ -223,10 +229,14 @@ function cite(side: "A" | "B", kind: "inline" | "full") {
 function statusFor(side: "A" | "B") {
   const parsed = side === "A" ? parsedA.value : parsedB.value;
   const source = side === "A" ? sourceA.value : sourceB.value;
-  if (source === "library")
+  const key = side === "A" ? keyA.value : keyB.value;
+  if (source === "library") {
+    if (libraryLoading.value && key)
+      return { tone: "neutral" as const, label: i18n.t("ui.loading") };
     return parsed.record
       ? { tone: "success" as const, label: t("compare.status.library", "Library record") }
       : { tone: "warning" as const, label: t("compare.status.pick", "Pick a record") };
+  }
   if (!(side === "A" ? pasteA.value : pasteB.value).trim())
     return { tone: "neutral" as const, label: t("compare.editor_empty", "Empty editor") };
   if (parsed.errorKey)
@@ -478,7 +488,12 @@ onBeforeUnmount(() => {
           {{ t("compare.diff_all", "All fields") }}</label
         >
       </fieldset>
-      <div v-if="!ready" class="compare-empty">
+      <UiLoadingState
+        v-if="comparisonPending"
+        variant="skeleton"
+        :label="i18n.t('ui.loading')"
+      />
+      <div v-else-if="!ready" class="compare-empty">
         <b>{{ t("compare.need_two", "Two records are needed") }}</b>
         <span>{{
           auth.isResearcher
