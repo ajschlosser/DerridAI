@@ -339,6 +339,38 @@ describe("PdfCorpusBuilder characterization", () => {
     wrapper.unmount();
   });
 
+  it("hydrates a deep-linked review build without waiting for setup support reads", async () => {
+    let resolveAssets!: (value: { items: Array<typeof sourceAsset> }) => void;
+    pdfCorpusApi.listAssets.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAssets = resolve;
+      }),
+    );
+    pdfCorpusApi.listBuilds.mockResolvedValueOnce({
+      items: [{ ...reviewBuild }],
+      total: 1,
+      offset: 0,
+      limit: 100,
+    });
+    pdfCorpusApi.build.mockResolvedValueOnce({
+      ...reviewBuild,
+      publication_readiness: {},
+    });
+
+    const wrapper = await mountBuilder("?workspace=review&build=build-1");
+
+    // Source/provider/profile reads support Setup, but a route-addressed build is
+    // already sufficient to restore Build/Review/Publish state. Do not hold the
+    // requested workspace behind a slow source-catalog response.
+    expect(pdfCorpusApi.build).toHaveBeenCalledWith("build-1");
+    expect(corpusReviewReads.queuePage).toHaveBeenCalled();
+    expect(wrapper.findComponent({ name: "CorpusReviewWorkspace" }).exists()).toBe(true);
+
+    resolveAssets({ items: [sourceAsset] });
+    await flushPromises();
+    wrapper.unmount();
+  });
+
   describe("workspace routing", () => {
     beforeEach(() => {
       pdfCorpusApi.listBuilds.mockResolvedValue({

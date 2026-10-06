@@ -2171,13 +2171,16 @@ function scheduleReviewHydrationRetry() {
   }, 250);
 }
 
-async function refreshAll() {
-  await Promise.all([
-    refreshProviders(),
-    refreshCorpusProfiles(),
-    refreshAssets(),
-    refreshBuilds(),
-  ]);
+async function refreshSetupDependencies() {
+  await Promise.all([refreshProviders(), refreshCorpusProfiles(), refreshAssets()]);
+}
+
+async function hydrateRouteContext() {
+  // Build identity is the route-critical dependency. Do not make a deep-linked
+  // Build/Review/Publish workspace wait for provider/profile/source-list reads that
+  // are primarily needed by Setup. The selected source can resolve later when the
+  // asset catalog arrives; review topology is addressed by build ID.
+  await refreshBuilds();
   const requestedQueue = parseReviewQueue(route.query.queue);
   if (requestedQueue) reviewQueue.value = requestedQueue;
   await refreshBuild();
@@ -2187,6 +2190,37 @@ async function refreshAll() {
   // one retry alive and cancel it with the component so an old Corpus Builder cannot
   // keep issuing review/source reads after navigation or test teardown.
   scheduleReviewHydrationRetry();
+}
+
+async function refreshAll() {
+  // Start Setup support reads immediately, but keep them off the critical path for
+  // restoring a route-backed build. Their failure is local to the setup/supporting
+  // regions and should not prevent an already-addressable build from opening.
+  const setupRefresh = refreshSetupDependencies().catch((exc) => {
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+  });
+  await hydrateRouteContext();
+  const hydratedBuildId = String(currentBuild.value?.build_id || "");
+  const hydratedAssetId = String(currentBuild.value?.asset_id || "");
+  if (buildRunning.value) startPolling();
+
+  // refreshAssets() historically settled before refreshBuild(), so the build's
+  // source selection won if the catalog changed underneath it. Preserve that
+  // final-state invariant without putting the catalog back on the route-critical
+  // path. Do not overwrite a researcher who has already moved into Setup or
+  // selected another build while the support reads were still pending.
+  void setupRefresh.then(() => {
+    if (
+      !hydratedBuildId ||
+      !hydratedAssetId ||
+      workspaceMode.value === "setup" ||
+      selectedBuildId.value !== hydratedBuildId ||
+      currentBuild.value?.build_id !== hydratedBuildId ||
+      currentBuild.value?.asset_id !== hydratedAssetId
+    )
+      return;
+    selectedAssetId.value = hydratedAssetId;
+  });
 }
 // Reading the record in context is a per-browser preference.
 const showRecordContext = ref(true);
@@ -2821,11 +2855,9 @@ onMounted(() => {
   attachReviewShortcut();
   restoreBuilderDraft();
   void loadSchemaChoices();
-  void refreshAll()
-    .then(() => {
-      if (buildRunning.value) startPolling();
-    })
-    .catch((exc) => setMessage(exc instanceof Error ? exc.message : String(exc), "error"));
+  void refreshAll().catch((exc) =>
+    setMessage(exc instanceof Error ? exc.message : String(exc), "error"),
+  );
 });
 onDeactivated(() => {
   suspendedByWorkspace = true;
