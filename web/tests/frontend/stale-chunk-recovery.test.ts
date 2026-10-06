@@ -20,6 +20,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   claimStaleChunkRecovery,
+  currentEntryScriptPath,
+  deploymentShellChanged,
+  entryScriptPathFromHtml,
   isLikelyStaleModuleError,
 } from "../../src/router/staleChunkRecovery";
 
@@ -33,6 +36,10 @@ function memoryStorage() {
       values.set(key, value);
     },
   };
+}
+
+function shell(entry: string) {
+  return `<!doctype html><html><head><script type="module" src="${entry}"></script></head></html>`;
 }
 
 describe("stale deployment chunk recovery", () => {
@@ -60,8 +67,26 @@ describe("stale deployment chunk recovery", () => {
     expect(claimStaleChunkRecovery(storage, 32_001, "build-b")).toBe(true);
   });
 
+  it("compares the running entry bundle with the current server shell", async () => {
+    const doc = new DOMParser().parseFromString(shell("/assets/index-old.js"), "text/html");
+    expect(currentEntryScriptPath(doc)).toBe("/assets/index-old.js");
+    expect(entryScriptPathFromHtml(shell("/assets/index-new.js"))).toBe("/assets/index-new.js");
+
+    const changed = await deploymentShellChanged(
+      async () => new Response(shell("/assets/index-new.js"), { status: 200 }),
+      doc,
+    );
+    expect(changed).toBe(true);
+
+    const unchanged = await deploymentShellChanged(
+      async () => new Response(shell("/assets/index-old.js"), { status: 200 }),
+      doc,
+    );
+    expect(unchanged).toBe(false);
+  });
+
   it("serves the HTML shell uncached while keeping hashed assets immutable", () => {
-    const nginx = readFileSync(new URL("../../nginx.conf", import.meta.url), "utf8");
+    const nginx = readFileSync("nginx.conf", "utf8");
     expect(nginx).toContain("location = /index.html");
     expect(nginx).toContain('Cache-Control "no-cache, no-store, must-revalidate"');
     expect(nginx).toContain("location /assets/");
