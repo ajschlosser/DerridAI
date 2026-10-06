@@ -1,0 +1,124 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+name: Native corpus CLI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "api/app/corpus_cli.py"
+      - "api/app/corpus_cli_config.py"
+      - "api/app/corpus_binary_manifest.py"
+      - "api/app/headless_corpus_runner.py"
+      - "api/app/corpus_output_profiles.py"
+      - "api/derridai_cli.py"
+      - "api/requirements-cli-build.txt"
+      - "scripts/build_cli_binary.py"
+      - "scripts/smoke_cli_binary.py"
+      - "scripts/install-derridai.sh"
+      - "scripts/install-derridai.ps1"
+      - "tests/test_corpus_cli.py"
+      - "tests/test_corpus_binary_manifest.py"
+      - "tests/test_headless_corpus_runner.py"
+      - "tests/test_corpus_output_profiles.py"
+      - "docs/BINARY_PIPELINE_PLAN.md"
+      - ".github/workflows/binary-cli.yml"
+  push:
+    branches: [master]
+    paths:
+      - "api/app/corpus_cli.py"
+      - "api/app/corpus_cli_config.py"
+      - "api/app/corpus_binary_manifest.py"
+      - "api/app/headless_corpus_runner.py"
+      - "api/app/corpus_output_profiles.py"
+      - "api/derridai_cli.py"
+      - "api/requirements-cli-build.txt"
+      - "scripts/build_cli_binary.py"
+      - "scripts/smoke_cli_binary.py"
+      - "tests/test_corpus_cli.py"
+      - "tests/test_corpus_binary_manifest.py"
+      - "tests/test_headless_corpus_runner.py"
+      - "tests/test_corpus_output_profiles.py"
+      - ".github/workflows/binary-cli.yml"
+
+concurrency:
+  group: native-corpus-cli-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone:
+    name: Standalone ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux-x86_64
+          - runner: windows-2025
+            target: windows-x86_64
+          - runner: macos-15
+            target: macos-arm64
+          - runner: macos-15-intel
+            target: macos-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements-cli-build.txt
+
+      - name: Install CLI build dependencies
+        run: python -m pip install -r api/requirements-cli-build.txt
+
+      - name: Run focused CLI tests
+        run: >-
+          python -m pytest -q
+          tests/test_corpus_cli.py
+          tests/test_corpus_binary_manifest.py
+          tests/test_corpus_output_profiles.py
+          tests/test_headless_corpus_runner.py
+
+      - name: Compile standalone binary
+        run: >-
+          python scripts/build_cli_binary.py
+          --target ${{ matrix.target }}
+          --output-dir dist/cli/${{ matrix.target }}/standalone
+
+      - name: Smoke test compiled binary
+        run: >-
+          python scripts/smoke_cli_binary.py
+          --manifest
+          dist/cli/${{ matrix.target }}/standalone/binary-manifest-${{ matrix.target }}-standalone.json
+
+      - name: Show binary manifest
+        run: >-
+          python -c "from pathlib import Path;
+          print(Path(r'dist/cli/${{ matrix.target }}/standalone/binary-manifest-${{ matrix.target }}-standalone.json').read_text())"
+
+      - name: Upload standalone distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: derridai-${{ matrix.target }}-standalone
+          path: dist/cli/${{ matrix.target }}/standalone
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 7
