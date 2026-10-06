@@ -42,7 +42,7 @@ on:
       - "docs/BINARY_PIPELINE_PLAN.md"
       - ".github/workflows/binary-cli.yml"
   push:
-    branches: [master]
+    branches: [master, "task/binary-pipeline-continuation"]
     paths:
       - "api/app/corpus_cli.py"
       - "api/app/corpus_cli_config.py"
