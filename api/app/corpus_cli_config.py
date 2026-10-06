@@ -266,7 +266,7 @@ def parse_processing_config(
 
 def load_processing_config(
     path: str | Path,
-) -> CorpusProcessingConfig | "CorpusRunEnvelopeV2":
+) -> CorpusProcessingConfig | CorpusRunEnvelopeV2:
     """Load and validate one v1 or v2 YAML configuration file."""
 
     config_path = Path(path)
