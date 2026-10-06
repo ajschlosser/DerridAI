@@ -509,7 +509,7 @@ describe("router and runtime stay in agreement", () => {
     expect(router.currentRoute.value.path).toBe("/search");
     expect(router.currentRoute.value.query.ts).toBeTruthy();
     expect(navigation.navigateTo).not.toHaveBeenCalled();
-    expect(sharedState.view).toBe("global");
+    expect(navigation.repaintAfterLocationChange).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 
