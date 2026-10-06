@@ -20,6 +20,9 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
 import { useAuthStore } from "../stores/auth";
 import { progressiveRouteComponent } from "./progressiveRoute";
 
+const pdfWorkspaceRoute = progressiveRouteComponent(() => import("../views/PdfWorkspaceView.vue"));
+const systemDataRouteView = progressiveRouteComponent(() => import("../views/SystemDataView.vue"));
+
 const systemDataRoute = (
   path: string,
   name: string,
@@ -28,7 +31,7 @@ const systemDataRoute = (
 ): RouteRecordRaw => ({
   path,
   name,
-  component: progressiveRouteComponent(() => import("../views/SystemDataView.vue")),
+  component: systemDataRouteView,
   meta: {
     view: "systemdata",
     navId: "responsecache",
@@ -223,7 +226,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/corpus-builder",
     name: "corpus-builder",
-    component: progressiveRouteComponent(() => import("../views/PdfWorkspaceView.vue")),
+    component: pdfWorkspaceRoute,
     meta: {
       view: "pdf",
       navId: "pdf",
@@ -238,7 +241,7 @@ export const APP_ROUTES: RouteRecordRaw[] = [
   {
     path: "/source-explorer",
     name: "source-explorer",
-    component: progressiveRouteComponent(() => import("../views/PdfWorkspaceView.vue")),
+    component: pdfWorkspaceRoute,
     meta: {
       view: "pdf",
       navId: "pdf",
