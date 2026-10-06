@@ -39,7 +39,7 @@ const compareLibrary = vi.hoisted(() => ({
         ? { record: records.b, label: "r-b" }
         : null,
   ),
-  ensureCompareLibrary: vi.fn(async () => undefined),
+  ensureCompareLibrary: vi.fn<() => Promise<void>>(async () => undefined),
 }));
 const clipboard = vi.hoisted(() => ({ copyJsonToClipboard: vi.fn(), copyCitation: vi.fn() }));
 vi.mock("../../src/domain/clipboardCopy", () => ({ ...clipboard }));
