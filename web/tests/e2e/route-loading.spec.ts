@@ -47,7 +47,7 @@ test("slow route modules commit the destination before the page chunk resolves",
   release();
   await expect(page.locator("#works-page-title")).toBeVisible();
 });
-test("failed route modules stay on the destination and retry in place", async ({ page }) => {
+test("failed route modules recover by reloading the committed destination", async ({ page }) => {
   await mockBackend(page, { role: "admin" });
   await page.goto(APP);
   await expect(page.locator("#appContent main")).toBeVisible();
