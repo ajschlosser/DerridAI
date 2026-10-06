@@ -17,7 +17,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   corpusBuilderApi,
@@ -136,6 +145,7 @@ import {
 const i18n = useI18nStore();
 const route = useRoute();
 const router = useRouter();
+const builderRouteActive = computed(() => route.meta.pdfMode !== "explorer");
 const builds = ref<CorpusBuild[]>([]);
 const buildsTotal = ref(0);
 const corpusProfiles = ref<Array<Record<string, unknown>>>([]);
@@ -2632,6 +2642,7 @@ watch(
       String(route.query.record || ""),
     ] as const,
   async ([buildId, queue, recordId]) => {
+    if (!builderRouteActive.value) return;
     const request = ++routeReviewRequest;
     const buildChanged = Boolean(buildId && buildId !== selectedBuildId.value);
     const queueChanged = Boolean(queue && queue !== reviewQueue.value);
@@ -2680,7 +2691,7 @@ watch(
 watch(
   [selectedBuildId, reviewQueue, selectedRecordId, () => route.query.workspace],
   () => {
-    if (!selectedBuildId.value) return;
+    if (!builderRouteActive.value || !selectedBuildId.value) return;
     const query = syncedReviewQuery(route.query, {
       buildId: selectedBuildId.value,
       queue: reviewQueue.value,
@@ -2755,8 +2766,26 @@ watch(
   },
   { flush: "post" },
 );
-onMounted(() => {
+let reviewShortcutAttached = false;
+let suspendedByWorkspace = false;
+function attachReviewShortcut() {
+  if (reviewShortcutAttached) return;
   window.addEventListener("keydown", reviewShortcut);
+  reviewShortcutAttached = true;
+}
+function detachReviewShortcut() {
+  if (!reviewShortcutAttached) return;
+  window.removeEventListener("keydown", reviewShortcut);
+  reviewShortcutAttached = false;
+}
+function cancelReviewHydrationRetry() {
+  if (reviewHydrationRetryTimer === undefined) return;
+  window.clearTimeout(reviewHydrationRetryTimer);
+  reviewHydrationRetryTimer = undefined;
+}
+
+onMounted(() => {
+  attachReviewShortcut();
   restoreBuilderDraft();
   void loadSchemaChoices();
   void refreshAll()
@@ -2765,12 +2794,33 @@ onMounted(() => {
     })
     .catch((exc) => setMessage(exc instanceof Error ? exc.message : String(exc), "error"));
 });
+onDeactivated(() => {
+  suspendedByWorkspace = true;
+  ++routeReviewRequest;
+  ++sourceBlockRequestVersion;
+  detachReviewShortcut();
+  cancelReviewHydrationRetry();
+  stopPolling();
+});
+onActivated(() => {
+  if (!suspendedByWorkspace) return;
+  suspendedByWorkspace = false;
+  attachReviewShortcut();
+  // KeepAlive preserves the expensive review/setup state. Reconcile only the
+  // selected build before resuming realtime instead of repeating refreshAll().
+  if (!selectedBuildId.value) return;
+  void refreshBuild()
+    .then(async () => {
+      if (!builderRouteActive.value) return;
+      if (hasRecordTopology.value && !reviewHydrated.value)
+        await ensureReviewHydrated(String(route.query.record || selectedRecordId.value || ""));
+      if (buildRunning.value) startPolling();
+    })
+    .catch((exc) => setMessage(exc instanceof Error ? exc.message : String(exc), "error"));
+});
 onBeforeUnmount(() => {
-  window.removeEventListener("keydown", reviewShortcut);
-  if (reviewHydrationRetryTimer !== undefined) {
-    window.clearTimeout(reviewHydrationRetryTimer);
-    reviewHydrationRetryTimer = undefined;
-  }
+  detachReviewShortcut();
+  cancelReviewHydrationRetry();
   stopPolling();
 });
 defineExpose({
