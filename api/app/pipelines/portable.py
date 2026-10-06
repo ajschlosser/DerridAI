@@ -102,7 +102,7 @@ class PipelineDocument(BaseModel):
         return reject_unknown_pipeline_fields(value)
 
     @model_validator(mode="after")
-    def validate_hash(self) -> "PipelineDocument":
+    def validate_hash(self) -> PipelineDocument:
         actual = pipeline_hash(self.pipeline)
         if self.pipeline_hash != actual:
             raise ValueError(
