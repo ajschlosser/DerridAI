@@ -1082,7 +1082,14 @@ class _HtmlText(HTMLParser):
         # markers as authoritative before generic chrome suppression so
         # classes such as `ws-noexport` do not discard the printed folio.
         is_page_number = bool(
-            classes & {"pagenum", "pagenumber", "page-number", "ws-pagenumber"}
+            classes
+            & {
+                "pagenum",
+                "pagenumber",
+                "page-number",
+                "ws-pagenum",
+                "ws-pagenumber",
+            }
         )
         has_page_data = bool(
             attr.get("data-page")
@@ -1099,6 +1106,13 @@ class _HtmlText(HTMLParser):
             self._pagenum_attr = (
                 attr.get("data-page")
                 or attr.get("data-page-number")
+                or attr.get("data-pagenum")
+                # Several Wikisource editions, including French pages, expose
+                # the printed folio only as the id of a ProofreadPage pagenum
+                # element. The title/data-page-name points to the scan ordinal,
+                # so only trust the id after the element itself was identified
+                # as a page-number marker.
+                or (anchor if is_page_number else "")
                 or (page_anchor.group(1) if page_anchor else "")
             )
             self._pagenum_buf = []
