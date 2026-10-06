@@ -2857,7 +2857,7 @@ defineExpose({
           @refresh="refreshBuilds"
         />
         <a
-          v-if="currentBuild?.publication"
+          v-if="currentBuild?.publication && workspaceMode !== 'publish'"
           class="btn primary"
           :href="corpusBuilderApi.publicationUrl(currentBuild.publication.publication_id)"
           >{{ i18n.t("pdf_corpus.download_jsonl") }}</a
