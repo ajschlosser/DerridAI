@@ -30,6 +30,7 @@ const i18n = useI18nStore();
 const collections = ref<SystemChromaCollection[]>([]);
 const loaded = ref(false);
 const loading = ref(false);
+const loadError = ref("");
 const error = ref("");
 const command = ref("");
 const validation = ref<SystemChromaCommandResult | null>(null);
@@ -42,7 +43,7 @@ function t(key: string, fallback: string) {
 
 async function load() {
   loading.value = true;
-  error.value = "";
+  loadError.value = "";
   try {
     const next = (await systemApi.systemChromaCollections()).collections || [];
     collections.value = next;
@@ -51,7 +52,7 @@ async function load() {
   } catch (cause) {
     // A failed refresh must not turn previously loaded collections into a
     // confirmed-empty state. Keep the last successful snapshot and mark it stale.
-    error.value = cause instanceof Error ? cause.message : String(cause);
+    loadError.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     loading.value = false;
   }
@@ -112,11 +113,11 @@ onMounted(() => void load());
     <div v-if="loading && !loaded" class="state" role="status">
       {{ t("runtime.system_checking_vectors", "Checking internal vector collections…") }}
     </div>
-    <div v-else-if="error && !loaded" class="state error" role="alert">
+    <div v-else-if="loadError && !loaded" class="state error" role="alert">
       <strong>{{
         t("runtime.system_vector_unavailable", "Internal vector storage is unavailable.")
       }}</strong>
-      <span>{{ error }}</span>
+      <span>{{ loadError }}</span>
       <button class="btn tiny" type="button" @click="load">
         {{ t("common.retry", "Retry") }}
       </button>
@@ -125,9 +126,9 @@ onMounted(() => void load());
       <div v-if="loading" class="state state-inline" role="status">
         {{ t("loading.updating", "Updating…") }}
       </div>
-      <div v-if="error" class="state error state-inline" role="alert">
+      <div v-if="loadError" class="state error state-inline" role="alert">
         <strong>{{ t("loading.stale", "Showing previously loaded data.") }}</strong>
-        <span>{{ error }}</span>
+        <span>{{ loadError }}</span>
         <button class="btn tiny" type="button" @click="load">
           {{ t("common.retry", "Retry") }}
         </button>
