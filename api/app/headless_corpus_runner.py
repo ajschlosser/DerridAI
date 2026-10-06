@@ -132,6 +132,7 @@ class HeadlessCorpusRunner:
         workspace: str | Path | None = None,
         repository: Any | None = None,
         manager: Any | None = None,
+        pipeline_contract_manager: Any | None = None,
         poll_seconds: float = 0.25,
     ) -> None:
         if (repository is None) != (manager is None):
@@ -144,6 +145,7 @@ class HeadlessCorpusRunner:
         self.workspace.mkdir(parents=True, exist_ok=True)
         self._repository = repository
         self._manager = manager
+        self._pipeline_contract_manager = pipeline_contract_manager
         self.poll_seconds = max(0.01, float(poll_seconds))
 
     def _engine(self) -> tuple[Any, Any]:
@@ -248,10 +250,14 @@ class HeadlessCorpusRunner:
         # current Corpus Builder still resolves this pipeline through its shared
         # assignment registry, so a mismatch must fail rather than be ignored.
         if isinstance(config, CorpusRunEnvelopeV2):
-            from .pipelines.manager import pipeline_manager
+            contract_manager = self._pipeline_contract_manager
+            if contract_manager is None:
+                from .pipelines.manager import pipeline_manager
+
+                contract_manager = pipeline_manager
 
             try:
-                config.validate_current_headless_execution(pipeline_manager)
+                config.validate_current_headless_execution(contract_manager)
             except ValueError as exc:
                 raise PipelineExecutionError(str(exc)) from exc
 
