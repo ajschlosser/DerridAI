@@ -60,6 +60,14 @@ Table rows now carry an explicit database/table/page identity. Refreshing the sa
 
 Focused regressions hold the first table read unresolved while requiring the database directory to be usable, retain rows through a same-table refresh failure, and require old rows to disappear while a different table identity is pending.
 
+### Pipeline Studio region-hydration checkpoint — 2026-10-06
+
+Pipeline Studio now treats its catalog, execution history, and operational-health metrics as independent server-state regions. The page header and section tabs remain usable while execution rows or health metrics are unresolved. Execution rows are bound to the exact filter/page identity that produced them: same-identity refreshes retain the last successful page, while a new filter or page withholds the prior rows until the requested identity succeeds. This prevents a previous result set from being presented under a newly requested query.
+
+Operational-health loading is likewise local to the Health panel, so Compare and Benchmarks navigation is available without waiting for metrics. Catalog refresh remains the only workspace-wide dependency because definitions, strategy vocabulary, purposes, and assignments are the structural contract for every Pipeline Studio section. A successful catalog remains mounted during background invalidation.
+
+Focused regressions hold the initial execution-page and metrics requests unresolved and require the destination-owned controls and section navigation to render before those reads complete.
+
 ## Findings and coverage
 
 Paths below are relative to `web/src/`. Priorities reflect workflow impact and breadth of the blocking pattern, not measured latency. P0 is shared groundwork; P1 covers the main research workflow; P2 covers remaining workspaces and administration.
