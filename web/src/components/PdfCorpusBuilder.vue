@@ -128,6 +128,7 @@ import { recurringShortLines } from "../domain/textCleanup";
 import { allEvidenceBlockIds } from "../domain/metadataEvidence";
 import { pdfState } from "../state/workspaceState";
 import { getDefaultProviderProfileId } from "../domain/sharedProviderProfiles";
+import { queryForPdfWorkspace } from "../domain/pdfWorkspaceNavigation";
 
 const i18n = useI18nStore();
 const route = useRoute();
@@ -2297,7 +2298,10 @@ async function chooseBuild(build: CorpusBuild) {
   if (buildRunning.value) startPolling();
 }
 async function openPdfExplorer() {
-  await router.push({ name: "source-explorer", query: route.query });
+  await router.push({
+    name: "source-explorer",
+    query: queryForPdfWorkspace("explorer", route.query),
+  });
 }
 async function reanalyzeDocument() {
   if (!currentBuild.value) return;
@@ -2551,7 +2555,10 @@ const queuedSourceIds = computed(() =>
 async function queueSources(ids: string[]) {
   await refreshAssets();
   await router.replace({
-    query: { ...route.query, mode: "builder", sources: ids.join(",") || undefined },
+    query: {
+      ...queryForPdfWorkspace("builder", route.query),
+      sources: ids.join(",") || undefined,
+    },
   });
   configurationSection.value = "source";
 }
