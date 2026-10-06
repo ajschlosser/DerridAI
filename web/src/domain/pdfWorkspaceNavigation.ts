@@ -40,3 +40,19 @@ export function queryForPdfWorkspace(
     Object.entries(query).filter(([key, value]) => allowed.has(key) && value !== undefined),
   );
 }
+
+/**
+ * Sanitize a query while crossing the Builder/Explorer boundary. `record`
+ * intentionally belongs to both routes but means different things, so it must
+ * never cross even though each workspace may preserve it within its own URL.
+ */
+export function queryForPdfWorkspaceTransition(
+  source: PdfWorkspaceDestination,
+  destination: PdfWorkspaceDestination,
+  query: Record<string, unknown>,
+): Record<string, unknown> {
+  if (source === destination) return queryForPdfWorkspace(destination, query);
+  const crossing = { ...query };
+  delete crossing.record;
+  return queryForPdfWorkspace(destination, crossing);
+}
