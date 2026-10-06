@@ -107,9 +107,6 @@ onBeforeUnmount(() => window.removeEventListener("derridai:pdf-builder", openBui
   padding: 9px 20px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--card) 97%, transparent);
-  position: sticky;
-  top: 0;
-  z-index: 20;
   backdrop-filter: blur(12px);
 }
 .pdf-mode-tabs button {
