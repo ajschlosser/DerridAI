@@ -367,6 +367,51 @@ describe("PdfCorpusBuilder characterization", () => {
       wrapper.unmount();
     });
 
+    it("does not reload review rows when a phase switch leaves Review", async () => {
+      const wrapper = await mountBuilder(
+        "?workspace=review&build=build-1&queue=all&record=record-1",
+      );
+      corpusReviewReads.queuePage.mockClear();
+
+      wrapper
+        .findComponent({ name: "CorpusBuilderWorkspaceHeader" })
+        .vm.$emit("workspace", "publish");
+      await flushPromises();
+
+      expect(wrapper.router.currentRoute.value.query.workspace).toBe("publish");
+      expect(corpusReviewReads.queuePage).not.toHaveBeenCalled();
+      wrapper.unmount();
+    });
+
+    it("applies a build, queue and record route change with one review-page read", async () => {
+      pdfCorpusApi.build.mockImplementation(async (buildId: string) => ({
+        ...reviewBuild,
+        build_id: buildId,
+        publication_readiness: {},
+      }));
+      const wrapper = await mountBuilder(
+        "?workspace=review&build=build-1&queue=all&record=record-1",
+      );
+      pdfCorpusApi.build.mockClear();
+      corpusReviewReads.queuePage.mockClear();
+
+      await wrapper.router.push({
+        name: "corpus-builder",
+        query: {
+          workspace: "review",
+          build: "build-2",
+          queue: "metadata",
+          record: "record-2",
+        },
+      });
+      await flushPromises();
+
+      expect(pdfCorpusApi.build).toHaveBeenCalledTimes(1);
+      expect(pdfCorpusApi.build).toHaveBeenCalledWith("build-2");
+      expect(corpusReviewReads.queuePage).toHaveBeenCalledTimes(1);
+      wrapper.unmount();
+    });
+
     it("defers autocomplete outside Review and loads when the metadata inspector becomes visible", async () => {
       const wrapper = await mountBuilder("?workspace=build&build=build-1");
       expect(corpusReviewReads.metadataFacets).not.toHaveBeenCalled();

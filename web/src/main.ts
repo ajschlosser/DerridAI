@@ -22,8 +22,14 @@ import { VueQueryPlugin } from "@tanstack/vue-query";
 import App from "./App.vue";
 import { queryClient } from "./realtime/dataQuery";
 import router from "./router";
+import { installStaleChunkRecovery } from "./router/staleChunkRecovery";
 import "./style.css";
 import "./styles/tokens.css";
 import "./styles/page.css";
+
+// Install before the first route navigation can lazy-load a view. A long-lived
+// tab can otherwise keep an old entry bundle after Docker replaces the web
+// image and request route chunks that no longer exist on the server.
+installStaleChunkRecovery(router);
 
 createApp(App).use(createPinia()).use(VueQueryPlugin, { queryClient }).use(router).mount("#app");

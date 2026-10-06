@@ -32,6 +32,8 @@ const { useCorpusPublication } = await import(
 
 function setup() {
   const setMessage = vi.fn();
+  const refreshBuild = vi.fn(async () => {});
+  const refreshBuilds = vi.fn(async () => {});
   const tf = vi.fn((key: string, values: Record<string, string | number>) =>
     [key, ...Object.values(values)].join("|"),
   );
@@ -40,12 +42,12 @@ function setup() {
     selectedRecord: ref(null),
     busy: ref(""),
     setMessage,
-    refreshBuild: async () => {},
-    refreshBuilds: async () => {},
+    refreshBuild,
+    refreshBuilds,
     t: (key) => key,
     tf,
   });
-  return { composable, setMessage };
+  return { composable, setMessage, refreshBuild, refreshBuilds };
 }
 
 describe("unreviewed corpus publication", () => {
@@ -69,9 +71,11 @@ describe("unreviewed corpus publication", () => {
       unreviewed_record_count: 2,
       unreviewed_accepted_field_count: 5,
     });
-    const { composable, setMessage } = setup();
+    const { composable, setMessage, refreshBuild, refreshBuilds } = setup();
     await composable.publish({ acceptUnreviewed: true });
     expect(publish).toHaveBeenCalledWith("build-1", { acceptUnreviewed: true });
+    expect(refreshBuild).toHaveBeenCalledTimes(1);
+    expect(refreshBuilds).toHaveBeenCalledTimes(1);
     expect(setMessage).toHaveBeenCalledWith("pdf_corpus.published_unreviewed|3|2|5");
   });
 
@@ -83,13 +87,15 @@ describe("unreviewed corpus publication", () => {
         blockers: [{ code: "source_validation", count: 1 }],
       },
     });
-    const { composable, setMessage } = setup();
+    const { composable, setMessage, refreshBuild, refreshBuilds } = setup();
 
     const result = await composable.publish();
 
     expect(result).toBeNull();
     expect(reconcile).toHaveBeenCalledWith("build-1");
     expect(publish).not.toHaveBeenCalled();
+    expect(refreshBuild).not.toHaveBeenCalled();
+    expect(refreshBuilds).toHaveBeenCalledTimes(1);
     expect(setMessage).toHaveBeenCalledWith("pdf_corpus.publication_waiting_help");
   });
 
