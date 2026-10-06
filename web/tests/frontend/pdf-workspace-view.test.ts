@@ -78,51 +78,48 @@ async function mountWorkspace() {
 }
 
 describe("PDF workspace sibling navigation", () => {
-  it(
-    "keeps Builder mounted while visiting Source Explorer and restores each route snapshot",
-    async () => {
-      const { wrapper, router, builder, explorer } = await mountWorkspace();
-      const tabs = () => wrapper.findAll(".pdf-mode-tabs button");
+  it("preserves Builder state across Source Explorer navigation", async () => {
+    const { wrapper, router, builder, explorer } = await mountWorkspace();
+    const tabs = () => wrapper.findAll(".pdf-mode-tabs button");
 
-      expect(builder.mounted).toBe(1);
-      expect(builder.unmounted).toBe(0);
+    expect(builder.mounted).toBe(1);
+    expect(builder.unmounted).toBe(0);
 
-      await tabs()[1].trigger("click");
-      await flushPromises();
-      expect(router.currentRoute.value.name).toBe("source-explorer");
-      expect(router.currentRoute.value.query).toEqual({});
-      expect(builder.unmounted).toBe(0);
-      expect(builder.deactivated).toBe(1);
-      expect(explorer.mounted).toBe(1);
+    await tabs()[1].trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe("source-explorer");
+    expect(router.currentRoute.value.query).toEqual({});
+    expect(builder.unmounted).toBe(0);
+    expect(builder.deactivated).toBe(1);
+    expect(explorer.mounted).toBe(1);
 
-      await router.replace({
-        name: "source-explorer",
-        query: { file: "f1", record: "7", pdfpage: "3" },
-      });
-      await flushPromises();
+    await router.replace({
+      name: "source-explorer",
+      query: { file: "f1", record: "7", pdfpage: "3" },
+    });
+    await flushPromises();
 
-      await tabs()[0].trigger("click");
-      await flushPromises();
-      expect(router.currentRoute.value.name).toBe("corpus-builder");
-      expect(router.currentRoute.value.query).toEqual({
-        workspace: "review",
-        build: "b1",
-        queue: "metadata",
-        record: "r1",
-      });
-      expect(builder.mounted).toBe(1);
-      expect(builder.unmounted).toBe(0);
-      expect(builder.activated).toBeGreaterThanOrEqual(2);
+    await tabs()[0].trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe("corpus-builder");
+    expect(router.currentRoute.value.query).toEqual({
+      workspace: "review",
+      build: "b1",
+      queue: "metadata",
+      record: "r1",
+    });
+    expect(builder.mounted).toBe(1);
+    expect(builder.unmounted).toBe(0);
+    expect(builder.activated).toBeGreaterThanOrEqual(2);
 
-      await tabs()[1].trigger("click");
-      await flushPromises();
-      expect(router.currentRoute.value.query).toEqual({
-        file: "f1",
-        record: "7",
-        pdfpage: "3",
-      });
+    await tabs()[1].trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.query).toEqual({
+      file: "f1",
+      record: "7",
+      pdfpage: "3",
+    });
 
-      wrapper.unmount();
-    },
-  );
+    wrapper.unmount();
+  });
 });
