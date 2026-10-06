@@ -2213,6 +2213,7 @@
   "pdf_corpus.choose_pdf": "Choose source file",
   "pdf_corpus.choose_persisted_pdf": "Choose a saved source…",
   "pdf_corpus.choose_source_prompt": "Choose a source to continue.",
+  "pdf_corpus.choose_another_source": "Choose another source",
   "pdf_corpus.choose_value": "Choose a value…",
   "pdf_corpus.citation_issues": "citation issue(s)",
   "pdf_corpus.complete": "Complete",
