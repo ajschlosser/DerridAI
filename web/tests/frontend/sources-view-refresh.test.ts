@@ -60,7 +60,6 @@ describe("Sources view table refresh", () => {
     corpusApi.listCaptures.mockResolvedValue({ items: [] });
   });
 
-
   it("keeps the source table usable while the capture list is still loading", async () => {
     let resolveCaptures!: (value: { items: [] }) => void;
     corpusApi.listCaptures.mockReturnValueOnce(

@@ -29,6 +29,8 @@ Pipeline Studio has also moved to region-owned hydration. Its catalog remains th
 
 The Works workspace is the next page-local Phase 10 slice. Its route-owned page header and library toolbar now mount before the first authoritative Works snapshot. Search, sort, filter, and view controls remain visible but inert until the snapshot is known, so the page does not advertise false zero-result counts or an empty library while a required read is unresolved. The loading skeleton is scoped to the library region rather than replacing the workspace frame. A failed first read keeps the same toolbar geometry, marks it unavailable, and presents Retry without claiming the corpus contains no works. Existing populated snapshots continue to remain mounted during same-context updates.
 
+Sources is the next audited route boundary. The source table and inspector already own their own hydration, so capture discovery no longer gets to define the state of the whole page. The capture region now distinguishes an unresolved first read from a confirmed empty capture list, keeps the table mounted while discovery is pending or unavailable, and exposes local Retry. Successful capture-list state remains authoritative for empty messaging; a transport failure is not presented as “no captures yet.”
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
