@@ -445,11 +445,7 @@ watch(
       </section>
     </div>
 
-    <aside
-      v-if="detail && displayedTableIsCurrent"
-      class="detail-panel"
-      aria-label="Row details"
-    >
+    <aside v-if="detail && displayedTableIsCurrent" class="detail-panel" aria-label="Row details">
       <header>
         <div>
           <small>{{ selectedDatabase }} / {{ selectedTable }}</small>
