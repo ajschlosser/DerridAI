@@ -75,7 +75,7 @@ import {
 import { SETTINGS_SECTIONS, resolveSettingsSectionId } from "./domain/settings";
 import { viewConfig } from "./domain/runtimeConstants";
 import * as runtime from "./domain/appBootstrap";
-import { navigateTo, repaintAfterLocationChange } from "./domain/sharedNavigation";
+import { repaintAfterLocationChange } from "./domain/sharedNavigation";
 import { viewFromPath } from "./domain/viewPaths";
 import { triggerImport } from "./domain/sharedFileLifecycle";
 import { pauseRuntime } from "./domain/jobsPause";
@@ -477,7 +477,10 @@ function searchCorpus(query: string) {
   sharedState.globalPage = 1;
   sharedState.storeSearchResults = [];
   sharedState.globalSearchMode = "traditional";
-  navigateTo("global");
+  // Encode the Search workspace URL directly from its state without first
+  // changing the compatibility view. Vue Router remains the navigation authority;
+  // the settled /search route then applies the same URL state back to the workspace.
+  navigateNative(sharedUrlStateCodec.urlFromState("global"));
 }
 
 function submitTopSearch() {
