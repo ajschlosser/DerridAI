@@ -191,6 +191,20 @@ const sourceBlocks = ref<SourceBlock[]>([]);
 const selectedEvidenceField = ref("");
 const selectedPdfPage = ref(1);
 const reviewQueue = ref<ReviewQueue>("all");
+const REVIEW_QUEUE_IDS: readonly ReviewQueue[] = [
+  "all",
+  "ready",
+  "issues",
+  "metadata",
+  "topology",
+  "source",
+  "accepted",
+  "rejected",
+] as const;
+function parseReviewQueue(value: unknown): ReviewQueue | "" {
+  const queue = String(Array.isArray(value) ? value[0] : (value ?? "")) as ReviewQueue;
+  return REVIEW_QUEUE_IDS.includes(queue) ? queue : "";
+}
 // Set when a Finish blocker sends the reviewer into the "all" queue, which
 // otherwise looks identical to the Finish workspace.
 const reviewRequested = ref(false);
@@ -2151,13 +2165,8 @@ async function refreshAll() {
     refreshAssets(),
     refreshBuilds(),
   ]);
-  const requestedQueue = String(route.query.queue || "") as ReviewQueue;
-  if (
-    ["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"].includes(
-      requestedQueue,
-    )
-  )
-    reviewQueue.value = requestedQueue;
+  const requestedQueue = parseReviewQueue(route.query.queue);
+  if (requestedQueue) reviewQueue.value = requestedQueue;
   await refreshBuild();
   await ensureReviewHydrated(String(route.query.record || ""));
   // A second post-paint hydration closes the lifecycle race where build.json is
@@ -2614,46 +2623,58 @@ watch(
   },
   { immediate: true },
 );
+let routeReviewRequest = 0;
 watch(
-  () => route.query.build,
-  async (value) => {
-    const buildId = String(value || "");
-    if (!buildId || buildId === selectedBuildId.value) return;
-    selectedBuildId.value = buildId;
-    selectedRecordId.value = "";
-    selectedRecord.value = null;
-    sourceBlocks.value = [];
-    const requestedQueue = String(route.query.queue || "") as ReviewQueue;
-    if (
-      ["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"].includes(
-        requestedQueue,
-      )
-    )
-      reviewQueue.value = requestedQueue;
-    await refreshBuild();
-    await refreshRecords(true, String(route.query.record || ""));
-    if (buildRunning.value) startPolling();
-  },
-);
-watch(
-  () => route.query.queue,
-  (value) => {
-    const queue = String(value || "") as ReviewQueue;
-    if (
-      ["all", "ready", "issues", "metadata", "topology", "source", "accepted", "rejected"].includes(
-        queue,
-      ) &&
-      queue !== reviewQueue.value
-    )
-      reviewQueue.value = queue;
-  },
-);
-watch(
-  () => route.query.record,
-  async (value) => {
-    const id = String(value || "");
-    if (!id || id === selectedRecordId.value) return;
-    await refreshRecords(false, id);
+  () =>
+    [
+      String(route.query.build || ""),
+      parseReviewQueue(route.query.queue),
+      String(route.query.record || ""),
+    ] as const,
+  async ([buildId, queue, recordId]) => {
+    const request = ++routeReviewRequest;
+    const buildChanged = Boolean(buildId && buildId !== selectedBuildId.value);
+    const queueChanged = Boolean(queue && queue !== reviewQueue.value);
+    const recordChanged = recordId !== selectedRecordId.value;
+
+    // Apply one route snapshot as one transaction. The old independent
+    // build/queue/record watchers could each issue their own review read when
+    // Back/Forward changed several query fields at once.
+    if (buildChanged) {
+      stopPolling();
+      selectedBuildId.value = buildId;
+      selectedRecordId.value = "";
+      selectedRecord.value = null;
+      sourceBlocks.value = [];
+      reviewRecords.clear();
+      hydratedMetadataCount.value = 0;
+      if (queue) {
+        settingReviewFilters = true;
+        reviewQueue.value = queue;
+        settingReviewFilters = false;
+      }
+      await refreshBuild();
+      if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+      await refreshRecords(true, recordId);
+      if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+      if (buildRunning.value) startPolling();
+      return;
+    }
+
+    if (queueChanged) {
+      settingReviewFilters = true;
+      reviewQueue.value = queue || "all";
+      settingReviewFilters = false;
+      selectedRecordId.value = "";
+      selectedRecord.value = null;
+      recordOffset.value = 0;
+      await refreshRecords(false, recordId);
+      return;
+    }
+
+    if (recordChanged && selectedBuildId.value) {
+      await refreshRecords(false, recordId);
+    }
   },
 );
 watch(
