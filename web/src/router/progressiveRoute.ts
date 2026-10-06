@@ -22,17 +22,43 @@ import ProgressiveRouteView from "../components/shell/ProgressiveRouteView.vue";
 export type ProgressiveRouteModule = { default: Component } | Component;
 export type ProgressiveRouteLoader = () => Promise<ProgressiveRouteModule>;
 
+const routeLoaders = new WeakMap<object, ProgressiveRouteLoader>();
+
+function memoizeRouteLoader(loader: ProgressiveRouteLoader): ProgressiveRouteLoader {
+  let pending: Promise<ProgressiveRouteModule> | null = null;
+  return () => {
+    if (!pending) {
+      pending = loader().catch((error) => {
+        // A transient chunk/network failure must remain retryable.
+        pending = null;
+        throw error;
+      });
+    }
+    return pending;
+  };
+}
+
 /**
  * Keep Vue Router's route component synchronous while the real page module loads
  * inside it. Vue Router otherwise waits for a lazy route import before committing
  * the URL/current route, which makes navigation itself feel blocked by chunk I/O.
  */
 export function progressiveRouteComponent(loader: ProgressiveRouteLoader): Component {
-  return defineComponent({
+  const load = memoizeRouteLoader(loader);
+  const component = defineComponent({
     name: "ProgressiveRouteEntry",
     inheritAttrs: false,
     setup(_props, { attrs }) {
-      return () => h(ProgressiveRouteView, { ...attrs, loader });
+      return () => h(ProgressiveRouteView, { ...attrs, loader: load });
     },
   });
+  routeLoaders.set(component, load);
+  return component;
+}
+
+/** Resolve the page-module loader owned by one progressive route entry. */
+export function progressiveRouteLoaderFor(component: unknown): ProgressiveRouteLoader | undefined {
+  return typeof component === "object" && component !== null
+    ? routeLoaders.get(component)
+    : undefined;
 }
