@@ -24,7 +24,7 @@ import { currentFieldAssertions } from "./fieldAssertions";
 import { metadataSchemasApi, type MetadataSchema } from "../api/metadataSchemas";
 import { commonWorkValue, workCoverUrl, workMetadataPresentationRows } from "./workMetadata";
 import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
-import type { WorksDbStatusKind, WorksIndexFreshness } from "../types/works";
+import type { WorksDbStatusKind, WorksIndexFreshness, WorksViewState } from "../types/works";
 
 export const WORKS_SORTS = ["title-asc", "title-desc", "records-desc", "review-desc", "year-asc"];
 /** The stable `workDbStatus()` kinds a Works filter may name. */
@@ -211,6 +211,28 @@ export function createWorksWorkspace(deps: Deps) {
   function worksSortValue() {
     return WORKS_SORTS.includes(state.worksSort) ? String(state.worksSort) : "title-asc";
   }
+
+  /**
+   * Return only the URL/persistence-owned control state. This is safe to read
+   * before corpus or database hydration and prevents a cold Works shell from
+   * inventing default controls that contradict the current deep link.
+   */
+  function getWorksViewState(): WorksViewState {
+    const dbStatus = String(state.worksDbStatus || "");
+    return {
+      query: String(state.worksSearch || ""),
+      sort: worksSortValue() as WorksViewState["sort"],
+      filters: {
+        needsReview: Boolean(state.worksNeedsReview),
+        dbStatus: WORKS_DB_STATUSES.includes(dbStatus as WorksDbStatusKind)
+          ? (dbStatus as WorksDbStatusKind)
+          : "",
+        author: String(state.worksAuthor || ""),
+      },
+      viewMode: ["list", "compact"].includes(String(state.worksView)) ? "list" : "cards",
+    };
+  }
+
   /** The first four-digit year in a label, or null when the work has no defined year. */
   function workYear(item: Any): number | null {
     const match = String(item.year_label || "").match(/\d{4}/);
@@ -358,15 +380,8 @@ export function createWorksWorkspace(deps: Deps) {
     const activeStoreInfo = stores.find((store: Any) => store.name === activeStore) || null;
     const noDbReason = dbUnavailableReason();
     return {
-      query: String(state.worksSearch || ""),
+      ...getWorksViewState(),
       selectedWork: String(state.workOverview || ""),
-      sort: worksSortValue(),
-      filters: {
-        needsReview: Boolean(state.worksNeedsReview),
-        dbStatus: String(state.worksDbStatus || ""),
-        author: String(state.worksAuthor || ""),
-      },
-      viewMode: ["list", "compact"].includes(String(state.worksView)) ? "list" : "cards",
       stores,
       activeStore,
       activeStoreCount: Number(activeStoreInfo?.count || 0),
@@ -659,6 +674,7 @@ export function createWorksWorkspace(deps: Deps) {
   }
   return {
     describeAdminWork,
+    getWorksViewState,
     worksSnapshotBase,
     prepareWorksWorkspace,
     getWorksWorkspaceSnapshot,
