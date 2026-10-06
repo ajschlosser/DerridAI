@@ -204,25 +204,13 @@ def test_loader_accepts_v2_yaml(tmp_path):
     assert pipeline_hash(loaded.pipeline.definition) == pipeline_hash(_metadata_pipeline())
 
 
-def test_cli_migrates_v1_to_v2_with_the_resolved_pipeline(
+def test_cli_migrates_v1_to_v2_with_the_built_in_pipeline(
     tmp_path,
-    monkeypatch,
     capsys,
 ):
     pipeline = _metadata_pipeline()
     source = tmp_path / "v1.yaml"
     source.write_text("version: 1\n", encoding="utf-8")
-
-    from app.pipelines.manager import pipeline_manager
-
-    monkeypatch.setattr(
-        pipeline_manager,
-        "resolve",
-        lambda feature: {
-            "pipeline": pipeline.model_dump(mode="json"),
-            "pipeline_hash": pipeline_hash(pipeline),
-        },
-    )
 
     code = main(["config", "migrate", "--config", str(source)])
     captured = capsys.readouterr()
