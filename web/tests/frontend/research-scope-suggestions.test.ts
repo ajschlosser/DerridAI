@@ -97,14 +97,12 @@ describe("ResearchScopeSuggestions", () => {
 
 describe("optional model suggestions", () => {
   it("calls only on demand and labels the confirmed filter as model assisted", async () => {
-    const resolveModel = vi
-      .fn()
-      .mockResolvedValue({
-        source: "model_assisted",
-        model: "local",
-        expression: 'custom_role = "witness"',
-        unresolved: [],
-      });
+    const resolveModel = vi.fn().mockResolvedValue({
+      source: "model_assisted",
+      model: "local",
+      expression: 'custom_role = "witness"',
+      unresolved: [],
+    });
     const wrapper = mount(ResearchScopeSuggestions, {
       props: {
         instructions: "Only relevant witness passages",
