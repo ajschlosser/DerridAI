@@ -376,7 +376,7 @@ Files:
 2. Move the existing dynamic `import()` calls inside a shared progressive route wrapper.
 3. Render a destination-owned loading skeleton immediately while the page module downloads.
 4. Preserve one-shot stale-deployment recovery for missing hashed chunks.
-5. Show an inline retry/reload state for ordinary transient module-load failures after the route has already committed.
+5. Show an inline recovery state for ordinary transient module-load failures after the route has already committed. Because browsers can cache a failed ES-module fetch for the lifetime of the document, explicit Retry reloads the already-committed destination instead of pretending that repeating the same `import()` is a reliable retry.
 6. Keep page-specific API/data hydration inside each destination. Audit pages that still hide their entire visible shell behind an initial `await` or all-or-nothing `Promise.all`, and convert those to header/controls-first progressive loading.
 7. Prefer intent preloading for likely destinations later, but do not make prefetch a correctness requirement for fast navigation.
 
@@ -387,7 +387,7 @@ Files:
 - The previous page is not retained merely because the destination chunk or API is slow.
 - A cold destination shows an immediate loading skeleton owned by the destination route.
 - Once the module is loaded, its page can continue loading data progressively without blocking route state.
-- A transient chunk failure is retryable without navigating back to the previous page.
+- A transient chunk failure is recoverable from the committed destination; explicit Retry reloads that destination rather than returning to the previous page.
 - A stale-deployment chunk failure still self-recovers through the existing guarded reload path.
 - Back/Forward has the same immediate-commit behavior.
 
