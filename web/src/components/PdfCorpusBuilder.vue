@@ -2637,6 +2637,7 @@ watch(
   { immediate: true },
 );
 let routeReviewRequest = 0;
+let applyingReviewRoute = false;
 watch(
   () =>
     [
@@ -2648,12 +2649,14 @@ watch(
   async ([buildId, workspace, queue, recordId]) => {
     if (!builderRouteActive.value) return;
     const request = ++routeReviewRequest;
-    const reviewing = workspace === "review";
-    const buildChanged = Boolean(buildId && buildId !== selectedBuildId.value);
-    const queueChanged = reviewing && (queue || "all") !== reviewQueue.value;
-    const recordChanged = reviewing && recordId !== selectedRecordId.value;
+    applyingReviewRoute = true;
+    try {
+      const reviewing = workspace === "review";
+      const buildChanged = Boolean(buildId && buildId !== selectedBuildId.value);
+      const queueChanged = reviewing && (queue || "all") !== reviewQueue.value;
+      const recordChanged = reviewing && recordId !== selectedRecordId.value;
 
-    // Apply one route snapshot as one transaction. The old independent
+      // Apply one route snapshot as one transaction. The old independent
     // build/queue/record watchers could each issue their own review read when
     // Back/Forward changed several query fields at once.
     if (buildChanged) {
@@ -2699,14 +2702,17 @@ watch(
       return;
     }
 
-    if (!reviewHydrated.value && selectedBuildId.value && hasRecordTopology.value)
-      await refreshRecords(false, recordId);
+      if (!reviewHydrated.value && selectedBuildId.value && hasRecordTopology.value)
+        await refreshRecords(false, recordId);
+    } finally {
+      if (request === routeReviewRequest) applyingReviewRoute = false;
+    }
   },
 );
 watch(
   [selectedBuildId, reviewQueue, selectedRecordId, () => route.query.workspace],
   () => {
-    if (!builderRouteActive.value || !selectedBuildId.value) return;
+    if (applyingReviewRoute || !builderRouteActive.value || !selectedBuildId.value) return;
     const query = syncedReviewQuery(route.query, {
       buildId: selectedBuildId.value,
       queue: reviewQueue.value,
