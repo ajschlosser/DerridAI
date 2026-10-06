@@ -93,6 +93,7 @@ describe("CompareView", () => {
     expect(wrapper.get("#compare-title").text()).toBe("Compare");
     expect(wrapper.findAllComponents({ name: "ComparePicker" })).toHaveLength(2);
     expect(wrapper.text()).not.toContain("Load JSONL files or browse the corpus database first.");
+    expect(wrapper.text()).not.toContain("Two records are needed");
     expect(wrapper.findAllComponents({ name: "UiLoadingState" }).length).toBeGreaterThan(0);
 
     resolveLibrary();
