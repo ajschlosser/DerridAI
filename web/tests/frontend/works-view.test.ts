@@ -830,8 +830,14 @@ describe("WorksView", () => {
 });
 
 describe("Works progressive loading", () => {
-  it("renders the title before preparation completes without an empty-state flash", async () => {
+  it("keeps the library controls and loading region mounted until a researcher snapshot arrives", async () => {
     setActivePinia(createPinia());
+    useAuthStore().user = {
+      id: 2,
+      username: "reader",
+      role: "researcher",
+      capabilities: ["page.works"],
+    } as never;
     let finish!: () => void;
     runtime.prepareWorksWorkspace.mockImplementationOnce(
       () =>
@@ -839,14 +845,56 @@ describe("Works progressive loading", () => {
           finish = () => resolve({ error: "" });
         }),
     );
-    runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot());
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        mode: "researcher",
+        capabilities: {
+          canManageCorpus: false,
+          canSync: false,
+          canSyncAll: false,
+          canPopulate: false,
+        },
+      }),
+    );
+
     const wrapper = mount(WorksView);
     await flushPromises();
+
     expect(wrapper.find("#works-page-title").exists()).toBe(true);
     expect(wrapper.find(".empty").exists()).toBe(false);
+    expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
+    expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".works-toolbar-summary").text()).not.toContain("0 of 0");
+    expect(wrapper.find(".works-library-loading").exists()).toBe(true);
+
     finish();
     await flushPromises();
-    expect(wrapper.find("#worksGrid").exists()).toBe(true);
+
+    expect(wrapper.find(".works-library-loading").exists()).toBe(false);
+    expect(wrapper.get("#worksSearch").attributes("disabled")).toBeUndefined();
+    expect(wrapper.find(".works-card").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("keeps the toolbar frame visible after a failed first read without claiming an empty library", async () => {
+    setActivePinia(createPinia());
+    useAuthStore().user = {
+      id: 2,
+      username: "reader",
+      role: "researcher",
+      capabilities: ["page.works"],
+    } as never;
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(undefined);
+    runtime.prepareWorksWorkspace.mockRejectedValueOnce(new Error("Works service unavailable"));
+
+    const wrapper = mount(WorksView);
+    await flushPromises();
+
+    expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
+    expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".works-toolbar-summary").text()).toContain("Unavailable");
+    expect(wrapper.get("[role='alert']").text()).toContain("Works service unavailable");
+    expect(wrapper.find(".empty").exists()).toBe(false);
     wrapper.unmount();
   });
 });
