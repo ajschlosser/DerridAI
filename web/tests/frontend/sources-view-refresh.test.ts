@@ -101,7 +101,6 @@ describe("Sources view table refresh", () => {
     expect(wrapper.find("[data-captures-empty]").exists()).toBe(true);
   });
 
-
   it("drops hidden selection and inspector state when the table changes result identity", async () => {
     const wrapper = await openDialog();
     const table = wrapper.getComponent(SourceTable);
