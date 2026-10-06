@@ -47,7 +47,7 @@ on:
       - "**/*.scss"
       - "**/*.html"
   push:
-    branches: [master]
+    branches: [master, "task/binary-pipeline-continuation"]
     paths:
       - "api/**"
       - "tests/**"
