@@ -17,13 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { SchemaSummary } from "../../api/metadataSchemas";
 import type { SearchFilter } from "../../types/search";
 import type { SearchFilterFieldOption } from "../../domain/searchFilterSchema";
 
-defineProps<{
+const props = defineProps<{
   filters: SearchFilter[];
   fields: SearchFilterFieldOption[];
   schemas: SchemaSummary[];
@@ -48,6 +49,8 @@ const i18n = useI18nStore();
 function valueRequired(op: string) {
   return !["empty", "notempty"].includes(op);
 }
+const selectedField = computed(() => props.fields.find((item) => item.key === props.field) || null);
+const valueInput = computed(() => selectedField.value?.input || "text");
 </script>
 
 <template>
@@ -136,7 +139,29 @@ function valueRequired(op: string) {
         </label>
         <label>
           <span class="sr-only">{{ i18n.t("search.value") }}</span>
+          <select
+            v-if="valueInput === 'select'"
+            class="control search-filter-value-control"
+            :value="value"
+            :disabled="!valueRequired(op)"
+            @change="emit('update:value', ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ i18n.t("search.filter_value_placeholder") }}</option>
+            <option v-for="item in suggestions" :key="item" :value="item">{{ item }}</option>
+          </select>
           <input
+            v-else-if="valueInput === 'number'"
+            class="control search-filter-value-control"
+            type="number"
+            step="any"
+            :value="value"
+            :disabled="!valueRequired(op)"
+            :placeholder="i18n.t('search.filter_value_placeholder')"
+            @input="emit('update:value', ($event.target as HTMLInputElement).value)"
+            @keydown.enter.prevent="emit('add')"
+          />
+          <input
+            v-else
             class="control"
             :value="value"
             :list="`search-suggestions-${field}`"
@@ -145,14 +170,14 @@ function valueRequired(op: string) {
             @input="emit('update:value', ($event.target as HTMLInputElement).value)"
             @keydown.enter.prevent="emit('add')"
           />
-          <datalist :id="`search-suggestions-${field}`">
+          <datalist v-if="valueInput === 'text'" :id="`search-suggestions-${field}`">
             <option v-for="item in suggestions" :key="item" :value="item"></option>
           </datalist>
         </label>
         <button
           type="button"
           class="btn primary search-add-filter"
-          :disabled="valueRequired(op) && !value.trim()"
+          :disabled="!field || (valueRequired(op) && !value.trim())"
           @click="emit('add')"
         >
           <AppIcon name="plus" />{{ i18n.t("research.add_filter") }}

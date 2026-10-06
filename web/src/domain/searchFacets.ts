@@ -19,14 +19,31 @@
 // Search facets, filter descriptors and row/record filter matching for the Search and Records views. Moved
 // verbatim from the legacy runtime; the state it read is passed in as dependencies.
 
-import {
-  SEARCH_AUTOCOMPLETE_EXCLUDED,
-  SEARCH_FACET_FIELDS,
-  SEARCH_FILTER_FIELDS,
-} from "./runtimeConstants";
+import { SEARCH_AUTOCOMPLETE_EXCLUDED } from "./runtimeConstants";
 import { bindCopy } from "../i18n/bindCopy";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/**
+ * Compatibility-only display order for schema-less/legacy loaded records.
+ *
+ * Eligibility still comes from recordFields(); these names merely keep the
+ * historical high-value facets first when no explicit schema/index capability
+ * set is available.
+ */
+const LEGACY_SEARCH_FACET_ORDER = [
+  "work",
+  "needs_review",
+  "__db_status",
+  "document_author",
+  "quoted_speaker",
+  "speaker",
+  "position_holder",
+  "discourse_role",
+  "document_language",
+  "topics",
+  "concepts",
+];
 
 interface Deps {
   tr: (key: string, fallback?: string) => string;
@@ -134,10 +151,16 @@ export function createSearchFacets(deps: Deps) {
     }
     return counts;
   }
-  function buildSearchFacets(source: Loose[], { database = false } = {}) {
+  function buildSearchFacets(
+    source: Loose[],
+    { database = false, fields = [] }: { database?: boolean; fields?: string[] } = {},
+  ) {
     const rows = (database ? null : source) as Loose[];
     const records = (database ? source : null) as Loose[];
-    const facetFields = [...new Set([...SEARCH_FACET_FIELDS, ...recordFields()])].filter(
+    const requestedFields = fields.length
+      ? fields
+      : [...LEGACY_SEARCH_FACET_ORDER, ...recordFields()];
+    const facetFields = [...new Set(requestedFields.map(String))].filter(
       (field) =>
         !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field) &&
         field !== "text" &&
@@ -173,16 +196,14 @@ export function createSearchFacets(deps: Deps) {
       })
       .filter((facet) => facet.values.length);
   }
-  function searchSuggestions(recordsOrRows: Loose[], { database = false } = {}) {
+  function searchSuggestions(
+    recordsOrRows: Loose[],
+    { database = false, fields = [] }: { database?: boolean; fields?: string[] } = {},
+  ) {
     const out: Record<string, string[]> = {};
     const rows = database ? recordsOrRows.map((record) => ({ record })) : recordsOrRows;
-    const fields = [
-      ...new Set([
-        ...SEARCH_FILTER_FIELDS,
-        ...recordFields().filter((field) => !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field)),
-      ]),
-    ];
-    for (const field of fields) {
+    const requestedFields = fields.length ? fields : recordFields();
+    for (const field of [...new Set(requestedFields.map(String))]) {
       if (SEARCH_AUTOCOMPLETE_EXCLUDED.has(field)) continue;
       const values = new Set<string>();
       for (const row of rows as Loose[]) {

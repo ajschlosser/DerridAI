@@ -23,16 +23,18 @@ import { queryClient } from "../../src/realtime/dataQuery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const push = vi.fn();
-const route = { name: "system-data-metadata", query: {} };
+const replace = vi.fn();
+const route = { name: "system-data-metadata", query: {} as Record<string, string> };
 
 vi.mock("vue-router", () => ({
   RouterLink: { props: ["to"], template: "<a><slot /></a>" },
   useRoute: () => route,
-  useRouter: () => ({ push }),
+  useRouter: () => ({ push, replace }),
 }));
 
 import { systemApi } from "../../src/api/system";
 import SystemDataOverview from "../../src/components/system-data/SystemDataOverview.vue";
+import SystemDataDatabases from "../../src/components/system-data/SystemDataDatabases.vue";
 import SystemDataAdvanced from "../../src/components/system-data/SystemDataAdvanced.vue";
 import SystemDataView from "../../src/views/SystemDataView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -43,6 +45,8 @@ describe("System Data workspaces", () => {
     useI18nStore().dictionary = {};
     vi.restoreAllMocks();
     push.mockReset();
+    replace.mockReset();
+    for (const key of Object.keys(route.query)) delete route.query[key];
   });
 
   it("restores the selected workspace from the URL and writes navigation back to it", async () => {
@@ -114,6 +118,132 @@ describe("System Data workspaces", () => {
     expect(wrapper.text()).toContain("metadata-memory");
     expect(wrapper.text()).toContain("vector service offline");
     expect(wrapper.text()).not.toContain("No internal vector collections are available.");
+    wrapper.unmount();
+  });
+
+  it("shows the database directory before selected-table rows finish loading", async () => {
+    vi.spyOn(systemApi, "systemData").mockResolvedValue({
+      databases: [
+        {
+          name: "system",
+          backend: "sqlite",
+          tables: [
+            {
+              name: "jobs",
+              row_count: 1,
+              columns: [{ name: "id", primary_key: 1 }, { name: "status" }],
+            },
+          ],
+        },
+      ],
+    });
+    let resolveRows!: (value: Awaited<ReturnType<typeof systemApi.systemDataRows>>) => void;
+    vi.spyOn(systemApi, "systemDataRows").mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRows = resolve;
+        }),
+    );
+
+    const wrapper = mount(SystemDataDatabases);
+    await flushPromises();
+
+    expect(wrapper.find(".browser").exists()).toBe(true);
+    expect(wrapper.text()).toContain("jobs");
+    expect(wrapper.text()).toContain("Loading rows");
+    expect(wrapper.find(".data-table").exists()).toBe(false);
+
+    resolveRows({
+      database: "system",
+      name: "jobs",
+      row_count: 1,
+      columns: [{ name: "id", primary_key: 1 }, { name: "status" }],
+      rows: [{ id: "job-1", status: "completed" }],
+      offset: 0,
+      limit: 25,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("job-1");
+    wrapper.unmount();
+  });
+
+  it("retains current rows during same-table refresh and withholds them for another table", async () => {
+    vi.spyOn(systemApi, "systemData").mockResolvedValue({
+      databases: [
+        {
+          name: "system",
+          backend: "sqlite",
+          tables: [
+            { name: "jobs", row_count: 1, columns: [{ name: "id", primary_key: 1 }] },
+            { name: "annotations", row_count: 1, columns: [{ name: "id", primary_key: 1 }] },
+          ],
+        },
+      ],
+    });
+    const rows = vi.spyOn(systemApi, "systemDataRows").mockResolvedValueOnce({
+      database: "system",
+      name: "jobs",
+      row_count: 1,
+      columns: [{ name: "id", primary_key: 1 }],
+      rows: [{ id: "job-1" }],
+      offset: 0,
+      limit: 25,
+    });
+
+    const wrapper = mount(SystemDataDatabases);
+    await flushPromises();
+    expect(wrapper.text()).toContain("job-1");
+
+    let rejectRefresh!: (reason?: unknown) => void;
+    rows.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectRefresh = reject;
+        }),
+    );
+    await wrapper
+      .findAll(".table-row button")
+      .find((button) => button.text().includes("jobs"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("job-1");
+    expect(wrapper.text()).toContain("Updating");
+
+    rejectRefresh(new Error("rows offline"));
+    await flushPromises();
+    expect(wrapper.text()).toContain("job-1");
+    expect(wrapper.text()).toContain("rows offline");
+
+    let resolveAnnotations!: (value: Awaited<ReturnType<typeof systemApi.systemDataRows>>) => void;
+    rows.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAnnotations = resolve;
+        }),
+    );
+    await wrapper
+      .findAll(".table-row button")
+      .find((button) => button.text().includes("annotations"))!
+      .trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("job-1");
+    expect(wrapper.text()).toContain("Loading rows");
+
+    resolveAnnotations({
+      database: "system",
+      name: "annotations",
+      row_count: 1,
+      columns: [{ name: "id", primary_key: 1 }],
+      rows: [{ id: "annotation-1" }],
+      offset: 0,
+      limit: 25,
+    });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("annotation-1");
     wrapper.unmount();
   });
 

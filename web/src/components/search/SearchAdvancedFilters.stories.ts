@@ -34,8 +34,26 @@ const meta = {
       },
     ],
     fields: [
-      { key: "work", label: "Work", kind: "text" },
-      { key: "speaker", label: "Speaker", kind: "text" },
+      {
+        key: "work",
+        label: "Work",
+        kind: "text",
+        cardinality: "scalar",
+        controlledValues: [],
+        strict: false,
+        input: "text",
+        filterable: true,
+      },
+      {
+        key: "speaker",
+        label: "Speaker",
+        kind: "text",
+        cardinality: "scalar",
+        controlledValues: [],
+        strict: false,
+        input: "text",
+        filterable: true,
+      },
     ],
     schemas: [
       {

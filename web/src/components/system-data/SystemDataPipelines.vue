@@ -99,8 +99,17 @@ const {
   runs,
   runTotal,
   focusedRun,
-  loading,
-  error: loadError,
+  catalogPending,
+  catalogRefreshing,
+  catalogError,
+  metricsPending,
+  metricsRefreshing,
+  metricsError,
+  runsPending,
+  runsRefreshing,
+  runsError,
+  reloadRuns,
+  reloadMetrics,
   reload: load,
 } = usePipelineStudioData({ runFilters, runOffset, selectedRunId: selectedTraceId });
 
@@ -348,8 +357,12 @@ const studioTabs = computed(() => [
   { id: "operations", label: t("pipelines.studio_operations", "Operations") },
 ]);
 const notices = computed<Notice[]>(() => {
-  const text = error.value || loadError.value;
-  return text ? [{ id: "pipeline-error", tone: "error", text }] : [];
+  const items: Notice[] = [];
+  if (error.value) items.push({ id: "pipeline-error", tone: "error", text: error.value });
+  if (catalogError.value) {
+    items.push({ id: "pipeline-catalog-error", tone: "error", text: catalogError.value });
+  }
+  return items;
 });
 </script>
 
@@ -395,11 +408,15 @@ const notices = computed<Notice[]>(() => {
       @dismiss="error = ''"
     />
     <UiLoadingState
-      v-if="loading && !catalog"
+      v-if="catalogPending && !catalog"
       :label="t('pipelines.loading', 'Loading pipelines…')"
     />
 
-    <template v-else-if="catalog">
+    <div v-if="catalogRefreshing && catalog" class="pipeline-studio-status" role="status">
+      {{ t("loading.updating", "Updating…") }}
+    </div>
+
+    <template v-if="catalog">
       <PipelineDefinitionsWorkspace
         v-if="section === 'pipelines'"
         :pipelines="pipelines"
@@ -466,12 +483,16 @@ const notices = computed<Notice[]>(() => {
         :limit="runLimit"
         :offset="runOffset"
         :filters="runFilters"
+        :pending="runsPending"
+        :refreshing="runsRefreshing"
+        :error="runsError"
         @select="selectTrace"
         @apply="applyRunFilters"
         @page="changeRunPage"
         @delete-run="deleteRun"
         @clear-history="clearHistory"
         @open-configuration="openConfiguration"
+        @retry="reloadRuns"
       />
 
       <PipelineOperationsWorkspace
@@ -482,10 +503,14 @@ const notices = computed<Notice[]>(() => {
         :strategies="strategies"
         :purposes="purposes"
         :vocabulary="vocabulary"
+        :metrics-pending="metricsPending"
+        :metrics-refreshing="metricsRefreshing"
+        :metrics-error="metricsError"
         @update:operation="selectOperationsSection"
         @view-executions="viewExecutions"
         @view-strategy="viewStrategy"
         @open-pipeline="selectPipeline"
+        @retry-metrics="reloadMetrics"
       />
     </template>
 
@@ -505,5 +530,12 @@ const notices = computed<Notice[]>(() => {
 }
 .pipeline-studio-nav {
   margin-top: var(--space-2);
+}
+.pipeline-studio-status {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
 }
 </style>

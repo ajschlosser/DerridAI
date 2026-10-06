@@ -19,16 +19,15 @@
 import { mlaPageSpan } from "./citations";
 import { valueMatches } from "./recordQuery";
 import { cloneAuditValue, sortRows } from "./recordValues";
-import {
-  SEARCH_AUTOCOMPLETE_EXCLUDED,
-  SEARCH_FILTER_FIELDS,
-  SEARCH_LOADED_COLUMNS,
-  TABLE_DEFAULTS,
-} from "./runtimeConstants";
+import { SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS } from "./runtimeConstants";
 import { decompressUrlState } from "./urlState";
 import { toast } from "../composables/notifications";
 import { createUpdateSearchQuery } from "./searchQuery";
-import { filterOpsForKind, type FilterFieldKind } from "./searchFilterSchema";
+import {
+  filterOpsForKind,
+  isSearchFilterFieldName,
+  type FilterFieldKind,
+} from "./searchFilterSchema";
 
 // The Search workspace: building the results, facets and columns the Search view shows, and the commands it sends
 // (scope, query, filters, sort, paging, selection, running a search). Moved verbatim from the legacy runtime; the
@@ -296,7 +295,8 @@ export function createSearchWorkspace(deps: Deps) {
       facets = [],
       suggestions = {},
       available = [],
-      filters = [];
+      filters = [],
+      filterFieldNames: string[] = [];
     if (scope === "loaded") {
       const base = localSearchBaseRows();
       let rows = base.filter((row: Any) => searchRowMatchesFacets(row));
@@ -308,9 +308,13 @@ export function createSearchWorkspace(deps: Deps) {
       const slice = rows.slice(start, start + pageSize);
       await refreshPresenceForRows(slice).catch(() => undefined);
       results = slice.map(buildWorkspaceSearchResult);
-      facets = buildSearchFacets(base);
-      suggestions = searchSuggestions(allRows());
       available = tableAvailableFields(allRows(), ["__file", ...SEARCH_LOADED_COLUMNS]);
+      filterFieldNames = available.filter((field: string) => isSearchFilterFieldName(field));
+      // Loaded records have no index capability contract. Let the facet helper
+      // derive eligibility from the record field inventory, retaining only its
+      // compatibility ordering for schema-less/legacy data.
+      facets = buildSearchFacets(base);
+      suggestions = searchSuggestions(allRows(), { fields: filterFieldNames });
       filters = state.globalFilters.map(searchFilterDescriptor);
     } else {
       let dbItems = (state.storeSearchResults || [])
@@ -323,8 +327,12 @@ export function createSearchWorkspace(deps: Deps) {
       const start = (state.globalPage - 1) * pageSize;
       results = dbItems.slice(start, start + pageSize);
       const records = (state.storeSearchResults || []).map((item: Any) => item.record || {});
-      facets = buildSearchFacets(records, { database: true });
-      suggestions = searchSuggestions(records, { database: true });
+      const activeStore = stores.find((store: Any) => store.name === state.activeStore);
+      filterFieldNames = Array.isArray(activeStore?.filter_fields)
+        ? activeStore.filter_fields.map(String).filter(isSearchFilterFieldName)
+        : [];
+      facets = buildSearchFacets(records, { database: true, fields: filterFieldNames });
+      suggestions = searchSuggestions(records, { database: true, fields: filterFieldNames });
       available = tableAvailableFields(
         records.map((record: Any) => ({ record })),
         ["__db_status"],
@@ -334,14 +342,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (!available.includes("__db_status")) available.unshift("__db_status");
     const columns = getTableColumns("global", available);
     const pages = Math.max(1, Math.ceil(total / pageSize));
-    const filterFields = [
-      ...new Set([
-        ...SEARCH_FILTER_FIELDS,
-        ...available.filter(
-          (field: Any) => !field.startsWith("__") && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field),
-        ),
-      ]),
-    ]
+    const filterFields = [...new Set(filterFieldNames)]
       .filter(Boolean)
       .sort((a, b) => label(a).localeCompare(label(b)));
     return {

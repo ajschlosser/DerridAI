@@ -21,6 +21,7 @@ import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
+import { label as compatibilityFieldLabel } from "../domain/sharedRecordHelpers";
 import { updateSearchQuery } from "../domain/sharedSearchQuery";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
@@ -59,6 +60,7 @@ import {
   chosenFilterSchemaId,
   defaultFilterSchemaId,
   filterOpsForKind,
+  filterValueSuggestions,
   resolveSearchFilterFields,
   saveFilterSchemaOverride,
   type SearchFilterFieldOption,
@@ -191,7 +193,10 @@ const schemaFilterFields = computed<SearchFilterFieldOption[]>(() => {
     schema,
     collectionFields: store?.filter_fields || [],
     availableFields: snapshot.value?.filter_fields.map((field) => field.key) || [],
-    labels: (key) => snapshot.value?.filter_fields.find((field) => field.key === key)?.label || key,
+    labels: (key) =>
+      snapshot.value?.filter_fields.find((field) => field.key === key)?.label ||
+      compatibilityFieldLabel(key),
+    database: databaseMode.value,
   });
 });
 const sortOptions = computed(() => {
@@ -344,7 +349,7 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
     !newFilterField.value ||
     !schemaFilterFields.value.some((field) => field.key === newFilterField.value)
   )
-    newFilterField.value = schemaFilterFields.value[0]?.key || next.filter_fields[0]?.key || "work";
+    newFilterField.value = schemaFilterFields.value[0]?.key || next.filter_fields[0]?.key || "";
 }
 function applyQuery(value: string) {
   query.value = value;
@@ -499,7 +504,7 @@ async function changeFilterSchema(id: string) {
   );
   await loadSchema(filterSchemaId.value);
   if (!schemaFilterFields.value.some((field) => field.key === newFilterField.value))
-    newFilterField.value = schemaFilterFields.value[0]?.key || "work";
+    newFilterField.value = schemaFilterFields.value[0]?.key || "";
 }
 function filterOps(field: string) {
   const kind = schemaFilterFields.value.find((item) => item.key === field)?.kind || "text";
@@ -511,7 +516,8 @@ function onFilterFieldChange() {
   newFilterValue.value = "";
 }
 function suggestionsFor(field: string) {
-  return snapshot.value?.filter_suggestions[field] || [];
+  const descriptor = schemaFilterFields.value.find((item) => item.key === field);
+  return filterValueSuggestions(descriptor, snapshot.value?.filter_suggestions[field] || []);
 }
 
 async function resultAction(result: SearchResult, action: string) {
