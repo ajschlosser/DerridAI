@@ -49,13 +49,62 @@ describe("search filter schema", () => {
     ]);
   });
 
-  it("prefers a schema over collection and fallback lists", () => {
+  it("prefers a schema over collection and fallback lists for loaded records", () => {
     const fields = resolveSearchFilterFields({
       schema,
       collectionFields: ["work"],
       availableFields: ["work", "needs_review"],
+      database: false,
     });
     expect(fields.map((field) => field.key)).toEqual(["speaker", "year", "topics"]);
+  });
+
+  it("intersects schema fields with database index capabilities without relying on built-in names", () => {
+    const renamedSchema = {
+      id: "renamed",
+      name: "Renamed",
+      fields: [
+        {
+          field_id: "field-position-holder",
+          name: "holder_alias",
+          semantic_compatibility_id: "derridai.position_holder",
+          label: "Position holder",
+          type: "choice",
+          values: [
+            { value: "Derrida", definition: "" },
+            { value: "Levinas", definition: "" },
+          ],
+        },
+        {
+          field_id: "field-conceptual-tension",
+          name: "conceptual_tension",
+          label: "Conceptual tension",
+          type: "list",
+          values: [],
+        },
+        { field_id: "field-unindexed", name: "unindexed_note", label: "Note", type: "text" },
+      ],
+    } as MetadataSchema;
+
+    const fields = resolveSearchFilterFields({
+      schema: renamedSchema,
+      collectionFields: ["holder_alias", "conceptual_tension"],
+      database: true,
+    });
+
+    expect(fields.map((field) => field.key)).toEqual(["holder_alias", "conceptual_tension"]);
+    expect(fields[0]).toMatchObject({
+      fieldId: "field-position-holder",
+      semanticCompatibilityId: "derridai.position_holder",
+      kind: "choice",
+      cardinality: "scalar",
+      controlledValues: ["Derrida", "Levinas"],
+    });
+    expect(fields[1]).toMatchObject({
+      fieldId: "field-conceptual-tension",
+      kind: "list",
+      cardinality: "collection",
+    });
   });
 
   it("falls back to collection filter fields when no schema is associated", () => {
@@ -73,6 +122,21 @@ describe("search filter schema", () => {
     expect(
       filterOpsForKind("list", { database: true, method: "filter" }).map(([op]) => op),
     ).toEqual(["has", "eq"]);
+  });
+
+  it("uses schema type semantics instead of text containment for choices and booleans", () => {
+    expect(filterOpsForKind("choice").map(([op]) => op)).toEqual([
+      "eq",
+      "neq",
+      "empty",
+      "notempty",
+    ]);
+    expect(filterOpsForKind("boolean").map(([op]) => op)).toEqual([
+      "eq",
+      "neq",
+      "empty",
+      "notempty",
+    ]);
   });
 
   it("stores a user-chosen schema for a corpus and otherwise uses the associated or default schema", () => {
