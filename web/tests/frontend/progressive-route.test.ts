@@ -21,6 +21,7 @@ import { createPinia } from "pinia";
 import { defineComponent, h, type Component } from "vue";
 import { createMemoryHistory, createRouter, RouterView } from "vue-router";
 import { describe, expect, it, vi } from "vitest";
+import { APP_ROUTES } from "../../src/router";
 import { progressiveRouteComponent } from "../../src/router/progressiveRoute";
 
 function deferred<T>() {
@@ -65,6 +66,23 @@ async function setup(loader: () => Promise<{ default: Component } | Component>) 
 }
 
 describe("progressive route components", () => {
+  it("keeps application page records synchronous at the router boundary", () => {
+    const renderedRoutes = APP_ROUTES.filter((route) => route.component);
+    expect(renderedRoutes.length).toBeGreaterThan(20);
+    for (const route of renderedRoutes) {
+      expect(typeof route.component, String(route.name || route.path)).not.toBe("function");
+    }
+
+    const builder = APP_ROUTES.find((route) => route.name === "corpus-builder");
+    const explorer = APP_ROUTES.find((route) => route.name === "source-explorer");
+    expect(builder?.component).toBe(explorer?.component);
+
+    const systemData = APP_ROUTES.filter((route) =>
+      String(route.name || "").startsWith("system-data-"),
+    ).filter((route) => route.component);
+    expect(new Set(systemData.map((route) => route.component)).size).toBe(1);
+  });
+
   it("commits navigation before the destination chunk resolves", async () => {
     const pending = deferred<{ default: Component }>();
     const { router, wrapper } = await setup(() => pending.promise);
