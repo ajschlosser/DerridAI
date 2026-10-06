@@ -20,7 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 `api/app/pipelines/` implements DerridAI's declarative, versioned computational pipeline system. Pipelines choose and connect server-owned strategies for retrieval, reranking, evidence recovery, metadata work, research, and related computations without allowing a pipeline definition to weaken scholarly provenance or authority rules.
 
-See [the backend map](../README.md), [the global architecture](../../../docs/ARCHITECTURE.md), and [the Pipeline migration handoff](../../../docs/PIPELINE_MIGRATION_HANDOFF.md).
+See [the backend map](../README.md), [the global architecture](../../../docs/ARCHITECTURE.md), [the Pipeline migration handoff](../../../docs/PIPELINE_MIGRATION_HANDOFF.md), and [the Pipeline Configuration Contract](../../../docs/PIPELINE_CONFIGURATION_CONTRACT.md).
 
 ## Core model
 
@@ -77,7 +77,7 @@ flowchart LR
 
 ## Change checklist
 
-When adding a strategy, define its typed inputs/outputs, complexity, concurrency semantics, validation, and registry entry together. When adding or migrating a purpose, keep domain policy outside the computational graph unless it is genuinely a tuning choice, add the purpose contract and adapter, and cover graph validation plus runtime semantics in `tests/test_pipeline_*.py`.
+When adding a strategy, define its typed inputs/outputs, complexity, concurrency semantics, validation, and registry entry together. When adding or migrating a purpose, keep domain policy outside the computational graph unless it is genuinely a tuning choice, add the purpose contract and adapter, and cover graph validation plus runtime semantics in `tests/test_pipeline_*.py`. Any execution-affecting setting intended for Pipeline Studio or the native CLI must be represented in these server-owned contracts; do not add a separate UI-only or CLI-only semantic default. The cross-surface drift, versioning, and export/import rules are defined in `docs/PIPELINE_CONFIGURATION_CONTRACT.md`.
 
 For readability, name stages, ports, bindings, and resolved strategies by their role rather than by position in a list. Wiring and fallback algorithms should expose their phases—validation, resolution, execution, trace projection—with short comments where ordering matters. Avoid a generic “pipeline data” dictionary when an existing contract type can state the port semantics.
 

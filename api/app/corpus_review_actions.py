@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from .corpus_citations import _citation_strings
 from .corpus_enrichment_helpers import _mark_human_touch, _prepend_metadata_priority
 from .corpus_llm_helpers import _provider_roles
 from .corpus_metadata import MANIFEST_INHERITED_FIELDS, apply_metadata_constraints
@@ -84,7 +85,6 @@ from .metadata_schema import MetadataSchema
 from .nlp_annotations import annotate_record
 from .pipelines.corpus_reviewer_evidence_choice import ReviewerEvidenceChoiceSession
 from .provenance_memory import persist_record_decision
-from .rag import _citation_strings
 from .reviewer_context import current_reviewer
 from .semantic_identity import ValueEquivalenceResult, canonical_value_key
 from .semantic_identity_registry import compare_field_values

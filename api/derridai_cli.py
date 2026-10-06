@@ -14,22 +14,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-fastapi>=0.115,<1
-uvicorn[standard]>=0.34,<1
-chromadb>=1.0,<2
-httpx>=0.28,<1
-pydantic>=2.10,<3
-PyYAML>=6.0,<7
-json-repair>=0.63,<1
-python-multipart>=0.0.20,<1
-# Read-only cELF GraphQL façade (docs/GRAPHQL.md). Pinned to a minor series:
-# Strawberry changes extension/router APIs between minors.
-strawberry-graphql[fastapi]>=0.327,<0.328
+"""Compilation entry point for the target-native DerridAI CLI executable."""
 
-pymupdf>=1.26,<2
-Pillow>=12.1,<13
+# Packaging mode and compiler options are owned by scripts/build_cli_binary.py.
+# Keeping them out of this source file prevents a hidden standalone option from
+# conflicting with later onefile release builds.
 
-# Optional-but-default RAG cross-encoder reranking from the supplied pipeline.
-sentence-transformers>=5.1,<6
+from app.corpus_cli import main
 
-zstandard>=0.23,<1
+
+if __name__ == "__main__":
+    raise SystemExit(main())

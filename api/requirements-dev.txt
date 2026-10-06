@@ -3,3 +3,5 @@ pytest>=9,<10
 ruff==0.16.8
 mypy==2.3.1
 pytest-xdist>=3.8,<4
+# Build-time only: compile the headless CLI into target-native executables.
+Nuitka>=4.2,<5
