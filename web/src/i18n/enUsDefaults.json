@@ -9718,5 +9718,7 @@
   "pipelines.config.include_answers.label": "Include prior generated answers",
   "pipelines.config.include_answers.help": "Prior answers remain advisory and cannot supply citation support.",
   "pipelines.config.semantic.label": "Rank older turns locally",
-  "pipelines.config.semantic.help": "Use an already loaded local ranker; fall back to recent turns when unavailable."
+  "pipelines.config.semantic.help": "Use an already loaded local ranker; fall back to recent turns when unavailable.",
+  "pipelines.strategy.filter_research_scope.label": "Research retrieval scope",
+  "pipelines.strategy.filter_research_scope.description": "Validate request filters before retrieval; pinned evidence remains an explicit exception."
 }

@@ -287,6 +287,10 @@ STRATEGY_CONTRACTS: dict[str, tuple[list[PortSpec], list[PortSpec], ComplexitySp
             cardinality=_FIXED,
         ),
     ),
+    "filter.research_scope": (
+        [QUERY_IN], [_in("query", "query")],
+        _complexity("O(q)", "O(q)", order=2, variables=("q",)),
+    ),
     "filter.metadata_scope": (
         [CANDIDATES_IN],
         [_in("candidates", "candidate_set")],

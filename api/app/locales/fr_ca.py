@@ -9650,6 +9650,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pipelines.strategy.retrieve_claim_memory.description': 'Repère des énoncés validés sémantiquement similaires dans la portée du propriétaire, puis rattache l’état faisant autorité de l’énoncé et de son soutien.',
  'pipelines.strategy.retrieve_response_memory.label': 'Mémoire des réponses antérieures',
  'pipelines.strategy.retrieve_response_memory.description': 'Repère des réponses de recherche admissibles et sémantiquement similaires dans la portée du propriétaire, puis rattache leur état durable.',
+ 'pipelines.strategy.filter_research_scope.label': 'Portée du repérage de recherche',
+ 'pipelines.strategy.filter_research_scope.description': 'Valide les filtres avant le repérage; les preuves épinglées demeurent une exception explicite.',
  'pipelines.strategy.filter_metadata_scope.label': 'Filtre de portée des métadonnées',
  'pipelines.strategy.filter_metadata_scope.description': 'Contraint les précédents selon le schéma, les identités de champs stables, la langue, la portée et les champs d’analogie révisés.',
  'pipelines.strategy.normalize_collection_relevance.label': 'Normalisation de pertinence sensible à la métrique',

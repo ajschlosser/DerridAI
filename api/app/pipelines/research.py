@@ -67,6 +67,7 @@ class ResearchPipelinePlan:
     pipeline_version: int
     pipeline_hash: str
     query_stage_id: str | None
+    scope_stage_id: str | None
     thread_context_stage_id: str | None
     query_decomposition_available: bool
     semantic_stage_id: str | None
@@ -154,6 +155,7 @@ class ResearchPipelinePlan:
 
 SUPPORTED_STRATEGIES = frozenset(
     {
+        "filter.research_scope",
         "query.passthrough",
         "query.research_decompose",
         "query.research_contextualize",
@@ -402,6 +404,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         raise ValueError("Research supports one query-transform stage, not both.")
     query_stage = query_decompose or query_passthrough
 
+    scope = _single_stage(by_strategy, "filter.research_scope")
     semantic = _single_stage(by_strategy, "retrieve.chroma_similarity")
     lexical = _single_stage(by_strategy, "retrieve.lexical_bm25")
     if not semantic and not lexical:
@@ -472,9 +475,33 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
                 "retrieval stages as entry points."
             )
 
+    if scope:
+        retrieval_ids = {stage.id for stage in (semantic, lexical) if stage}
+        if (
+            query_stage is None
+            or query_stage.next != [scope.id]
+            or set(scope.next) != retrieval_ids
+            or any(
+                scope.id in stage.edge_targets()
+                for stage in stages.values()
+                if stage.id != query_stage.id
+            )
+            or any(
+                target in stage.edge_targets()
+                for stage in stages.values()
+                if stage.id != scope.id
+                for target in retrieval_ids
+            )
+        ):
+            raise ValueError(
+                "Research scope must directly follow the query and feed every retrieval route without bypasses."
+            )
+
     mmr_stages = by_strategy.get("select.mmr", [])
     if len(mmr_stages) > 2:
-        raise ValueError("Research supports at most one retrieval MMR and one diversity MMR stage.")
+        raise ValueError(
+            "Research supports at most one retrieval MMR and one diversity MMR stage."
+        )
 
     pre_fusion_mmr: PipelineStageDefinition | None = None
     post_mmr: PipelineStageDefinition | None = None
@@ -661,6 +688,7 @@ def compile_research_pipeline(pipeline: PipelineDefinition) -> ResearchPipelineP
         pipeline_version=pipeline.version,
         pipeline_hash=pipeline_hash(pipeline),
         query_stage_id=query_stage.id if query_stage else None,
+        scope_stage_id=scope.id if scope else None,
         thread_context_stage_id=context_stage.id if context_stage else None,
         query_decomposition_available=query_decompose is not None,
         semantic_stage_id=semantic.id if semantic else None,

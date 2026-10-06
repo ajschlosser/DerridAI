@@ -371,3 +371,53 @@ def test_research_trace_preserves_thread_lineage_without_history_text():
     assert "PRIVATE" not in trace.model_dump_json()
     assert "E99" not in trace.model_dump_json()
     assert all(stage.stage_id != "thread_context" for stage in trace.stages)
+
+
+def test_research_scope_trace_records_execution_without_filter_values() -> None:
+    result = _result()
+    pipeline = built_in_pipeline("research.balanced", 3)
+    result["pipeline"].update(
+        pipeline_version=3,
+        pipeline_hash=pipeline_hash(pipeline),
+        resolved_pipeline=pipeline.model_dump(mode="json"),
+    )
+    result["stages"].insert(
+        1,
+        {
+            "name": "research_scope",
+            "seconds": 0.002,
+            "detail": {
+                "active": True,
+                "source": "explicit",
+                "metadata_fields": ["work"],
+                "document_filter_active": True,
+                "selected_evidence_exempt_count": 2,
+            },
+        },
+    )
+    request = RAGRunRequest(
+        prompt="Question",
+        filter_plan={
+            "metadata_filter": {"work": "Private work"},
+            "document_filter": {"$contains": "Private quotation"},
+        },
+    )
+    now = datetime.now(UTC)
+    trace = build_research_trace(
+        run_id="scope-run",
+        owner="owner",
+        request=request,
+        result=result,
+        started_at=now,
+        finished_at=now,
+    )
+    stage = next(item for item in trace.stages if item.stage_id == "scope")
+    assert stage.strategy_id == "filter.research_scope"
+    assert stage.status == "completed"
+    assert stage.elapsed_ms == 2
+    assert stage.parameters["selected_evidence_exempt_count"] == 2
+    serialized = trace.model_dump_json()
+    assert "Private work" not in serialized
+    assert "Private quotation" not in serialized
+    ids = [item.stage_id for item in trace.stages]
+    assert ids.index("query") < ids.index("scope") < ids.index("dense")

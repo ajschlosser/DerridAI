@@ -287,6 +287,15 @@ DEFAULT_STRATEGIES = [
         output_type="context_packet",
     ),
     StrategySpec(
+        strategy_id="filter.research_scope",
+        family="filter",
+        scholarly_effect="scope_constraint",
+        label="Research retrieval scope",
+        description="Validate request filters before retrieval; pinned evidence remains an explicit exception.",
+        input_type="query",
+        output_type="query",
+    ),
+    StrategySpec(
         strategy_id="filter.metadata_scope",
         family="filter",
         scholarly_effect="scope_constraint",
