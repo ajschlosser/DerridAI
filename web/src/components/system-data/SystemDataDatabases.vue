@@ -137,7 +137,7 @@ function applyRequestedTable() {
   selectedDatabase.value = owner.name;
   selectedTable.value = requested;
 }
-function syncRoute(offset = page.value?.offset || 0) {
+function syncRoute(offset = requestedOffset.value) {
   void router.replace({
     name: "system-data-databases",
     query: {
@@ -191,7 +191,7 @@ function chooseTable(name: string) {
 }
 
 onMounted(() => void loadDatabases());
-watch(search, () => syncRoute(page.value?.offset || 0));
+watch(search, () => syncRoute(requestedOffset.value));
 // Keep URL-addressable database/table/page state authoritative when a cached
 // System Data workspace is revisited through breadcrumbs or browser history.
 watch(
