@@ -78,9 +78,7 @@ export function usePipelineStudioData(nav: {
     },
     { immediate: true },
   );
-  const runsAreCurrent = computed(
-    () => shownRunsIdentity.value === requestedRunsIdentity.value,
-  );
+  const runsAreCurrent = computed(() => shownRunsIdentity.value === requestedRunsIdentity.value);
   const runs = computed(() => (runsAreCurrent.value ? retainedRuns.value : []));
   const runTotal = computed(() => (runsAreCurrent.value ? retainedRunTotal.value : 0));
 
@@ -131,9 +129,7 @@ export function usePipelineStudioData(nav: {
     ),
     catalogError: computed(() => messageFor(catalogQuery.error.value)),
     metrics: computed(() => metricsQuery.data.value ?? null),
-    metricsPending: computed(
-      () => metricsQuery.isFetching.value && !metricsQuery.data.value,
-    ),
+    metricsPending: computed(() => metricsQuery.isFetching.value && !metricsQuery.data.value),
     metricsRefreshing: computed(
       () => metricsQuery.isFetching.value && Boolean(metricsQuery.data.value),
     ),
