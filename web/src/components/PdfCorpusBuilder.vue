@@ -2657,50 +2657,50 @@ watch(
       const recordChanged = reviewing && recordId !== selectedRecordId.value;
 
       // Apply one route snapshot as one transaction. The old independent
-    // build/queue/record watchers could each issue their own review read when
-    // Back/Forward changed several query fields at once.
-    if (buildChanged) {
-      stopPolling();
-      selectedBuildId.value = buildId;
-      selectedRecordId.value = "";
-      selectedRecord.value = null;
-      sourceBlocks.value = [];
-      reviewRecords.clear();
-      hydratedMetadataCount.value = 0;
-      if (reviewing) {
+      // build/queue/record watchers could each issue their own review read when
+      // Back/Forward changed several query fields at once.
+      if (buildChanged) {
+        stopPolling();
+        selectedBuildId.value = buildId;
+        selectedRecordId.value = "";
+        selectedRecord.value = null;
+        sourceBlocks.value = [];
+        reviewRecords.clear();
+        hydratedMetadataCount.value = 0;
+        if (reviewing) {
+          settingReviewFilters = true;
+          reviewQueue.value = queue || "all";
+          settingReviewFilters = false;
+        }
+        await refreshBuild();
+        if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+        if (reviewing && hasRecordTopology.value) {
+          await refreshRecords(true, recordId);
+          if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+        }
+        if (buildRunning.value) startPolling();
+        return;
+      }
+
+      // Build and Publish do not consume queue/record route state. Clearing those
+      // query keys during a phase switch must not cause an unnecessary review read.
+      if (!reviewing) return;
+
+      if (queueChanged) {
         settingReviewFilters = true;
         reviewQueue.value = queue || "all";
         settingReviewFilters = false;
+        selectedRecordId.value = "";
+        selectedRecord.value = null;
+        recordOffset.value = 0;
+        await refreshRecords(false, recordId);
+        return;
       }
-      await refreshBuild();
-      if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
-      if (reviewing && hasRecordTopology.value) {
-        await refreshRecords(true, recordId);
-        if (request !== routeReviewRequest || selectedBuildId.value !== buildId) return;
+
+      if (recordChanged && selectedBuildId.value) {
+        await refreshRecords(false, recordId);
+        return;
       }
-      if (buildRunning.value) startPolling();
-      return;
-    }
-
-    // Build and Publish do not consume queue/record route state. Clearing those
-    // query keys during a phase switch must not cause an unnecessary review read.
-    if (!reviewing) return;
-
-    if (queueChanged) {
-      settingReviewFilters = true;
-      reviewQueue.value = queue || "all";
-      settingReviewFilters = false;
-      selectedRecordId.value = "";
-      selectedRecord.value = null;
-      recordOffset.value = 0;
-      await refreshRecords(false, recordId);
-      return;
-    }
-
-    if (recordChanged && selectedBuildId.value) {
-      await refreshRecords(false, recordId);
-      return;
-    }
 
       if (!reviewHydrated.value && selectedBuildId.value && hasRecordTopology.value)
         await refreshRecords(false, recordId);
