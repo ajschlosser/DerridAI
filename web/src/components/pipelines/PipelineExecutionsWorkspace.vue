@@ -139,9 +139,7 @@ const menuItems = computed<UiMenuItem[]>(() => [
       role="alert"
     >
       <div>
-        <strong>{{
-          t("pipelines.executions_failed", "Could not load execution history.")
-        }}</strong>
+        <strong>{{ t("pipelines.executions_failed", "Could not load execution history.") }}</strong>
         <p>{{ error }}</p>
       </div>
       <UiButton :label="t('common.retry', 'Retry')" @click="emit('retry')" />
@@ -193,7 +191,9 @@ const menuItems = computed<UiMenuItem[]>(() => [
       <div v-else class="empty-state">
         <AppIcon name="history" />
         <div>
-          <strong>{{ t("pipelines.no_matching_runs", "No executions match these filters.") }}</strong>
+          <strong>{{
+            t("pipelines.no_matching_runs", "No executions match these filters.")
+          }}</strong>
           <p>
             {{
               t("pipelines.no_runs_help", "New Research runs will appear here once they complete.")

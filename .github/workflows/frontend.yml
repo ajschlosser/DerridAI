@@ -197,13 +197,6 @@ jobs:
             exit 0
           fi
 
-          ./web/node_modules/.bin/prettier web/src/components/pipelines/PipelineExecutionsWorkspace.vue \
-            --write --config web/.prettierrc --ignore-path .prettierignore
-          echo "=== PRETTIER DIFF: PipelineExecutionsWorkspace.vue ==="
-          git diff -- web/src/components/pipelines/PipelineExecutionsWorkspace.vue
-          echo "=== END PRETTIER DIFF ==="
-          exit 1
-
           # Deleted files cannot be formatted; exclude them before passing paths to Prettier.
           git diff --name-only --diff-filter=ACMRTUXB -z "$BASE_SHA" "$HEAD_SHA" -- \
             '*.md' '*.json' '*.yml' '*.yaml' '*.js' '*.mjs' '*.cjs' \
