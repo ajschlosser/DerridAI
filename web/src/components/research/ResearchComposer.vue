@@ -17,7 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch, onBeforeUnmount } from "vue";
+import { researchFiltersApi } from "../../api/researchFilters";
+import type { ResearchFilterInventory } from "../../api/researchFilters";
 import AppIcon from "../AppIcon.vue";
 import ResearchFilterEditor from "./ResearchFilterEditor.vue";
 import ResearchScopeSuggestions from "./ResearchScopeSuggestions.vue";
@@ -69,7 +71,7 @@ const emit = defineEmits<{
   "update:prompt": [value: string];
   "update:instructions": [value: string];
   "update:filterExpression": [value: string];
-  scopeAccepted: [];
+  scopeAccepted: [source: "deterministic_natural_language" | "model_assisted"];
   filterChange: [value: ResearchFilterChange];
   "update:sourceCollection": [value: string];
   "update:providerProfileId": [value: string];
@@ -83,6 +85,27 @@ const emit = defineEmits<{
   history: [item: Record<string, unknown>];
 }>();
 const i18n = useI18nStore();
+const filterInventory = ref<ResearchFilterInventory | null>(null);
+let inventoryRequest: AbortController | null = null;
+watch(
+  () => props.sourceCollection,
+  async (collection) => {
+    inventoryRequest?.abort();
+    filterInventory.value = null;
+    if (!collection) return;
+    const controller = new AbortController();
+    inventoryRequest = controller;
+    try {
+      const result = await researchFiltersApi.inventory({ collection }, controller.signal);
+      if (!controller.signal.aborted) filterInventory.value = result;
+    } catch {
+      if (!controller.signal.aborted)
+        filterInventory.value = { works: [], fields: [], truncated: false };
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => inventoryRequest?.abort());
 const historyOpen = ref(false);
 const historyQuery = ref("");
 const filteredHistory = computed(() => {
@@ -216,12 +239,14 @@ function pickHistory(item: Record<string, unknown>) {
       ></textarea>
       <ResearchScopeSuggestions
         :instructions="instructions"
+        :inventory-data="filterInventory"
+        :provider-profile-id="providerProfileId"
         :filter-expression="filterExpression"
         :collection="sourceCollection"
         :fields="selectedStore?.filter_fields || []"
         :disabled="!(canDraft ?? canConfigure)"
         @update:filter-expression="emit('update:filterExpression', $event)"
-        @accepted="emit('scopeAccepted')"
+        @accepted="emit('scopeAccepted', $event)"
       />
     </details>
 
@@ -234,6 +259,7 @@ function pickHistory(item: Record<string, unknown>) {
       </summary>
       <ResearchFilterEditor
         :model-value="filterExpression"
+        :field-catalog="filterInventory?.fields || []"
         :collection="sourceCollection"
         :fields="selectedStore?.filter_fields || []"
         :disabled="!(canDraft ?? canConfigure)"

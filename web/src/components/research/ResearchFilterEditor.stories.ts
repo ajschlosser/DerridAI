@@ -83,3 +83,20 @@ export const Interactive: Story = {
     template: '<ResearchFilterEditor v-bind="args" v-model="expression" />',
   }),
 };
+
+export const IndexedSchemaCatalog: Story = {
+  args: {
+    modelValue: 'custom_role = "witness"',
+    fields: [],
+    fieldCatalog: [
+      {
+        key: "custom_role",
+        type: "string",
+        values: ["witness", "editor"],
+        schema_ids: ["schema-a", "schema-b"],
+      },
+      { key: "certainty", type: "number", values: [0.5, 0.9] },
+      { key: "topics", type: "string", encoding: "json", values: ['__json__:["negation"]'] },
+    ],
+  },
+};

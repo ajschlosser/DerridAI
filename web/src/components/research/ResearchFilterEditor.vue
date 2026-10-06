@@ -30,7 +30,7 @@ import {
   researchFilterCatalog,
   suggestResearchFilterCompletions,
 } from "../../domain/researchFilters";
-import type { ResearchFilterPlanDraft } from "../../domain/researchFilters";
+import type { ResearchFilterField, ResearchFilterPlanDraft } from "../../domain/researchFilters";
 import { useI18nStore } from "../../stores/i18n";
 
 export type ResearchFilterChange = {
@@ -44,6 +44,7 @@ const props = withDefaults(
     modelValue: string;
     collection: string;
     fields: string[];
+    fieldCatalog?: ResearchFilterField[];
     locales?: string[];
     disabled?: boolean;
     debounceMs?: number;
@@ -63,7 +64,7 @@ const inputId = `research-filter-${uid}`;
 const helpId = `research-filter-help-${uid}`;
 const statusId = `research-filter-status-${uid}`;
 
-const catalog = computed(() => researchFilterCatalog(props.fields));
+const catalog = computed(() => researchFilterCatalog(props.fields, props.fieldCatalog));
 const parsed = computed(() => parseResearchFilterExpression(props.modelValue, catalog.value));
 const plan = computed<ResearchFilterPlanDraft | null>(() => {
   const result = parsed.value;
@@ -178,6 +179,9 @@ function clauseValue(value: unknown) {
     <label class="research-filter-label" :for="inputId">{{
       i18n.t("research.filters.label")
     }}</label>
+    <p v-if="catalog.some((field) => field.encoding === 'json')" class="note">
+      {{ i18n.t("research.filters.json_values") }}
+    </p>
     <textarea
       :id="inputId"
       class="research-filter-input"

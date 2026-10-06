@@ -30,6 +30,9 @@ import { useI18nStore } from "../../stores/i18n";
 const props = withDefaults(
   defineProps<{
     instructions: string;
+    inventoryData?: ResearchFilterInventory | null;
+    providerProfileId?: string;
+    resolveModel?: typeof researchFiltersApi.resolve;
     filterExpression: string;
     collection: string;
     fields: string[];
@@ -44,10 +47,16 @@ const props = withDefaults(
   }>(),
   { locales: () => [], disabled: false, debounceMs: 300, loadInventory: undefined },
 );
-const emit = defineEmits<{ "update:filterExpression": [value: string]; accepted: [] }>();
+const emit = defineEmits<{
+  "update:filterExpression": [value: string];
+  accepted: [source: "deterministic_natural_language" | "model_assisted"];
+}>();
 
 const i18n = useI18nStore();
-const catalog = computed(() => researchFilterCatalog(props.fields));
+const effectiveInventory = computed(() => props.inventoryData ?? inventory.value);
+const catalog = computed(() =>
+  researchFilterCatalog(props.fields, effectiveInventory.value?.fields),
+);
 const inventoryCache = new Map<string, ResearchFilterInventory>();
 const inventory = ref<ResearchFilterInventory | null>(null);
 // Debounced copy of the instructions: interpretation is local and cheap, but a
@@ -71,13 +80,19 @@ onBeforeUnmount(() => {
 // The inventory is fetched only once the instructions are non-empty, and then
 // reused per collection; a stale response is dropped after a collection change.
 watch(
-  [() => props.collection, () => Boolean(settled.value.trim())],
+  [
+    () => props.collection,
+    () => Boolean(settled.value.trim()),
+    () => JSON.stringify(props.locales),
+    () => props.disabled,
+  ],
   async ([collection, hasText]) => {
     ticket += 1;
     const mine = ticket;
     inventory.value = null;
-    if (!collection || !hasText || props.disabled) return;
-    const cached = inventoryCache.get(collection);
+    if (props.inventoryData !== undefined || !collection || !hasText || props.disabled) return;
+    const cacheKey = JSON.stringify([collection, props.locales]);
+    const cached = inventoryCache.get(cacheKey);
     if (cached) {
       inventory.value = cached;
       return;
@@ -88,7 +103,7 @@ watch(
         locales: props.locales,
       });
       if (mine !== ticket) return;
-      inventoryCache.set(collection, result);
+      inventoryCache.set(cacheKey, result);
       inventory.value = result;
     } catch {
       // Without an inventory only inventory-free phrases (speaker, pages, years) are proposed.
@@ -101,7 +116,7 @@ watch(
 const interpretation = computed(() =>
   interpretResearchInstructionFilters(
     settled.value,
-    inventory.value ?? { works: [] },
+    effectiveInventory.value ?? { works: [] },
     catalog.value,
   ),
 );
@@ -112,9 +127,48 @@ const visible = computed(
 function added(expression: string) {
   return props.filterExpression.includes(expression);
 }
-function add(expression: string) {
+function add(
+  expression: string,
+  source: "deterministic_natural_language" | "model_assisted" = "deterministic_natural_language",
+) {
   emit("update:filterExpression", appendFilterExpression(props.filterExpression, expression));
-  emit("accepted");
+  emit("accepted", source);
+}
+const modelResult = ref<Awaited<ReturnType<typeof researchFiltersApi.resolve>> | null>(null);
+const modelBusy = ref(false);
+const modelError = ref(false);
+let modelRequest: AbortController | null = null;
+watch([() => props.collection, () => props.instructions, () => props.providerProfileId], () => {
+  modelRequest?.abort();
+  modelResult.value = null;
+  modelError.value = false;
+  modelBusy.value = false;
+});
+onBeforeUnmount(() => modelRequest?.abort());
+async function resolveAmbiguity() {
+  modelRequest?.abort();
+  const controller = new AbortController();
+  modelRequest = controller;
+  modelBusy.value = true;
+  modelError.value = false;
+  modelResult.value = null;
+  try {
+    const result = await (props.resolveModel ?? researchFiltersApi.resolve)(
+      {
+        collection: props.collection,
+        instructions: props.instructions,
+        provider_profile_id: props.providerProfileId,
+        locales: props.locales,
+      },
+      controller.signal,
+    );
+    if (controller.signal.aborted) return;
+    modelResult.value = result;
+  } catch {
+    if (!controller.signal.aborted) modelError.value = true;
+  } finally {
+    if (!controller.signal.aborted) modelBusy.value = false;
+  }
 }
 function reason(item: { reason: string; phrase: string; params: Record<string, string> }) {
   return i18n.tf(`research.scope.reason.${item.reason}`, { ...item.params, phrase: item.phrase });
@@ -154,7 +208,32 @@ function reason(item: { reason: string; phrase: string; params: Record<string, s
           <span aria-hidden="true">ℹ </span>{{ reason(item) }}
         </li>
       </ul>
+      <p class="note">{{ i18n.t("research.scope.model_help") }}</p>
+      <button
+        class="btn"
+        type="button"
+        :disabled="disabled || modelBusy || !effectiveInventory?.fields?.length"
+        @click="resolveAmbiguity"
+      >
+        {{ i18n.t(modelBusy ? "research.scope.model_busy" : "research.scope.model_resolve") }}
+      </button>
     </template>
+    <p v-if="modelError" role="alert">{{ i18n.t("research.scope.model_error") }}</p>
+    <div v-if="modelResult" role="status">
+      <p>{{ i18n.tf("research.scope.model_label", { model: modelResult.model }) }}</p>
+      <code v-if="modelResult.expression">{{ modelResult.expression }}</code>
+      <button
+        v-if="modelResult.expression && !added(modelResult.expression)"
+        class="btn"
+        type="button"
+        :disabled="disabled"
+        @click="add(modelResult.expression, 'model_assisted')"
+      >
+        {{ i18n.t("research.scope.add") }}
+      </button>
+      <p v-for="(phrase, index) in modelResult.unresolved" :key="index">{{ phrase }}</p>
+      <p v-if="!modelResult.expression">{{ i18n.t("research.scope.model_empty") }}</p>
+    </div>
   </section>
 </template>
 

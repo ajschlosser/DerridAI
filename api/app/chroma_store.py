@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import functools
 import gc
 import hashlib
@@ -24,6 +25,7 @@ import logging
 import math
 import re
 import shutil
+import time
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -377,7 +379,13 @@ def _notes_collection_change(*extra_resources: str):
     def decorate(method):
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
-            result = method(self, *args, **kwargs)
+            try:
+                result = method(self, *args, **kwargs)
+            finally:
+                inventory_cache = getattr(self, "_research_filter_cache", None)
+                if isinstance(inventory_cache, dict):
+                    inventory_cache.clear()
+                self._research_filter_epoch = getattr(self, "_research_filter_epoch", 0) + 1
             # Record-size samples are derived operational state. Any collection
             # mutation can invalidate a median without changing the item count,
             # so clear the tiny cache rather than risking stale auto-sizing.
@@ -440,6 +448,10 @@ class ChromaStore:
         }
         self.embeddings = Embeddings()
         self._record_size_cache: dict[tuple[str, int, int], dict[str, int]] = {}
+        self._research_filter_cache: dict[
+            tuple[tuple[str, int], ...], tuple[float, dict[str, Any]]
+        ] = {}
+        self._research_filter_epoch = 0
 
     def default_embedding_spec(self) -> tuple[str, str | None]:
         """Resolve the server-owned default used when a collection omits a contract."""
@@ -1848,6 +1860,25 @@ class ChromaStore:
 
     def list_works(self, store: str) -> list[str]:
         return [item["work"] for item in self.work_stats(store)]
+
+    def research_filter_inventory(self, names: list[str]) -> dict[str, Any]:
+        from .research_filter_catalog import indexed_filter_inventory
+
+        collections = [self._collection(name) for name in dict.fromkeys(names)]
+        key = tuple((str(getattr(col, "id", name)), col.count()) for name, col in zip(dict.fromkeys(names), collections))
+        epoch = getattr(self, "_research_filter_epoch", 0)
+        cache = getattr(self, "_research_filter_cache", None)
+        if cache is None:
+            cache = self._research_filter_cache = {}
+        cached = cache.get(key)
+        if cached and time.monotonic() - cached[0] < 30:
+            return copy.deepcopy(cached[1])
+        result = indexed_filter_inventory(collections)
+        if epoch == getattr(self, "_research_filter_epoch", 0):
+            if len(cache) >= 8:
+                cache.clear()
+            cache[key] = (time.monotonic(), result)
+        return copy.deepcopy(result)
 
     def work_stats(self, store: str) -> list[dict[str, Any]]:
         col = self._collection(store)

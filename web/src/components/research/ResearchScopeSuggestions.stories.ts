@@ -56,3 +56,57 @@ export const EmphasisStaysAnInstruction: Story = {
   args: { instructions: "Focus especially on Derrida's early works." },
 };
 export const UnknownScope: Story = { args: { instructions: "Only use recent essays." } };
+
+export const CustomSchemaFields: Story = {
+  args: {
+    instructions: "custom role is witness. certainty >= 0.75. language is French.",
+    fields: [],
+    inventoryData: {
+      works: [
+        { work: "A", authors: [] },
+        { work: "B", authors: [] },
+      ],
+      truncated: false,
+      fields: [
+        {
+          key: "custom_role",
+          type: "string",
+          values: ["witness", "editor"],
+          schema_ids: ["a", "b"],
+        },
+        { key: "certainty", type: "number" },
+        {
+          key: "document_language",
+          type: "string",
+          values: ["fr"],
+          field_ids: ["derridai.document.language"],
+        },
+      ],
+    },
+  },
+};
+export const ModelAssistedProposal: Story = {
+  args: {
+    instructions: "Only relevant witness passages",
+    fields: [],
+    inventoryData: {
+      works: [],
+      truncated: false,
+      fields: [{ key: "custom_role", type: "string", values: ["witness"] }],
+    },
+    resolveModel: async () => ({
+      source: "model_assisted",
+      model: "configured-local-model",
+      expression: 'custom_role = "witness"',
+      unresolved: [],
+    }),
+  },
+};
+export const ModelUnavailable: Story = {
+  args: {
+    ...ModelAssistedProposal.args,
+    resolveModel: async () => {
+      throw new Error("Unavailable");
+    },
+  },
+};

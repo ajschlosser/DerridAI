@@ -39,6 +39,12 @@ export type ResearchFilterField = {
   /** Indexed Chroma projection key. */
   key: string;
   type?: "string" | "number" | "boolean" | "any";
+  values?: FilterScalar[];
+  values_truncated?: boolean;
+  field_ids?: string[];
+  schema_ids?: string[];
+  works?: string[];
+  encoding?: "scalar" | "json";
 };
 
 export type ResearchFilterErrorCode =
@@ -417,15 +423,14 @@ export function explainResearchFilterPlan(
 }
 
 export type ResearchFilterCompletion = {
-  kind: "field" | "operator" | "connective";
+  kind: "field" | "operator" | "connective" | "value";
   text: string;
 };
 
 const OPERATOR_COMPLETIONS = ["=", "!=", ">", ">=", "<", "<=", "in", "not in"];
 
 /**
- * Suggestions for the token being typed at the end of `text`. Values are never
- * suggested here: the corpus value inventory belongs to the server preview.
+ * Suggestions for the token being typed, using bounded server catalog values.
  */
 export function suggestResearchFilterCompletions(
   text: string,
@@ -457,6 +462,13 @@ export function suggestResearchFilterCompletions(
     return previous.value === DOCUMENT_FIELD
       ? matches("operator", ["contains", "not contains"])
       : matches("operator", OPERATOR_COMPLETIONS);
+  if (previous?.kind === "op") {
+    const fieldToken = settled[settled.length - 2];
+    const field = catalog.find((item) => item.key === fieldToken?.value);
+    return (field?.values ?? [])
+      .slice(0, 20)
+      .map((value) => ({ kind: "value" as const, text: JSON.stringify(value) }));
+  }
   if (isValueEnd(previous)) return matches("connective", ["and", "or"]);
   return [];
 }
@@ -476,6 +488,13 @@ function isValueEnd(token: Token) {
 }
 
 /** Build the field catalog from a collection's declared filter fields. */
-export function researchFilterCatalog(filterFields: string[] | undefined): ResearchFilterField[] {
-  return [...new Set(filterFields ?? [])].map((key) => ({ key, type: "any" as const }));
+export function researchFilterCatalog(
+  filterFields: string[] | undefined,
+  indexed: ResearchFilterField[] = [],
+): ResearchFilterField[] {
+  const fields = new Map(
+    (filterFields ?? []).map((key) => [key, { key, type: "any" as const } as ResearchFilterField]),
+  );
+  for (const field of indexed) fields.set(field.key, field);
+  return [...fields.values()];
 }

@@ -451,7 +451,9 @@ Deliverables:
 
 ### Phase 4 — deterministic natural-language filters
 
-Status: implemented (`web/src/domain/researchInstructionFilters.ts`, `ResearchScopeSuggestions.vue`, `POST /api/research/filters/inventory`). Interpretation is local and proposal-only: a phrase becomes a hard filter only after the researcher presses "Add to filter", and a confirmed plan is sent with `source: deterministic_natural_language`. Works/authors resolve from a bounded, names-only inventory (500 works; fetched lazily once instructions are non-empty and cached per collection); field keys resolve through the collection's catalog, so an undeclared field yields an unresolved note instead of a proposal. Gaps: speaker values are taken literally from the wording (`verified: false`; there is no speaker inventory); "language is …" is reported as unsupported because language values are not inventoried; a named author resolves to that author's works, as the existing named-scope safeguard does, and is not treated as a speaker; EN phrases plus a small FR subset; the inventory endpoint runs `work_stats` (a collection scan, as the named-scope safeguard already does per run), so a cheaper cached inventory is a follow-up.
+Status: implemented and extended with an indexed catalog across all resolved Research collections. Field discovery reads metadata in pages (never source documents), unions custom fields from every indexed work/schema, and retains selected FieldAssertion field/schema identities, indexed value types, and exact projection keys. Suggestions include up to 100 bounded values per field; value truncation does not truncate field discovery. A small 30-second server cache is invalidated by collection writes, including partial failures. Generic `<field> is/is not/equals/before/after <value>` predicates use catalog types and exact inventoried values; underscores may be written as spaces. Language aliases resolve through document-language semantic identity. Unknown/truncated-out string values remain unresolved; explicit expressions can still name exact values. Works/authors remain names-only, and author selection resolves to works rather than speaker identity. All proposals still require **Add to filter**.
+
+Storage boundary: this covers indexed schema projections, including custom scalar fields. List/object fields retain Chroma's existing encoded JSON projection and support equality of the complete value, not element membership or nested-field predicates. Unindexed/unpopulated schema fields require publication/indexing before they can filter Records. The editor explains that distinction; encoded values are available in autocomplete. The initial catalog discovery traverses collection metadata, so cost is proportional to indexed Records; preview/model actions reuse the bounded cache. External writers can remain stale for at most its 30-second TTL.
 
 Deliverables:
 
@@ -464,6 +466,8 @@ Deliverables:
 Required negation regressions include “only Work A”, “exclude Work A”, “use Work A but not Work B”, “do not exclude Work A”, “speaker is not Heidegger”, and “not only Work A”.
 
 ### Phase 5 — optional model-assisted ambiguity resolver
+
+Status: implemented as an explicit **Suggest scope with Ollama** action for unresolved instructions. `research_filter_model.py` is the optional adapter: it sends only instructions and bounded field vocabulary to a configured/approved Ollama endpoint, does no downloads or per-keystroke inference, and uses a closed Pydantic output schema. Deterministic validation rejects unknown fields, uninventoried string/boolean values, numbers absent from the original instruction, incompatible types/operators and extra output keys. The model returns proposals/unresolved wording; the researcher must add a proposal before it becomes a hard filter. The run records `model_assisted` provenance. Researcher access requires an administrator-approved Ollama profile; endpoint URLs are resolved server-side. One concurrent interpretation and a 45-second network timeout bound the adapter; oversized vocabularies and unavailable models leave explicit/deterministic filters usable. Collection/instruction/profile changes reject stale browser completions.
 
 Deliverables:
 
@@ -572,3 +576,16 @@ Agents continuing this work should:
 8. update this document when a contract decision changes, not for routine progress narration;
 9. update `docs/USER_GUIDE.md` once user-visible filter controls ship;
 10. update `docs/ARCHITECTURE.md` when the scope stage becomes part of the executable Research pipeline.
+
+## Schema catalog / Phases 4–5 checkpoint (2026-10-05)
+
+Branch: `codex/research-filters-schema-coverage`, based on master `0f030f59f`.
+
+- Preview and job startup validate the indexed catalog before spawning filtered Research runs. Existing retrieval propagation and selected-evidence exceptions are preserved.
+- Regression coverage includes cross-schema identities, custom scalar types, metadata-only paging, complete field discovery with truncated value suggestions, whole-JSON equality, cache invalidation, model-output rejection, explicit invocation, confirmation/provenance and stale responses.
+- Validation so far: 32 backend filter/catalog/locale tests and 33 frontend filter tests passed. Backend tests used temporary dependencies and stubbed Chroma/services; no live corpus/model was contacted.
+- Full app typecheck and full Storybook build are blocked by missing packages in the reused dependency installation (`@tanstack/vue-query`, `@graphql-typed-document-node/core`, `@storybook/vue3`) and resulting errors outside this change. Targeted visual/accessibility validation is recorded below when complete. No full preflight or Docker validation is claimed.
+
+- Targeted Storybook build passed using only the changed filter/scope stories. All 21 targeted Playwright checks passed: WCAG 2.2 AA light/dark, keyboard confirmation, model error/proposal states, and narrow-width reflow. The full Storybook build remains blocked as described above.
+
+- Publication was explicitly approved by the user after automatic review requested clarification of the conflicting AGENTS.md instructions. The checkpoint is committed and pushed on `codex/research-filters-schema-coverage`.

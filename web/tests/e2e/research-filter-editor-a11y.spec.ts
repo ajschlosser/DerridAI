@@ -28,6 +28,7 @@ const STORIES = [
   "research-filter-editor--syntax-error",
   "research-filter-editor--server-rejected",
   "research-filter-editor--no-declared-fields",
+  "research-filter-editor--indexed-schema-catalog",
 ];
 
 async function scan(page: Page) {
@@ -70,3 +71,25 @@ test("the filter editor is operable from the keyboard and announces results", as
   await page.keyboard.press("Enter");
   await expect(input).toHaveValue('work = "Of Grammatology" and ');
 });
+
+for (const scheme of ["light", "dark"] as const) {
+  for (const id of ["custom-schema-fields", "model-assisted-proposal", "model-unavailable"]) {
+    test(`scope ${id} is accessible at narrow width in ${scheme}`, async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 900 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.goto(`/iframe.html?id=research-scope-suggestions--${id}&viewMode=story`);
+      await expect(page.locator(".research-scope")).toBeVisible();
+      if (id !== "custom-schema-fields") {
+        await page.getByRole("button", { name: "Suggest scope with Ollama" }).focus();
+        await page.keyboard.press("Enter");
+        if (id === "model-unavailable") await expect(page.getByRole("alert")).toBeVisible();
+        else await expect(page.getByRole("status")).toContainText("Model-assisted proposal");
+      }
+      const { violations } = await scan(page);
+      expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true);
+    });
+  }
+}

@@ -84,7 +84,7 @@ def non_admin_route_allowed(role: str, path: str, method: str) -> bool:
     if path == "/api/jobs/rag" and method == "POST":
         return role_has_capability(role, "rag.run")
     if (
-        path in {"/api/research/filters/preview", "/api/research/filters/inventory"}
+        path in {"/api/research/filters/preview", "/api/research/filters/inventory", "/api/research/filters/resolve"}
         and method == "POST"
     ):
         return role_has_capability(role, "rag.run")

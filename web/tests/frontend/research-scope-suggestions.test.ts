@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { researchFiltersApi } from "../../src/api/researchFilters";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -89,7 +90,87 @@ describe("ResearchScopeSuggestions", () => {
       },
     });
     await settle();
-    expect(wrapper.find("button").exists()).toBe(false);
+    expect(wrapper.find(".research-scope-proposals button").exists()).toBe(false);
     expect(wrapper.find(".research-scope-unresolved").exists()).toBe(true);
+  });
+});
+
+describe("optional model suggestions", () => {
+  it("calls only on demand and labels the confirmed filter as model assisted", async () => {
+    const resolveModel = vi.fn().mockResolvedValue({
+      source: "model_assisted",
+      model: "local",
+      expression: 'custom_role = "witness"',
+      unresolved: [],
+    });
+    const wrapper = mount(ResearchScopeSuggestions, {
+      props: {
+        instructions: "Only relevant witness passages",
+        filterExpression: "",
+        collection: "corpus",
+        fields: [],
+        inventoryData: {
+          works: [],
+          truncated: false,
+          fields: [{ key: "custom_role", type: "string", values: ["witness"] }],
+        },
+        resolveModel,
+        debounceMs: 1,
+      },
+    });
+    await settle();
+    expect(resolveModel).not.toHaveBeenCalled();
+    const button = wrapper.findAll("button").find((item) => item.text().includes("Ollama"))!;
+    await button.trigger("click");
+    await settle();
+    expect(resolveModel).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("update:filterExpression")).toBeUndefined();
+    await wrapper
+      .findAll("button")
+      .find((item) => item.text() === "Add to filter")!
+      .trigger("click");
+    expect(wrapper.emitted("accepted")?.[0]).toEqual(["model_assisted"]);
+  });
+  it("rejects a late model result after collection identity changes", async () => {
+    let complete!: (value: {
+      source: "model_assisted";
+      model: string;
+      expression: string;
+      unresolved: string[];
+    }) => void;
+    const resolveModel = vi.fn(
+      () =>
+        new Promise<Awaited<ReturnType<typeof researchFiltersApi.resolve>>>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const wrapper = mount(ResearchScopeSuggestions, {
+      props: {
+        instructions: "Only unknown scope",
+        filterExpression: "",
+        collection: "A",
+        fields: [],
+        inventoryData: {
+          works: [],
+          truncated: false,
+          fields: [{ key: "role", values: ["witness"] }],
+        },
+        resolveModel,
+      },
+    });
+    await settle();
+    await wrapper
+      .findAll("button")
+      .find((item) => item.text().includes("Ollama"))!
+      .trigger("click");
+    await wrapper.setProps({ collection: "B" });
+    complete({
+      source: "model_assisted",
+      model: "old",
+      expression: 'role = "witness"',
+      unresolved: [],
+    });
+    await settle();
+    expect(wrapper.text()).not.toContain('role = "witness"');
   });
 });
