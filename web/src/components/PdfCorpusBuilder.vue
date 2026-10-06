@@ -2399,7 +2399,7 @@ async function saveManifest(changes: Record<string, unknown>) {
   }
 }
 
-async function startNewBuildSetup() {
+async function resetBuildSetup(clearSource = false) {
   stopPolling();
   selectedBuildId.value = "";
   currentBuild.value = null;
@@ -2408,7 +2408,11 @@ async function startNewBuildSetup() {
   selectedRecord.value = null;
   sourceBlocks.value = [];
   bulkMetadataOpen.value = false;
-  void router.replace({
+  if (clearSource) {
+    selectedAssetId.value = "";
+    configurationSection.value = "source";
+  }
+  await router.replace({
     query: {
       ...route.query,
       workspace: "setup",
@@ -2417,6 +2421,14 @@ async function startNewBuildSetup() {
       queue: undefined,
     },
   });
+}
+
+async function startNewBuildSetup() {
+  await resetBuildSetup(false);
+}
+
+async function chooseAnotherSourceSetup() {
+  await resetBuildSetup(true);
 }
 function reviewShortcut(event: KeyboardEvent) {
   if (!selectedRecord.value || busy.value) return;
@@ -2865,7 +2877,6 @@ defineExpose({
       :accepted-count="currentBuild?.accepted_count || 0"
       :workspace="workspaceMode"
       :steps="workflowSteps"
-      :sticky="!showReviewWorkspace"
       @workspace="requestWorkspace"
     >
       <template #actions>
@@ -2883,7 +2894,7 @@ defineExpose({
           :href="corpusBuilderApi.publicationUrl(currentBuild.publication.publication_id)"
           >{{ i18n.t("pdf_corpus.download_jsonl") }}</a
         >
-        <UiButton
+        <template
           v-if="
             currentBuild &&
             (buildRunning
@@ -2892,15 +2903,24 @@ defineExpose({
                   String(currentBuild.status || ''),
                 ))
           "
-          :label="
-            buildRunning
-              ? i18n.t('pdf_corpus.start_concurrent_build')
-              : i18n.t('pdf_corpus.start_new_build')
-          "
-          variant="ghost"
-          :disabled="busy !== ''"
-          @click="startNewBuildSetup"
-        />
+        >
+          <UiButton
+            :label="
+              buildRunning
+                ? i18n.t('pdf_corpus.start_concurrent_build')
+                : i18n.t('pdf_corpus.start_new_build')
+            "
+            variant="ghost"
+            :disabled="busy !== ''"
+            @click="startNewBuildSetup"
+          />
+          <UiButton
+            :label="i18n.t('pdf_corpus.choose_pdf')"
+            variant="ghost"
+            :disabled="busy !== ''"
+            @click="chooseAnotherSourceSetup"
+          />
+        </template>
       </template>
     </CorpusBuilderWorkspaceHeader>
 
