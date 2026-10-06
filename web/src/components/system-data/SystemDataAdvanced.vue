@@ -135,7 +135,11 @@ onMounted(() => void load());
     <div v-if="loaded && !collections.length" class="state">
       {{ t("runtime.system_no_internal_vectors", "No internal vector collections are available.") }}
     </div>
-    <section v-if="loaded && collections.length" class="collections" aria-labelledby="collections-title">
+    <section
+      v-if="loaded && collections.length"
+      class="collections"
+      aria-labelledby="collections-title"
+    >
       <div class="section-heading">
         <div>
           <h3 id="collections-title">
