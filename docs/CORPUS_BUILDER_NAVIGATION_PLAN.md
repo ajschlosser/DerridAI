@@ -27,6 +27,8 @@ System Data is now being converted to the same retained-refresh contract instead
 
 Pipeline Studio has also moved to region-owned hydration. Its catalog remains the structural workspace dependency, but execution history and operational-health metrics no longer block their section controls or sibling Operations tabs. Execution rows are bound to the exact filter/page identity that produced them, so a new query cannot temporarily display rows from the previous query while same-identity refreshes still retain useful content.
 
+The Works workspace is the next page-local Phase 10 slice. Its route-owned page header and library toolbar now mount before the first authoritative Works snapshot. Search, sort, filter, and view controls remain visible but inert until the snapshot is known, so the page does not advertise false zero-result counts or an empty library while a required read is unresolved. The loading skeleton is scoped to the library region rather than replacing the workspace frame. A failed first read keeps the same toolbar geometry, marks it unavailable, and presents Retry without claiming the corpus contains no works. Existing populated snapshots continue to remain mounted during same-context updates.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities

@@ -68,6 +68,14 @@ Operational-health loading is likewise local to the Health panel, so Compare and
 
 Focused regressions hold the initial execution-page and metrics requests unresolved and require the destination-owned controls and section navigation to render before those reads complete.
 
+### Works workspace checkpoint — 2026-10-06
+
+Works now keeps its page header and library toolbar mounted while the first authoritative workspace snapshot is unresolved. Search, sort, filter, and view controls remain visible but disabled until that snapshot exists, and the result summary reports loading rather than a synthetic zero count. The first-read skeleton is scoped to the library region, so the route-owned workspace frame is already present.
+
+A failed first read retains that same frame, marks the toolbar unavailable, and presents the existing Retry action without claiming that the corpus contains no works. Administrator sessions still take the existing early local-corpus path after authoritative corpus hydration, while researcher sessions wait for their authorized database summary before controls or counts become active. Existing populated snapshots continue to remain mounted during same-context updates. Focused regressions cover an intentionally unresolved researcher read and a failed first read; the toolbar also has explicit Pending and Unavailable Storybook states.
+
+This is one Phase 10 page-local slice. Cold/warm/back-navigation timing, authorization/cache/offline/cancellation coverage, and the remaining route inventory still require completion before the progressive-loading plan is closed.
+
 ## Findings and coverage
 
 Paths below are relative to `web/src/`. Priorities reflect workflow impact and breadth of the blocking pattern, not measured latency. P0 is shared groundwork; P1 covers the main research workflow; P2 covers remaining workspaces and administration.

@@ -61,7 +61,9 @@ const createSiteBusy = ref(false);
 const createSiteError = ref("");
 const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
 const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
-const createSiteBrowserEmbedding = ref<SiteExportOptions["browser_embedding_profile"] | undefined>();
+const createSiteBrowserEmbedding = ref<
+  SiteExportOptions["browser_embedding_profile"] | undefined
+>();
 const createSiteProgress = ref<{ file: string; received: number; total: number } | null>(null);
 
 async function openCreateSite() {
@@ -421,7 +423,33 @@ onBeforeUnmount(() => {
       @create-site="openCreateSite"
     />
 
-    <section v-if="loading && !snapshot" class="card view-loading-card" aria-busy="true">
+    <WorksLibraryToolbar
+      v-if="!snapshot"
+      :mode="auth.isResearcher ? 'researcher' : 'admin'"
+      :query="query"
+      sort="title-asc"
+      :filters="{ needsReview: false, dbStatus: '', author: '' }"
+      view-mode="cards"
+      :authors="[]"
+      :total-works="0"
+      :visible-works="0"
+      :total-review="0"
+      :pending="loading"
+      :unavailable="Boolean(error)"
+      @query="applyQuery"
+      @sort="applyView({ sort: $event })"
+      @filters="applyFilters"
+      @view-mode="applyView({ viewMode: $event })"
+    />
+
+    <section
+      v-if="loading && !snapshot"
+      id="worksGrid"
+      class="card view-loading-card works-library"
+      :aria-label="i18n.t('nav.works')"
+      aria-busy="true"
+      data-works-loading
+    >
       <UiLoadingState
         :label="loadingTitle"
         :detail="loadingDetail"
