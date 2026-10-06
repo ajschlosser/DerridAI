@@ -196,7 +196,6 @@ export function resolveSearchFilterFields(options: {
 
   const collection = filterFieldsFromNames(collectionFields, labels);
   if (options.database) return collection;
-  if (!options.schema && collection.length) return collection;
 
   const availableNames = options.availableFields || [];
   if (!options.schema) {
