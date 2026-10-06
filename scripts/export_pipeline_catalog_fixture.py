@@ -45,11 +45,13 @@ def _display(path: Path) -> str:
 
 def rendered_fixture() -> str:
     sys.path.insert(0, str(ROOT / "api"))
+    from app.pipelines.capabilities import pipeline_contract_identity
     from app.pipelines.purposes import workflow_vocabulary
     from app.pipelines.service import PipelineService
     from app.pipelines.workflows import purpose_catalog
 
     contract = {
+        "contract": pipeline_contract_identity(),
         "purposes": purpose_catalog(),
         "vocabulary": workflow_vocabulary(),
         "strategies": PipelineService().strategies(),
