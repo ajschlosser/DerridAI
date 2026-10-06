@@ -24,6 +24,7 @@ import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
 import UiInput from "./ui/UiInput.vue";
 import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 import UiTabs from "./ui/UiTabs.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import SchemaFieldsTable from "./metadata-schemas/SchemaFieldsTable.vue";
@@ -71,8 +72,15 @@ const selectedId = ref(props.initialSchemaId || "default");
 const draft = ref<MetadataSchema | null>(null);
 const savedHash = ref("");
 const error = ref("");
+const readError = ref("");
+const catalogLoading = ref(false);
+const catalogReady = ref(false);
+const detailLoading = ref(false);
+const requestedId = ref(props.initialSchemaId || "default");
 const notice = ref("");
 const busy = ref(false);
+let catalogRequestSerial = 0;
+let detailRequestSerial = 0;
 const isNew = ref(false);
 const tab = ref(VALID_TABS.has(props.initialTab) ? props.initialTab : "fields");
 
@@ -81,7 +89,7 @@ const builtin = computed(() => {
   return summaries.value.some((item) => item.id === selectedId.value && item.builtin);
 });
 const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
-const readonly = computed(() => builtin.value || busy.value);
+const readonly = computed(() => builtin.value || busy.value || detailLoading.value);
 const tabs = computed(() => [
   { id: "fields", label: t("tab_fields", "Fields") },
   { id: "document", label: t("tab_document_fields", "Document fields") },
@@ -109,9 +117,22 @@ function load(schema: MetadataSchema, fresh = false) {
 const confirmDiscard = () =>
   !dirty.value || window.confirm(t("discard_changes", "Discard unsaved schema changes?"));
 async function refresh(keep?: string) {
-  summaries.value = (await metadataSchemasApi.list()).items;
-  const id = keep && summaries.value.some((s) => s.id === keep) ? keep : selectedId.value;
-  await select(summaries.value.some((s) => s.id === id) ? id : "default", true);
+  const request = ++catalogRequestSerial;
+  catalogLoading.value = true;
+  readError.value = "";
+  try {
+    const next = (await metadataSchemasApi.list()).items;
+    if (request !== catalogRequestSerial) return;
+    summaries.value = next;
+    catalogReady.value = true;
+    const id = keep && next.some((item) => item.id === keep) ? keep : requestedId.value;
+    await select(next.some((item) => item.id === id) ? id : "default", true);
+  } catch (exc) {
+    if (request !== catalogRequestSerial) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === catalogRequestSerial) catalogLoading.value = false;
+  }
 }
 async function select(id: string, force = false) {
   if (!force && id === selectedId.value && !isNew.value) return;
@@ -119,10 +140,38 @@ async function select(id: string, force = false) {
     emit("selection", selectedId.value);
     return;
   }
-  selectedId.value = id;
+
+  const request = ++detailRequestSerial;
+  const changesIdentity = isNew.value || id !== selectedId.value;
+  requestedId.value = id;
   notice.value = "";
-  load(await metadataSchemasApi.get(id));
-  emit("selection", id);
+  readError.value = "";
+  if (changesIdentity) {
+    selectedId.value = id;
+    draft.value = null;
+    savedHash.value = "";
+    isNew.value = false;
+  }
+  detailLoading.value = true;
+  try {
+    const next = await metadataSchemasApi.get(id);
+    if (request !== detailRequestSerial) return;
+    selectedId.value = id;
+    load(next);
+    emit("selection", id);
+  } catch (exc) {
+    if (request !== detailRequestSerial) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === detailRequestSerial) detailLoading.value = false;
+  }
+}
+async function retryRead() {
+  if (!catalogReady.value) {
+    await refresh(requestedId.value);
+    return;
+  }
+  await select(requestedId.value || selectedId.value || "default", true);
 }
 async function guarded<T>(work: () => Promise<T>): Promise<T | undefined> {
   busy.value = true;
@@ -247,7 +296,8 @@ watch(
   () => props.initialSchemaId,
   (value) => {
     const id = value || "default";
-    if (id === selectedId.value || !summaries.value.length) return;
+    requestedId.value = id;
+    if (id === selectedId.value || !catalogReady.value) return;
     void select(summaries.value.some((item) => item.id === id) ? id : "default");
   },
 );
@@ -285,20 +335,51 @@ defineExpose({ select, draft });
           size="small"
           icon="plus"
           button-class="new-schema"
-          :disabled="busy"
+          :disabled="busy || !catalogReady"
           :label="t('new_schema', 'New schema')"
           @click="newSchema"
         />
       </div>
+      <UiLoadingState
+        v-if="catalogLoading && !catalogReady"
+        variant="skeleton"
+        :skeleton-count="3"
+        :label="t('loading', 'Loading schemas…')"
+      />
+      <p v-if="readError && !catalogReady" class="schema-error" role="alert">
+        {{ readError }}
+        <button type="button" class="btn small" @click="retryRead">
+          {{ t("retry", "Retry") }}
+        </button>
+      </p>
       <SchemaListTable
+        v-if="catalogReady"
         :items="summaries"
         :selected-id="selectedId"
         :unsaved-name="isNew ? draft?.name || t('new_schema_name', 'New schema') : ''"
         @select="select($event)"
       />
+      <UiLoadingState
+        v-if="catalogLoading && catalogReady"
+        variant="inline"
+        :label="t('updating', 'Updating…')"
+      />
     </section>
 
-    <section v-if="draft" class="schema-form" :aria-label="t('editor', 'Schema editor')">
+    <section class="schema-form" :aria-label="t('editor', 'Schema editor')">
+      <p v-if="readError && catalogReady" class="schema-error" role="alert">
+        {{ readError }}
+        <button type="button" class="btn small" @click="retryRead">
+          {{ t("retry", "Retry") }}
+        </button>
+      </p>
+      <UiLoadingState
+        v-if="detailLoading && !draft"
+        variant="skeleton"
+        :skeleton-count="3"
+        :label="t('loading_schema', 'Loading schema…')"
+      />
+      <template v-if="draft">
       <p v-if="error" class="schema-error" role="alert">{{ error }}</p>
       <p v-if="notice" class="schema-notice" role="status">{{ notice }}</p>
       <p v-if="builtin" class="schema-note">
@@ -391,6 +472,7 @@ defineExpose({ select, draft });
           @manage="emit('changed')"
         />
       </div>
+      </template>
     </section>
   </div>
 </template>

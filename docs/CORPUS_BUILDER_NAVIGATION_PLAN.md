@@ -35,6 +35,8 @@ Sources is the next audited route boundary. Capture discovery, the source table,
 
 A Research re-audit found that its current implementation already follows the same first-frame principle: the page header and composer mount before the workspace snapshot, optional run history and pipeline options hydrate independently, saved-answer loading is separate from workspace readiness, and failed refreshes retain the composer/draft. The remaining Research work is finer-grained session/evidence/result auditing rather than another page-wide loading rewrite.
 
+Metadata Schemas has also been reworked around result identity rather than one undifferentiated editor state. The schema catalog now has an explicit first-read/refresh/error state, schema detail reads are generation-guarded, and choosing a different schema clears the previous draft before the new identity resolves. A late response from an older selection cannot replace the current schema. Mutations still use the editor's existing busy gate, so background catalog/detail reads are not confused with saves, imports, previews, or deletes.
+
 ## Current problems
 
 ### 1. Global navigation has two forward-navigation authorities
