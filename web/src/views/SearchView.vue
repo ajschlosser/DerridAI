@@ -192,7 +192,9 @@ const schemaFilterFields = computed<SearchFilterFieldOption[]>(() => {
     schema,
     collectionFields: store?.filter_fields || [],
     availableFields: snapshot.value?.filter_fields.map((field) => field.key) || [],
-    labels: (key) => snapshot.value?.filter_fields.find((field) => field.key === key)?.label || key,
+    labels: (key) =>
+      snapshot.value?.filter_fields.find((field) => field.key === key)?.label ||
+      i18n.t(`field.${key}`, key),
     database: databaseMode.value,
   });
 });
