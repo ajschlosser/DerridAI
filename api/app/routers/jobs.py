@@ -134,6 +134,18 @@ def start_research_run(
             if isinstance(selection.record, dict):
                 selection.record.pop("updates", None)
 
+        if body.filter_plan is not None:
+            from .research_filters import ResearchFilterPreviewRequest, preview_research_filter
+
+            preview = preview_research_filter(ResearchFilterPreviewRequest(
+                collection=body.source_collection, locales=body.locales,
+                metadata_filter=body.filter_plan.metadata_filter,
+                document_filter=body.filter_plan.document_filter,
+                source=body.filter_plan.source,
+            ))
+            if not preview["valid"]:
+                raise ValueError(f"Invalid Research scope: {preview['errors']}")
+
         pipeline = resolve_research_pipeline(
             requested_id=body.pipeline_id,
             requested_version=body.pipeline_version,

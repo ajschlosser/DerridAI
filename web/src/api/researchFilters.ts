@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import type { ResearchFilterField } from "../domain/researchFilters";
 import { apiRequest } from "./http";
 
 export type ResearchFilterPreviewRequest = {
@@ -43,10 +44,30 @@ export type ResearchFilterPreview = {
 export type ResearchFilterInventory = {
   works: Array<{ work: string; authors: string[] }>;
   truncated: boolean;
+  fields?: ResearchFilterField[];
 };
 
 /** Non-mutating server check of a filter against a collection's declared filter fields. */
 export const researchFiltersApi = {
+  resolve: (
+    body: {
+      collection: string;
+      instructions: string;
+      provider_profile_id?: string;
+      locales?: string[];
+    },
+    signal?: AbortSignal,
+  ) =>
+    apiRequest<{
+      source: "model_assisted";
+      model: string;
+      expression: string;
+      unresolved: string[];
+    }>("/api/research/filters/resolve", {
+      method: "POST",
+      body: JSON.stringify(body),
+      signal,
+    }),
   preview: (body: ResearchFilterPreviewRequest, signal?: AbortSignal) =>
     apiRequest<ResearchFilterPreview>("/api/research/filters/preview", {
       method: "POST",

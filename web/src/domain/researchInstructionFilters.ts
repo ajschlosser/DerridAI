@@ -107,6 +107,14 @@ function quote(value: string): string {
 }
 
 function resolveKey(concept: Concept, catalog: ResearchFilterField[]): string | null {
+  const semanticIds: Partial<Record<Concept, string>> = {
+    speaker: "derridai.speaker",
+    year: "derridai.document.publication_year",
+  };
+  const semantic = catalog.find(
+    (field) => semanticIds[concept] && field.field_ids?.includes(semanticIds[concept]!),
+  );
+  if (semantic) return semantic.key;
   const keys = new Set(catalog.map((field) => field.key));
   return CONCEPT_KEYS[concept].find((key) => keys.has(key)) ?? null;
 }
@@ -267,10 +275,101 @@ function speakerClause(out: Collector, sentence: string): boolean {
   return true;
 }
 
-function interpretSentence(out: Collector, inventory: ScopeInventory, raw: string) {
+function schemaClause(out: Collector, sentence: string, catalog: ResearchFilterField[]): boolean {
+  const text = sentence
+    .trim()
+    .replace(/[.!?]+$/u, "")
+    .replace(/^(?:only\s+(?:records?\s+)?(?:where\s+)?|where\s+|with\s+)/iu, "");
+  for (const field of [...catalog].sort((a, b) => b.key.length - a.key.length)) {
+    const escaped = field.key.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/_/gu, "[ _]");
+    const label = field.field_ids?.some((id) =>
+      ["derridai.document.language", "derridai.document.document_language"].includes(id),
+    )
+      ? `(?:${escaped}|language|langue)`
+      : escaped;
+    const match = new RegExp(
+      `^${label}\\s+(is not|isn't|is|equals|=|!=|>=|<=|>|<|after|before|est pas|est)\\s+(.+)$`,
+      "iu",
+    ).exec(text);
+    if (!match) continue;
+    const op =
+      (
+        {
+          "is not": "!=",
+          "isn't": "!=",
+          "est pas": "!=",
+          is: "=",
+          equals: "=",
+          est: "=",
+          after: ">",
+          before: "<",
+        } as Record<string, string>
+      )[match[1].toLowerCase()] ?? match[1];
+    const raw = match[2].trim().replace(/^["“”']|["“”']$/gu, "");
+    let value: string | number | boolean = raw;
+    if (field.type === "number") value = Number(raw);
+    else if (field.type === "boolean") {
+      if (!/^(true|false|vrai|faux)$/iu.test(raw)) {
+        out.skip(sentence, "unknown_scope", { text: raw });
+        return true;
+      }
+      value = /^(true|vrai)$/iu.test(raw);
+    } else if (field.values) {
+      const norm = fold(raw);
+      const language = (
+        { french: "fr", francais: "fr", english: "en", anglais: "en" } as Record<string, string>
+      )[norm];
+      const matches = field.values.filter(
+        (candidate) =>
+          fold(String(candidate)) === norm ||
+          (language &&
+            field.field_ids?.some(
+              (id) =>
+                id.endsWith(".language") ||
+                id.endsWith(".document_language") ||
+                id.endsWith(".original_language"),
+            ) &&
+            fold(String(candidate)) === language),
+      );
+      if (matches.length !== 1) {
+        out.skip(sentence, "unknown_scope", { text: raw });
+        return true;
+      }
+      value = matches[0];
+    }
+    if (typeof value === "number" && !Number.isFinite(value)) {
+      out.skip(sentence, "ambiguous_number", { value: raw });
+      return true;
+    }
+    const expression = `${field.key} ${op} ${JSON.stringify(value)}`;
+    if (!parseResearchFilterExpression(expression, catalog).ok) {
+      out.skip(sentence, "unsupported_field", { concept: field.key });
+      return true;
+    }
+    out.propose(sentence, expression, Boolean(field.values) || typeof value !== "string");
+    return true;
+  }
+  return false;
+}
+
+function interpretSentence(
+  out: Collector,
+  inventory: ScopeInventory,
+  raw: string,
+  catalog: ResearchFilterField[],
+) {
   const sentence = raw.replace(/[’]/gu, "'").replace(/\s+/gu, " ").trim();
   if (!sentence) return;
 
+  if (SOFT_MARKERS.test(sentence)) {
+    out.skip(sentence, "soft_preference");
+    return;
+  }
+  if (
+    !/\b(?:not only|do not|don't|never)\b/iu.test(sentence) &&
+    schemaClause(out, sentence, catalog)
+  )
+    return;
   if (/\blanguage\s+(?:is|=)\b/iu.test(sentence)) {
     out.skip(sentence, "unsupported_field", { concept: "language" });
     return;
@@ -317,7 +416,7 @@ export function interpretResearchInstructionFilters(
 ): InstructionInterpretation {
   const out = new Collector(catalog);
   for (const sentence of text.split(/(?<=[.!?;])\s+|\n+/u)) {
-    interpretSentence(out, inventory, sentence);
+    interpretSentence(out, inventory, sentence, catalog);
   }
   return { proposals: out.proposals, unresolved: out.unresolved };
 }

@@ -153,7 +153,9 @@ const prompt = ref("");
 const instructions = ref("");
 const filterExpression = ref("");
 // True once the researcher confirmed a phrase interpreted from the instructions.
-const filterFromInstructions = ref(false);
+const filterFromInstructions = ref<false | "deterministic_natural_language" | "model_assisted">(
+  false,
+);
 watch(filterExpression, (value) => {
   if (!value.trim()) filterFromInstructions.value = false;
 });
@@ -508,7 +510,7 @@ function filterPlanForRun() {
   return filterFromInstructions.value
     ? {
         ...plan,
-        source: "deterministic_natural_language",
+        source: filterFromInstructions.value,
         original_text: instructions.value,
       }
     : { ...plan, source: "explicit", original_text: filterExpression.value };
@@ -1030,7 +1032,7 @@ onBeforeUnmount(() => {
         v-model:prompt="prompt"
         v-model:instructions="instructions"
         v-model:filter-expression="filterExpression"
-        @scope-accepted="filterFromInstructions = true"
+        @scope-accepted="filterFromInstructions = $event"
         @filter-change="filterState = $event"
         :source-collection="config?.source_collection || ''"
         :provider-profile-id="config?.provider_profile_id || ''"

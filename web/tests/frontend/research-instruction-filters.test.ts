@@ -117,3 +117,41 @@ describe("deterministic instruction filters", () => {
     expect(appendFilterExpression('work = "A"', 'work = "A"')).toBe('work = "A"');
   });
 });
+
+describe("schema-driven natural language predicates", () => {
+  const fields = researchFilterCatalog(
+    [],
+    [
+      { key: "custom_role", type: "string", values: ["witness", "editor"], schema_ids: ["a", "b"] },
+      { key: "certainty", type: "number", values: [0.5] },
+      { key: "attested", type: "boolean", values: [true, false] },
+      {
+        key: "document_language",
+        type: "string",
+        values: ["fr", "en"],
+        field_ids: ["derridai.document.language"],
+      },
+    ],
+  );
+  const interpret = (text: string) =>
+    interpretResearchInstructionFilters(text, { works: [] }, fields);
+  it("uses arbitrary fields from multiple schemas with indexed types and exact values", () => {
+    expect(interpret("custom role is Witness").proposals[0]).toMatchObject({
+      expression: 'custom_role = "witness"',
+      verified: true,
+    });
+    expect(interpret("certainty >= 0.75").proposals[0].expression).toBe("certainty >= 0.75");
+    expect(interpret("attested is false").proposals[0].expression).toBe("attested = false");
+    expect(interpret("language is French").proposals[0].expression).toBe(
+      'document_language = "fr"',
+    );
+    expect(interpret("document language is French").proposals[0].expression).toBe(
+      'document_language = "fr"',
+    );
+  });
+  it("retains unknown values, invalid numbers and soft emphasis instead of inventing filters", () => {
+    expect(interpret("custom role is inventor").proposals).toEqual([]);
+    expect(interpret("certainty is high").proposals).toEqual([]);
+    expect(interpret("focus mainly on custom role is witness").proposals).toEqual([]);
+  });
+});
