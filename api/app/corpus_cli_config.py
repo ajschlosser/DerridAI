@@ -245,7 +245,7 @@ class CorpusProcessingConfig(_StrictConfigModel):
 
 def parse_processing_config(
     payload: object,
-) -> CorpusProcessingConfig | "CorpusRunEnvelopeV2":
+) -> CorpusProcessingConfig | CorpusRunEnvelopeV2:
     """Validate an already-decoded corpus configuration by explicit format version."""
 
     if not isinstance(payload, dict):
@@ -280,7 +280,7 @@ def load_processing_config(
 
 
 def dump_processing_config_yaml(
-    config: CorpusProcessingConfig | "CorpusRunEnvelopeV2",
+    config: CorpusProcessingConfig | CorpusRunEnvelopeV2,
 ) -> str:
     """Serialize a validated, secret-free corpus configuration deterministically."""
 
