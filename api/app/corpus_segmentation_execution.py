@@ -35,6 +35,7 @@ from .corpus_models import (
     SEGMENTATION_PROMPT_VERSION,
     BoundaryAuditResponseModel,
     BoundaryBatchResponseModel,
+    segmentation_dimensions_for_profile,
 )
 from .corpus_record_quality import iso_now
 from .corpus_segmentation import (
@@ -56,6 +57,14 @@ def _manifest_prompt_context(manifest: dict[str, Any]) -> dict[str, Any]:
         for key in ("title", "document_author", "translator", "language", "document_type")
         if manifest.get(key) not in (None, "")
     }
+
+
+def _boundary_dimension_prompt_phrase(dimensions: tuple[str, ...]) -> str:
+    """Render profile-owned segmentation dimensions without changing prompt semantics."""
+    labels = [dimension.replace("_", " ") for dimension in dimensions]
+    if len(labels) == 1:
+        return labels[0]
+    return f"{', '.join(labels[:-1])}, or {labels[-1]}"
 
 
 class BuildSegmentationExecutionMixin:
@@ -124,6 +133,7 @@ class BuildSegmentationExecutionMixin:
         build_id: str,
         *,
         session: SegmentationSession,
+        boundary_dimensions: tuple[str, ...] | None = None,
     ) -> tuple[dict[str, dict[str, Any]], str | None]:
         """Adjudicate a small set of already-filtered transitions in one call.
 
@@ -131,6 +141,17 @@ class BuildSegmentationExecutionMixin:
         returns malformed output, omits an item, or attempts an `uncertain` value,
         the transition deterministically remains KEEP.
         """
+        if boundary_dimensions is None:
+            # Direct callers (including prompt characterization and pipeline parity
+            # tests) do not necessarily have a persisted build. The active profile
+            # still owns the semantics; build orchestration passes its resolved
+            # profile dimensions explicitly below.
+            from .corpus_models import CORPUS_PROFILES, PROFILE_VERSION
+
+            boundary_dimensions = segmentation_dimensions_for_profile(
+                CORPUS_PROFILES[PROFILE_VERSION]
+            )
+        dimension_phrase = _boundary_dimension_prompt_phrase(boundary_dimensions)
         items=[]
         for c in batch:
             i=int(c["index"])
@@ -150,7 +171,7 @@ class BuildSegmentationExecutionMixin:
             )
         context = _manifest_prompt_context(manifest)
         prompt=f"""You are a conservative semantic-boundary adjudicator for an auditable scholarly corpus.
-Python has already filtered out ordinary prose and protected attribution-sensitive seams. For each listed transition choose SPLIT only when the right block clearly begins a new coherent discourse/argument unit because of a meaningful change in speaker, position holder, stance, target, quotation frame, discourse role, or argumentative move. Otherwise choose KEEP. Page changes and text length are never evidence. When in doubt, KEEP.
+Python has already filtered out ordinary prose and protected attribution-sensitive seams. For each listed transition choose SPLIT only when the right block clearly begins a new coherent discourse/argument unit because of a meaningful change in {dimension_phrase}. Otherwise choose KEEP. Page changes and text length are never evidence. When in doubt, KEEP.
 
 Document context: {json.dumps(context, ensure_ascii=False)}
 When document_author is present, use it only as source-document authorship context. Do not assume it is the speaker or position holder, and do not invent an author or work when the document context does not supply one.
@@ -510,7 +531,13 @@ Return one decision for the exact boundary id. `signals` should contain compact 
                     raise InterruptedError("Corpus build cancelled")
                 batch = [item[0] for item in chunk]
                 results, failure = self._segment_candidate_batch(
-                    batch, blocks, manifest, request, build_id, session=session
+                    batch,
+                    blocks,
+                    manifest,
+                    request,
+                    build_id,
+                    session=session,
+                    boundary_dimensions=segmentation_dimensions_for_profile(profile),
                 )
                 return results, failure, session.identity() if session is not None else {}
 
