@@ -162,12 +162,22 @@ def _migrate_config(path: Path, *, output: Path | None) -> int:
         return int(ExitCode.USAGE_OR_CONFIG)
 
     from .corpus_run_config import migrate_v1_to_v2
-    from .pipelines.manager import pipeline_manager
-    from .pipelines.models import PipelineDefinition
+    from .pipelines.defaults import built_in_assignment, built_in_pipeline
 
     try:
-        resolved = pipeline_manager.resolve("corpus_metadata_enrichment")
-        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+        assignment = built_in_assignment("corpus_metadata_enrichment")
+        if assignment is None:
+            raise ValueError(
+                "This DerridAI build does not define a default corpus metadata enrichment pipeline."
+            )
+        pipeline = built_in_pipeline(
+            assignment.pipeline_id,
+            assignment.pipeline_version,
+        )
+        if pipeline is None:
+            raise ValueError(
+                "The default corpus metadata enrichment pipeline is unavailable."
+            )
         migrated = migrate_v1_to_v2(config, pipeline=pipeline)
         rendered = dump_processing_config_yaml(migrated)
     except (KeyError, ValueError, ValidationError) as exc:
