@@ -27,14 +27,27 @@ import type { SearchScope } from "../../types/search";
 
 const props = withDefaults(
   defineProps<{
-    scope: SearchScope;
+    scope?: SearchScope | null;
     researcher?: boolean;
     totalLoaded?: number;
     databaseCount?: number;
     selectedEvidence?: number;
     canUseLoaded?: boolean;
+    /** Keep the page frame mounted while the first authoritative workspace read is unresolved. */
+    pending?: boolean;
+    /** Keep the frame visible after a failed first read without implying zero available data. */
+    unavailable?: boolean;
   }>(),
-  { researcher: false, totalLoaded: 0, databaseCount: 0, selectedEvidence: 0, canUseLoaded: true },
+  {
+    scope: null,
+    researcher: false,
+    totalLoaded: 0,
+    databaseCount: 0,
+    selectedEvidence: 0,
+    canUseLoaded: true,
+    pending: false,
+    unavailable: false,
+  },
 );
 const emit = defineEmits<{
   "update:scope": [scope: SearchScope];
@@ -43,7 +56,10 @@ const emit = defineEmits<{
   views: [];
 }>();
 const i18n = useI18nStore();
-const loadedDisabled = computed(() => props.researcher || !props.canUseLoaded);
+const controlsDisabled = computed(() => props.pending || props.unavailable);
+const loadedDisabled = computed(
+  () => controlsDisabled.value || props.researcher || !props.canUseLoaded,
+);
 const loadedUnavailable = i18n.t("search.loaded_scope_unavailable");
 const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable);
 </script>
@@ -56,6 +72,7 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
     :description="i18n.t('search.subtitle')"
     title-id="search-page-title"
     :actions-label="i18n.t('search.view_actions')"
+    :aria-busy="props.pending || undefined"
   >
     <template #actions>
       <div class="search-workspace-actions">
@@ -65,7 +82,7 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
           :content-focusable="false"
           placement="bottom"
         >
-          <button type="button" class="btn" @click="emit('views')">
+          <button type="button" class="btn" :disabled="controlsDisabled" @click="emit('views')">
             <AppIcon name="history" />{{ i18n.t("search.saved_views") }}
           </button>
         </UiTooltip>
@@ -75,7 +92,7 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
           :content-focusable="false"
           placement="bottom"
         >
-          <button type="button" class="btn" @click="emit('save')">
+          <button type="button" class="btn" :disabled="controlsDisabled" @click="emit('save')">
             <AppIcon name="plus" />{{ i18n.t("search.save_view") }}
           </button>
         </UiTooltip>
@@ -85,7 +102,12 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
           :content-focusable="false"
           placement="bottom"
         >
-          <button type="button" class="btn soft" @click="emit('share')">
+          <button
+            type="button"
+            class="btn soft"
+            :disabled="controlsDisabled"
+            @click="emit('share')"
+          >
             <AppIcon name="copy" />{{ i18n.t("search.copy_link") }}
           </button>
         </UiTooltip>
@@ -109,7 +131,9 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
             >
               <AppIcon name="list" />
               <span>{{ i18n.t("search.loaded_records") }}</span>
-              <small>{{ Number(totalLoaded || 0).toLocaleString(i18n.locale) }}</small>
+              <small>{{
+                controlsDisabled ? "—" : Number(totalLoaded || 0).toLocaleString(i18n.locale)
+              }}</small>
             </button>
           </UiTooltip>
           <button
@@ -117,25 +141,35 @@ const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable
             type="button"
             :class="{ active: scope === 'loaded' }"
             :aria-pressed="scope === 'loaded'"
+            :disabled="controlsDisabled"
             @click="emit('update:scope', 'loaded')"
           >
             <AppIcon name="list" />
             <span>{{ i18n.t("search.loaded_records") }}</span>
-            <small>{{ Number(totalLoaded || 0).toLocaleString(i18n.locale) }}</small>
+            <small>{{
+              controlsDisabled ? "—" : Number(totalLoaded || 0).toLocaleString(i18n.locale)
+            }}</small>
           </button>
           <button
             type="button"
             :class="{ active: scope === 'database' }"
             :aria-pressed="scope === 'database'"
+            :disabled="controlsDisabled"
             @click="emit('update:scope', 'database')"
           >
             <AppIcon name="database" />
             <span>{{ i18n.t("search.corpus_database") }}</span>
-            <small>{{ Number(databaseCount || 0).toLocaleString(i18n.locale) }}</small>
+            <small>{{
+              controlsDisabled ? "—" : Number(databaseCount || 0).toLocaleString(i18n.locale)
+            }}</small>
           </button>
         </div>
         <p class="search-workspace-stats" aria-live="polite">
-          <span
+          <span v-if="props.pending"><AppIcon name="spark" />{{ i18n.t("search.loading") }}</span>
+          <span v-else-if="props.unavailable"
+            ><AppIcon name="spark" />{{ i18n.t("loading.unavailable", "Unavailable") }}</span
+          >
+          <span v-else
             ><AppIcon name="spark" />{{
               Number(selectedEvidence || 0).toLocaleString(i18n.locale)
             }}
