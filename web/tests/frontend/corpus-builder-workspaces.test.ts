@@ -298,7 +298,7 @@ describe("setup state", () => {
 describe("workspace header", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it("presents three user-facing phases while keeping Build and Review directly navigable", async () => {
+  it("keeps all four workflow phases visible and directly navigable", async () => {
     const wrapper = mount(CorpusBuilderWorkspaceHeader, {
       props: {
         sourceFilename: "Of Grammatology.pdf",
@@ -316,17 +316,18 @@ describe("workspace header", () => {
       },
     });
     const phases = wrapper.findAll(".workspace-phase-list > li > button");
-    expect(phases).toHaveLength(3);
+    expect(phases).toHaveLength(4);
     expect(phases[0].text()).toContain("✓");
-    expect(phases[1].text()).toContain("Build & review");
-    expect(phases[1].get(".step-mark").text()).toBe("2");
-    expect(phases[1].attributes("aria-current")).toBe("step");
-    expect(phases[2].attributes("disabled")).toBeDefined();
+    expect(phases[1].text()).toContain("✓");
+    expect(phases[1].text()).toContain("Build");
+    expect(phases[2].text()).toContain("Review");
+    expect(phases[2].get(".step-mark").text()).toBe("3");
+    expect(phases[2].attributes("aria-current")).toBe("step");
+    expect(phases[3].text()).toContain("Publish");
+    expect(phases[3].attributes("disabled")).toBeDefined();
+    expect(wrapper.find(".workspace-subnav").exists()).toBe(false);
 
-    const subnav = wrapper.findAll(".workspace-subnav button");
-    expect(subnav).toHaveLength(2);
-    expect(subnav[1].attributes("aria-pressed")).toBe("true");
-    await subnav[0].trigger("click");
+    await phases[1].trigger("click");
     expect(wrapper.emitted("workspace")).toEqual([["build"]]);
 
     expect(wrapper.get(".corpus-workspace-stage").text()).toBe("Reviewing");
