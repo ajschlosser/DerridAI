@@ -64,11 +64,7 @@ describe("search workspace commands", () => {
 
     expect(ctx.state.pageSize).toBe(250);
     expect(ctx.state.globalPage).toBe(1);
-    expect(ctx.calls).toEqual([
-      "persistListPreferences",
-      "persistSearchPreferences",
-      "syncUrl",
-    ]);
+    expect(ctx.calls).toEqual(["persistListPreferences", "persistSearchPreferences", "syncUrl"]);
     expect(ctx.calls).not.toContain("persistPrefs");
   });
 

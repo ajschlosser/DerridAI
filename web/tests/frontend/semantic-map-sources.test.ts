@@ -59,9 +59,7 @@ describe("semantic map sources", () => {
       files: [
         {
           id: "f1",
-          records: Array.from({ length: 450 }, (_, index) =>
-            record(`r-${index}`, "Glas"),
-          ),
+          records: Array.from({ length: 450 }, (_, index) => record(`r-${index}`, "Glas")),
         },
         later,
       ],

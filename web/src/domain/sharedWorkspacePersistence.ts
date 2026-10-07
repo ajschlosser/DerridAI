@@ -25,10 +25,7 @@ import { trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { workspaceDb } from "./sharedWorkspaceStorage";
 import { createWorkspacePersistence } from "./workspacePersistence";
-import {
-  applyDomainPreferenceRecord,
-  DOMAIN_PREFERENCE_KEYS,
-} from "./domainPreferencePersistence";
+import { applyDomainPreferenceRecord, DOMAIN_PREFERENCE_KEYS } from "./domainPreferencePersistence";
 
 // Saving and restoring the browser-local workspace over the shared state and database, usable without the legacy
 // runtime. The runtime uses this same instance. `fileTimers` is exported because deleting the workspace database must

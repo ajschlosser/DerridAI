@@ -481,8 +481,10 @@ function openCreate() {
   if (!providersReady.value) return;
   const models = status.llmStatus?.models || [];
   openCollectionCreationWizard({
-    defaultProvider: (config.appConfig as { embedding_provider?: string })?.embedding_provider || "ollama",
-    defaultModel: (config.appConfig as { embedding_model?: string })?.embedding_model || "bge-m3:latest",
+    defaultProvider:
+      (config.appConfig as { embedding_provider?: string })?.embedding_provider || "ollama",
+    defaultModel:
+      (config.appConfig as { embedding_model?: string })?.embedding_model || "bge-m3:latest",
     installedModels: models,
     providerProfiles: providerProfiles.value,
   } as never);

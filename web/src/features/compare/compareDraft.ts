@@ -35,10 +35,9 @@ type PersistedCompareDraft = CompareDraft & { key: string };
 /** Reads only the Compare-owned browser-local draft record. */
 export async function loadCompareDraft(): Promise<CompareDraft | null> {
   try {
-    const value = (await workspaceDb.get(
-      "prefs",
-      COMPARE_DRAFT_KEY,
-    )) as Partial<PersistedCompareDraft> | undefined;
+    const value = (await workspaceDb.get("prefs", COMPARE_DRAFT_KEY)) as
+      | Partial<PersistedCompareDraft>
+      | undefined;
     if (!value || value.key !== COMPARE_DRAFT_KEY) return null;
     return {
       sourceA: value.sourceA === "scratch" ? "scratch" : "library",
@@ -58,7 +57,10 @@ export async function loadCompareDraft(): Promise<CompareDraft | null> {
 /** Persists only Compare state; no unrelated workspace domain is serialized. */
 export async function saveCompareDraft(draft: CompareDraft): Promise<void> {
   try {
-    await workspaceDb.put("prefs", { key: COMPARE_DRAFT_KEY, ...draft } satisfies PersistedCompareDraft);
+    await workspaceDb.put("prefs", {
+      key: COMPARE_DRAFT_KEY,
+      ...draft,
+    } satisfies PersistedCompareDraft);
   } catch (error) {
     console.warn("Could not persist Compare draft", error);
   }

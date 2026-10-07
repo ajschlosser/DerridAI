@@ -23,10 +23,7 @@ type Deps = {
 };
 
 /** Updates Search-owned query state without persistence or URL work. */
-export function setSearchQueryDraft(
-  state: Record<string, unknown>,
-  value: unknown,
-): string {
+export function setSearchQueryDraft(state: Record<string, unknown>, value: unknown): string {
   state.globalSearch = String(value || "");
   state.globalPage = 1;
   return String(state.globalSearch);

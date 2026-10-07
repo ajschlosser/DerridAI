@@ -38,10 +38,7 @@ export const corpusCache: {
 // corpus-derived state changes so sync/status checks never reuse a pre-edit hash.
 let recordFingerprintCache = new WeakMap<object, string>();
 
-export function invalidateCorpusCache(
-  fileId: string | null = null,
-  structure = false,
-): void {
+export function invalidateCorpusCache(fileId: string | null = null, structure = false): void {
   touchCorpus(fileId, structure);
   invalidateShellStatusProjection();
   corpusCache.rows = null;

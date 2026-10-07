@@ -36,7 +36,11 @@ type TouchupProposal = {
   [key: string]: unknown;
 };
 type TouchupStatus = { available?: boolean; configured_model?: string; [key: string]: unknown };
-type TouchupResult = { item: TouchupWorkspaceItem; proposal: TouchupProposal | null; error?: unknown };
+type TouchupResult = {
+  item: TouchupWorkspaceItem;
+  proposal: TouchupProposal | null;
+  error?: unknown;
+};
 type WorkspaceInfo = {
   items: TouchupWorkspaceItem[];
   initialMode: string;

@@ -76,7 +76,7 @@ The initial census found these concrete paths:
 
 ## Target ownership model
 
-~~~text
+```text
 App
 |- auth/session
 |- router
@@ -93,7 +93,7 @@ App
       |- feature query/API layer
       `- feature components
          `- ephemeral component state
-~~~
+```
 
 Cross-domain data is exposed as explicit read-only projections or commands. A feature never reaches into another feature's
 mutable state to make its own UI current.

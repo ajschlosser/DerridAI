@@ -34,10 +34,9 @@ type PersistedResearchComposerDraft = ResearchComposerDraft & { key: string };
  */
 export async function loadResearchComposerDraft(): Promise<ResearchComposerDraft | null> {
   try {
-    const value = (await workspaceDb.get(
-      "prefs",
-      RESEARCH_COMPOSER_DRAFT_KEY,
-    )) as Partial<PersistedResearchComposerDraft> | undefined;
+    const value = (await workspaceDb.get("prefs", RESEARCH_COMPOSER_DRAFT_KEY)) as
+      | Partial<PersistedResearchComposerDraft>
+      | undefined;
     if (!value || value.key !== RESEARCH_COMPOSER_DRAFT_KEY) return null;
     return {
       prompt: String(value.prompt || ""),

@@ -439,11 +439,7 @@ function restoreComposerDraft(expectedPrompt: string, expectedInstructions: stri
     const saved = await loadResearchComposerDraft();
     if (disposed || epoch !== composerDraftEpoch || !isNativeResearch.value) return;
     composerDraftLoaded = true;
-    if (
-      saved &&
-      prompt.value === expectedPrompt &&
-      instructions.value === expectedInstructions
-    ) {
+    if (saved && prompt.value === expectedPrompt && instructions.value === expectedInstructions) {
       prompt.value = saved.prompt;
       instructions.value = saved.instructions;
     }

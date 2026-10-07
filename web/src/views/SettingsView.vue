@@ -157,13 +157,9 @@ const busy = ref("");
 const isAdmin = computed(() => auth.isAdmin);
 const canAppearance = computed(() => auth.can("appearance.manage") || isAdmin.value);
 const chromaPath = computed(() =>
-  String(
-    (status.health as { chroma?: { path?: string } } | null)?.chroma?.path || "/data/chroma",
-  ),
+  String((status.health as { chroma?: { path?: string } } | null)?.chroma?.path || "/data/chroma"),
 );
-const providerStatuses = computed(
-  () => status.providerStatuses as Record<string, ProviderStatus>,
-);
+const providerStatuses = computed(() => status.providerStatuses as Record<string, ProviderStatus>);
 const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderProfile[]);
 const defaultProfileId = computed(() =>
   String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),

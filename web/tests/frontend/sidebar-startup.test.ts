@@ -535,9 +535,7 @@ describe("router and runtime stay in agreement", () => {
 
     expect(search!.classes()).toContain("pending");
     expect(search!.attributes("aria-busy")).toBe("true");
-    expect(interactionTiming.measure).toHaveBeenCalledWith(
-      "derridai.navigation.intent_to_frame",
-    );
+    expect(interactionTiming.measure).toHaveBeenCalledWith("derridai.navigation.intent_to_frame");
     expect(router.currentRoute.value.path).toBe("/");
 
     await vi.waitFor(() => expect(release).toBeTypeOf("function"));

@@ -799,11 +799,11 @@ watch(
       </button>
     </header>
     <SidebarNavigator
-    :groups="mobileNavGroups"
-    :collapsed="false"
-    :pending-id="pendingNavId"
-    @navigate="navigateFromMobile"
-  />
+      :groups="mobileNavGroups"
+      :collapsed="false"
+      :pending-id="pendingNavId"
+      @navigate="navigateFromMobile"
+    />
   </dialog>
   <NavigationCommandPalette
     ref="commandPalette"

@@ -43,7 +43,6 @@ export const {
   researcherDbRecords,
 });
 
-
 /**
  * Invalidates the database-backed Compare library before an explicit "load newer"
  * request. Native Vue callers use this command instead of mutating compatibility

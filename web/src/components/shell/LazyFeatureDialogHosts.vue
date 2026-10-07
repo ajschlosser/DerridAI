@@ -67,13 +67,17 @@ const MergeFilesDialog = defineAsyncComponent(() => import("../MergeFilesDialog.
 const MixedWorkValuesDialog = defineAsyncComponent(() => import("../MixedWorkValuesDialog.vue"));
 const OcrCleanupDialog = defineAsyncComponent(() => import("../OcrCleanupDialog.vue"));
 const PdfDraftRecordDialog = defineAsyncComponent(() => import("../PdfDraftRecordDialog.vue"));
-const RecordFieldEditorDialog = defineAsyncComponent(() => import("../RecordFieldEditorDialog.vue"));
+const RecordFieldEditorDialog = defineAsyncComponent(
+  () => import("../RecordFieldEditorDialog.vue"),
+);
 const RecordHistoryDialog = defineAsyncComponent(() => import("../RecordHistoryDialog.vue"));
 const RecordPreviewDialog = defineAsyncComponent(() => import("../RecordPreviewDialog.vue"));
 const RemoveWorkDialog = defineAsyncComponent(() => import("../RemoveWorkDialog.vue"));
 const SeparateWorksDialog = defineAsyncComponent(() => import("../SeparateWorksDialog.vue"));
 const UpsertQueueDialog = defineAsyncComponent(() => import("../UpsertQueueDialog.vue"));
-const WorkMetadataEditorDialog = defineAsyncComponent(() => import("../WorkMetadataEditorDialog.vue"));
+const WorkMetadataEditorDialog = defineAsyncComponent(
+  () => import("../WorkMetadataEditorDialog.vue"),
+);
 const WorkMetadataLlmDialog = defineAsyncComponent(() => import("../WorkMetadataLlmDialog.vue"));
 const WorkMetadataProposalDialog = defineAsyncComponent(
   () => import("../WorkMetadataProposalDialog.vue"),

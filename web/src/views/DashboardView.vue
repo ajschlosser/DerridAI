@@ -240,9 +240,7 @@ function applyDashboardCore() {
     corpusBuilds.value = [];
     corpusBuildsActive.value = 0;
   } else {
-    const builds = (jobsStore.jobs as Any[])
-      .filter((job) => job.type === "pdf_corpus")
-      .slice(0, 4);
+    const builds = (jobsStore.jobs as Any[]).filter((job) => job.type === "pdf_corpus").slice(0, 4);
     corpusBuilds.value = builds;
     corpusBuildsActive.value = builds.filter((job) =>
       ["queued", "running", "cancelling"].includes(String(job.status)),
@@ -256,7 +254,8 @@ async function refreshActivity() {
   activityError.value = "";
   try {
     await annotationsWorkspace.refreshServerAnnotations(
-      isResearcher.value && annotationsStore.serverAnnotationsStore !== String(vectorStore.activeStore || ""),
+      isResearcher.value &&
+        annotationsStore.serverAnnotationsStore !== String(vectorStore.activeStore || ""),
     );
   } catch (error) {
     if (request !== activityRequestSerial) return;
@@ -424,17 +423,20 @@ async function goSearch() {
     navigateTo("global");
     try {
       const mode = searchStore.dbSearchMethod || "similarity";
-      const data: Any = await api(`/api/stores/${encodeURIComponent(vectorStore.activeStore)}/search`, {
-        method: "POST",
-        body: JSON.stringify({
-          query: searchStore.globalSearch,
-          mode,
-          n_results: 100,
-          where: Object.keys(dbSearchWhere()).length ? dbSearchWhere() : null,
-          fetch_k: Number(searchStore.dbSearchFetchK || 100),
-          lambda_mult: Number(searchStore.dbSearchLambda ?? 0.7),
-        }),
-      });
+      const data: Any = await api(
+        `/api/stores/${encodeURIComponent(vectorStore.activeStore)}/search`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: searchStore.globalSearch,
+            mode,
+            n_results: 100,
+            where: Object.keys(dbSearchWhere()).length ? dbSearchWhere() : null,
+            fetch_k: Number(searchStore.dbSearchFetchK || 100),
+            lambda_mult: Number(searchStore.dbSearchLambda ?? 0.7),
+          }),
+        },
+      );
       vectorStore.storeSearchResults = data.results || [];
     } catch (error) {
       toast(

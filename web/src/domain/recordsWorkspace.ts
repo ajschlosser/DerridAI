@@ -126,15 +126,13 @@ export function createRecordsWorkspace(deps: Deps) {
     available: string[];
   };
   let baseRowsCache: BaseRowsCache | null = null;
-  let queryRowsCache:
-    | {
-        file: Any;
-        version: number;
-        query: string;
-        filtersKey: string;
-        rows: Any[];
-      }
-    | null = null;
+  let queryRowsCache: {
+    file: Any;
+    version: number;
+    query: string;
+    filtersKey: string;
+    rows: Any[];
+  } | null = null;
   let normalizedTextCache = new WeakMap<object, string>();
 
   function baseRowsForFile(file: Any): BaseRowsCache {

@@ -77,8 +77,7 @@ export function getShellStatusProjection(): ShellStatusProjection {
   // requiring every legacy assignment to know about this projection.
   return {
     ...aggregates,
-    hasCorpusDb:
-      state.health?.chroma?.available === true && aggregates.corpusStoreCount > 0,
+    hasCorpusDb: state.health?.chroma?.available === true && aggregates.corpusStoreCount > 0,
     activeStore: String(state.activeStore || ""),
     selectedEvidenceCount: Object.values(state.selectedEvidence || {}).filter(Boolean).length,
   };
