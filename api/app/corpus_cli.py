@@ -292,7 +292,14 @@ def _error_code(category: str) -> ExitCode:
 
 def _build_corpus(args: argparse.Namespace) -> int:
     try:
-        config = load_run_config(args.config)
+        loaded = load_run_config(args.config)
+        # Legacy v1 files remain accepted, but execution always freezes the
+        # current corpus pipeline bundle into the v2 run contract first.
+        config = (
+            loaded
+            if isinstance(loaded, CorpusRunConfigV2)
+            else migrate_v1_config(loaded)
+        )
         # Resolve required secret environment variables before reading/extracting
         # a potentially large source file.
         config.build_request()
@@ -300,12 +307,11 @@ def _build_corpus(args: argparse.Namespace) -> int:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return int(ExitCode.USAGE_OR_CONFIG)
 
-    if isinstance(config, CorpusRunConfigV2):
-        try:
-            config.assert_runtime_pipeline_capabilities()
-        except ValueError as exc:
-            print(f"Pipeline capability error: {exc}", file=sys.stderr)
-            return int(ExitCode.MISSING_CAPABILITY)
+    try:
+        config.assert_runtime_pipeline_capabilities()
+    except ValueError as exc:
+        print(f"Pipeline capability error: {exc}", file=sys.stderr)
+        return int(ExitCode.MISSING_CAPABILITY)
 
     from .headless_corpus_runner import HeadlessCorpusError, HeadlessCorpusRunner
 
