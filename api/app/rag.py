@@ -2317,12 +2317,20 @@ def run_rag_pipeline(
 
     raw_answer = generate_answer(generation_prompt, on_generation_delta)
     generation_attempts = 1
-    prose_contract_retry = False
-    if (
-        not _requests_json_output(request.prompt, request.instructions or "")
-        and _json_like_answer(raw_answer)
-    ):
-        prose_contract_retry = True
+    prose_required = not _requests_json_output(
+        request.prompt,
+        request.instructions or "",
+    )
+    contract_issues = _generation_contract_issues(
+        raw_answer,
+        evidence,
+        prose_required=prose_required,
+        require_evidence_markers=request.bind_citations,
+    )
+    initial_contract_issues = list(contract_issues)
+    output_contract_retry = bool(contract_issues)
+    prose_contract_retry = "structured_json" in contract_issues
+    if contract_issues:
         generation_attempts += 1
         warnings.append(
             "Generation returned structured JSON for a prose Research request; regenerated once."
