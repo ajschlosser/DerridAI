@@ -32,6 +32,7 @@ on:
       - "api/requirements-cli-build.txt"
       - "scripts/build_cli_binary.py"
       - "scripts/smoke_cli_binary.py"
+      - "scripts/smoke_cli_corpus.py"
       - "scripts/install-derridai.sh"
       - "scripts/install-derridai.ps1"
       - "tests/test_corpus_cli.py"
@@ -57,6 +58,7 @@ on:
       - "api/requirements-cli-build.txt"
       - "scripts/build_cli_binary.py"
       - "scripts/smoke_cli_binary.py"
+      - "scripts/smoke_cli_corpus.py"
       - "tests/test_corpus_cli.py"
       - "tests/test_corpus_run_config.py"
       - "tests/test_pipeline_capabilities.py"
@@ -121,6 +123,12 @@ jobs:
           --manifest
           dist/cli/${{ matrix.target }}/standalone/binary-manifest-${{ matrix.target }}-standalone.json
 
+      - name: Build deterministic corpus through standalone binary
+        run: >-
+          python scripts/smoke_cli_corpus.py
+          --manifest
+          dist/cli/${{ matrix.target }}/standalone/binary-manifest-${{ matrix.target }}-standalone.json
+
       - name: Show binary manifest
         run: >-
           python -c "from pathlib import Path;
@@ -145,6 +153,12 @@ jobs:
       - name: Smoke test onefile binary
         run: >-
           python scripts/smoke_cli_binary.py
+          --manifest
+          dist/cli/${{ matrix.target }}/onefile/binary-manifest-${{ matrix.target }}-onefile.json
+
+      - name: Build deterministic corpus through onefile binary
+        run: >-
+          python scripts/smoke_cli_corpus.py
           --manifest
           dist/cli/${{ matrix.target }}/onefile/binary-manifest-${{ matrix.target }}-onefile.json
 

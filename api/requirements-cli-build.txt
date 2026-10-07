@@ -10,5 +10,9 @@
 pydantic>=2.10,<3
 PyYAML>=6.0,<7
 zstandard>=0.23,<1
+Pillow>=12.1,<13
+pymupdf>=1.26,<2
+json-repair>=0.63,<1
+httpx>=0.28,<1
 pytest>=9,<10
 Nuitka>=4.2,<5
