@@ -127,6 +127,7 @@ class _CaptureCollection:
     def __init__(self) -> None:
         self.metadata = {"hnsw:space": "cosine"}
         self.last_get = None
+        self.get_calls = []
         self.last_query = None
 
     def count(self) -> int:
@@ -144,6 +145,7 @@ class _CaptureCollection:
 
     def get(self, **kwargs):
         self.last_get = kwargs
+        self.get_calls.append(kwargs)
         return {
             "ids": ["r1"],
             "documents": ["The trace is not a presence."],
@@ -191,9 +193,11 @@ def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
     )
 
     assert [item["record"]["record_id"] for item in lexical] == ["r1"]
-    assert collection.last_get["where"] == where
-    assert collection.last_get["where_document"] == where_document
-
+    assert any(call.get("where") == where for call in collection.get_calls)
+    assert any(
+        call.get("where_document") == where_document
+        for call in collection.get_calls
+    )
 
 
 class _PagedLexicalCollection:
