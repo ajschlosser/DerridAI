@@ -49,7 +49,6 @@ from .pipelines.capabilities import (
 from .pipelines.models import PipelineConfigOverrideSet, PipelineDefinition
 from .pipelines.overrides import resolve_pipeline_config
 from .pipelines.portable import reject_unknown_pipeline_fields
-from .pipelines.service import pipeline_hash
 
 
 class _StrictRunModel(BaseModel):
