@@ -202,6 +202,7 @@ async function load() {
     if (request !== readRequest) return;
     if (next.record_id !== snapshot.value.record_id) editOpen.value = false;
     snapshot.value = next;
+    recordWorkspace.rememberRecordWorkspaceSnapshot(next);
     void loadRecordSchema(next.record || {});
     void loadTraceability(snapshot.value);
     loadSemanticMap();
