@@ -26,6 +26,7 @@ const props = defineProps<{
   icon: string;
   collapsed?: boolean;
   active?: boolean;
+  pending?: boolean;
   disabledReason?: string;
 }>();
 defineEmits<{ navigate: [string] }>();
@@ -44,9 +45,10 @@ const showTooltip = () => Boolean(props.collapsed || props.disabledReason);
     <span class="nav-tooltip-wrap">
       <button
         type="button"
-        :class="{ active }"
+        :class="{ active, pending }"
         :disabled="Boolean(disabledReason)"
         :aria-current="active ? 'page' : undefined"
+        :aria-busy="pending || undefined"
         :aria-label="label"
         @click="$emit('navigate', id)"
       >
@@ -58,9 +60,10 @@ const showTooltip = () => Boolean(props.collapsed || props.disabledReason);
   <span v-else class="nav-tooltip-wrap">
     <button
       type="button"
-      :class="{ active }"
+      :class="{ active, pending }"
       :disabled="Boolean(disabledReason)"
       :aria-current="active ? 'page' : undefined"
+      :aria-busy="pending || undefined"
       :aria-label="label"
       @click="$emit('navigate', id)"
     >
@@ -106,7 +109,8 @@ const showTooltip = () => Boolean(props.collapsed || props.disabledReason);
   color: var(--text);
 }
 
-.nav-tooltip-wrap > button.active {
+.nav-tooltip-wrap > button.active,
+.nav-tooltip-wrap > button.pending {
   background: var(--surface-selected);
   box-shadow:
     inset 3px 0 0 var(--ui-accent),
@@ -141,7 +145,8 @@ const showTooltip = () => Boolean(props.collapsed || props.disabledReason);
 }
 
 @media (forced-colors: active) {
-  .nav-tooltip-wrap > button.active {
+  .nav-tooltip-wrap > button.active,
+  .nav-tooltip-wrap > button.pending {
     outline: 2px solid CanvasText;
     outline-offset: -2px;
     box-shadow: none;
