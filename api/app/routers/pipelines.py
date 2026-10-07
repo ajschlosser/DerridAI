@@ -22,6 +22,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from ..corpus_cli_config import CorpusProcessingConfig
+from ..corpus_run_config import (
+    HEADLESS_CORPUS_PIPELINE_FEATURES,
+    CorpusPipelineBinding,
+    migrate_v1_config,
+)
 from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
@@ -45,16 +51,10 @@ from ..pipelines.comparison import (
     summarize_evidence_recovery_run,
     summarize_evidence_suggestion_run,
 )
+from ..pipelines.compatibility import pipeline_strategy_requirements
 from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
-from ..corpus_cli_config import CorpusProcessingConfig
-from ..corpus_run_config import (
-    HEADLESS_CORPUS_PIPELINE_FEATURES,
-    CorpusPipelineBinding,
-    migrate_v1_config,
-)
-from ..pipelines.compatibility import pipeline_strategy_requirements
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
 from ..pipelines.portable import export_pipeline_document, parse_pipeline_document
 from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
