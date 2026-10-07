@@ -467,19 +467,25 @@ def _requests_json_output(prompt: str, instructions: str) -> bool:
 
 
 def _json_like_answer(text: str) -> bool:
-    """Detect a complete JSON object/array, including a JSON code fence."""
+    """Detect JSON-shaped output even when a local model emits malformed JSON."""
 
     candidate = str(text or "").strip()
     fenced = _JSON_CODE_FENCE_PATTERN.fullmatch(candidate)
     if fenced:
         candidate = fenced.group(1).strip()
+        # A fenced JSON object/array already violates the prose contract even if
+        # the model produced invalid escapes or otherwise malformed JSON.
+        if candidate.startswith(("{", "[")):
+            return True
     if not candidate.startswith(("{", "[")):
         return False
     try:
         return isinstance(json.loads(candidate), (dict, list))
     except (TypeError, ValueError, json.JSONDecodeError):
-        return False
-
+        closing = "}" if candidate.startswith("{") else "]"
+        return candidate.endswith(closing) and bool(
+            re.search(r"[A-Za-z_][A-Za-z0-9_ -]{0,79}\\s*:", candidate[:4000])
+        )
 
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
     citation_map = {
@@ -1293,6 +1299,14 @@ def run_rag_pipeline(
         else metadata_filter
     )
     filter_detail["inferred_exclusive_works"] = exclusive_scope_works
+    if pipeline_plan.scope_stage_id and exclusive_scope_works:
+        scope_stage = next(
+            (stage for stage in reversed(stages) if stage["name"] == "research_scope"),
+            None,
+        )
+        if scope_stage is not None:
+            scope_stage["detail"]["active"] = True
+            scope_stage["detail"]["inferred_exclusive_works"] = exclusive_scope_works
 
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
