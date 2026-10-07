@@ -83,13 +83,13 @@ export function createAppLifecycle(deps: Deps) {
       try {
         await refreshStores();
         if (isResearcher() && state.activeStore) await refreshStoreWorks(true);
-        persistPrefs();
         const active = document.activeElement;
         const userIsEditing =
           active &&
           active !== document.body &&
           ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
-        if (!userIsEditing) {
+        if (userIsEditing) persistPrefs();
+        else {
           shell();
           renderView();
         }
