@@ -232,18 +232,34 @@ class _ProviderHandler(BaseHTTPRequestHandler):
             # strict schema. -1 preserves the deterministic source metadata.
             answer = {"candidate_index": -1}
 
-        payload = json.dumps(
-            {
-                "choices": [
-                    {
-                        "message": {"content": json.dumps(answer)},
-                        "finish_reason": "stop",
-                    }
-                ]
-            }
-        ).encode("utf-8")
+        answer_text = json.dumps(answer)
+        if body.get("stream") is True:
+            event = json.dumps(
+                {
+                    "choices": [
+                        {
+                            "delta": {"content": answer_text},
+                            "finish_reason": "stop",
+                        }
+                    ]
+                }
+            )
+            payload = f"data: {event}\n\ndata: [DONE]\n\n".encode("utf-8")
+            content_type = "text/event-stream"
+        else:
+            payload = json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {"content": answer_text},
+                            "finish_reason": "stop",
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+            content_type = "application/json"
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
