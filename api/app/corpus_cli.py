@@ -30,7 +30,6 @@ from pydantic import ValidationError
 
 from .config import APP_VERSION
 from .corpus_run_config import (
-    HEADLESS_CORPUS_PIPELINE_FEATURES,
     CorpusRunConfigV2,
     dump_run_config,
     load_run_config,
@@ -179,7 +178,11 @@ def _migrate_config(
 ) -> int:
     try:
         loaded = load_run_config(path)
-        config = loaded if isinstance(loaded, CorpusRunConfigV2) else migrate_v1_config(loaded)
+        config = (
+            loaded
+            if isinstance(loaded, CorpusRunConfigV2)
+            else migrate_v1_config(loaded, use_system_assignments=False)
+        )
     except (ValueError, ValidationError) as exc:
         print(f"Configuration error: {exc}", file=sys.stderr)
         return int(ExitCode.USAGE_OR_CONFIG)
@@ -226,44 +229,37 @@ def _pipeline_capabilities(*, as_json: bool) -> int:
 
 
 def _doctor(*, as_json: bool) -> int:
-    from .pipelines.compatibility import pipeline_contract_identity
-    from .pipelines.manager import pipeline_manager
+    """Report native runtime capabilities without loading server persistence."""
 
-    available: dict[str, dict[str, Any]] = {}
-    missing: list[str] = []
-    for feature in HEADLESS_CORPUS_PIPELINE_FEATURES:
-        try:
-            resolved = pipeline_manager.resolve(feature)
-        except KeyError:
-            missing.append(feature)
-            continue
-        pipeline = resolved["pipeline"]
-        available[feature] = {
-            "pipeline_id": pipeline["pipeline_id"],
-            "pipeline_version": pipeline["version"],
-            "pipeline_hash": resolved.get("pipeline_hash"),
-        }
+    from .corpus_capabilities import runtime_capabilities
 
-    payload = {
-        "status": "ok" if not missing else "missing_capability",
-        "pipeline_compatibility": pipeline_contract_identity(),
-        "headless_corpus_pipelines": available,
-        "missing_features": missing,
-    }
+    payload = runtime_capabilities()
     if as_json:
         print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
     else:
-        if missing:
-            print(
-                "Headless corpus pipeline check failed: missing "
-                + ", ".join(missing),
-                file=sys.stderr,
-            )
-        else:
-            print(
-                f"Headless corpus pipeline check passed ({len(available)} features)."
-            )
-    return int(ExitCode.OK if not missing else ExitCode.MISSING_CAPABILITY)
+        status = str(payload.get("status") or "unknown")
+        helpers = payload.get("helpers") or {}
+        available_helpers = [
+            name
+            for name, detail in helpers.items()
+            if isinstance(detail, dict) and detail.get("available")
+        ]
+        source_kinds = payload.get("source_kinds") or {}
+        available_sources = [
+            name
+            for name, detail in source_kinds.items()
+            if isinstance(detail, dict) and detail.get("available")
+        ]
+        print(
+            "DerridAI native diagnostics: "
+            f"{status}; {len(available_sources)} source kinds ready; "
+            f"{len(available_helpers)} optional helpers available."
+        )
+    return int(
+        ExitCode.OK
+        if payload.get("status") == "ok"
+        else ExitCode.MISSING_CAPABILITY
+    )
 
 
 def _progress_printer(build: dict[str, Any]) -> None:
@@ -298,7 +294,7 @@ def _build_corpus(args: argparse.Namespace) -> int:
         config = (
             loaded
             if isinstance(loaded, CorpusRunConfigV2)
-            else migrate_v1_config(loaded)
+            else migrate_v1_config(loaded, use_system_assignments=False)
         )
         # Resolve required secret environment variables before reading/extracting
         # a potentially large source file.
