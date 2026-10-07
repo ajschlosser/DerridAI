@@ -20,7 +20,8 @@ import { nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
-  getRecordsListSnapshot: vi.fn(() => ({ files: [], columns: [] })),
+  getRecordsListSnapshot: vi.fn(() => ({ files: [], columns: [], rows: [] })),
+  refreshRecordsListPresence: vi.fn(async () => undefined),
   ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   state: { view: "" },
 }));
