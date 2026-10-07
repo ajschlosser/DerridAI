@@ -29,6 +29,7 @@ const runtime = vi.hoisted(() => ({
   setSearchScope: vi.fn(),
   restoreSearchViewFromHref: vi.fn(),
   updateSearchQuery: vi.fn(),
+  setSearchQueryDraft: vi.fn(),
   setSearchMmrOptions: vi.fn(),
   setSearchStore: vi.fn(),
   setSearchMethod: vi.fn(),
@@ -55,6 +56,10 @@ const runtime = vi.hoisted(() => ({
 // Vue's template proxy probes the namespace for reactivity flags; a strict module
 // mock throws on unknown keys, so declare them.
 vi.mock("../../src/domain/sharedSearchWorkspace", () => ({ searchWorkspace: runtime }));
+vi.mock("../../src/domain/sharedSearchQuery", () => ({
+  setSearchQueryDraft: runtime.setSearchQueryDraft,
+  updateSearchQuery: runtime.updateSearchQuery,
+}));
 vi.mock("../../src/domain/shellSnapshot", () => ({
   getShellSnapshot: (...args: unknown[]) =>
     (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
@@ -179,6 +184,29 @@ beforeEach(() => {
 });
 
 describe("Search workspace loading boundaries", () => {
+  it("keeps keystrokes on draft state until the loaded-record debounce commits URL state", async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await mountSearch();
+      await flushPromises();
+      const input = wrapper.get(".search-command-surface input[type='search']");
+
+      await input.setValue("hospitality");
+
+      expect(runtime.setSearchQueryDraft).toHaveBeenLastCalledWith("hospitality");
+      expect(runtime.updateSearchQuery).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(149);
+      expect(runtime.updateSearchQuery).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runtime.updateSearchQuery).toHaveBeenCalledWith("hospitality", { replace: true });
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("renders the page frame before the first read lands instead of hiding the page", async () => {
     const read = deferred<ReturnType<typeof snapshot>>();
     runtime.getSearchWorkspaceSnapshot.mockReturnValueOnce(read.promise);
