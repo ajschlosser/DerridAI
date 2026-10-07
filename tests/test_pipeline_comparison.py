@@ -1100,6 +1100,49 @@ def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) 
     assert generation_stage["detail"]["output_contract_retry"] is False
 
 
+def test_explicit_json_retry_preserves_requested_form_and_adds_grounding(monkeypatch) -> None:
+    drafts = [
+        '{"answer":"The trace is not a presence."}',
+        '{"answer":"The trace is not a presence [[E0]]."}',
+    ]
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return drafts[len(prompts) - 1]
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        instructions="Answer as JSON.",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 2
+    assert "Preserve the output form explicitly requested" in prompts[1]
+    assert "Return only cohesive scholarly prose" not in prompts[1]
+    assert json.loads(result["answer"])["answer"]
+    assert "Works Cited" not in result["answer"]
+    generation_stage = next(
+        stage for stage in result["stages"] if stage["name"] == "generation"
+    )
+    assert generation_stage["detail"]["output_contract_retry"] is True
+    assert generation_stage["detail"]["prose_contract_retry"] is False
+
+
 def test_explicit_json_binding_stays_valid_json_without_appended_bibliography(monkeypatch) -> None:
     def generate(**_kwargs):
         return '{"answer":"The trace is not a presence [[E0]]."}'
