@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.corpus_cli_config import CorpusProcessingConfig
+from app.corpus_run_config import HEADLESS_CORPUS_PIPELINE_FEATURES
 from app.headless_corpus_runner import HeadlessCorpusRunner
 from app.metadata_schema import default_schema
 
@@ -148,6 +149,9 @@ def test_headless_runner_uses_shared_build_then_emits_research_projection(tmp_pa
     assert manager.created_request is not None
     assert manager.created_request["asset_id"] == "asset-1"
     assert manager.created_request["autonomous"]["enabled"] is False
+    assert set(manager.created_request["_pipeline_bindings"]) == set(
+        HEADLESS_CORPUS_PIPELINE_FEATURES
+    )
     assert manager.autonomous_request is not None
     assert manager.autonomous_request["autonomous"]["enabled"] is True
 
