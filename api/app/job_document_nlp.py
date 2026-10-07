@@ -29,7 +29,6 @@ from typing import Any
 
 from . import document_nlp_packs as packs
 from .job_state import JobPayloadList, PersistentJobStateMixin, iso_now
-from .persistence import job_repository
 
 ACTIVE = {"queued", "running", "cancelling"}
 
