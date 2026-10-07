@@ -139,7 +139,8 @@ export function createRecordsWorkspace(deps: Deps) {
 
   function baseRowsForFile(file: Any): BaseRowsCache {
     const version = Number(corpusVersion()) || 0;
-    if (baseRowsCache?.file === file && baseRowsCache.version === version) return baseRowsCache;
+    const cached = baseRowsCache;
+    if (cached && cached.file === file && cached.version === version) return cached;
 
     const rows = file.records.map((record: Any, index: number) => ({ file, record, index }));
     const next: BaseRowsCache = {
