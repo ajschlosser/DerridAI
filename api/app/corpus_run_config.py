@@ -137,7 +137,7 @@ class CorpusPipelineBinding(_StrictConfigModel):
         return dict(sorted(normalized.items()))
 
     @model_validator(mode="after")
-    def validate_binding(self) -> "CorpusPipelineBinding":
+    def validate_binding(self) -> CorpusPipelineBinding:
         if self.definition.status != "active":
             raise ValueError(
                 "Portable corpus-run bindings must contain active pipeline definitions."
@@ -218,7 +218,7 @@ class CorpusRunConfigV2(_StrictConfigModel):
     pipelines: CorpusPipelineBundle
 
     @model_validator(mode="after")
-    def validate_pipeline_bundle(self) -> "CorpusRunConfigV2":
+    def validate_pipeline_bundle(self) -> CorpusRunConfigV2:
         missing = sorted(
             set(HEADLESS_CORPUS_PIPELINE_FEATURES)
             - set(self.pipelines.assignments)
@@ -315,7 +315,6 @@ class CorpusRunConfigV2(_StrictConfigModel):
                     binding.definition,
                     run_overrides=binding.overrides,
                 )
-
 
 
 CorpusRunConfig = CorpusProcessingConfig | CorpusRunConfigV2
