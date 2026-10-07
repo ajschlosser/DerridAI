@@ -218,6 +218,8 @@ def test_repository_list_summaries_drop_heavy_results(tmp_path):
         "result": {"answer": "x" * 100_000},
         "results": [{"proposal": {"changes": {"speaker": "Derrida"}}}],
         "request": {"prompt": "What is différance?"},
+        "_resume_dictionary": {"heavy": "y" * 100_000},
+        "_resume_failed_keys": ["heavy"],
     }
     repository.upsert(job)
 
@@ -227,6 +229,12 @@ def test_repository_list_summaries_drop_heavy_results(tmp_path):
         {
             key: value
             for key, value in job.items()
-            if key not in {"result", "results"}
+            if key
+            not in {
+                "result",
+                "results",
+                "_resume_dictionary",
+                "_resume_failed_keys",
+            }
         }
     ]
