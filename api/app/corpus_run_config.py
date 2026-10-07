@@ -268,6 +268,14 @@ class CorpusRunConfigV2(_StrictConfigModel):
     def public_snapshot(self) -> dict[str, Any]:
         return self.model_dump(mode="json")
 
+    def execution_pipeline_bindings(self) -> dict[str, dict[str, Any]]:
+        """Return the validated, secret-free bindings persisted with a headless build."""
+
+        return {
+            feature: binding.model_dump(mode="json")
+            for feature, binding in self.pipelines.assignments.items()
+        }
+
     def assert_installed_pipeline_bindings(self) -> None:
         """Fail before source extraction if installed assignments have drifted.
 
