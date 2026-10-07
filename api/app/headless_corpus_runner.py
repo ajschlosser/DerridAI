@@ -27,7 +27,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .corpus_run_config import CorpusRunConfig, CorpusRunConfigV2
+from .corpus_run_config import (
+    CorpusRunConfig,
+    CorpusRunConfigV2,
+    migrate_v1_config,
+)
 from .corpus_output_profiles import atomic_copy, write_research_jsonl_zst
 from .metadata_schema import MetadataSchema
 
@@ -243,6 +247,10 @@ class HeadlessCorpusRunner:
         force_profile: RunProfile | None = None,
         progress: ProgressCallback | None = None,
     ) -> HeadlessRunResult:
+        if not isinstance(config, CorpusRunConfigV2):
+            config = migrate_v1_config(config)
+        config.assert_runtime_pipeline_capabilities()
+
         source_path = Path(source).expanduser().resolve()
         if not source_path.is_file():
             raise SourceInputError(f"Source file does not exist: {source_path}")
