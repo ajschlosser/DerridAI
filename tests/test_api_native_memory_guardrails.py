@@ -39,3 +39,16 @@ def test_env_example_documents_native_runtime_limits() -> None:
     env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
     for key, value in NATIVE_RUNTIME_DEFAULTS.items():
         assert f"{key}={value}" in env_example
+
+
+def test_hot_native_paths_reuse_bounded_process_wide_executors() -> None:
+    from app import cross_encoder
+    from app import metadata_exemplar_retrieval
+
+    assert cross_encoder._INFERENCE_EXECUTOR._max_workers == 1
+    assert metadata_exemplar_retrieval._EXEMPLAR_QUERY_EXECUTOR._max_workers == 4
+
+
+def test_corpus_builder_does_not_keep_duplicate_semantic_graphs_in_process_memory() -> None:
+    source = (ROOT / "api" / "app" / "corpus_builder.py").read_text(encoding="utf-8")
+    assert "_semantic_graph_cache" not in source
