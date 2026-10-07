@@ -42,9 +42,16 @@ describe("useRecordsWorkspace refreshes when the loaded corpus changes", () => {
     // Nothing was loaded yet, so a change does not load anything on its own.
     expect(runtime.getRecordsListSnapshot).not.toHaveBeenCalled();
 
+    corpusState.activeFileId = "f1";
     records.load();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(1);
-    touchCorpus();
+
+    // Record edits in another file no longer invalidate the active Records view.
+    touchCorpus("other-file");
+    await nextTick();
+    expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(1);
+
+    touchCorpus("f1");
     await nextTick();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(2);
 
@@ -52,6 +59,7 @@ describe("useRecordsWorkspace refreshes when the loaded corpus changes", () => {
     await nextTick();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(3);
     corpusState.activeFileId = null;
+    corpusState.fileVersions = {};
   });
 
   it("tries to auto-load the corpus from Chroma when activated with nothing loaded", async () => {
