@@ -21,7 +21,7 @@ import json
 import re
 from typing import Any
 
-QUERY_CONTRACT = "research-query-v2"
+QUERY_CONTRACT = "research-query-v3"
 GENERATION_CONTRACT = "research-generation-v2"
 
 
