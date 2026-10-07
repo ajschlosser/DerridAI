@@ -55,6 +55,31 @@ _SOURCE_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "audio": ("fitz", "httpx"),
 }
 
+_SOURCE_SUFFIXES: dict[str, str] = {
+    ".pdf": "pdf",
+    ".txt": "text",
+    ".text": "text",
+    ".md": "text",
+    ".html": "html",
+    ".htm": "html",
+    ".rtf": "rtf",
+    ".doc": "doc",
+    ".docx": "docx",
+    ".png": "image",
+    ".jpg": "image",
+    ".jpeg": "image",
+    ".mp3": "audio",
+    ".wav": "audio",
+    ".m4a": "audio",
+    ".ogg": "audio",
+    ".flac": "audio",
+    ".webm": "audio",
+    ".mp4": "audio",
+    ".mpeg": "audio",
+    ".mpga": "audio",
+    ".aac": "audio",
+}
+
 _BUNDLED_NLP_PACKAGES: tuple[tuple[str, str], ...] = (
     ("en", "en_core_web_sm"),
     ("fr", "fr_core_news_sm"),
@@ -170,6 +195,49 @@ def _source_kinds(
             "missing": missing,
         }
     return result
+
+
+def source_preflight(
+    path: str | Path,
+    *,
+    ocr_mode: str = "auto",
+) -> dict[str, Any]:
+    """Return only capabilities relevant to one local source path.
+
+    This is a cheap filename-level preflight. Content sniffing and safety limits
+    remain authoritative in the ingestion layer after the file is read.
+    """
+
+    source = Path(path)
+    kind = _SOURCE_SUFFIXES.get(source.suffix.casefold())
+    tesseract = _tool("tesseract", ("--version",))
+    ffprobe = _tool("ffprobe", ("-version",))
+    source_kinds = _source_kinds(tesseract=tesseract, ffprobe=ffprobe)
+
+    # Unknown/no-extension files may still be supported plain text. The shared
+    # engine dependencies are nevertheless required before any build can start.
+    required_modules = (
+        _SOURCE_REQUIREMENTS[kind]
+        if kind is not None
+        else ("fitz", "httpx")
+    )
+    missing = [
+        f"python:{module}"
+        for module in required_modules
+        if not _module_available(module)
+    ]
+    if kind == "image" and not tesseract["available"]:
+        missing.append("tool:tesseract")
+    if kind == "pdf" and ocr_mode == "always" and not tesseract["available"]:
+        missing.append("tool:tesseract")
+    if kind == "audio" and not ffprobe["available"]:
+        missing.append("tool:ffprobe")
+
+    return {
+        "kind": kind,
+        "available": not missing,
+        "missing": list(dict.fromkeys(missing)),
+    }
 
 
 def runtime_capabilities(

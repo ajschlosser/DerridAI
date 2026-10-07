@@ -54,6 +54,10 @@ class SourceInputError(HeadlessCorpusError):
     category = "source"
 
 
+class MissingCapabilityError(HeadlessCorpusError):
+    category = "capability"
+
+
 class PipelineExecutionError(HeadlessCorpusError):
     category = "pipeline"
 
@@ -151,7 +155,13 @@ class HeadlessCorpusRunner:
     def _engine(self) -> tuple[Any, Any]:
         if self._repository is not None and self._manager is not None:
             return self._repository, self._manager
-        from .corpus_builder import PdfCorpusBuildManager, PdfCorpusRepository
+        try:
+            from .corpus_builder import PdfCorpusBuildManager, PdfCorpusRepository
+        except ModuleNotFoundError as exc:
+            missing = str(exc.name or "optional runtime dependency")
+            raise MissingCapabilityError(
+                f"Corpus Builder runtime dependency {missing!r} is not installed."
+            ) from exc
 
         repository = PdfCorpusRepository(self.workspace)
         manager = PdfCorpusBuildManager(repository, max_workers=1)
@@ -244,6 +254,20 @@ class HeadlessCorpusRunner:
         source_path = Path(source).expanduser().resolve()
         if not source_path.is_file():
             raise SourceInputError(f"Source file does not exist: {source_path}")
+
+        if self._repository is None and self._manager is None:
+            from .corpus_capabilities import source_preflight
+
+            capability = source_preflight(
+                source_path,
+                ocr_mode=config.source.ocr_mode,
+            )
+            if not capability["available"]:
+                missing = ", ".join(capability["missing"])
+                kind = capability["kind"] or "source"
+                raise MissingCapabilityError(
+                    f"{kind} corpus ingestion is unavailable; missing {missing}."
+                )
 
         # A v2 file names the pipeline it expects to execute. Validate that
         # identity before reading or extracting a potentially large source. The

@@ -20,8 +20,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from app.corpus_cli_config import CorpusProcessingConfig
-from app.headless_corpus_runner import HeadlessCorpusRunner
+from app.headless_corpus_runner import (
+    HeadlessCorpusRunner,
+    MissingCapabilityError,
+)
 from app.metadata_schema import default_schema
 
 
@@ -168,3 +172,47 @@ def test_headless_runner_celf_profile_copies_canonical_publication_and_sidecar(t
     assert result.sha256 == "celf-archive-sha"
     assert output.read_bytes() == b"celf-fixture"
     assert output.with_name("celf.jsonl.zst.sha512").is_file()
+
+
+
+def test_native_runner_preflights_source_capabilities_before_engine_import(
+    tmp_path,
+    monkeypatch,
+):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.7\nfixture")
+    config = CorpusProcessingConfig.model_validate({"version": 1})
+    runner = HeadlessCorpusRunner(workspace=tmp_path / "native-workspace")
+
+    monkeypatch.setattr(
+        "app.corpus_capabilities.source_preflight",
+        lambda *_args, **_kwargs: {
+            "kind": "pdf",
+            "available": False,
+            "missing": ["python:fitz"],
+        },
+    )
+
+    with pytest.raises(MissingCapabilityError, match="python:fitz"):
+        runner.run(source, config, output=tmp_path / "out.jsonl.zst")
+
+
+def test_injected_engine_does_not_depend_on_host_capability_probe(
+    tmp_path,
+    monkeypatch,
+):
+    source = tmp_path / "source.txt"
+    source.write_text("A source-bound passage.", encoding="utf-8")
+    config = CorpusProcessingConfig.model_validate({"version": 1})
+    runner, _repository, _manager = _runner(tmp_path)
+
+    monkeypatch.setattr(
+        "app.corpus_capabilities.source_preflight",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("injected engine should not use native capability probe")
+        ),
+    )
+
+    result = runner.run(source, config, output=tmp_path / "out.jsonl.zst")
+
+    assert result.status == "ok"
