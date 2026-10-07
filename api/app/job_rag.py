@@ -922,7 +922,7 @@ class RAGJobManager(PersistentJobStateMixin):
             self._persist_job(job_id)
 
     def list(self) -> JobPayloadList:
-        jobs = [self._copy(job, include_result=False) for job in self._all_job_records()]
+        jobs = [self._copy(job, include_result=False) for job in self._list_job_records()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
 
     def get(self, job_id: str) -> dict[str, Any]:
