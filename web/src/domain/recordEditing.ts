@@ -99,7 +99,7 @@ export function createRecordEditing(deps: Deps) {
     next.updates = history;
     file.records[index] = next;
     file.dirty.add(index);
-    invalidateCorpusCache();
+    invalidateCorpusCache(file.id);
     persistFile(file);
     if (state.view === "record" && typeof window !== "undefined")
       window.dispatchEvent(new CustomEvent("derridai:record-updated"));
