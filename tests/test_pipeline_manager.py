@@ -273,3 +273,14 @@ def test_prepare_clone_of_custom_pipeline_creates_next_immutable_version(tmp_pat
     assert clone.name == "Research — academic"
     assert clone.status == "draft"
     assert clone.derived_from == "research.academic@4"
+
+
+
+def test_catalog_exposes_pipeline_compatibility_identity(tmp_path) -> None:
+    manager = _manager(tmp_path)
+
+    compatibility = manager.catalog()["compatibility"]
+
+    assert compatibility["pipeline_contract_version"] >= 1
+    assert compatibility["application_version"]
+    assert compatibility["strategies"]["llm.structured_metadata"]["version"] >= 1

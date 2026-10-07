@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import platform
 import time
@@ -27,8 +29,17 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .corpus_cli_config import CorpusProcessingConfig
-from .corpus_output_profiles import atomic_copy, write_research_jsonl_zst
+from .config import APP_VERSION
+from .corpus_output_profiles import (
+    atomic_copy,
+    write_research_jsonl_zst,
+    write_run_manifest,
+)
+from .corpus_run_config import (
+    CorpusRunConfig,
+    CorpusRunConfigV2,
+    migrate_v1_config,
+)
 from .metadata_schema import MetadataSchema
 
 RunProfile = Literal["research", "celf"]
@@ -80,6 +91,10 @@ class HeadlessRunResult:
     celf_conformant: bool | None
     workspace: str
     publication_id: str | None = None
+    manifest: str | None = None
+    source_sha256: str | None = None
+    content_sha256: str | None = None
+    config_sha256: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -157,7 +172,7 @@ class HeadlessCorpusRunner:
 
     @staticmethod
     def _validated_request(
-        config: CorpusProcessingConfig,
+        config: CorpusRunConfig,
         asset_id: str,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         from .models import PdfCorpusBuildCreate
@@ -175,6 +190,12 @@ class HeadlessCorpusRunner:
             mode="json",
             exclude_none=True,
         )
+        if isinstance(config, CorpusRunConfigV2):
+            # This server-owned key is added only after the public request model
+            # has validated the ordinary Corpus Builder fields. The build worker
+            # persists it for resume/reproducibility and pipeline adapters prefer
+            # these immutable bindings over mutable system assignments.
+            validated["_pipeline_bindings"] = config.execution_pipeline_bindings()
         return validated, desired_autonomous
 
     def _wait_for_build(
@@ -231,12 +252,16 @@ class HeadlessCorpusRunner:
     def run(
         self,
         source: str | Path,
-        config: CorpusProcessingConfig,
+        config: CorpusRunConfig,
         *,
         output: str | Path | None = None,
         force_profile: RunProfile | None = None,
         progress: ProgressCallback | None = None,
     ) -> HeadlessRunResult:
+        if not isinstance(config, CorpusRunConfigV2):
+            config = migrate_v1_config(config)
+        config.assert_runtime_pipeline_capabilities()
+
         source_path = Path(source).expanduser().resolve()
         if not source_path.is_file():
             raise SourceInputError(f"Source file does not exist: {source_path}")
@@ -310,6 +335,18 @@ class HeadlessCorpusRunner:
                 "cELF output was requested but the canonical publication did not "
                 f"pass cELF conformance: {detail}"
             )
+        content_sha256: str | None = None
+        manifest_path = target.with_name(f"{target.name}.manifest.json")
+        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        config_snapshot = config.public_snapshot()
+        config_sha256 = hashlib.sha256(
+            json.dumps(
+                config_snapshot,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
         try:
             if profile == "celf":
                 published = repository.publication_path(publication_id)
@@ -318,6 +355,7 @@ class HeadlessCorpusRunner:
                 if integrity.is_file():
                     atomic_copy(integrity, target.with_name(f"{target.name}.sha512"))
                 archive_sha256 = str(publication.get("archive_sha256") or "")
+                content_sha256 = str(publication.get("sha256") or "") or None
                 record_count = int(publication.get("record_count") or 0)
                 celf_conformant: bool | None = bool(
                     publication.get("celf_conformant")
@@ -334,8 +372,34 @@ class HeadlessCorpusRunner:
                     schema=schema,
                 )
                 archive_sha256 = written.archive_sha256
+                content_sha256 = written.content_sha256
                 record_count = written.record_count
                 celf_conformant = None
+
+            write_run_manifest(
+                manifest_path,
+                {
+                    "schema": "derridai-headless-run-manifest-v1",
+                    "application_version": APP_VERSION,
+                    "build_id": build_id,
+                    "publication_id": publication_id or None,
+                    "publication_profile": profile,
+                    "source": {
+                        "filename": source_path.name,
+                        "sha256": source_sha256,
+                    },
+                    "configuration_sha256": config_sha256,
+                    "configuration": config_snapshot,
+                    "pipelines": config.pipeline_identity_snapshot(),
+                    "output": {
+                        "filename": target.name,
+                        "record_count": record_count,
+                        "archive_sha256": archive_sha256,
+                        "content_sha256": content_sha256,
+                        "celf_conformant": celf_conformant,
+                    },
+                },
+            )
         except (OSError, RuntimeError, ValueError) as exc:
             raise OutputWriteError(str(exc)) from exc
 
@@ -350,4 +414,8 @@ class HeadlessCorpusRunner:
             celf_conformant=celf_conformant,
             workspace=str(self.workspace),
             publication_id=publication_id or None,
+            manifest=str(manifest_path),
+            source_sha256=source_sha256,
+            content_sha256=content_sha256,
+            config_sha256=config_sha256,
         )

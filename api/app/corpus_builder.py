@@ -2852,8 +2852,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._metadata_request_coalescer = MetadataRequestCoalescer()
         # Semantic projections are persisted as rebuildable System Data. Per-build
         # locks make generation single-flight so concurrent Record/Work opens join
-        # one materialization instead of repeating graph traversal.
-        self._semantic_graph_cache: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+        # one materialization instead of repeating graph traversal. Do not retain
+        # an additional process-lifetime graph copy; persisted projections are the
+        # cache and are already generation/audience scoped.
         self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
@@ -3156,12 +3157,6 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     graph,
                     audience=audience,
                 )
-                with self._cache_lock:
-                    self._semantic_graph_cache[(build_id, audience)] = (
-                        generation,
-                        graph,
-                    )
-
             if scope_type == "graph":
                 if not graph_is_current:
                     system_store.mark_semantic_map_clean(build_id, generation)
@@ -4049,7 +4044,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # embedded-metadata fallback below applies, with the reason in the build warning.
         session: DocumentManifestSession | None = None
         try:
-            session = DocumentManifestSession.open()
+            session = (
+                DocumentManifestSession.open(request)
+                if request.get("_pipeline_bindings")
+                else DocumentManifestSession.open()
+            )
             result = self._document_manifest_call(
                 session, request, prompt, max_tokens=limits["manifest_num_predict"], build_id=build_id,
             )
@@ -4777,7 +4776,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             current_build["source_unit_embedding_projection"] = source_embedding_projection
             self.repo.save_build(current_build)
             memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema), request=request)
                 if bool(request.get("memory_prefill", True))
                 else {"status": "disabled"}
             )
@@ -6055,7 +6054,11 @@ is not permitted to see are filtered exactly as they are in the interactive revi
         # One trace per proposal. Without a resolvable pipeline no model is asked and the request fails
         # with the reason, as any failed touch-up does; reviewed text is never touched here.
         try:
-            session = TextTouchupSession.open()
+            session = (
+                TextTouchupSession.open(active_request)
+                if active_request.get("_pipeline_bindings")
+                else TextTouchupSession.open()
+            )
         except RuntimeError as exc:
             raise ValueError(str(exc)) from exc
         try:

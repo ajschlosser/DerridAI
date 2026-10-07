@@ -294,7 +294,33 @@ export type PipelineRunTrace = {
   stages: PipelineStageTrace[];
 };
 
+export type PipelineContractIdentity = {
+  pipeline_contract_version: number;
+  minimum_readable_pipeline_version: number;
+  application_version: string;
+  strategies: Record<string, { version: number }>;
+};
+
+export type PortablePipelineDocument = {
+  format: "derridai-pipeline";
+  version: 1;
+  pipeline_contract_version: number;
+  required_strategies: Record<string, number>;
+  pipeline_hash: string;
+  pipeline: PipelineDefinition;
+};
+
+export type PipelineImportResult = {
+  document: PortablePipelineDocument;
+  pipeline: PipelineDefinition;
+  pipeline_hash: string;
+  created: boolean;
+  same_as_existing: boolean;
+};
+
 export type PipelineCatalog = {
+  /** Runtime compatibility identity; older servers may omit it. */
+  compatibility?: PipelineContractIdentity;
   purposes: PipelinePurpose[];
   vocabulary: PipelineWorkflowVocabulary;
   strategies: PipelineStrategy[];

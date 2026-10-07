@@ -22,6 +22,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from ..corpus_cli_config import CorpusProcessingConfig
+from ..corpus_run_config import (
+    HEADLESS_CORPUS_PIPELINE_FEATURES,
+    CorpusPipelineBinding,
+    migrate_v1_config,
+)
 from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
@@ -45,10 +51,12 @@ from ..pipelines.comparison import (
     summarize_evidence_recovery_run,
     summarize_evidence_suggestion_run,
 )
+from ..pipelines.compatibility import pipeline_strategy_requirements
 from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
+from ..pipelines.portable import export_pipeline_document, parse_pipeline_document
 from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
 from ..pipelines.service import pipeline_hash
 from ..pipelines.store import pipeline_store
@@ -109,6 +117,87 @@ def pipeline_catalog(request: Request) -> dict[str, Any]:
 
     require_admin(request)
     return pipeline_manager.catalog()
+
+
+@router.get("/definitions/{pipeline_id}/{version}/export")
+def export_pipeline_definition(
+    pipeline_id: str,
+    version: int,
+    request: Request,
+) -> dict[str, Any]:
+    """Export one immutable definition with exact runtime requirements."""
+
+    require_admin(request)
+    pipeline = pipeline_manager.get_definition(pipeline_id, version)
+    if pipeline is None:
+        raise HTTPException(status_code=404, detail="Pipeline definition not found.")
+    return export_pipeline_document(
+        pipeline,
+        registry=pipeline_manager.service.registry,
+    ).model_dump(mode="json")
+
+
+@router.get("/definitions/{pipeline_id}/{version}/run-envelope")
+def export_pipeline_run_envelope(
+    pipeline_id: str,
+    version: int,
+    request: Request,
+) -> dict[str, Any]:
+    """Export a secret-free v2 corpus-run envelope using this exact definition."""
+
+    require_admin(request)
+    pipeline = pipeline_manager.get_definition(pipeline_id, version)
+    if pipeline is None:
+        raise HTTPException(status_code=404, detail="Pipeline definition not found.")
+    if pipeline.purpose not in HEADLESS_CORPUS_PIPELINE_FEATURES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Pipeline purpose {pipeline.purpose!r} is not part of the "
+                "unattended Corpus Builder run contract."
+            ),
+        )
+
+    try:
+        envelope = migrate_v1_config(
+            CorpusProcessingConfig.model_validate({"version": 1})
+        )
+        envelope.pipelines.assignments[pipeline.purpose] = CorpusPipelineBinding(
+            definition=pipeline,
+            pipeline_hash=pipeline_hash(pipeline),
+            required_strategies=pipeline_strategy_requirements(
+                pipeline,
+                registry=pipeline_manager.service.registry,
+            ),
+        )
+        envelope = type(envelope).model_validate(
+            envelope.model_dump(mode="json")
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return envelope.model_dump(mode="json")
+
+
+@router.post("/definitions/import")
+def import_pipeline_definition(
+    body: dict[str, Any],
+    request: Request,
+) -> dict[str, Any]:
+    """Validate and idempotently persist one exact portable definition."""
+
+    require_admin(request)
+    try:
+        document = parse_pipeline_document(body, service=pipeline_manager.service)
+        pipeline, created = pipeline_manager.import_definition(document.pipeline)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        "document": document.model_dump(mode="json"),
+        "pipeline": pipeline.model_dump(mode="json"),
+        "pipeline_hash": document.pipeline_hash,
+        "created": created,
+        "same_as_existing": not created,
+    }
 
 
 @router.get("/research-options")

@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from .compatibility import pipeline_contract_identity
 from .contracts import input_ports
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
@@ -32,8 +33,6 @@ from .models import PipelineAssignment, PipelineDefinition
 from .purposes import purpose_registry, workflow_vocabulary
 from .service import PipelineService, pipeline_hash, pipeline_service
 from .store import PipelineStore, pipeline_store
-from .workflows import PURPOSE_ADAPTERS, compile_for_feature, purpose_catalog
-from .workflows import runtime_support as adapter_runtime_support
 
 
 class PipelineManager:
@@ -173,6 +172,8 @@ class PipelineManager:
         clone identity is.
         """
 
+        from .workflows import PURPOSE_ADAPTERS
+
         purpose = purpose_registry.get(purpose_id)
         adapter = PURPOSE_ADAPTERS.get(purpose_id)
         if purpose is None or adapter is None:
@@ -251,6 +252,53 @@ class PipelineManager:
             raise ValueError(messages or "Pipeline definition is invalid.")
         return self.store.put_definition(normalized)
 
+    def import_definition(
+        self,
+        definition: PipelineDefinition,
+    ) -> tuple[PipelineDefinition, bool]:
+        """Persist a portable definition without changing its canonical hash.
+
+        Import is idempotent for an identical ID/version/hash and rejects
+        collisions. Unlike interactive saves, import does not rewrite provenance
+        fields because that would invalidate the exported canonical identity.
+        """
+
+        code_owned = built_in_pipeline(definition.pipeline_id, definition.version)
+        if code_owned is not None:
+            if pipeline_hash(code_owned) == pipeline_hash(definition):
+                return code_owned, False
+            raise ValueError(
+                f"Pipeline {definition.pipeline_id}@{definition.version} conflicts "
+                "with a code-owned built-in definition."
+            )
+
+        if definition.built_in:
+            raise ValueError(
+                "Portable custom pipeline definitions cannot claim built-in ownership."
+            )
+
+        existing = self.store.get_definition(definition.pipeline_id, definition.version)
+        if existing is not None:
+            if pipeline_hash(existing) == pipeline_hash(definition):
+                return existing, False
+            raise ValueError(
+                f"Pipeline {definition.pipeline_id}@{definition.version} already exists "
+                "with different canonical content."
+            )
+
+        validation = self.service.validate(definition)
+        if not validation.valid:
+            messages = "; ".join(
+                issue.message for issue in validation.issues if issue.level == "error"
+            )
+            raise ValueError(messages or "Pipeline definition is invalid.")
+        if definition.created_at is None:
+            raise ValueError(
+                "Portable custom pipeline definitions must retain created_at so their "
+                "canonical hash can be persisted unchanged."
+            )
+        return self.store.put_definition(definition), True
+
     def assign(
         self,
         assignment: PipelineAssignment,
@@ -276,7 +324,10 @@ class PipelineManager:
 
         # Compiling is the runtime-support check: administrators can save
         # experimental graphs, but only graphs the purpose's adapter can run may
-        # become active execution configuration.
+        # become active execution configuration. Keep the workflow adapters lazy
+        # so read-only resolution remains usable by the narrow native CLI.
+        from .workflows import compile_for_feature
+
         compile_for_feature(assignment.feature, pipeline)
 
         normalized = assignment.model_copy(update={"source": actor_source})
@@ -309,10 +360,15 @@ class PipelineManager:
     def runtime_support(self, pipeline: PipelineDefinition) -> dict[str, Any]:
         """Describe whether a saved graph can currently drive production code."""
 
+        from .workflows import runtime_support as adapter_runtime_support
+
         return adapter_runtime_support(pipeline)
 
     def catalog(self) -> dict[str, Any]:
+        from .workflows import purpose_catalog
+
         return {
+            "compatibility": pipeline_contract_identity(self.service.registry),
             "purposes": purpose_catalog(self.service.registry),
             "vocabulary": workflow_vocabulary(),
             "strategies": self.service.strategies(),

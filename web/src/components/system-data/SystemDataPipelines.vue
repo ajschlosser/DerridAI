@@ -59,6 +59,9 @@ const validation = ref<PipelineValidationResponse | null>(null);
 const saving = ref(false);
 const assigning = ref(false);
 const cloning = ref(false);
+const exporting = ref(false);
+const importing = ref(false);
+const notice = ref("");
 const creating = ref(false);
 const helpOpen = ref(false);
 // The server explains the draft as it is edited: how every input is wired, what each stage
@@ -169,6 +172,65 @@ watch(catalog, (next) => {
     selectedKey.value = defaultPipelineKey(next);
   syncRouteState();
 });
+
+async function exportSelected() {
+  const pipeline = selectedPipeline.value;
+  if (!pipeline || exporting.value) return;
+
+  exporting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const portable = await pipelinesApi.exportDefinition(pipeline.pipeline_id, pipeline.version);
+    const url = URL.createObjectURL(
+      new Blob([`${JSON.stringify(portable, null, 2)}\n`], { type: "application/json" }),
+    );
+    const link = document.createElement("a");
+    const safeId = pipeline.pipeline_id.replace(/[^A-Za-z0-9._-]+/g, "-");
+    link.href = url;
+    link.download = `${safeId}-v${pipeline.version}.derridai-pipeline.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    exporting.value = false;
+  }
+}
+
+async function importPipelineFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file || importing.value) return;
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(await file.text());
+  } catch {
+    error.value = t("pipelines.import_not_json", "That pipeline file is not valid JSON.");
+    return;
+  }
+
+  importing.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const imported = await pipelinesApi.importDefinition(payload);
+    await load();
+    selectPipeline(pipelineKey(imported.pipeline));
+    notice.value = imported.created
+      ? t("pipelines.imported", "Pipeline imported.")
+      : t(
+          "pipelines.import_existing",
+          "That exact pipeline version is already available; no duplicate was created.",
+        );
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    importing.value = false;
+  }
+}
 
 async function beginClone() {
   const source = selectedPipeline.value;
@@ -356,9 +418,15 @@ const studioTabs = computed(() => [
   { id: "executions", label: t("pipelines.studio_executions", "Executions") },
   { id: "operations", label: t("pipelines.studio_operations", "Operations") },
 ]);
+function dismissNotice(id: string) {
+  if (id === "pipeline-error") error.value = "";
+  if (id === "pipeline-notice") notice.value = "";
+}
+
 const notices = computed<Notice[]>(() => {
   const items: Notice[] = [];
   if (error.value) items.push({ id: "pipeline-error", tone: "error", text: error.value });
+  if (notice.value) items.push({ id: "pipeline-notice", tone: "success", text: notice.value });
   if (catalogError.value) {
     items.push({ id: "pipeline-catalog-error", tone: "error", text: catalogError.value });
   }
@@ -405,7 +473,7 @@ const notices = computed<Notice[]>(() => {
       v-if="notices.length"
       :items="notices"
       :label="t('pipelines.studio_notices', 'Pipeline Studio messages')"
-      @dismiss="error = ''"
+      @dismiss="dismissNotice"
     />
     <UiLoadingState
       v-if="catalogPending && !catalog"
@@ -434,6 +502,8 @@ const notices = computed<Notice[]>(() => {
         :can-assign="canAssignSelected"
         :assigning="assigning"
         :cloning="cloning"
+        :exporting="exporting"
+        :importing="importing"
         :creating="creating"
         :draft="draft"
         :draft-purpose="purposeFor(draft)"
@@ -448,6 +518,8 @@ const notices = computed<Notice[]>(() => {
         @update:filters="setPipelineFilters"
         @update:draft="draft = $event"
         @clone="beginClone"
+        @export="exportSelected"
+        @import="importPipelineFile"
         @create="beginNew"
         @assign="assignSelected"
         @reset-assignment="resetSelectedAssignment"

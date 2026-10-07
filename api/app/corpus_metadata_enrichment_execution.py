@@ -1057,7 +1057,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             if "session" in pipeline or "error" in pipeline:
                 return
             try:
-                pipeline["session"] = EnrichmentSession.open()
+                pipeline["session"] = (
+                    EnrichmentSession.open(request)
+                    if request.get("_pipeline_bindings")
+                    else EnrichmentSession.open()
+                )
             except RuntimeError as exc:
                 pipeline["error"] = exc
 
@@ -1283,7 +1287,11 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             active_request = self._latest_runtime_request(build_id, request) if build_id else request
             if "session" not in pipeline and "error" not in pipeline:
                 try:
-                    pipeline["session"] = EnrichmentSession.open()
+                    pipeline["session"] = (
+                        EnrichmentSession.open(request)
+                        if request.get("_pipeline_bindings")
+                        else EnrichmentSession.open()
+                    )
                 except RuntimeError as exc:
                     pipeline["error"] = exc
             session: EnrichmentSession | None = pipeline.get("session")
@@ -2156,6 +2164,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         value=value, blocks=source_blocks, field=field, field_metadata=field_metadata,
                         source_document_id=source_document_id, projection=evidence_projection,
                         llm_choice=evidence_llm_choice, llm_skip_reason=evidence_llm_skip_reason,
+                        request=request,
                     )
                 except Exception as exc:  # noqa: BLE001 - logged and left pending review, never silent
                     logger.warning("Evidence recovery pipeline did not run for %s: %s", field, exc)

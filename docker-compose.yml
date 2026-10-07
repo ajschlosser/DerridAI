@@ -60,6 +60,16 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
+      # The API already schedules application work explicitly. Keep native
+      # runtimes from creating nested worker pools and glibc from retaining a
+      # separate large malloc arena for each short-lived native worker thread.
+      MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-4}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-1}
+      OPENBLAS_NUM_THREADS: ${OPENBLAS_NUM_THREADS:-1}
+      MKL_NUM_THREADS: ${MKL_NUM_THREADS:-1}
+      NUMEXPR_NUM_THREADS: ${NUMEXPR_NUM_THREADS:-1}
+      RAYON_NUM_THREADS: ${RAYON_NUM_THREADS:-2}
+      TOKENIZERS_PARALLELISM: ${TOKENIZERS_PARALLELISM:-false}
       HOME: /data/.home
       CHROMA_PATH: /data/chroma
       CHROMA_DATA_ROOT: /data
