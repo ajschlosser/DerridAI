@@ -52,8 +52,8 @@ type Helper =
   | "isResearcher"
   | "navigateTo"
   | "persistJobPreferences"
-  | "persistPrefs"
   | "persistResearchPreferences"
+  | "persistSettingsPreferences"
   | "providerDisplayName"
   | "providerProfile"
   | "providerProfiles"
@@ -85,8 +85,8 @@ export function createResearchWorkspace(deps: Deps) {
     isResearcher,
     navigateTo,
     persistJobPreferences,
-    persistPrefs,
     persistResearchPreferences,
+    persistSettingsPreferences,
     providerDisplayName,
     providerProfile,
     providerProfiles,
@@ -754,7 +754,8 @@ export function createResearchWorkspace(deps: Deps) {
       );
       if (gradeProfile) cfg.auto_grade_provider_profile_id = gradeProfile.id;
     }
-    persistPrefs();
+    persistResearchPreferences();
+    persistSettingsPreferences();
     navigateTo("rag");
   }
   return {
