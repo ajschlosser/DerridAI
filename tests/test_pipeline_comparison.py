@@ -1068,7 +1068,7 @@ def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) 
 
     def generate(**kwargs):
         prompts.append(kwargs["prompt"])
-        return '{"answer":"The trace is not a presence."}'
+        return '{"answer":"The trace is not a presence [[E0]]."}'
 
     monkeypatch.setattr("app.rag.chat_complete", generate)
     request = RAGRunRequest(
@@ -1092,6 +1092,8 @@ def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) 
 
     assert len(prompts) == 1
     assert result["raw_answer"].startswith('{"answer"')
+    assert json.loads(result["answer"])["answer"]
+    assert "Works Cited" not in result["answer"]
     generation_stage = next(
         stage for stage in result["stages"] if stage["name"] == "generation"
     )
