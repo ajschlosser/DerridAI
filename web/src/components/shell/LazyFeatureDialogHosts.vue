@@ -36,6 +36,7 @@ import { useUpsertQueueDialog } from "../../composables/upsertQueueDialog";
 import { useWorkMetadataEditorDialog } from "../../composables/workMetadataEditor";
 import { useWorkMetadataLlmDialog } from "../../composables/workMetadataLlmDialog";
 import { useWorkMetadataProposalDialog } from "../../composables/workMetadataProposalDialog";
+import { useTouchupWorkspaceRequest } from "../../features/touchup/touchupWorkspaceRequest";
 
 /**
  * Feature dialogs are globally addressable commands, but their implementations
@@ -59,6 +60,7 @@ function activatedBy(current: Ref<unknown>): Ref<boolean> {
 const BulkFieldEditorDialog = defineAsyncComponent(() => import("../BulkFieldEditorDialog.vue"));
 const JobDetailsDialog = defineAsyncComponent(() => import("../JobDetailsDialog.vue"));
 const JobReviewDialog = defineAsyncComponent(() => import("../JobReviewDialog.vue"));
+const LlmReviewWorkspace = defineAsyncComponent(() => import("../LlmReviewWorkspace.vue"));
 const LlmTaskLauncherDialog = defineAsyncComponent(() => import("../LlmTaskLauncherDialog.vue"));
 const LlmToolResultDialog = defineAsyncComponent(() => import("../LlmToolResultDialog.vue"));
 const MergeFilesDialog = defineAsyncComponent(() => import("../MergeFilesDialog.vue"));
@@ -80,6 +82,7 @@ const WorkMetadataProposalDialog = defineAsyncComponent(
 const bulkFieldEditorActive = activatedBy(useBulkFieldEditorDialog().current);
 const jobDetailsActive = activatedBy(useJobDetailsDialog().current);
 const jobReviewActive = activatedBy(useJobReviewDialog().current);
+const llmReviewWorkspaceActive = activatedBy(useTouchupWorkspaceRequest().current);
 const llmTaskLauncherActive = activatedBy(useLlmTaskLauncherDialog().current);
 const llmToolResultActive = activatedBy(useLlmToolResultDialog().current);
 const mergeFilesActive = activatedBy(useMergeFilesDialog().current);
@@ -101,6 +104,7 @@ const workMetadataProposalActive = activatedBy(useWorkMetadataProposalDialog().c
   <BulkFieldEditorDialog v-if="bulkFieldEditorActive" />
   <JobDetailsDialog v-if="jobDetailsActive" />
   <JobReviewDialog v-if="jobReviewActive" />
+  <LlmReviewWorkspace v-if="llmReviewWorkspaceActive" />
   <LlmTaskLauncherDialog v-if="llmTaskLauncherActive" />
   <LlmToolResultDialog v-if="llmToolResultActive" />
   <MergeFilesDialog v-if="mergeFilesActive" />
