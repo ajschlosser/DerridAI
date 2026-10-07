@@ -121,14 +121,30 @@ import { state } from "./sharedUrlState";
 import { restoreWorkspace } from "./sharedWorkspacePersistence";
 import { checkHealth, warmupConfiguredLlm } from "./sharedAppLifecycle";
 import { shell } from "./sharedWorkspaceStorage";
+import { resetWorkspaceSessionPersistence } from "./workspaceSessionPersistence";
 
 export { setUrlSyncHook } from "./sharedNavigation";
 export { setShellRefreshHook } from "./sharedWorkspaceStorage";
 
-export function setUserContext(user: { id?: string | number } | null) {
-  const priorId = state.userContext?.id;
+export function setUserContext(
+  user: { id?: string | number; role?: string } | null,
+) {
+  const priorContext = state.userContext;
+  const priorKey = priorContext
+    ? `${String(priorContext.role || "")}:${String(priorContext.id || "")}`
+    : "";
+  const nextKey = user ? `${String(user.role || "")}:${String(user.id || "")}` : "";
+
+  if (priorKey !== nextKey) {
+    // Cancel timers and close the old IndexedDB connection before changing the
+    // identity used by workspaceDbName(). Callers that can await session exit
+    // flush pending writes first; this synchronous guard prevents cross-account
+    // writes even when identity changes through another path.
+    resetWorkspaceSessionPersistence();
+  }
+
   state.userContext = user || null;
-  if (priorId !== state.userContext?.id) {
+  if (priorKey !== nextKey) {
     state.serverAnnotations = [];
     state.serverAnnotationsStore = "";
     state.annotationsFetchedAt = 0;
