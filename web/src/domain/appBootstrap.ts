@@ -111,6 +111,7 @@ import "./sharedAppearance";
 import "./relativeTimeLabel";
 import "./pdfWorkerSetup";
 import { refreshResearcherContentPolicy } from "./researcherInputFilter";
+import { invalidateCorpusCache } from "./corpusCache";
 import { wireTabScrollPreservation } from "./tabScrollPreservation";
 import { wireMetadataSearchDelegation } from "./legacyDomListeners";
 import { api } from "./legacyApi";
@@ -143,6 +144,9 @@ export function setUserContext(
     // writes even when identity changes through another path.
     resetWorkspaceSessionPersistence();
     resetWorkspaceGroupsForSessionChange();
+    // The flattened/memoized corpus cache is module-scoped and would otherwise
+    // still expose the previous user's rows after the shared corpus slice is reset.
+    invalidateCorpusCache(null, true);
     jobsState.jobs = [];
     jobsState.jobsLastFetched = 0;
     jobsState.jobApplied = {};
