@@ -123,8 +123,13 @@ export function applyDomainPreferenceRecord(state: Loose, value: unknown): void 
   if (!value || typeof value !== "object") return;
   const record = value as Loose;
   const key = String(record.key || "");
-  if (key === DOMAIN_PREFERENCE_KEYS.research) assignFields(state, record, RESEARCH_FIELDS);
-  else if (key === DOMAIN_PREFERENCE_KEYS.search) assignFields(state, record, SEARCH_FIELDS);
+  if (key === DOMAIN_PREFERENCE_KEYS.research) {
+    if (record.ragConfig !== undefined)
+      state.ragConfig = {
+        ...(state.ragConfig && typeof state.ragConfig === "object" ? state.ragConfig : {}),
+        ...(record.ragConfig && typeof record.ragConfig === "object" ? record.ragConfig : {}),
+      };
+  } else if (key === DOMAIN_PREFERENCE_KEYS.search) assignFields(state, record, SEARCH_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.layout) assignFields(state, record, LAYOUT_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.vector) assignFields(state, record, VECTOR_FIELDS);
