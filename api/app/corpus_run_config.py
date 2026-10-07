@@ -43,7 +43,9 @@ from .corpus_cli_config import (
     SourceConfig,
 )
 from .pipelines.compatibility import (
+    PIPELINE_CONTRACT_VERSION,
     pipeline_strategy_requirements,
+    validate_pipeline_contract_version,
     validate_pipeline_strategy_requirements,
 )
 from .pipelines.models import (
@@ -208,6 +210,10 @@ class CorpusRunConfigV2(_StrictConfigModel):
 
     format: Literal["derridai-corpus-run"]
     version: Literal[2]
+    pipeline_contract_version: int = Field(
+        default=PIPELINE_CONTRACT_VERSION,
+        ge=1,
+    )
     source: SourceConfig = Field(default_factory=SourceConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     metadata: MetadataConfig = Field(default_factory=MetadataConfig)
@@ -219,6 +225,8 @@ class CorpusRunConfigV2(_StrictConfigModel):
 
     @model_validator(mode="after")
     def validate_pipeline_bundle(self) -> CorpusRunConfigV2:
+        validate_pipeline_contract_version(self.pipeline_contract_version)
+
         missing = sorted(
             set(HEADLESS_CORPUS_PIPELINE_FEATURES)
             - set(self.pipelines.assignments)
