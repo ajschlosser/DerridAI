@@ -313,7 +313,7 @@ implementation elsewhere.
 Input:
 
 - source path;
-- validated `CorpusProcessingConfig`;
+- validated `CorpusRunConfig` (v1 compatibility or v2 run envelope);
 - output path;
 - optional workspace path;
 - optional progress callback.
@@ -694,20 +694,20 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | Milestone                              | Status      | Deliverable                                                                                                                                                                                                                 |
 | -------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | B0. Architecture                       | DONE        | Python shared-engine + Nuitka native-binary direction; standalone-first policy; four target keys; release-vs-repo binary gate.                                                                                              |
-| B1. Versioned CLI config               | IN PROGRESS | Strict YAML validation, stable exit categories, secret-by-environment resolution, and corpus-build wiring are implemented; the v1 bespoke settings surface must migrate toward the shared PipelineDefinition contract.      |
+| B1. Versioned CLI config               | IN PROGRESS | Strict v1/v2 validation, stable exit categories, secret-by-environment resolution, v1 migration, and pipeline-bound v2 envelopes are implemented; direct execution from embedded definitions remains. |
 | B2. Binary build spine                 | IN PROGRESS | Target identity helpers, Nuitka entry point/build script, artifact naming, manifest/checksum generation, compiled-binary smoke harness, and four-target standalone CI are implemented; onefile/release publication remains. |
 | B3. Installer spine                    | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned/latest release resolution are implemented; they become end-to-end testable once release assets exist.                      |
 | B4. Headless runner                    | IN PROGRESS | Synchronous source-to-canonical-build application service is implemented without an HTTP dependency; actual compiled-binary end-to-end corpus acceptance remains.                                                           |
 | B5. Automatic settlement               | IN PROGRESS | The headless runner invokes the shared autonomous settlement policy and publishes unreviewed values without granting human authority; end-to-end regression coverage remains.                                               |
 | B6. Research output                    | IN PROGRESS | Explicit allow-list research projection and atomic `.jsonl.zst` writing are implemented and unit-tested; compiled-binary fixture acceptance remains.                                                                        |
 | B7. cELF output                        | IN PROGRESS | The CLI uses the canonical publication/conformance path and rejects requested cELF output that is non-conformant; compiled-binary fixture acceptance remains.                                                               |
-| B8. Capability doctor                  | TODO        | Source-kind-aware helper/model/provider diagnostics.                                                                                                                                                                        |
+| B8. Capability doctor                  | IN PROGRESS | Pipeline contract/strategy identity and required headless feature bindings are reported; source-kind-aware helper/model/provider/workspace diagnostics remain.                                                              |
 | B9. Native standalone acceptance       | TODO        | Full deterministic compiled-artifact fixture suite on all four target keys.                                                                                                                                                 |
 | B10. Onefile acceptance                | TODO        | Onefile artifacts pass the same suite; size report determines release/repo distribution.                                                                                                                                    |
 | B11. Signing/release                   | TODO        | Checksums, manifests, signing/notarization, immutable release assets, installer release resolution.                                                                                                                         |
 | B12. Repo-binary decision              | TODO        | Use measured onefile sizes to decide whether `bin/` artifacts are committed.                                                                                                                                                |
 | B13. Documentation/release integration | TODO        | README/USER_GUIDE/ARCHITECTURE/CONTRIBUTING and release process updated after behavior is implemented.                                                                                                                      |
-| B14. Shared pipeline contract          | IN PROGRESS | Pipeline/Studio/CLI ownership, versioning, migration, export/import, and drift rules are documented; contract identity, CLI v2 envelope, round-trip/parity CI, and binary capability checks remain.                         |
+| B14. Shared pipeline contract          | IN PROGRESS | Shared compatibility identity, v2 CLI envelope, and v1 migration are implemented; direct embedded execution, Studio export/import, round-trip/parity CI, and compiled capability gates remain.                              |
 
 ## Definition of done
 
@@ -738,18 +738,17 @@ orchestration:
 
 1. keep the current headless runner/research/cELF behavior green while `master`
    continues to evolve;
-2. introduce an explicit pipeline-contract capability identity shared by the API
-   catalog and native-binary diagnostics;
-3. define the v2 corpus-run envelope around canonical `PipelineDefinition` /
-   `PipelineConfigOverrideSet` data and add deterministic migration from v1 YAML;
-4. add Pipeline Studio/API/CLI export-import round-trip tests that preserve the
+2. finish immutable per-build pipeline pinning so v2 embedded definitions drive
+   every Corpus Builder pipeline resolution for the lifetime of the run;
+3. add Pipeline Studio/API/CLI export-import round-trip tests that preserve the
    canonical pipeline hash;
-5. add server/headless execution-parity fixtures for representative corpus
+4. add server/headless execution-parity fixtures for representative corpus
    pipeline definitions;
-6. add compiled-binary capability checks so dynamically packaged strategy coverage
+5. add compiled-binary capability checks so dynamically packaged strategy coverage
    cannot silently drift;
-7. add actual compiled source-to-corpus fixtures on all target platforms;
-8. implement `derridai doctor` using the same capability identity;
-9. build onefile on all targets and measure final artifact size;
-10. decide release-only versus repository-committed binaries, then finish
+6. add actual compiled source-to-corpus fixtures on all target platforms;
+7. expand `derridai doctor` from pipeline identity into source/helper/NLP/provider
+   capability checks;
+8. build onefile on all targets and measure final artifact size;
+9. decide release-only versus repository-committed binaries, then finish
     signing/notarization and release integration.
