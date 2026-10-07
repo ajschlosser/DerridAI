@@ -276,8 +276,9 @@ export function createResearchWorkspace(deps: Deps) {
     for (const [key, value] of Object.entries(patch || {}))
       if (allowed.has(key)) state.ragConfig[key] = cloneAuditValue(value);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
+    // Research configuration is feature-owned. Updating it must not invalidate
+    // application chrome; shell-visible state is unaffected by these fields.
     persistPrefs();
-    shellRefreshHook?.();
     return researchConfigForUi();
   }
   function removeResearchEvidence(key: Any) {
