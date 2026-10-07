@@ -1034,7 +1034,8 @@ def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) 
 
     monkeypatch.setattr("app.rag.chat_complete", generate)
     request = RAGRunRequest(
-        prompt="What is the trace? Answer as JSON.",
+        prompt="What is the trace?",
+        instructions="Answer as JSON.",
         model="test-model",
         pipeline_id="research.current",
         pipeline_version=1,
