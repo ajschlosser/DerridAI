@@ -829,6 +829,52 @@ def test_filtered_run_labels_pinned_evidence_exemption(version) -> None:
 
 
 
+def test_inferred_scope_labels_out_of_scope_pinned_evidence_exemption() -> None:
+    request = RAGRunRequest(
+        prompt="Describe the major themes and stakes of Levinas's philosophy.",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=3,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+        selected_evidence=[
+            {
+                "record": {
+                    "record_id": "pinned-derrida",
+                    "work": "Of Grammatology",
+                    "document_author": "Jacques Derrida",
+                    "year": 1976,
+                    "page_start": 65,
+                    "text": "Pinned evidence intentionally outside the inferred Levinas scope.",
+                }
+            }
+        ],
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {
+        "l1",
+        "pinned-derrida",
+    }
+    filter_plan = result["retrieval"]["filter_plan"]
+    assert filter_plan["selected_evidence_inferred_scope_exempt_count"] == 1
+    assert filter_plan["selected_evidence_exempt_count"] == 1
+    scope_stage = next(stage for stage in result["stages"] if stage["name"] == "research_scope")
+    assert scope_stage["detail"]["selected_evidence_inferred_scope_exempt_count"] == 1
+    assert scope_stage["detail"]["selected_evidence_exempt_count"] == 1
+
+
 def test_lexical_rerank_distinguishes_source_author_from_mentioned_author() -> None:
     docs = [
         {
