@@ -22,7 +22,7 @@ import re
 from typing import Any
 
 QUERY_CONTRACT = "research-query-v3"
-GENERATION_CONTRACT = "research-generation-v2"
+GENERATION_CONTRACT = "research-generation-v3"
 
 
 def advisory_context(audit: dict[str, Any] | None, question: str) -> str:
