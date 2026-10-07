@@ -252,6 +252,53 @@ class PipelineManager:
             raise ValueError(messages or "Pipeline definition is invalid.")
         return self.store.put_definition(normalized)
 
+    def import_definition(
+        self,
+        definition: PipelineDefinition,
+    ) -> tuple[PipelineDefinition, bool]:
+        """Persist a portable definition without changing its canonical hash.
+
+        Import is idempotent for an identical ID/version/hash and rejects
+        collisions. Unlike interactive saves, import does not rewrite provenance
+        fields because that would invalidate the exported canonical identity.
+        """
+
+        code_owned = built_in_pipeline(definition.pipeline_id, definition.version)
+        if code_owned is not None:
+            if pipeline_hash(code_owned) == pipeline_hash(definition):
+                return code_owned, False
+            raise ValueError(
+                f"Pipeline {definition.pipeline_id}@{definition.version} conflicts "
+                "with a code-owned built-in definition."
+            )
+
+        if definition.built_in:
+            raise ValueError(
+                "Portable custom pipeline definitions cannot claim built-in ownership."
+            )
+
+        existing = self.store.get_definition(definition.pipeline_id, definition.version)
+        if existing is not None:
+            if pipeline_hash(existing) == pipeline_hash(definition):
+                return existing, False
+            raise ValueError(
+                f"Pipeline {definition.pipeline_id}@{definition.version} already exists "
+                "with different canonical content."
+            )
+
+        validation = self.service.validate(definition)
+        if not validation.valid:
+            messages = "; ".join(
+                issue.message for issue in validation.issues if issue.level == "error"
+            )
+            raise ValueError(messages or "Pipeline definition is invalid.")
+        if definition.created_at is None:
+            raise ValueError(
+                "Portable custom pipeline definitions must retain created_at so their "
+                "canonical hash can be persisted unchanged."
+            )
+        return self.store.put_definition(definition), True
+
     def assign(
         self,
         assignment: PipelineAssignment,
