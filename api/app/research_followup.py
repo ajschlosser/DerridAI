@@ -55,7 +55,7 @@ If ambiguous, preserve the ambiguity rather than inventing a referent.
 User instructions: {json.dumps(instructions, ensure_ascii=True)}
 Return only one JSON object with nonempty string fields prompt_query (standalone
 English retrieval question), prompt_query_fr (same question in French),
-prompt_instructions (only supplied user instructions), response_language (en or fr).
+response_language (en or fr).
 Use fr when the current question primarily uses French, otherwise en.'''
 
 
@@ -66,6 +66,4 @@ def validate_contextual_query(value: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(f"Invalid contextualized {key}")
     if value.get("response_language") not in ("en", "fr"):
         raise ValueError("Invalid contextualized response language")
-    if not isinstance(value.get("prompt_instructions"), str):
-        raise ValueError("Invalid contextualized instructions")
     return value
