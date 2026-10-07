@@ -43,7 +43,11 @@ const NAV = [
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
 const navigation = vi.hoisted(() => ({ navigateTo: vi.fn(), repaintAfterLocationChange: vi.fn() }));
+const interactionTiming = vi.hoisted(() => ({ measure: vi.fn() }));
 vi.mock("../../src/domain/sharedNavigation", () => navigation);
+vi.mock("../../src/domain/interactionTiming", () => ({
+  measureInteractionToNextFrame: interactionTiming.measure,
+}));
 vi.mock("../../src/domain/jobsPause", () => ({ pauseRuntime: vi.fn() }));
 vi.mock("../../src/domain/semanticMapSources", () => ({
   listSemanticMapSources: vi.fn(),
@@ -531,6 +535,9 @@ describe("router and runtime stay in agreement", () => {
 
     expect(search!.classes()).toContain("pending");
     expect(search!.attributes("aria-busy")).toBe("true");
+    expect(interactionTiming.measure).toHaveBeenCalledWith(
+      "derridai.navigation.intent_to_frame",
+    );
     expect(router.currentRoute.value.path).toBe("/");
 
     release?.(true);
