@@ -161,7 +161,7 @@ Work order:
       explicit async effect keyed to visible rows.
 - [x] B6. Stop Compare editor keystrokes from serializing unrelated workspace state; avoid duplicate compare derivations per
       render.
-- [ ] B7. Replace broad corpus `version` consumers with narrower structure/content/review/evidence invalidation or normalized
+- [x] B7. Replace broad corpus `version` consumers with narrower structure/content/review/evidence invalidation or normalized
       reactive state.
 - [x] B8. Retire native-view imports of writable `sharedUrlState.state`, replacing them with feature stores/controllers.
 
@@ -197,8 +197,10 @@ small feature-owned request refs and lazy hosts instead of being statically owne
 explicit async effect, and corpus-derived row metadata is cached by corpus generation with prefix-query narrowing for
 ordinary typing. Research configuration now has its own domain preference record in addition to its composer-draft record. Search,
 Records/list, layout, review/evidence, vector, jobs, Settings, Works, and record-view preferences use independent records
-and timers; Compare keeps its bounded feature draft record. Legacy `workspace` reads remain as a migration fallback,
-but these native feature paths no longer default to whole-workspace serialization. Bounded User Timing
+and timers; Compare keeps its bounded feature draft record. Corpus invalidation now distinguishes structure changes,
+global content changes, and per-file content generations: Records watches only its active file plus structure, while
+Compare explicitly watches corpus content/structure because its library spans the corpus. Legacy `workspace` reads
+remain as a migration fallback, but native feature paths no longer default to whole-workspace serialization. Bounded User Timing
 measures record Research prompt/instruction input-to-next-frame latency and sidebar navigation intent-to-next-frame latency.
 Repository validation has not yet been run in this environment.
 
