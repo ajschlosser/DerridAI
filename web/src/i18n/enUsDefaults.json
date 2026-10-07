@@ -8376,6 +8376,8 @@
   "pipelines.then": "then",
   "pipelines.title": "Pipeline Studio",
   "pipelines.export_pipeline": "Export pipeline",
+  "pipelines.export_run": "Export run config",
+  "pipelines.export_run_help": "Download a secret-free v2 corpus-run envelope around this exact pipeline for the native CLI.",
   "pipelines.export_pipeline_help": "Download this immutable pipeline definition with its canonical hash and exact strategy-version requirements.",
   "pipelines.exporting": "Exporting…",
   "pipelines.import_pipeline": "Import pipeline…",

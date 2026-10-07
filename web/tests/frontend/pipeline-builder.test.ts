@@ -515,6 +515,53 @@ describe("portable pipeline controls", () => {
   });
 });
 
+describe("portable corpus-run export", () => {
+  it("offers a run configuration only for the corpus metadata workflow", async () => {
+    const corpusPipeline = {
+      ...draft(),
+      pipeline_id: "corpus.metadata",
+      purpose: "corpus_metadata_enrichment",
+    };
+    const corpusPurpose = contractPurposes.find(
+      (purpose) => purpose.id === "corpus_metadata_enrichment",
+    );
+    expect(corpusPurpose).toBeDefined();
+
+    const wrapper = mount(PipelineDefinitionsWorkspace, {
+      attachTo: document.body,
+      props: {
+        pipelines: [corpusPipeline],
+        strategies: contractStrategies,
+        assignments: [],
+        purposes: contractPurposes,
+        vocabulary: contractVocabulary,
+        selectedKey: "corpus.metadata@1",
+        workflow: "",
+        filters: { query: "", status: "" },
+        selectedPipeline: corpusPipeline,
+        selectedPurpose: corpusPurpose!,
+        selectedAssignment: null,
+        assigned: false,
+        canAssign: false,
+        assigning: false,
+        cloning: false,
+        draft: null,
+        draftPurpose: null,
+        validation: null,
+        saving: false,
+      },
+    });
+
+    const button = wrapper
+      .findAll("button")
+      .find((item) => item.text().includes("Export run config"));
+    expect(button).toBeDefined();
+    await button!.trigger("click");
+    expect(wrapper.emitted("exportRun")).toHaveLength(1);
+    wrapper.unmount();
+  });
+});
+
 describe("strategy details", () => {
   it("shows ports, declared cost and observed latency", () => {
     const wrapper = mount(PipelineStrategyInspector, {

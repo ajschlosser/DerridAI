@@ -48,6 +48,7 @@ defineProps<{
 const emit = defineEmits<{
   clone: [];
   export: [];
+  exportRun: [];
   assign: [];
   resetAssignment: [];
 }>();
@@ -71,6 +72,7 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       :exporting="exporting"
       @clone="emit('clone')"
       @export="emit('export')"
+      @export-run="emit('exportRun')"
       @assign="emit('assign')"
       @reset-assignment="emit('resetAssignment')"
     />

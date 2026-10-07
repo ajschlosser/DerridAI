@@ -198,6 +198,36 @@ async function exportSelected() {
   }
 }
 
+async function exportSelectedRun() {
+  const pipeline = selectedPipeline.value;
+  if (!pipeline || exporting.value) return;
+
+  exporting.value = true;
+  error.value = "";
+  notice.value = "";
+  try {
+    const envelope = await pipelinesApi.exportRunEnvelope(
+      pipeline.pipeline_id,
+      pipeline.version,
+    );
+    const url = URL.createObjectURL(
+      new Blob([`${JSON.stringify(envelope, null, 2)}\n`], {
+        type: "application/json",
+      }),
+    );
+    const link = document.createElement("a");
+    const safeId = pipeline.pipeline_id.replace(/[^A-Za-z0-9._-]+/g, "-");
+    link.href = url;
+    link.download = `${safeId}-v${pipeline.version}.derridai-corpus-run.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  } catch (exc) {
+    error.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    exporting.value = false;
+  }
+}
+
 async function importPipelineFile(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0];
@@ -519,6 +549,7 @@ const notices = computed<Notice[]>(() => {
         @update:draft="draft = $event"
         @clone="beginClone"
         @export="exportSelected"
+        @export-run="exportSelectedRun"
         @import="importPipelineFile"
         @create="beginNew"
         @assign="assignSelected"

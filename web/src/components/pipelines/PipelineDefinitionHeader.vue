@@ -51,7 +51,13 @@ const props = defineProps<{
   cloning: boolean;
   exporting?: boolean;
 }>();
-const emit = defineEmits<{ clone: []; export: []; assign: []; resetAssignment: [] }>();
+const emit = defineEmits<{
+  clone: [];
+  export: [];
+  exportRun: [];
+  assign: [];
+  resetAssignment: [];
+}>();
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
@@ -147,6 +153,22 @@ const moreItems = computed<UiMenuItem[]>(() =>
             t(
               'pipelines.export_pipeline_help',
               'Download this immutable pipeline definition with its canonical hash and exact strategy-version requirements.',
+            )
+          "
+        />
+      </span>
+      <span v-if="pipeline.purpose === 'corpus_metadata_enrichment'" class="action-with-help">
+        <UiButton
+          icon="file"
+          :label="t('pipelines.export_run', 'Export run config')"
+          :disabled="exporting"
+          @click="emit('exportRun')"
+        />
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.export_run_help',
+              'Download a secret-free v2 corpus-run envelope around this exact pipeline for the native CLI.',
             )
           "
         />

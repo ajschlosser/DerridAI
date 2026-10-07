@@ -73,6 +73,7 @@ const emit = defineEmits<{
   "update:draft": [draft: PipelineDefinition];
   clone: [];
   export: [];
+  exportRun: [];
   import: [event: Event];
   create: [purposeId: string];
   assign: [];
@@ -175,6 +176,7 @@ function create(purposeId: string) {
         :exporting="exporting"
         @clone="emit('clone')"
         @export="emit('export')"
+        @export-run="emit('exportRun')"
         @assign="emit('assign')"
         @reset-assignment="emit('resetAssignment')"
       />

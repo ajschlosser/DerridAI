@@ -9576,6 +9576,8 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pipelines.then': 'puis',
  'pipelines.title': 'Atelier de pipelines',
  'pipelines.export_pipeline': 'Exporter le pipeline',
+ 'pipelines.export_run': 'Exporter la configuration d’exécution',
+ 'pipelines.export_run_help': 'Téléchargez une enveloppe d’exécution de corpus v2 sans secrets autour de ce pipeline exact pour la CLI native.',
  'pipelines.export_pipeline_help': 'Téléchargez cette définition immuable avec son empreinte canonique et les versions exactes des stratégies requises.',
  'pipelines.exporting': 'Exportation…',
  'pipelines.import_pipeline': 'Importer un pipeline…',

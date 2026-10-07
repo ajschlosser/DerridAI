@@ -80,6 +80,11 @@ export const pipelinesApi = {
       `/api/system/pipelines/definitions/${encodeURIComponent(pipelineId)}/${version}/export`,
     ),
 
+  exportRunEnvelope: (pipelineId: string, version: number) =>
+    apiRequest<Record<string, unknown>>(
+      `/api/system/pipelines/definitions/${encodeURIComponent(pipelineId)}/${version}/run-envelope`,
+    ),
+
   importDefinition: (document: unknown) =>
     apiRequest<PipelineImportResult>("/api/system/pipelines/definitions/import", {
       method: "POST",

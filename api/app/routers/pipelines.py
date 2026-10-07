@@ -49,6 +49,8 @@ from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
+from ..corpus_cli_config import CorpusProcessingConfig
+from ..corpus_run_config import migrate_v1_to_v2
 from ..pipelines.portable import export_pipeline_document, parse_pipeline_document
 from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
 from ..pipelines.service import pipeline_hash
@@ -128,6 +130,33 @@ def export_pipeline_definition(
         pipeline,
         registry=pipeline_manager.service.registry,
     ).model_dump(mode="json")
+
+
+@router.get("/definitions/{pipeline_id}/{version}/run-envelope")
+def export_pipeline_run_envelope(
+    pipeline_id: str,
+    version: int,
+    request: Request,
+) -> dict[str, Any]:
+    """Export a secret-free v2 corpus-run envelope around one exact pipeline."""
+
+    require_admin(request)
+    pipeline = pipeline_manager.get_definition(pipeline_id, version)
+    if pipeline is None:
+        raise HTTPException(status_code=404, detail="Pipeline definition not found.")
+    if pipeline.purpose != "corpus_metadata_enrichment":
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Only corpus_metadata_enrichment pipelines can be exported as "
+                "headless corpus-run envelopes."
+            ),
+        )
+    envelope = migrate_v1_to_v2(
+        CorpusProcessingConfig.model_validate({"version": 1}),
+        pipeline=pipeline,
+    )
+    return envelope.model_dump(mode="json")
 
 
 @router.post("/definitions/import")
