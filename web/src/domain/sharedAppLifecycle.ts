@@ -25,9 +25,11 @@ import { refreshStores } from "./sharedStores";
 import { state } from "./sharedUrlState";
 import { persistPrefs, shell } from "./sharedWorkspaceStorage";
 import { systemCardHtml } from "./shellSnapshot";
+import { invalidateShellStatusProjection } from "./shellStatusProjection";
 import { refreshStoreWorks } from "./storeWorks";
 
 function updateSystemCard() {
+  invalidateShellStatusProjection();
   const card = document.querySelector(".system-card");
   if (card) card.innerHTML = systemCardHtml();
 }
