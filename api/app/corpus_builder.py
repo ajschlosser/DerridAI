@@ -2852,8 +2852,9 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
         self._metadata_request_coalescer = MetadataRequestCoalescer()
         # Semantic projections are persisted as rebuildable System Data. Per-build
         # locks make generation single-flight so concurrent Record/Work opens join
-        # one materialization instead of repeating graph traversal.
-        self._semantic_graph_cache: dict[tuple[str, str], tuple[int, dict[str, Any]]] = {}
+        # one materialization instead of repeating graph traversal. Do not retain
+        # an additional process-lifetime graph copy; persisted projections are the
+        # cache and are already generation/audience scoped.
         self._semantic_projection_locks: dict[str, threading.RLock] = {}
         self._executor = ThreadPoolExecutor(max_workers=max(1, max_workers), thread_name_prefix="derridai-pdf-corpus")
         # Conventions confirmed independently in several builds; see enrichment_cycles.
@@ -3156,12 +3157,6 @@ class PdfCorpusBuildManager(BuildLifecycleMixin, EditorialMemoryMixin, ManifestW
                     graph,
                     audience=audience,
                 )
-                with self._cache_lock:
-                    self._semantic_graph_cache[(build_id, audience)] = (
-                        generation,
-                        graph,
-                    )
-
             if scope_type == "graph":
                 if not graph_is_current:
                     system_store.mark_semantic_map_clean(build_id, generation)
