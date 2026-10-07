@@ -368,7 +368,7 @@ class LLMJobManager(PersistentJobStateMixin):
     def list(self) -> JobPayloadList:
         jobs = [
             self._copy(job, include_results=False)
-            for job in self._list_job_records()
+            for job in self._all_job_records()
             if not job.get("dismissed")
         ]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
