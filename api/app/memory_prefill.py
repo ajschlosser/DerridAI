@@ -174,6 +174,7 @@ def prefill_records(
     build_id: str,
     time_budget: float = 90.0,
     registry: Any = None,
+    request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Pre-fill ``records`` in place. Returns a summary; never raises.
 
@@ -222,7 +223,7 @@ def prefill_records(
         if not int(collection.count()):
             summary["status"] = "empty"
             return summary
-        plan, resolved_hash = resolve_prefill_plan()
+        plan, resolved_hash = resolve_prefill_plan(request)
         trace_started = datetime.now(UTC)
         provider, model = index.store._embedding_spec(collection)
         retrieve_started = time.monotonic()
