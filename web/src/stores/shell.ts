@@ -19,7 +19,10 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { getNavItems } from "../domain/navItems";
-import { getShellSnapshot } from "../domain/shellSnapshot";
+import {
+  getShellContextSnapshot,
+  getShellStatusSnapshot,
+} from "../domain/shellSnapshot";
 
 export interface ShellFile {
   id: string;
@@ -71,9 +74,46 @@ export const useShellStore = defineStore("shell", () => {
   // must not draw a partial menu (only the Vue-side admin items) before this.
   const navReady = ref(false);
 
+  function syncContext() {
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellContextSnapshot() as Pick<ShellSnapshot, "view" | "files" | "context">),
+    };
+  }
+
+  function syncStatus() {
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellStatusSnapshot() as Pick<
+        ShellSnapshot,
+        | "totalLoaded"
+        | "corpusStoreCount"
+        | "dbRecords"
+        | "hasCorpusDb"
+        | "activeStore"
+        | "selectedEvidenceCount"
+      >),
+    };
+  }
+
   function sync() {
-    snapshot.value = getShellSnapshot() as ShellSnapshot;
-    navReady.value = true;
+    // Generic compatibility refreshes update only context/status. Navigation is
+    // stable for the signed-in user and is recomputed only when it has not been
+    // initialized (or when an explicit navigation refresh is requested).
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellContextSnapshot() as Pick<ShellSnapshot, "view" | "files" | "context">),
+      ...(getShellStatusSnapshot() as Pick<
+        ShellSnapshot,
+        | "totalLoaded"
+        | "corpusStoreCount"
+        | "dbRecords"
+        | "hasCorpusDb"
+        | "activeStore"
+        | "selectedEvidenceCount"
+      >),
+    };
+    if (!navReady.value) syncNav();
   }
 
   // Publish only the menu. Cheap and independent of workspace bootstrap, so it can run
@@ -101,5 +141,15 @@ export const useShellStore = defineStore("shell", () => {
     return groups;
   });
 
-  return { snapshot, ready, navReady, groupedNav, sync, syncNav, resetNav };
+  return {
+    snapshot,
+    ready,
+    navReady,
+    groupedNav,
+    sync,
+    syncContext,
+    syncStatus,
+    syncNav,
+    resetNav,
+  };
 });
