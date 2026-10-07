@@ -22,6 +22,9 @@ on:
     paths:
       - "api/app/corpus_cli.py"
       - "api/app/corpus_cli_config.py"
+      - "api/app/corpus_run_config.py"
+      - "api/app/pipelines/compatibility.py"
+      - "api/app/pipelines/manager.py"
       - "api/app/corpus_binary_manifest.py"
       - "api/app/headless_corpus_runner.py"
       - "api/app/corpus_output_profiles.py"
@@ -36,12 +39,17 @@ on:
       - "tests/test_headless_corpus_runner.py"
       - "tests/test_corpus_output_profiles.py"
       - "docs/BINARY_PIPELINE_PLAN.md"
+      - "docs/HEADLESS_CORPUS_CLI.md"
+      - "docs/PIPELINE_CONFIGURATION_CONTRACT.md"
       - ".github/workflows/binary-cli.yml"
   push:
     branches: [master]
     paths:
       - "api/app/corpus_cli.py"
       - "api/app/corpus_cli_config.py"
+      - "api/app/corpus_run_config.py"
+      - "api/app/pipelines/compatibility.py"
+      - "api/app/pipelines/manager.py"
       - "api/app/corpus_binary_manifest.py"
       - "api/app/headless_corpus_runner.py"
       - "api/app/corpus_output_profiles.py"
@@ -96,6 +104,7 @@ jobs:
           tests/test_corpus_binary_manifest.py
           tests/test_corpus_output_profiles.py
           tests/test_headless_corpus_runner.py
+          tests/test_pipeline_manager.py
 
       - name: Compile standalone binary
         run: >-
