@@ -53,6 +53,21 @@ describe("shell status projection", () => {
     expect(second.selectedEvidenceCount).toBe(2);
   });
 
+  it("detects top-level file/store replacement without a manual invalidation", () => {
+    state.files = [{ records: [{}] }];
+    state.stores = [];
+    invalidateShellStatusProjection();
+    expect(getShellStatusProjection().totalLoaded).toBe(1);
+
+    state.files = [{ records: [{}, {}, {}] }];
+    state.stores = [{ name: "primary", count: 7 }];
+    expect(getShellStatusProjection()).toMatchObject({
+      totalLoaded: 3,
+      corpusStoreCount: 1,
+      dbRecords: 7,
+    });
+  });
+
   it("is invalidated by corpus changes rather than rescanning on every shell refresh", () => {
     state.files = [{ records: [{}] }];
     invalidateShellStatusProjection();
