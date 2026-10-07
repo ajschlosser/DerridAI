@@ -1547,7 +1547,7 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 f"""
-                SELECT id, created_at, LENGTH(payload_json) AS stored_bytes,
+                SELECT id, created_at, LENGTH(CAST(payload_json AS BLOB)) AS stored_bytes,
                        CASE WHEN status IN ({placeholders}) THEN 1 ELSE 0 END AS active
                 FROM jobs
                 WHERE job_type=?
