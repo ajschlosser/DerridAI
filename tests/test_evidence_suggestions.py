@@ -67,6 +67,18 @@ def test_citation_strings_do_not_assume_an_author():
     assert full.startswith("Of Grammatology")
 
 
+def test_citation_strings_without_year_do_not_emit_empty_year_gap():
+    from app.rag import _citation_strings
+
+    inline, _full = _citation_strings({
+        "document_author": "Marcel Proust",
+        "work": "Du côté de chez Swann",
+        "page_start": 9,
+        "page_end": 10,
+    })
+    assert inline == "Proust: 9-10"
+
+
 class LocalProjection:
     def __init__(self, vectors, query_vector=None, error=None):
         self.vectors = vectors
