@@ -32,7 +32,6 @@ type Helper =
   | "defaultProviderProfile"
   | "ensureProviderProfiles"
   | "isResearcher"
-  | "persistPrefs"
   | "warmupProviderProfile"
   | "refreshProviderStatuses"
   | "refreshStoreWorks"
@@ -49,7 +48,6 @@ export function createAppLifecycle(deps: Deps) {
     defaultProviderProfile,
     ensureProviderProfiles,
     isResearcher,
-    persistPrefs,
     warmupProviderProfile,
     refreshProviderStatuses,
     refreshStoreWorks,
@@ -88,8 +86,7 @@ export function createAppLifecycle(deps: Deps) {
           active &&
           active !== document.body &&
           ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
-        if (userIsEditing) persistPrefs();
-        else {
+        if (!userIsEditing) {
           shell();
           renderView();
         }
