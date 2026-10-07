@@ -57,6 +57,10 @@ import type {
 
 type VectorTab = "overview" | "data" | "retrieval" | "builds" | "settings";
 type BrowseMode = "works" | "records";
+type LoadedCorpusFile = Record<string, unknown> & {
+  id?: string;
+  records?: unknown[];
+};
 // Vector-owned state comes from its feature store. Cross-domain read-only
 // dependencies are taken from their narrow stores rather than the writable
 // compatibility workspace object.
@@ -689,16 +693,23 @@ async function confirmAction() {
 }
 
 function syncActive() {
-  const file = corpusState.files?.find((item: any) => item.id === corpusState.activeFileId);
+  const files = (corpusState.files || []) as LoadedCorpusFile[];
+  const file = files.find((item) => item.id === corpusState.activeFileId);
   if (!file) return toast(i18n.t("vector.load_jsonl_first"), { tone: "warning" });
+  const rows = Array.isArray(file.records) ? file.records : [];
   void upsertRows(
-    file.records.map((record: unknown, index: number) => ({ file, record, index })),
+    rows.map((record, index) => ({ file, record, index })),
     "records",
   ).then(() => load());
 }
 function syncAll() {
-  const rows = (corpusState.files || []).flatMap((file: any) =>
-    file.records.map((record, index) => ({ file, record, index })),
+  const files = (corpusState.files || []) as LoadedCorpusFile[];
+  const rows = files.flatMap((file) =>
+    (Array.isArray(file.records) ? file.records : []).map((record, index) => ({
+      file,
+      record,
+      index,
+    })),
   );
   if (!rows.length) return toast(i18n.t("vector.load_jsonl_any_first"), { tone: "warning" });
   void upsertRows(rows, "records").then(() => load());
