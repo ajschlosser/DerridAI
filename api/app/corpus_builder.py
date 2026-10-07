@@ -4049,7 +4049,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # embedded-metadata fallback below applies, with the reason in the build warning.
         session: DocumentManifestSession | None = None
         try:
-            session = DocumentManifestSession.open(request)
+            session = (\n                DocumentManifestSession.open(request)\n                if request.get("_pipeline_bindings")\n                else DocumentManifestSession.open()\n            )
             result = self._document_manifest_call(
                 session, request, prompt, max_tokens=limits["manifest_num_predict"], build_id=build_id,
             )
@@ -6055,7 +6055,7 @@ is not permitted to see are filtered exactly as they are in the interactive revi
         # One trace per proposal. Without a resolvable pipeline no model is asked and the request fails
         # with the reason, as any failed touch-up does; reviewed text is never touched here.
         try:
-            session = TextTouchupSession.open(active_request)
+            session = (\n                TextTouchupSession.open(active_request)\n                if active_request.get("_pipeline_bindings")\n                else TextTouchupSession.open()\n            )
         except RuntimeError as exc:
             raise ValueError(str(exc)) from exc
         try:
