@@ -28,7 +28,6 @@ import uuid
 from typing import Any
 
 from .job_state import JobPayloadList, PersistentJobStateMixin, iso_now
-from .persistence import job_repository
 from .source_capture import CorpusCaptureService
 from .source_identity import CaptureError
 
