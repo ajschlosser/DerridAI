@@ -49,14 +49,24 @@ export function useRecordsWorkspace() {
   const error = ref("");
   let disposed = false;
   let activation: Promise<void> | null = null;
+  let presenceRequest = 0;
   if (getCurrentScope())
     onScopeDispose(() => {
       disposed = true;
     });
 
-  function load() {
+  function load({ refreshPresence = true } = {}) {
     const next = recordsWorkspace.getRecordsListSnapshot() as RecordsListSnapshot | undefined;
-    if (next) snapshot.value = next;
+    if (!next) return;
+    snapshot.value = next;
+    if (!refreshPresence || !next.rows.length) return;
+
+    const request = ++presenceRequest;
+    void Promise.resolve(
+      recordsWorkspace.refreshRecordsListPresence(next.rows.map((row) => row.index)),
+    ).then(() => {
+      if (!disposed && request === presenceRequest) load({ refreshPresence: false });
+    });
   }
   // The loaded corpus also changes outside this view: a file imported or closed, or a record edited elsewhere. Read the
   // snapshot again then, so the rail and table do not keep showing the corpus as it was (a file imported while Records was
