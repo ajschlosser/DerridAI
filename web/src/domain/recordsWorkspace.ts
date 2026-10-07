@@ -49,7 +49,8 @@ type Helper =
   | "openOcrCleanupDialog"
   | "openTouchup"
   | "pageInfo"
-  | "persistPrefs"
+  | "persistListPreferences"
+  | "persistReviewPreferences"
   | "recordDbStatus"
   | "recordStores"
   | "recordsListCell"
@@ -92,7 +93,8 @@ export function createRecordsWorkspace(deps: Deps) {
     openOcrCleanupDialog,
     openTouchup,
     pageInfo,
-    persistPrefs,
+    persistListPreferences,
+    persistReviewPreferences,
     recordDbStatus,
     recordStores,
     recordsListCell,
@@ -119,7 +121,7 @@ export function createRecordsWorkspace(deps: Deps) {
     if (!f) return;
     state.listFilters[f.id] = {};
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function clearRecordsListSelection() {
@@ -315,7 +317,7 @@ export function createRecordsWorkspace(deps: Deps) {
   }
   function resetRecordsListColumns() {
     state.tableColumns.list = [...TABLE_DEFAULTS.list];
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function selectRecordsListMatches() {
@@ -334,13 +336,13 @@ export function createRecordsWorkspace(deps: Deps) {
       )
       .filter((x: Any) => rowMatchesListFilters(x, filters));
     for (const x of rows) state.reviewSelection.add(reviewKey(f, x.index));
-    persistPrefs();
+    persistReviewPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListColumns(keys: Any) {
     const list = Array.isArray(keys) ? keys.filter(Boolean) : [];
     if (list.length) state.tableColumns.list = list;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListFilter(key: Any, value: Any) {
@@ -354,7 +356,7 @@ export function createRecordsWorkspace(deps: Deps) {
     const f = activeFile();
     if (!f) return;
     state.pages[f.id] = Math.max(1, Number(page) || 1);
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListPageSelected(selected: Any) {
@@ -369,7 +371,7 @@ export function createRecordsWorkspace(deps: Deps) {
     if (!f) return;
     state.pageSize = Number(size) || state.pageSize;
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListQuery(value: Any) {
@@ -377,7 +379,7 @@ export function createRecordsWorkspace(deps: Deps) {
     if (!f) return;
     state.searches[f.id] = String(value || "");
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListRowSelected(index: Any, selected: Any) {
@@ -392,7 +394,7 @@ export function createRecordsWorkspace(deps: Deps) {
     const sort = state.sorts[f.id] || (state.sorts[f.id] = { key: "page_start", dir: 1 });
     toggleSort(sort, key);
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListStore(name: Any) {
