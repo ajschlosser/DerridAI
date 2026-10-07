@@ -878,15 +878,31 @@ class ChromaStore:
             return default
         return parsed
 
-    def _manifest_spec(self, collection) -> dict[str, Any]:
+    def _manifest_spec(
+        self,
+        collection,
+        *,
+        collection_count: int | None = None,
+        resolve_count: bool = True,
+    ) -> dict[str, Any]:
         metadata = dict(getattr(collection, "metadata", None) or {})
-        count = collection.count()
+        count = collection_count
+        if count is None and resolve_count:
+            count = int(collection.count())
         dimension = metadata.get(self._DIMENSION_KEY)
         try:
             dimension = int(dimension) if dimension not in (None, "") else None
         except (TypeError, ValueError):
             dimension = None
-        status = str(metadata.get(self._STATUS_KEY) or ("ready" if count else "empty"))
+        inferred_nonempty = bool(
+            count
+            if count is not None
+            else metadata.get(self._SOURCE_COUNT_KEY)
+        )
+        status = str(
+            metadata.get(self._STATUS_KEY)
+            or ("ready" if inferred_nonempty else "empty")
+        )
         history = self._decode_json_metadata(metadata.get(self._BUILD_HISTORY_KEY), [])
         if not isinstance(history, list):
             history = []
@@ -1213,7 +1229,12 @@ class ChromaStore:
             for key, value in metadata.items()
             if key not in private
         }
-        manifest = self._manifest_spec(collection)
+        collection_count = int(collection.count()) if include_count else None
+        manifest = self._manifest_spec(
+            collection,
+            collection_count=collection_count,
+            resolve_count=include_count,
+        )
         result = {
             "name": self._public_collection_name(collection),
             "storage_name": collection.name,
@@ -1227,7 +1248,7 @@ class ChromaStore:
             "last_build_error": metadata.get("__derridai_last_build_error"),
         }
         if include_count:
-            result["count"] = collection.count()
+            result["count"] = int(collection_count or 0)
         return result
 
     def list_store_descriptors(self) -> list[dict[str, Any]]:
