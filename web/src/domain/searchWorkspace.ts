@@ -62,7 +62,10 @@ type Helper =
   | "openDatabaseCreationFromResearch"
   | "openStoreRecordEditor"
   | "openTouchup"
+  | "persistListPreferences"
   | "persistPrefs"
+  | "persistSearchPreferences"
+  | "persistVectorPreferences"
   | "recordDbStatus"
   | "recordStores"
   | "refreshPresenceForRows"
@@ -79,7 +82,7 @@ type Helper =
   | "selectedEvidenceEntries"
   | "selectedReviewItems"
   | "setReviewSelected"
-  | "shell"
+  | "refreshShell"
   | "syncUrl"
   | "tableAvailableFields"
   | "toggleDbEvidence"
@@ -115,7 +118,10 @@ export function createSearchWorkspace(deps: Deps) {
     openDatabaseCreationFromResearch,
     openStoreRecordEditor,
     openTouchup,
+    persistListPreferences,
     persistPrefs,
+    persistSearchPreferences,
+    persistVectorPreferences,
     recordDbStatus,
     recordStores,
     refreshPresenceForRows,
@@ -132,7 +138,7 @@ export function createSearchWorkspace(deps: Deps) {
     selectedEvidenceEntries,
     selectedReviewItems,
     setReviewSelected,
-    shell,
+    refreshShell,
     syncUrl,
     tableAvailableFields,
     toggleDbEvidence,
