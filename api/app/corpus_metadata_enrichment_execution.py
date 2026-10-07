@@ -1057,7 +1057,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             if "session" in pipeline or "error" in pipeline:
                 return
             try:
-                pipeline["session"] = EnrichmentSession.open(request)
+                pipeline["session"] = (\n                    EnrichmentSession.open(request)\n                    if request.get("_pipeline_bindings")\n                    else EnrichmentSession.open()\n                )
             except RuntimeError as exc:
                 pipeline["error"] = exc
 
@@ -1283,7 +1283,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             active_request = self._latest_runtime_request(build_id, request) if build_id else request
             if "session" not in pipeline and "error" not in pipeline:
                 try:
-                    pipeline["session"] = EnrichmentSession.open(request)
+                    pipeline["session"] = (\n                        EnrichmentSession.open(request)\n                        if request.get("_pipeline_bindings")\n                        else EnrichmentSession.open()\n                    )
                 except RuntimeError as exc:
                     pipeline["error"] = exc
             session: EnrichmentSession | None = pipeline.get("session")
