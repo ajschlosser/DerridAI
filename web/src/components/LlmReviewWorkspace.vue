@@ -21,9 +21,9 @@ import { computed, ref, watch } from "vue";
 import UiButton from "./ui/UiButton.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import { useI18nStore } from "../stores/i18n";
-import { state as sharedState } from "../domain/sharedUrlState";
 import * as touchupRuntime from "../domain/touchupActions";
-import { persistPrefs } from "../domain/sharedWorkspaceStorage";
+import { persistSettingsPreferences } from "../domain/sharedWorkspaceStorage";
+import { useConfigStore } from "../stores/workspace";
 import {
   useTouchupWorkspaceRequest,
   type TouchupWorkspaceItem,
@@ -54,6 +54,7 @@ type WorkspaceInfo = {
 const EMPTY_PROPOSAL: TouchupProposal = { changes: {}, rationale: {} };
 
 const i18n = useI18nStore();
+const config = useConfigStore();
 const touchupRequest = useTouchupWorkspaceRequest();
 const open = ref(false);
 const info = ref<WorkspaceInfo>({
@@ -142,11 +143,8 @@ async function refreshStatus() {
 }
 function setMode(value: string) {
   mode.value = value as typeof mode.value;
-  if (mode.value !== "auto")
-    (
-      sharedState as unknown as { appConfig: Record<string, unknown> }
-    ).appConfig.default_llm_run_mode = mode.value;
-  persistPrefs();
+  if (mode.value !== "auto") config.appConfig.default_llm_run_mode = mode.value;
+  persistSettingsPreferences();
 }
 function setProfile(value: string) {
   profileId.value = value;
