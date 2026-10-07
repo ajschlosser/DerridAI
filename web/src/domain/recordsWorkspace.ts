@@ -62,7 +62,7 @@ type Helper =
   | "setActiveStore"
   | "setListFilterValue"
   | "setReviewSelected"
-  | "shell"
+  | "refreshShell"
   | "syncUrl"
   | "tableAvailableFields"
   | "toggleSort"
@@ -106,7 +106,7 @@ export function createRecordsWorkspace(deps: Deps) {
     setActiveStore,
     setListFilterValue,
     setReviewSelected,
-    shell,
+    refreshShell,
     syncUrl,
     tableAvailableFields,
     toggleSort,
@@ -399,13 +399,14 @@ export function createRecordsWorkspace(deps: Deps) {
   }
   function setRecordsListStore(name: Any) {
     setActiveStore(name);
-    shell();
+    refreshShell();
   }
   function toggleRecordsListEvidence(index: Any) {
     const f = activeFile();
     if (!f) return;
+    // The evidence-selection command owns review persistence and shell-status
+    // publication; do not schedule a second global shell/persistence cycle.
     toggleWorkspaceEvidence(f, index);
-    shell();
   }
   return {
     clearRecordsListFilters,
