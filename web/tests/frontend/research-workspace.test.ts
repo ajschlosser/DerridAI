@@ -38,7 +38,14 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (["persistPrefs", "persistResearchPreferences", "persistJobPreferences"].includes(name))
+          if (
+            [
+              "persistPrefs",
+              "persistResearchPreferences",
+              "persistSettingsPreferences",
+              "persistJobPreferences",
+            ].includes(name)
+          )
             calls.push(name);
         });
         return spies[name];
@@ -176,6 +183,25 @@ describe("research workspace commands", () => {
     expect(calls).toEqual(["persistResearchPreferences"]);
     expect(spies.persistPrefs).toBeUndefined();
     expect(spies.shellRefreshHook).not.toHaveBeenCalled();
+  });
+
+  it("persists rerun configuration without serializing the whole workspace", () => {
+    const { calls, spies, workspace } = setup({
+      providerProfiles: () => [
+        { id: "p", type: "ollama", model: "model", base_url: "http://ollama" },
+      ],
+      navigateTo: vi.fn(),
+    });
+
+    workspace.prepareRagRerun({
+      prompt: "Original question",
+      provider: "ollama",
+      model: "model",
+      base_url: "http://ollama",
+    });
+
+    expect(calls).toEqual(["persistResearchPreferences", "persistSettingsPreferences"]);
+    expect(spies.persistPrefs).toBeUndefined();
   });
 
   it("turns off skipping retrieval when no evidence is selected", () => {
