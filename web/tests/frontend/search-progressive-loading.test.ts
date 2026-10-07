@@ -253,6 +253,7 @@ describe("Search workspace loading boundaries", () => {
 
     const read = deferred<ReturnType<typeof snapshot>>();
     runtime.getSearchWorkspaceSnapshot.mockReturnValueOnce(read.promise);
+    window.dispatchEvent(new PopStateEvent("popstate"));
     await router.push("/search?page=2");
     await flushPromises();
     expect(wrapper.get(".search-results-panel").element).toBe(panel);
@@ -276,6 +277,7 @@ describe("Search workspace loading boundaries", () => {
     runtime.getSearchWorkspaceSnapshot.mockRejectedValueOnce(
       Object.assign(new Error("Forbidden"), { status: 403 }),
     );
+    window.dispatchEvent(new PopStateEvent("popstate"));
     await router.push("/search?page=3");
     await flushPromises();
 
@@ -294,6 +296,7 @@ describe("Search workspace loading boundaries", () => {
     runtime.getSearchWorkspaceSnapshot.mockImplementation(() =>
       Promise.resolve(snapshot({ layout: "cards", results: [result("NEW")], total: 1 })),
     );
+    window.dispatchEvent(new PopStateEvent("popstate"));
     await router.push("/search?page=4");
     await flushPromises();
     expect(wrapper.text()).toContain("NEW");
