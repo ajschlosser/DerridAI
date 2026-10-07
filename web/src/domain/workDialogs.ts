@@ -53,7 +53,8 @@ type Helper =
   | "parseProposedMetadataValue"
   | "parseWorkMetadataValue"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistCorpusPreferences"
+  | "persistJobPreferences"
   | "providerProfile"
   | "providerProfiles"
   | "providerRequestConfig"
@@ -120,7 +121,8 @@ export function createWorkDialogs(deps: Deps) {
     parseProposedMetadataValue,
     parseWorkMetadataValue,
     persistFileNow,
-    persistPrefs,
+    persistCorpusPreferences,
+    persistJobPreferences,
     providerProfile,
     providerProfiles,
     providerRequestConfig,
@@ -414,7 +416,7 @@ export function createWorkDialogs(deps: Deps) {
           await persistFileNow(file);
         }
         state.jobApplied[job.id] = new Date().toISOString();
-        persistPrefs();
+        persistJobPreferences();
         shell();
         renderView();
         toast(
@@ -478,7 +480,6 @@ export function createWorkDialogs(deps: Deps) {
           if (state.storePresenceIds[dbStore]) state.storePresenceIds[dbStore] = {};
           await refreshStores();
         }
-        persistPrefs();
         shell();
         renderView();
         toast(
@@ -578,7 +579,7 @@ export function createWorkDialogs(deps: Deps) {
         if (sourceChanged) await persistFileNow(file);
         if (created.length) state.activeFileId = created[0].id;
         corpusCache.fields = null;
-        persistPrefs();
+        persistCorpusPreferences();
         shell();
         renderView();
         toast(trf("works.created_tabs", { count: created.length }), {
