@@ -1290,8 +1290,15 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             active_request = self._latest_runtime_request(build_id, request) if build_id else request
             if "session" not in pipeline and "error" not in pipeline:
                 try:
-                    pipeline["session"] = EnrichmentSession.open()
-                except RuntimeError as exc:
+                    declared = active_request.get("pipeline_definition")
+                    if isinstance(declared, dict):
+                        from .pipelines.models import PipelineDefinition
+
+                        exact = PipelineDefinition.model_validate(declared)
+                        pipeline["session"] = EnrichmentSession.open(exact)
+                    else:
+                        pipeline["session"] = EnrichmentSession.open()
+                except (RuntimeError, ValueError, ValidationError) as exc:
                     pipeline["error"] = exc
             session: EnrichmentSession | None = pipeline.get("session")
             dependency_fingerprint = (
