@@ -400,6 +400,7 @@ async function goSearch() {
     searchStore.globalSearchMode = "database";
     if (!vectorStore.activeStore) {
       persistSearchPreferences();
+      persistVectorPreferences();
       if (canAccessPage("vector")) {
         toast(i18n.t("search.redirect_database"), { tone: "info" });
         openDatabaseCreationFromResearch();
@@ -419,6 +420,7 @@ async function goSearch() {
     searchStore.globalSearchAutoRun = false;
     vectorStore.storeSearchLoading = true;
     persistSearchPreferences();
+    persistVectorPreferences();
     navigateTo("global");
     try {
       const mode = searchStore.dbSearchMethod || "similarity";
@@ -441,7 +443,7 @@ async function goSearch() {
       );
     } finally {
       vectorStore.storeSearchLoading = false;
-      persistSearchPreferences();
+      persistVectorPreferences();
     }
   } else {
     searchStore.globalSearchMode = "traditional";
