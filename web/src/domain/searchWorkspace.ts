@@ -290,7 +290,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (isResearcher()) state.globalSearchMode = "database";
     if (autoRun && state.globalSearchAutoRun && searchScope() === "database" && stores.length) {
       state.globalSearchAutoRun = false;
-      persistPrefs();
+      persistSearchPreferences();
       await runSearchWorkspace({ silent: true });
     }
     const scope = searchScope();
@@ -410,15 +410,19 @@ export function createSearchWorkspace(deps: Deps) {
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: false });
-    shell();
+    refreshShell();
     return getSearchWorkspaceSnapshot({ refresh: true, autoRun: false });
   }
-  const updateSearchQuery = createUpdateSearchQuery({ state, persistPrefs, syncUrl });
+  const updateSearchQuery = createUpdateSearchQuery({
+    state,
+    persistPrefs: persistSearchPreferences,
+    syncUrl,
+  });
   function setSearchAdvancedOpen(value: Any) {
     state.globalAdvancedOpen = Boolean(value);
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchMethod(method: Any) {
@@ -445,7 +449,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchStore(name: Any) {
@@ -456,33 +460,35 @@ export function createSearchWorkspace(deps: Deps) {
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
+    persistVectorPreferences();
     syncUrl({ replace: true });
-    shell();
+    refreshShell();
   }
   function setSearchMmrOptions({ fetch_k, lambda_mult }: Loose = {}) {
     if (fetch_k != null) state.dbSearchFetchK = Math.max(1, Math.min(1000, Number(fetch_k) || 100));
     if (lambda_mult != null)
       state.dbSearchLambda = Math.max(0, Math.min(1, Number(lambda_mult) || 0));
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchLayout(layout: Any) {
     if (!["compact", "roomy", "cards"].includes(layout)) return;
     const key = searchScope() === "database" ? "database" : "traditional";
     state.searchResultLayouts = { ...(state.searchResultLayouts || {}), [key]: layout };
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchPage(page: Any) {
     state.globalPage = Math.max(1, Number(page) || 1);
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchPageSize(size: Any) {
     state.pageSize = Math.max(10, Math.min(500, Number(size) || 100));
     state.globalPage = 1;
-    persistPrefs();
+    persistListPreferences();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchColumns(columns: Any) {
@@ -501,7 +507,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.tableColumns.global = requested.length
       ? requested
       : fallback.filter((key) => available.includes(key));
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setSearchSort(key: Any) {
