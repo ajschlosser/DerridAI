@@ -1935,7 +1935,21 @@ class ChromaStore:
                 if not metadatas:
                     break
                 for metadata in metadatas:
-                    record = decode_metadata(metadata or {})
+                    raw_metadata = metadata or {}
+                    # Chroma returns the whole metadata object even when documents
+                    # are excluded. Decode only the fields needed for scope routing;
+                    # audit histories and unrelated JSON metadata can themselves be
+                    # large enough to create avoidable per-run allocation spikes.
+                    record = decode_metadata({
+                        field: raw_metadata[field]
+                        for field in (
+                            "work",
+                            "document_author",
+                            "field_assertions",
+                            "current_field_assertions",
+                        )
+                        if field in raw_metadata
+                    })
                     work = source_work_label(record)
                     if not work:
                         continue
