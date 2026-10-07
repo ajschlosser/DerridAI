@@ -195,6 +195,90 @@ def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
     assert collection.last_get["where_document"] == where_document
 
 
+
+class _PagedLexicalCollection:
+    def __init__(self, count: int = 350) -> None:
+        self.metadata = {"hnsw:space": "cosine"}
+        self.calls: list[dict] = []
+        self.rows = [
+            (
+                f"r{index}",
+                (
+                    "trace trace différance"
+                    if index == count - 1
+                    else f"ordinary passage {index}"
+                ),
+                {
+                    "_record_id": f"r{index}",
+                    "work": "Of Grammatology",
+                    "document_author": "Jacques Derrida",
+                    # Deliberately large irrelevant JSON metadata. The lexical
+                    # scan must not decode it for every candidate.
+                    "updates": "__json__:" + ("[{\"field\":\"x\"}]" * 200),
+                },
+            )
+            for index in range(count)
+        ]
+
+    def count(self) -> int:
+        return len(self.rows)
+
+    def get(self, *, ids=None, include=None, limit=None, offset=0, **kwargs):
+        self.calls.append(
+            {
+                "ids": list(ids) if ids is not None else None,
+                "include": include,
+                "limit": limit,
+                "offset": offset,
+                **kwargs,
+            }
+        )
+        if ids is not None:
+            wanted = set(ids)
+            rows = [row for row in self.rows if row[0] in wanted]
+        else:
+            stop = offset + int(limit or len(self.rows))
+            rows = self.rows[offset:stop]
+        return {
+            "ids": [row[0] for row in rows],
+            "documents": [row[1] for row in rows],
+            "metadatas": [row[2] for row in rows],
+        }
+
+
+def test_lexical_search_pages_candidates_and_decodes_only_final_results(
+    monkeypatch,
+) -> None:
+    from app import chroma_store as chroma_store_module
+
+    collection = _PagedLexicalCollection()
+    store = object.__new__(ChromaStore)
+    store._collection = lambda _name: collection
+
+    original_decode_metadata = chroma_store_module.decode_metadata
+    decoded = []
+
+    def tracked_decode(metadata):
+        decoded.append(metadata)
+        return original_decode_metadata(metadata)
+
+    monkeypatch.setattr(chroma_store_module, "decode_metadata", tracked_decode)
+
+    result = store.lexical_search("corpus", "trace différance", 4)
+
+    assert result[0]["id"] == f"r{len(collection.rows) - 1}"
+    scan_calls = [call for call in collection.calls if call["ids"] is None]
+    assert len(scan_calls) > 1
+    assert all(call["limit"] is not None for call in scan_calls)
+    assert all(call["limit"] <= 512 for call in scan_calls)
+    assert all(call["include"] == ["documents", "metadatas"] for call in scan_calls)
+
+    final_calls = [call for call in collection.calls if call["ids"] is not None]
+    assert len(final_calls) == 1
+    assert len(final_calls[0]["ids"]) <= 4
+    assert len(decoded) <= 4
+
+
 # --- Phase 2: preview endpoint -------------------------------------------------
 
 
