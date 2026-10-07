@@ -568,7 +568,7 @@ def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeyp
 
 def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None:
     drafts = [
-        '```json\\n{"title":"Bad \\\\*structured answer","major_themes":[]}\\n```',
+        '```json\n{"title":"Bad \\*structured answer","major_themes":[]}\n```',
         "The trace is not a presence [[E0]].",
     ]
     prompts: list[str] = []
