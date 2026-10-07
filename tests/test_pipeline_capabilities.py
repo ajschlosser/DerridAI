@@ -22,8 +22,11 @@ import json
 
 from app.corpus_cli import ExitCode, main
 from app.pipelines.capabilities import pipeline_contract_identity
+from app.pipelines.manager import PipelineManager
 from app.pipelines.models import StrategySpec
 from app.pipelines.registry import StrategyRegistry
+from app.pipelines.service import PipelineService
+from app.pipelines.store import PipelineStore
 
 
 def test_contract_identity_reports_exact_strategy_versions():
@@ -72,3 +75,21 @@ def test_cli_pipeline_capabilities_json_uses_shared_identity(capsys):
     assert code == ExitCode.OK
     assert json.loads(captured.out) == pipeline_contract_identity()
     assert captured.err == ""
+
+
+
+def test_catalog_contract_versions_match_the_strategy_catalog(tmp_path):
+    """The machine capability identity cannot drift from the catalog clients edit."""
+
+    manager = PipelineManager(
+        service=PipelineService(),
+        store=PipelineStore(tmp_path / "pipeline-capabilities.sqlite3"),
+    )
+    catalog = manager.catalog()
+
+    advertised = {
+        item["strategy_id"]: {"version": item["version"]}
+        for item in catalog["strategies"]
+    }
+    assert catalog["contract"]["strategies"] == advertised
+    assert catalog["contract"]["pipeline_contract_version"] >= 1
