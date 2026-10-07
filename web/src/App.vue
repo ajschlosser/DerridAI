@@ -98,6 +98,7 @@ const commandPalette = ref<InstanceType<typeof NavigationCommandPalette> | null>
 const corpusFileInput = ref<HTMLInputElement | null>(null);
 const mobileNavDialog = ref<HTMLDialogElement | null>(null);
 const mobileNavTrigger = ref<HTMLButtonElement | null>(null);
+const pendingNavId = ref("");
 const narrowSidebar = useMatchMedia("(min-width: 781px) and (max-width: 900px)");
 const mobileLayout = useMatchMedia("(max-width: 780px)");
 const commandShortcut =
@@ -423,10 +424,11 @@ function syncSharedStateFromRoute() {
   repaintAfterLocationChange();
 }
 
-function navigateNative(path: string) {
+function navigateNative(path: string, intentId = "") {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
   if (current === target) {
+    pendingNavId.value = "";
     // The router remains authoritative even if compatibility state drifted.
     // Re-derive that state from the settled URL instead of initiating a second
     // forward-navigation path through sharedNavigation.navigateTo().
@@ -434,15 +436,24 @@ function navigateNative(path: string) {
     if (expectedView && sharedState.view !== expectedView) syncSharedStateFromRoute();
     return;
   }
-  void router.push(target).catch(() => {
-    // The route feedback panel exposes the failure and recovery actions.
-  });
+  if (intentId) pendingNavId.value = intentId;
+  void router
+    .push(target)
+    .then((failure) => {
+      // Aborted/cancelled navigations resolve with a NavigationFailure rather
+      // than rejecting. Do not leave a stale busy state on the clicked item.
+      if (failure && pendingNavId.value === intentId) pendingNavId.value = "";
+    })
+    .catch(() => {
+      if (pendingNavId.value === intentId) pendingNavId.value = "";
+      // The route feedback panel exposes the failure and recovery actions.
+    });
 }
 
 function navigate(view: string) {
   const target = NAV_TARGETS[view];
   if (!target) return;
-  navigateNative(target.path);
+  navigateNative(target.path, view);
 }
 
 function openMobileNavigation() {
@@ -572,6 +583,13 @@ const runtimeLocationSync = createRuntimeLocationSync(router, {
 });
 
 watch(
+  () => route.fullPath,
+  () => {
+    pendingNavId.value = "";
+  },
+);
+
+watch(
   () => auth.user?.id,
   (id) => {
     if (!id) {
@@ -603,11 +621,13 @@ watch(
       <SidebarNavigator
         :groups="groupedNavItems"
         :collapsed="effectiveSidebarCollapsed"
+        :pending-id="pendingNavId"
         @navigate="navigate"
       />
       <SidebarUtilityNav
         :items="utilityNavItems"
         :collapsed="effectiveSidebarCollapsed"
+        :pending-id="pendingNavId"
         @navigate="navigate"
       />
       <SidebarStatus
@@ -792,7 +812,12 @@ watch(
         <AppIcon name="close" aria-hidden="true" />
       </button>
     </header>
-    <SidebarNavigator :groups="mobileNavGroups" :collapsed="false" @navigate="navigateFromMobile" />
+    <SidebarNavigator
+    :groups="mobileNavGroups"
+    :collapsed="false"
+    :pending-id="pendingNavId"
+    @navigate="navigateFromMobile"
+  />
   </dialog>
   <NavigationCommandPalette
     ref="commandPalette"
