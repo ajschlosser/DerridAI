@@ -46,7 +46,12 @@ const workspacePersistence = createWorkspacePersistence({
   serializableFile: serializableRecordsFile,
 });
 
-export const { persistFileNow, persistFile } = workspacePersistence;
+export const {
+  persistFileNow,
+  persistFile,
+  flushPendingFileWrites,
+  cancelPendingFileWrites,
+} = workspacePersistence;
 
 export async function restoreWorkspace() {
   await workspacePersistence.restoreWorkspace();
