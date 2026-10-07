@@ -29,7 +29,12 @@ import { refreshStores } from "./sharedStores";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { persistFileNow } from "./sharedWorkspacePersistence";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import {
+  persistAnnotationsPreferences,
+  persistRecordViewPreferences,
+  persistVectorPreferences,
+  persistWorksPreferences,
+} from "./sharedWorkspaceStorage";
 import { recordStores } from "./storeAvailability";
 import { reviewItemFromKey } from "./reviewItems";
 
@@ -48,7 +53,10 @@ export const annotationsWorkspace = createAnnotationsWorkspace({
   memoCorpus,
   navigateTo,
   persistFileNow,
-  persistPrefs,
+  persistAnnotationsPreferences,
+  persistRecordViewPreferences,
+  persistVectorPreferences,
+  persistWorksPreferences,
   recordStores,
   refreshStores,
   reviewItemFromKey: (key: unknown) => reviewItemFromKey(state, key),
