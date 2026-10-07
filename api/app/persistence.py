@@ -1396,19 +1396,27 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
     """Durable operation ledger used by all background job managers."""
 
     ACTIVE_STATUSES = frozenset({"queued", "running", "cancelling"})
+    # Vector upserts are deliberately restart-resumable because their full
+    # request body is spooled separately before execution. Other side-effecting
+    # operations remain fail-closed after a process restart.
+    RESTART_RESUMABLE_TYPES = frozenset({"upsert"})
 
     def recover_interrupted(self) -> int:
-        """Finalize jobs whose worker process disappeared during a restart.
-
-        We intentionally do not auto-replay side-effecting work.  The durable
-        record remains inspectable; resumable workflows (notably language
-        translation) retain their checkpoints and can be explicitly resumed.
-        """
+        """Finalize non-resumable jobs whose worker process disappeared."""
         recovered = 0
         now = _iso_now()
+        placeholders = ",".join("?" for _ in self.RESTART_RESUMABLE_TYPES)
+        exclusion = (
+            f" AND job_type NOT IN ({placeholders})"
+            if self.RESTART_RESUMABLE_TYPES
+            else ""
+        )
+        params = tuple(sorted(self.RESTART_RESUMABLE_TYPES))
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT id,payload_json FROM jobs WHERE status IN ('queued','running','cancelling')"
+                "SELECT id,payload_json FROM jobs "
+                "WHERE status IN ('queued','running','cancelling')" + exclusion,
+                params,
             ).fetchall()
             for row in rows:
                 job = _json_loads(row["payload_json"], {})
@@ -1428,7 +1436,11 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
                     events.append({
                         "timestamp": now,
                         "stage": "interrupted",
-                        "detail": "Operation was interrupted by application restart; retained state can be inspected or explicitly resumed where supported.",
+                        "detail": (
+                            "Operation was interrupted by application restart; "
+                            "retained state can be inspected or explicitly resumed "
+                            "where supported."
+                        ),
                     })
                 self._upsert_conn(conn, job, now=now)
                 recovered += 1
@@ -1439,7 +1451,13 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
     def _job_type(job: dict[str, Any]) -> str:
         return str(job.get("type") or job.get("mode") or "operation")
 
-    def _upsert_conn(self, conn: sqlite3.Connection, job: dict[str, Any], *, now: str | None = None) -> None:
+    def _upsert_conn(
+        self,
+        conn: sqlite3.Connection,
+        job: dict[str, Any],
+        *,
+        now: str | None = None,
+    ) -> None:
         job_id = str(job.get("id") or "").strip()
         if not job_id:
             raise ValueError("Job payload is missing an id.")
@@ -1468,16 +1486,18 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         )
 
     def upsert(self, job: dict[str, Any]) -> None:
+        """Persist one caller-owned snapshot without making another full copy."""
         with self._lock, self._connect() as conn:
-            self._upsert_conn(conn, copy.deepcopy(job))
+            self._upsert_conn(conn, job)
             conn.commit()
 
     def upsert_many(self, jobs: Iterable[dict[str, Any]]) -> None:
+        """Persist caller-owned snapshots without duplicating their object graphs."""
         now = _iso_now()
         with self._lock, self._connect() as conn:
             for job in jobs:
                 if isinstance(job, dict) and job.get("id"):
-                    self._upsert_conn(conn, copy.deepcopy(job), now=now)
+                    self._upsert_conn(conn, job, now=now)
             conn.commit()
 
     def load(self, job_type: str) -> list[dict[str, Any]]:
@@ -1487,8 +1507,61 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
                 (str(job_type),),
             ).fetchall()
         return [
-            item for item in (_json_loads(row["payload_json"], {}) for row in rows)
+            item
+            for item in (_json_loads(row["payload_json"], {}) for row in rows)
             if isinstance(item, dict) and item.get("id")
+        ]
+
+    def load_active(self, job_type: str) -> list[dict[str, Any]]:
+        """Load only work that must remain resident for live worker coordination."""
+        placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
+        params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"SELECT payload_json FROM jobs "
+                f"WHERE job_type=? AND status IN ({placeholders}) "
+                f"ORDER BY created_at DESC",  # noqa: S608
+                params,
+            ).fetchall()
+        return [
+            item
+            for item in (_json_loads(row["payload_json"], {}) for row in rows)
+            if isinstance(item, dict) and item.get("id")
+        ]
+
+    def get(self, job_id: str, *, job_type: str | None = None) -> dict[str, Any] | None:
+        query = "SELECT payload_json FROM jobs WHERE id=?"
+        params: list[Any] = [str(job_id)]
+        if job_type is not None:
+            query += " AND job_type=?"
+            params.append(str(job_type))
+        with self._lock, self._connect() as conn:
+            row = conn.execute(query, params).fetchone()
+        value = _json_loads(row["payload_json"], {}) if row is not None else {}
+        return value if isinstance(value, dict) and value.get("id") else None
+
+    def footprints(self, job_type: str) -> list[tuple[str, str, int, bool]]:
+        """Return retention metadata without deserializing historical payloads."""
+        placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
+        params: list[Any] = [*sorted(self.ACTIVE_STATUSES), str(job_type)]
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, created_at, LENGTH(payload_json) AS stored_bytes,
+                       CASE WHEN status IN ({placeholders}) THEN 1 ELSE 0 END AS active
+                FROM jobs
+                WHERE job_type=?
+                """,  # noqa: S608
+                params,
+            ).fetchall()
+        return [
+            (
+                str(row["id"]),
+                str(row["created_at"] or ""),
+                int(row["stored_bytes"] or 0),
+                bool(row["active"]),
+            )
+            for row in rows
         ]
 
     def delete(self, job_id: str) -> bool:
@@ -1502,8 +1575,8 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
-                # Placeholders are only "?" drawn from the frozen ACTIVE_STATUSES set.
-                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",  # noqa: S608
+                f"DELETE FROM jobs WHERE job_type=? "
+                f"AND status NOT IN ({placeholders})",  # noqa: S608
                 params,
             )
             conn.commit()
@@ -1529,8 +1602,8 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             conn.execute(
-                # Placeholders are only "?" drawn from the frozen ACTIVE_STATUSES set.
-                f"DELETE FROM jobs WHERE job_type=? AND status NOT IN ({placeholders})",  # noqa: S608
+                f"DELETE FROM jobs WHERE job_type=? "
+                f"AND status NOT IN ({placeholders})",  # noqa: S608
                 params,
             )
             for raw in jobs or []:
@@ -1545,7 +1618,6 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
                 restored += 1
             conn.commit()
         return restored
-
 
 system_repository = SQLiteSystemRepository()
 job_repository = SQLiteJobRepository(system_repository.path)
