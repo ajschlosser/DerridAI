@@ -18,6 +18,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { createPrefsPersistence } from "../../src/domain/prefsPersistence";
+import { createWorkspacePersistence } from "../../src/domain/workspacePersistence";
 import { createRuntimeState } from "../../src/state/runtimeState";
 
 describe("workspace preference persistence", () => {
@@ -41,5 +42,56 @@ describe("workspace preference persistence", () => {
     expect(saved.appConfig.provider_profiles).toEqual([{ id: "profile" }]);
     expect(saved.selectedEvidence).toEqual({});
     expect(() => structuredClone(saved)).not.toThrow();
+  });
+
+  it("applies domain overlays before final validation and before storage becomes writable", async () => {
+    const state = createRuntimeState();
+    state.storageReady = false;
+    const applyUiTheme = vi.fn();
+    const ensureProviderProfiles = vi.fn();
+    const restorePreferenceOverlays = vi.fn(async () => {
+      expect(state.storageReady).toBe(false);
+      state.appConfig = { ...state.appConfig, ui_color_theme: "blue" };
+      state.ragConfig = {
+        ...state.ragConfig,
+        locales: ["de", "en"],
+        history: Array.from({ length: 120 }, (_, index) => ({ index })),
+      };
+      state.pageSize = Number.NaN;
+    });
+
+    const persistence = createWorkspacePersistence({
+      state,
+      fileTimers: new Map(),
+      applyUiTheme,
+      ensureProviderProfiles,
+      idbGet: vi.fn(async (_store: string, key: string) =>
+        key === "workspace"
+          ? {
+              key: "workspace",
+              appConfig: { ui_color_theme: "green" },
+              ragConfig: { locales: ["fr"] },
+              reviewSelection: [],
+            }
+          : null,
+      ),
+      idbGetAll: vi.fn(async () => []),
+      idbPut: vi.fn(),
+      invalidateCorpusCache: vi.fn(),
+      restoreCurrentPdfAsset: vi.fn(async () => undefined),
+      restorePreferenceOverlays,
+      serializableFile: vi.fn(),
+      trf: vi.fn((key: string) => key),
+    });
+
+    await persistence.restoreWorkspace();
+
+    expect(restorePreferenceOverlays).toHaveBeenCalledTimes(1);
+    expect(applyUiTheme).toHaveBeenLastCalledWith("blue");
+    expect(state.ragConfig.locales).toEqual(["en"]);
+    expect(state.ragConfig.history).toHaveLength(100);
+    expect(state.pageSize).toBe(100);
+    expect(ensureProviderProfiles).toHaveBeenCalledTimes(1);
+    expect(state.storageReady).toBe(true);
   });
 });
