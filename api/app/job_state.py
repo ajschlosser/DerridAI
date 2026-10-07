@@ -243,7 +243,12 @@ class PersistentJobStateMixin:
         )
 
     def _prune_resident_finished(self) -> None:
-        """Bound finished in-memory payloads after their durable write succeeds."""
+        """Bound finished resident payloads without serializing them a second time."""
+        durable_sizes = {
+            job_id: size
+            for job_id, _created_at, size, _active
+            in job_repository.footprints(self.JOB_TYPE)
+        }
         with self._lock:
             finished = [
                 (job_id, job)
@@ -257,7 +262,12 @@ class PersistentJobStateMixin:
             keep: set[str] = set()
             kept_bytes = 0
             for job_id, job in finished:
-                size = self._payload_size(job)
+                # A just-persisted terminal row should always have a durable
+                # size. If storage cannot report one, evict conservatively.
+                size = durable_sizes.get(
+                    str(job_id),
+                    self.RESIDENT_FINISHED_MAX_BYTES + 1,
+                )
                 if (
                     len(keep) < self.RESIDENT_FINISHED_MAX_JOBS
                     and kept_bytes + size <= self.RESIDENT_FINISHED_MAX_BYTES
