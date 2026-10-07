@@ -540,6 +540,7 @@ describe("router and runtime stay in agreement", () => {
     );
     expect(router.currentRoute.value.path).toBe("/");
 
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
     release?.(true);
     await flushPromises();
 
