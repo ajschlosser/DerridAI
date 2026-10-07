@@ -41,13 +41,20 @@ export function listSemanticMapSources() {
   };
   const current: Any = selectedRecord();
   if (current) push(current);
+  if (!isResearcher()) {
+    // Respect the bounded semantic-map source limit while walking local files;
+    // do not allocate a flattened copy of the entire corpus first.
+    for (const file of state.files || []) {
+      for (const record of file.records || []) {
+        push(record);
+        if (records.length >= 400) break;
+      }
+      if (records.length >= 400) break;
+    }
+  }
   const pools = isResearcher()
     ? [researcherDbRecords(), state.storeRecords || []]
-    : [
-        (state.files || []).flatMap((file: Any) => file.records || []),
-        state.storeRecords || [],
-        researcherDbRecords(),
-      ];
+    : [state.storeRecords || [], researcherDbRecords()];
   for (const pool of pools) {
     for (const record of pool || []) {
       push(record);
