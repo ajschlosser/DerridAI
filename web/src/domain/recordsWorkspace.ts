@@ -37,6 +37,7 @@ type Helper =
   | "clearReviewSelection"
   | "copyCitation"
   | "copyJsonToClipboard"
+  | "corpusVersion"
   | "dbUnavailableReason"
   | "evidenceIsSelected"
   | "getTableColumns"
@@ -81,6 +82,7 @@ export function createRecordsWorkspace(deps: Deps) {
     clearReviewSelection,
     copyCitation,
     copyJsonToClipboard,
+    corpusVersion,
     dbUnavailableReason,
     evidenceIsSelected,
     getTableColumns,
@@ -116,6 +118,60 @@ export function createRecordsWorkspace(deps: Deps) {
     urlFromState,
     workspaceEvidenceSelectionKey,
   } = deps;
+  let baseRowsCache:
+    | {
+        file: Any;
+        version: number;
+        rows: Any[];
+        flagged: number;
+        available: string[];
+      }
+    | null = null;
+  let queryRowsCache:
+    | {
+        file: Any;
+        version: number;
+        query: string;
+        filtersKey: string;
+        rows: Any[];
+      }
+    | null = null;
+  let normalizedTextCache = new WeakMap<object, string>();
+
+  function baseRowsForFile(file: Any) {
+    const version = Number(corpusVersion()) || 0;
+    if (baseRowsCache?.file === file && baseRowsCache.version === version) return baseRowsCache;
+
+    const rows = file.records.map((record: Any, index: number) => ({ file, record, index }));
+    baseRowsCache = {
+      file,
+      version,
+      rows,
+      flagged: needsReviewItems(rows).length,
+      available: tableAvailableFields(rows, [
+        "__db_status",
+        "work",
+        "page_start",
+        "needs_review",
+        "text",
+      ]),
+    };
+    queryRowsCache = null;
+    normalizedTextCache = new WeakMap();
+    return baseRowsCache;
+  }
+
+  function normalizedRecordText(record: Any) {
+    if (record && typeof record === "object") {
+      const cached = normalizedTextCache.get(record);
+      if (cached !== undefined) return cached;
+      const value = String(record.text || "").toLocaleLowerCase();
+      normalizedTextCache.set(record, value);
+      return value;
+    }
+    return String(record?.text || "").toLocaleLowerCase();
+  }
+
   function clearRecordsListFilters() {
     const f = activeFile();
     if (!f) return;
@@ -184,32 +240,47 @@ export function createRecordsWorkspace(deps: Deps) {
         capabilities,
       };
     }
-    const query = state.searches[f.id] || "";
-    const sort = state.sorts[f.id] || (state.sorts[f.id] = { key: "page_start", dir: 1 });
+    const query = String(state.searches[f.id] || "");
+    const normalizedQuery = query.toLocaleLowerCase();
+    const sort = state.sorts[f.id] || { key: "page_start", dir: 1 };
     const filters = state.listFilters[f.id] || {};
-    let rows = f.records
-      .map((record: Any, index: Any) => ({ file: f, record, index }))
-      .filter(
-        (x: Any) =>
-          !query ||
-          String(x.record.text || "")
-            .toLocaleLowerCase()
-            .includes(query.toLocaleLowerCase()),
-      )
-      .filter((x: Any) => rowMatchesListFilters(x, filters));
-    rows = sortRows(rows, sort);
+    const base = baseRowsForFile(f);
+    const filtersKey = JSON.stringify(filters);
+    const canNarrowPreviousQuery =
+      Boolean(queryRowsCache) &&
+      queryRowsCache!.file === f &&
+      queryRowsCache!.version === base.version &&
+      queryRowsCache!.filtersKey === filtersKey &&
+      normalizedQuery.startsWith(queryRowsCache!.query);
+
+    let matchedRows: Any[];
+    if (canNarrowPreviousQuery) {
+      matchedRows = normalizedQuery
+        ? queryRowsCache!.rows.filter((row: Any) =>
+            normalizedRecordText(row.record).includes(normalizedQuery),
+          )
+        : [...base.rows];
+    } else {
+      matchedRows = base.rows.filter(
+        (row: Any) =>
+          (!normalizedQuery || normalizedRecordText(row.record).includes(normalizedQuery)) &&
+          rowMatchesListFilters(row, filters),
+      );
+    }
+    queryRowsCache = {
+      file: f,
+      version: base.version,
+      query: normalizedQuery,
+      filtersKey,
+      rows: matchedRows,
+    };
+    const rows = sortRows([...matchedRows], sort);
     const pg = pageInfo(rows.length, state.pages[f.id] || 1);
-    state.pages[f.id] = pg.page;
     const slice = rows.slice(pg.start, pg.end);
-    const flagged = needsReviewItems(
-      f.records.map((record: Any, index: Any) => ({ file: f, record, index })),
-    ).length;
+    const flagged = base.flagged;
     const pageSelected =
       slice.length > 0 && slice.every((x: Any) => state.reviewSelection.has(reviewKey(f, x.index)));
-    const available = tableAvailableFields(
-      f.records.map((record: Any, index: Any) => ({ file: f, record, index })),
-      ["__db_status", "work", "page_start", "needs_review", "text"],
-    );
+    const available = base.available;
     const columnKeys = getTableColumns("list", available);
     return {
       available: true,
