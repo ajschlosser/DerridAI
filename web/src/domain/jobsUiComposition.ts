@@ -112,6 +112,7 @@ import {
   persistLayoutPreferences,
   persistPrefs,
   persistResearchPreferences,
+  persistSettingsPreferences,
   refreshShell,
   shell,
 } from "./sharedWorkspaceStorage";
@@ -325,6 +326,7 @@ const {
   persistJobPreferences: late(() => persistJobPreferences),
   persistPrefs: late(() => persistPrefs),
   persistResearchPreferences: late(() => persistResearchPreferences),
+  persistSettingsPreferences: late(() => persistSettingsPreferences),
   providerDisplayName: late(() => providerDisplayName),
   providerProfile: late(() => providerProfile),
   providerProfiles: late(() => providerProfiles),
