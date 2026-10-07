@@ -2483,7 +2483,7 @@ def run_rag_pipeline(
         raw_answer,
         evidence,
         prose_required=prose_required,
-        require_evidence_markers=request.bind_citations and prose_required,
+        require_evidence_markers=request.bind_citations,
     )
     initial_contract_issues = list(contract_issues)
     output_contract_retry = bool(contract_issues)
@@ -2502,7 +2502,8 @@ def run_rag_pipeline(
             warnings.append(
                 "Generation cited evidence markers outside the current evidence packet; regenerated once."
             )
-        correction_prompt = generation_prompt + """
+        correction_prompt = generation_prompt + (
+            """
 
 <OUTPUT_CONTRACT_CORRECTION>
 The previous draft failed the Research output or evidence contract.
@@ -2510,6 +2511,17 @@ Return only cohesive scholarly prose with current evidence markers. Avoid JSON, 
 field-name wrappers such as title/introduction/themes, and fenced code blocks.
 </OUTPUT_CONTRACT_CORRECTION>
 """
+            if prose_required
+            else """
+
+<OUTPUT_CONTRACT_CORRECTION>
+The previous draft failed the Research evidence contract.
+Preserve the output form explicitly requested by the researcher. Ground substantive claims
+with current evidence markers such as [[E0]], cite only IDs present in the current evidence
+packet, and do not switch to prose unless the researcher requested prose.
+</OUTPUT_CONTRACT_CORRECTION>
+"""
+        )
         raw_answer = generate_answer(correction_prompt, None)
         contract_issues = _generation_contract_issues(
             raw_answer,
