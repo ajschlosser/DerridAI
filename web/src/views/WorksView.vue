@@ -21,6 +21,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
+import { useVectorStore } from "../stores/workspace";
 import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
@@ -50,6 +51,7 @@ import {
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
+const vector = useVectorStore();
 const works = useWorksWorkspace();
 const { snapshot, viewState, error } = works;
 const loading = ref(true);
@@ -389,6 +391,13 @@ watch(fileSignature, () => {
   if (loading.value || !snapshot.value) return;
   reload();
 });
+watch(
+  () => vector.presenceVersion,
+  () => {
+    if (loading.value || !snapshot.value || snapshot.value.mode !== "admin") return;
+    reload();
+  },
+);
 watch(
   () => shell.snapshot.activeStore,
   () => {
