@@ -694,7 +694,7 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | Milestone                              | Status      | Deliverable                                                                                                                                                                                                                 |
 | -------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | B0. Architecture                       | DONE        | Python shared-engine + Nuitka native-binary direction; standalone-first policy; four target keys; release-vs-repo binary gate.                                                                                              |
-| B1. Versioned CLI config               | IN PROGRESS | Strict v1/v2 validation, stable exit categories, secret-by-environment resolution, v1 migration, and pipeline-bound v2 envelopes are implemented; direct execution from embedded definitions remains. |
+| B1. Versioned CLI config               | IN PROGRESS | Strict v1/v2 validation, stable exit categories, secret-by-environment resolution, v1 migration, and pipeline-bound v2 envelopes are implemented; direct execution from embedded definitions remains.                       |
 | B2. Binary build spine                 | IN PROGRESS | Target identity helpers, Nuitka entry point/build script, artifact naming, manifest/checksum generation, compiled-binary smoke harness, and four-target standalone CI are implemented; onefile/release publication remains. |
 | B3. Installer spine                    | IN PROGRESS | curl/wget shell installer and Windows PowerShell installer with checksum verification and pinned/latest release resolution are implemented; they become end-to-end testable once release assets exist.                      |
 | B4. Headless runner                    | IN PROGRESS | Synchronous source-to-canonical-build application service is implemented without an HTTP dependency; actual compiled-binary end-to-end corpus acceptance remains.                                                           |
@@ -751,4 +751,4 @@ orchestration:
    capability checks;
 8. build onefile on all targets and measure final artifact size;
 9. decide release-only versus repository-committed binaries, then finish
-    signing/notarization and release integration.
+   signing/notarization and release integration.
