@@ -42,6 +42,7 @@ type Helper =
   | "jobProviderSummary"
   | "navigateTo"
   | "notifyOperationsChanged"
+  | "persistJobPreferences"
   | "persistPrefs"
   | "recordFingerprint"
   | "refreshCorpusBuildsHomeCardOnly"
@@ -72,6 +73,7 @@ export function createJobsWorkspace(deps: Deps) {
     jobProviderSummary,
     navigateTo,
     notifyOperationsChanged,
+    persistJobPreferences,
     persistPrefs,
     recordFingerprint,
     refreshCorpusBuildsHomeCardOnly,
@@ -112,10 +114,18 @@ export function createJobsWorkspace(deps: Deps) {
       for (const id of disappearedRagIds) pruneClientJobState(id, { removeHistory: false });
       persistPrefs();
     }
+    let jobBookkeepingChanged = false;
     for (const id of Object.keys(state.jobApplied || {}))
-      if (!knownJobIds.has(id)) delete state.jobApplied[id];
+      if (!knownJobIds.has(id)) {
+        delete state.jobApplied[id];
+        jobBookkeepingChanged = true;
+      }
     for (const id of Object.keys(state.upsertJobApplied || {}))
-      if (!knownJobIds.has(id)) delete state.upsertJobApplied[id];
+      if (!knownJobIds.has(id)) {
+        delete state.upsertJobApplied[id];
+        jobBookkeepingChanged = true;
+      }
+    if (jobBookkeepingChanged) persistJobPreferences();
     for (const job of state.jobs) await syncUpsertJobReceipts(job);
     syncJobProgressToasts(previous);
     // Operations chrome renders from the jobs/operations projection. Reconciliation
@@ -311,7 +321,7 @@ export function createJobsWorkspace(deps: Deps) {
       }
     }
     state.upsertJobApplied[job.id] = results.length;
-    persistPrefs();
+    persistJobPreferences();
     updateDbStatusElements();
     if (!["queued", "running", "cancelling"].includes(detail.status)) {
       try {
