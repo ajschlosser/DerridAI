@@ -31,7 +31,11 @@ import { canUse, hasCapability } from "./sharedSession";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { navigateTo, syncUrl, urlFromState } from "./sharedNavigation";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import {
+  persistListPreferences,
+  persistReviewPreferences,
+  shell,
+} from "./sharedWorkspaceStorage";
 import {
   recordDbStatus,
   refreshPresenceForRows,
@@ -63,7 +67,8 @@ export const recordsWorkspace = createRecordsWorkspace({
   openOcrCleanupDialog: recordDialogs.openOcrCleanupDialog,
   openTouchup,
   pageInfo,
-  persistPrefs,
+  persistListPreferences,
+  persistReviewPreferences,
   recordDbStatus,
   recordStores,
   recordsListCell: recordPresenters.recordsListCell,
