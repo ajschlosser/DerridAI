@@ -32,7 +32,6 @@ type Helper =
   | "activeFile"
   | "canAccessPage"
   | "dbSearchWhere"
-  | "persistPrefs"
   | "renderView"
   | "selectedIndex"
   | "shell";
@@ -46,7 +45,6 @@ export function createNavigation(deps: Deps) {
     activeFile,
     canAccessPage,
     dbSearchWhere,
-    persistPrefs,
     renderView,
     selectedIndex,
     shell,
@@ -114,7 +112,6 @@ export function createNavigation(deps: Deps) {
       state.storeSearchResults = [];
     }
     state.view = view;
-    persistPrefs();
     syncUrl({ replace: !push, href });
     shell();
     renderView();
