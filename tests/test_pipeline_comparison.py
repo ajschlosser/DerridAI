@@ -1092,8 +1092,13 @@ def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) 
 
     assert len(prompts) == 1
     assert result["raw_answer"].startswith('{"answer"')
-    generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
-    assert generation_stage["detail"]["output_contract_retry"]def test_explicit_json_binding_stays_valid_json_without_appended_bibliography(monkeypatch) -> None:
+    generation_stage = next(
+        stage for stage in result["stages"] if stage["name"] == "generation"
+    )
+    assert generation_stage["detail"]["output_contract_retry"] is False
+
+
+def test_explicit_json_binding_stays_valid_json_without_appended_bibliography(monkeypatch) -> None:
     def generate(**_kwargs):
         return '{"answer":"The trace is not a presence [[E0]]."}'
 
@@ -1120,9 +1125,6 @@ def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) 
     parsed = json.loads(result["answer"])
     assert "1976" in parsed["answer"]
     assert "Works Cited" not in result["answer"]
-
-
- is False
 
 
 def test_works_cited_never_implies_binding_when_answer_has_no_evidence_markers() -> None:
