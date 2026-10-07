@@ -20,7 +20,7 @@ import { toast } from "../composables/notifications";
 import { allRows, memoCorpus } from "./corpusCache";
 import { reviewKey } from "./evidenceSelection";
 import { selectedReviewItems } from "./reviewItems";
-import { applyRecordChanges } from "./sharedRecordEditing";
+import { applyRecordChanges, commitRecordFiles } from "./sharedRecordEditing";
 import { renderView } from "./sharedNavigation";
 import { trf } from "./sharedTranslate";
 import { selectedIndex, state } from "./sharedUrlState";
@@ -75,6 +75,7 @@ export function cleanRows(rows: any[]) {
   const batchId = crypto.randomUUID();
   let recordsChanged = 0,
     fieldsChanged = 0;
+  const touchedFiles = new Set<any>();
   for (const row of rows) {
     const current = row.file.records[row.index];
     const cleaned = stripLigaturesAndArtifacts(current?.text);
@@ -83,13 +84,15 @@ export function cleanRows(rows: any[]) {
       row.file,
       row.index,
       { text: cleaned.text },
-      { source: "ocr_cleanup", batchId },
+      { source: "ocr_cleanup", batchId, deferCommit: true },
     );
     if (n) {
       recordsChanged++;
       fieldsChanged += n;
+      touchedFiles.add(row.file);
     }
   }
+  commitRecordFiles(touchedFiles);
   shell();
   renderView();
   toast(trf("dynamic.cleaned_records", { records: recordsChanged, changes: fieldsChanged }), {
