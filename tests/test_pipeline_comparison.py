@@ -514,6 +514,147 @@ def test_single_named_author_closes_retrieval_scope() -> None:
     assert scope_stage["detail"]["inferred_exclusive_works"] == ["Totality and Infinity"]
 
 
+
+def test_source_author_role_closes_scope_when_target_author_is_also_named() -> None:
+    request = RAGRunRequest(
+        prompt="What does Derrida say about Levinas?",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert [item["record"]["record_id"] for item in result["evidence"]] == ["d1"]
+    assert result["retrieval"]["inferred_source_authors"] == ["Jacques Derrida"]
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == ["Of Grammatology"]
+
+
+def test_author_comparison_keeps_documentary_scope_open() -> None:
+    request = RAGRunRequest(
+        prompt="Compare Derrida and Levinas on alterity.",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert result["retrieval"]["inferred_source_authors"] == []
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == []
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {"d1", "l1"}
+
+
+class _SameTitleScopeStore(_ExplicitScopeStore):
+    def work_stats(self, name):
+        assert name == "corpus"
+        return [
+            {"work": "Shared Title", "document_author": "Marcel Proust", "count": 1},
+            {"work": "Shared Title", "document_author": "Jacques Derrida", "count": 1},
+        ]
+
+    def lexical_search(self, name, query, limit, where=None, where_document=None):
+        assert name == "corpus"
+        assert where_document is None
+
+        def matches(record, predicate):
+            if not predicate:
+                return True
+            key, value = next(iter(predicate.items()))
+            if key == "$and":
+                return all(matches(record, child) for child in value)
+            actual = record.get(key)
+            if not isinstance(value, dict):
+                return actual == value
+            operator, expected = next(iter(value.items()))
+            if operator == "$in":
+                return actual in expected
+            if operator == "$eq":
+                return actual == expected
+            raise AssertionError(f"unsupported fake filter operator: {operator}")
+
+        rows = [
+            {
+                "id": "derrida-shared",
+                "record": {
+                    "record_id": "d-shared",
+                    "work": "Shared Title",
+                    "document_author": "Jacques Derrida",
+                    "year": 2000,
+                    "page_start": 1,
+                    "text": "Derrida record with the colliding title.",
+                },
+                "relevance": 0.99,
+            },
+            {
+                "id": "proust-shared",
+                "record": {
+                    "record_id": "p-shared",
+                    "work": "Shared Title",
+                    "document_author": "Marcel Proust",
+                    "year": 1913,
+                    "page_start": 1,
+                    "text": "Proust record with the colliding title.",
+                },
+                "relevance": 0.70,
+            },
+        ]
+        if where:
+            return [row for row in rows if matches(row["record"], where)][:limit]
+        return rows[:limit]
+
+
+def test_named_source_author_disambiguates_same_titled_works() -> None:
+    request = RAGRunRequest(
+        prompt="According to Proust, what is at stake in Shared Title?",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _SameTitleScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert [item["record"]["record_id"] for item in result["evidence"]] == ["p-shared"]
+    assert result["retrieval"]["inferred_source_authors"] == ["Marcel Proust"]
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == ["Shared Title"]
+
+
 def test_single_citation_directive_remains_open_but_reserves_source() -> None:
     request = RAGRunRequest(
         prompt="Explain the relation between alterity and trace. Cite Levinas explicitly.",
