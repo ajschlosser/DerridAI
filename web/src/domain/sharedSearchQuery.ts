@@ -17,11 +17,15 @@
  */
 
 import { createUpdateSearchQuery, setSearchQueryDraft as setDraft } from "./searchQuery";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistSearchPreferences } from "./sharedWorkspaceStorage";
 import { syncUrl } from "./sharedNavigation";
 import { state } from "./sharedUrlState";
 
 // Search query commands over the shared state. Draft updates are intentionally
 // side-effect free so typing can paint before persistence and URL compression.
 export const setSearchQueryDraft = (value: unknown) => setDraft(state, value);
-export const updateSearchQuery = createUpdateSearchQuery({ state, persistPrefs, syncUrl });
+export const updateSearchQuery = createUpdateSearchQuery({
+  state,
+  persistPrefs: persistSearchPreferences,
+  syncUrl,
+});
