@@ -298,7 +298,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         opened: SegmentationSession | None = None
         try:
             if session is None:
-                session = opened = SegmentationSession.open()
+                session = opened = SegmentationSession.open(request)
             result = self._boundary_call(
                 session, request, prompt, response_model=BoundaryAuditResponseModel,
                 max_tokens=min(int(limits.get("reconciliation_num_predict") or 1000), 1200),
@@ -376,7 +376,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         session: SegmentationSession | None = None
         if pairs:
             try:
-                session = SegmentationSession.open()
+                session = SegmentationSession.open(request)
             except RuntimeError:
                 session = None
 
@@ -514,7 +514,7 @@ Return one decision for the exact boundary id. `signals` should contain compact 
         session: SegmentationSession | None = None
         if pending:
             try:
-                session=SegmentationSession.open()
+                session=SegmentationSession.open(request)
             except RuntimeError as exc:
                 classifier_failures+=len(pending); llm_keep_count+=len(pending)
                 self._increment_metric(build_id,"local_boundary_classifier_failures",len(pending))
