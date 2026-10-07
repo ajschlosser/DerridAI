@@ -372,6 +372,12 @@ export function createResearchWorkspace(deps: Deps) {
     if (!prompt) throw new Error("Enter a research question.");
     const selected = selectedEvidenceEntries();
     const skipRetrieval = Boolean(input.skip_retrieval ?? cfg.skip_retrieval);
+    // Selected evidence is authoritative only when the run explicitly opts into
+    // evidence-only or hybrid/pinned-evidence semantics. Merely having evidence
+    // selected in the workspace must not silently contaminate an ordinary
+    // Balanced/Precision/Recall/Custom retrieval run.
+    const includeSelectedEvidence =
+      skipRetrieval || Boolean(input.include_selected_evidence);
     if (skipRetrieval && !selected.length)
       throw new Error("Select at least one evidence record before using evidence-only mode.");
     if (!skipRetrieval && !cfg.source_collection) throw new Error("Select a corpus database.");
@@ -392,8 +398,8 @@ export function createResearchWorkspace(deps: Deps) {
     }
     if (selected.length > 500)
       throw new Error("Research supports at most 500 selected evidence records in one run.");
-    const selectedPayload = selectedEvidencePayload();
-    if (skipRetrieval && selectedPayload.length !== selected.length)
+    const selectedPayload = includeSelectedEvidence ? selectedEvidencePayload() : [];
+    if (includeSelectedEvidence && selectedPayload.length !== selected.length)
       throw new Error(
         "One or more selected evidence records are no longer available. Remove the stale selection and try again.",
       );
