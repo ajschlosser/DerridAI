@@ -18,19 +18,23 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from app.pipelines.capabilities import (
     PipelineContractRequirement,
     StrategyVersionRequirement,
 )
 from app.pipelines.defaults import built_in_pipeline
+from app.pipelines.manager import PipelineManager
 from app.pipelines.models import PipelineDefinition
 from app.pipelines.portable import (
     PipelineDocument,
     export_pipeline_document,
     parse_pipeline_document,
 )
-from app.pipelines.service import pipeline_hash
+from app.pipelines.service import PipelineService, pipeline_hash
+from app.pipelines.store import PipelineStore
 from pydantic import ValidationError
 
 
@@ -107,3 +111,64 @@ def test_pipeline_document_contract_is_strict():
 
     with pytest.raises(ValidationError):
         PipelineDocument.model_validate(payload)
+
+
+def _custom_pipeline() -> PipelineDefinition:
+    source = _pipeline()
+    return source.model_copy(
+        deep=True,
+        update={
+            "pipeline_id": "test.portable.custom",
+            "version": 7,
+            "name": "Portable custom pipeline",
+            "built_in": False,
+            "created_at": datetime(2026, 10, 6, 12, 0, tzinfo=UTC),
+            "created_by": "portable-test",
+        },
+    )
+
+
+def test_manager_import_preserves_exact_hash_and_is_idempotent(tmp_path):
+    service = PipelineService()
+    manager = PipelineManager(
+        service=service,
+        store=PipelineStore(tmp_path / "pipeline-import.sqlite3"),
+    )
+    pipeline = _custom_pipeline()
+    expected_hash = pipeline_hash(pipeline)
+
+    imported, created = manager.import_definition(pipeline)
+    repeated, repeated_created = manager.import_definition(pipeline)
+
+    assert created is True
+    assert repeated_created is False
+    assert pipeline_hash(imported) == expected_hash
+    assert pipeline_hash(repeated) == expected_hash
+    assert manager.get_definition(pipeline.pipeline_id, pipeline.version) is not None
+
+
+def test_manager_import_rejects_same_version_with_different_content(tmp_path):
+    manager = PipelineManager(
+        service=PipelineService(),
+        store=PipelineStore(tmp_path / "pipeline-conflict.sqlite3"),
+    )
+    pipeline = _custom_pipeline()
+    manager.import_definition(pipeline)
+    conflicting = pipeline.model_copy(update={"name": "Different canonical content"})
+
+    with pytest.raises(ValueError, match="different canonical content"):
+        manager.import_definition(conflicting)
+
+
+def test_manager_import_accepts_identical_code_owned_builtin_without_persisting(tmp_path):
+    manager = PipelineManager(
+        service=PipelineService(),
+        store=PipelineStore(tmp_path / "pipeline-built-in.sqlite3"),
+    )
+    pipeline = _pipeline()
+
+    imported, created = manager.import_definition(pipeline)
+
+    assert created is False
+    assert pipeline_hash(imported) == pipeline_hash(pipeline)
+    assert manager.store.get_definition(pipeline.pipeline_id, pipeline.version) is None

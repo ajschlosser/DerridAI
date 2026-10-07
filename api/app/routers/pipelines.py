@@ -135,7 +135,7 @@ def import_pipeline_definition(
     body: dict[str, Any],
     request: Request,
 ) -> dict[str, Any]:
-    """Validate a portable pipeline document without silently persisting it."""
+    """Validate and idempotently persist one exact portable pipeline definition."""
 
     require_admin(request)
     try:
@@ -143,15 +143,16 @@ def import_pipeline_definition(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    pipeline = document.pipeline
-    existing = pipeline_manager.get_definition(pipeline.pipeline_id, pipeline.version)
-    existing_hash = pipeline_hash(existing) if existing is not None else None
+    try:
+        pipeline, created = pipeline_manager.import_definition(document.pipeline)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {
         "document": document.model_dump(mode="json"),
         "pipeline": pipeline.model_dump(mode="json"),
         "pipeline_hash": document.pipeline_hash,
-        "existing": existing is not None,
-        "same_as_existing": existing_hash == document.pipeline_hash if existing is not None else False,
+        "created": created,
+        "same_as_existing": not created,
     }
 
 
