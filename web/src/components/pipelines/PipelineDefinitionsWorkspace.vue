@@ -101,6 +101,21 @@ function create(purposeId: string) {
     aria-labelledby="pipeline-tab-pipelines"
   >
     <div class="pipeline-definitions-actions">
+      <UiButton
+        variant="primary"
+        icon="plus"
+        :label="t('pipelines.new_pipeline', 'New pipeline')"
+        :disabled="creating || Boolean(draft)"
+        :disabled-reason="
+          draft
+            ? t(
+                'pipelines.new_pipeline_while_editing',
+                'Finish or cancel the version you are editing first.',
+              )
+            : ''
+        "
+        @click="newOpen = true"
+      />
       <input
         ref="importInput"
         type="file"
@@ -126,21 +141,6 @@ function create(purposeId: string) {
             : ''
         "
         @click="importInput?.click()"
-      />
-      <UiButton
-        variant="primary"
-        icon="plus"
-        :label="t('pipelines.new_pipeline', 'New pipeline')"
-        :disabled="creating || Boolean(draft)"
-        :disabled-reason="
-          draft
-            ? t(
-                'pipelines.new_pipeline_while_editing',
-                'Finish or cancel the version you are editing first.',
-              )
-            : ''
-        "
-        @click="newOpen = true"
       />
     </div>
 
