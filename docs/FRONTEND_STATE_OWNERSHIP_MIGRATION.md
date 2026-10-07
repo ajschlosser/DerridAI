@@ -155,7 +155,7 @@ Work order:
       typing. Preserve draft restoration through a Research-specific repository if draft persistence remains desired.
 - [ ] B3. Split global preference persistence into domain repositories/timers, starting with Research, layout, Search,
       Records, and Compare. Retain migration reads from the existing `prefs` object until all domains move.
-- [ ] B4. Stop Search keystrokes from synchronously compressing/replacing URL state. Make query rendering immediate and URL
+- [x] B4. Stop Search keystrokes from synchronously compressing/replacing URL state. Make query rendering immediate and URL
       persistence delayed/meaningful.
 - [ ] B5. Make Records projections incremental/cached where feasible and side-effect free. Move presence refresh to an
       explicit async effect keyed to visible rows.
@@ -189,7 +189,7 @@ Acceptance:
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
 
-Implementation status on `task/frontend-state-ownership-performance`: A1, A2, B1, and B2 are implemented with focused
+Implementation status on `task/frontend-state-ownership-performance`: A1, A2, B1, B2, and B4 are implemented with focused
 regression coverage. Bounded User Timing measures now record Research prompt/instruction input-to-next-frame latency and
 sidebar navigation intent-to-next-frame latency. Repository validation has not yet been run in this environment.
 
