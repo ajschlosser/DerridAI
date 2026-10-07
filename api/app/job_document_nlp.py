@@ -116,7 +116,7 @@ class DocumentNlpPackJobManager(PersistentJobStateMixin):
         self._persist_job(job_id)
 
     def list(self) -> JobPayloadList:
-        jobs = [copy.deepcopy(job) for job in self._list_job_records()]
+        jobs = [copy.deepcopy(job) for job in self._all_job_records()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
 
     def get(self, job_id: str) -> dict[str, Any]:
