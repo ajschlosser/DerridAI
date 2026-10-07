@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 from app.chroma_store import ChromaStore
 from app.models import RAGRunRequest, ResearchFilterPlan
+from app.rag import _resolve_search_collections
 from app.research_filters import (
     combine_metadata_filters,
     metadata_filter_fields,
@@ -290,6 +291,58 @@ def test_lexical_search_pages_candidates_and_decodes_only_final_results(
     assert len(final_calls) == 1
     assert len(final_calls[0]["ids"]) <= 4
     assert len(decoded) <= 4
+
+
+class _DescriptorRoutingStore:
+    def __init__(self) -> None:
+        self.counted: list[str] = []
+
+    def list_store_descriptors(self):
+        return [
+            {
+                "name": "corpus",
+                "metadata": {},
+                "collection_role": "primary",
+                "language_codes": ["en", "fr"],
+                "source_collection": None,
+            },
+            {
+                "name": "corpus_en",
+                "metadata": {},
+                "collection_role": "language",
+                "language_codes": ["en"],
+                "source_collection": "corpus",
+            },
+            {
+                "name": "unrelated",
+                "metadata": {},
+                "collection_role": "general",
+                "language_codes": ["en"],
+                "source_collection": None,
+            },
+        ]
+
+    def list_stores(self):
+        raise AssertionError("Research routing must not count every collection")
+
+    def collection_count(self, name):
+        self.counted.append(name)
+        return {"corpus": 1000, "corpus_en": 600, "unrelated": 9000}[name]
+
+
+def test_research_routing_counts_only_selected_collections() -> None:
+    store = _DescriptorRoutingStore()
+
+    resolved = _resolve_search_collections(
+        store,  # type: ignore[arg-type]
+        "corpus",
+        ["en", "fr"],
+    )
+
+    assert [row["name"] for row in resolved] == ["corpus_en", "corpus"]
+    assert [row["count"] for row in resolved] == [600, 1000]
+    assert store.counted == ["corpus_en", "corpus"]
+    assert "unrelated" not in store.counted
 
 
 # --- Phase 2: preview endpoint -------------------------------------------------
