@@ -33,7 +33,7 @@ import logging
 import threading
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, NoReturn, Self
@@ -147,12 +147,17 @@ class StructuredStageSession:
     _local: threading.local = field(default_factory=threading.local, repr=False)
 
     @classmethod
-    def open_for(cls, spec: StructuredStageFeature) -> Self:
-        """Resolve and compile the assignment; there is no hidden default outside it."""
-        from .manager import pipeline_manager
+    def open_for(
+        cls,
+        spec: StructuredStageFeature,
+        *,
+        request: Mapping[str, Any] | None = None,
+    ) -> Self:
+        """Resolve and compile the system assignment or a frozen run binding."""
+        from .execution_resolution import resolve_execution_pipeline
 
         try:
-            resolved = pipeline_manager.resolve(spec.feature)
+            resolved = resolve_execution_pipeline(spec.feature, request)
             pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
             plan = compile_structured_stage_pipeline(pipeline, spec)
         except Exception as exc:  # noqa: BLE001 - reported to the caller as a task failure
