@@ -324,7 +324,6 @@ const {
   isResearcher: late(() => isResearcher),
   navigateTo: late(() => navigateTo),
   persistJobPreferences: late(() => persistJobPreferences),
-  persistPrefs: late(() => persistPrefs),
   persistResearchPreferences: late(() => persistResearchPreferences),
   persistSettingsPreferences: late(() => persistSettingsPreferences),
   providerDisplayName: late(() => providerDisplayName),
