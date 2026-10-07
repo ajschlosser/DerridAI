@@ -124,7 +124,7 @@ Work order:
 - [x] A2. Add immediate sidebar navigation intent state (`pendingNavId` or equivalent) that is visible before route work,
       keyboard accessible, and cleared on route settle/failure.
 - [ ] A3. Decompose the shell snapshot into stable navigation/layout/context and independent counters/status projections.
-- [ ] A4. Remove `pendingUpsertRows()` and every corpus-size-dependent selector from shell render paths.
+- [x] A4. Remove `pendingUpsertRows()` and every corpus-size-dependent selector from shell render paths.
 - [ ] A5. Replace shell polling/recomputation of corpus/job counts with domain-maintained read-only summary projections.
 - [ ] A6. Remove direct DOM updates for the global operations button; render the badge from the jobs/operations projection.
 - [ ] A7. Make semantic-map source refresh depend on semantic-map inputs rather than every `route.fullPath` change, and avoid
@@ -189,7 +189,7 @@ Acceptance:
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
 
-Implementation status on `task/frontend-state-ownership-performance`: A1, A2, B1, B2, and B4 are implemented with focused
+Implementation status on `task/frontend-state-ownership-performance`: A1, A2, A4, B1, B2, and B4 are implemented with focused
 regression coverage. Bounded User Timing measures now record Research prompt/instruction input-to-next-frame latency and
 sidebar navigation intent-to-next-frame latency. Repository validation has not yet been run in this environment.
 
