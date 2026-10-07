@@ -52,6 +52,7 @@ type Helper =
   | "hasCorpusDb"
   | "historyVersionChanges"
   | "idbDelete"
+  | "invalidateCorpusCache"
   | "jsonPretty"
   | "label"
   | "localRecordKey"
@@ -101,6 +102,7 @@ export function createRecordDialogs(deps: Deps) {
     hasCorpusDb,
     historyVersionChanges,
     idbDelete,
+    invalidateCorpusCache,
     jsonPretty,
     label,
     localRecordKey,
@@ -196,6 +198,7 @@ export function createRecordDialogs(deps: Deps) {
           }
         }
 
+        invalidateCorpusCache(merged.id, true);
         await persistFileNow(merged);
         state.activeFileId = merged.id;
         if (wantsDownload) download(merged.name, fileJsonl(merged));
