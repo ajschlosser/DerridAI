@@ -55,7 +55,11 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
             + (f" [{span['speaker']}]" if span.get("speaker") else "")
             for span in timed_spans
         )
-    inline = f"{last} {year}{': ' + pages if pages else ''}".strip()
+    citation_head = " ".join(part for part in (last, str(year or "")) if part).strip()
+    if pages:
+        inline = f"{citation_head}: {pages}" if citation_head else pages
+    else:
+        inline = citation_head
 
     parts = author.split()
     reversed_name = (

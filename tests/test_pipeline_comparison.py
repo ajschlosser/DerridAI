@@ -314,6 +314,64 @@ class _ExplicitScopeStore:
         return [derrida][:limit]
 
 
+def test_single_named_author_closes_retrieval_scope() -> None:
+    request = RAGRunRequest(
+        prompt="Describe the major themes and stakes of Levinas's philosophy.",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert [item["record"]["record_id"] for item in result["evidence"]] == ["l1"]
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == ["Totality and Infinity"]
+    assert result["retrieval"]["filter_plan"]["inferred_exclusive_works"] == [
+        "Totality and Infinity"
+    ]
+    scope_stage = next(stage for stage in result["stages"] if stage["name"] == "research_scope")
+    assert scope_stage["detail"]["active"] is True
+    assert scope_stage["detail"]["inferred_exclusive_works"] == ["Totality and Infinity"]
+
+
+def test_single_citation_directive_remains_open_but_reserves_source() -> None:
+    request = RAGRunRequest(
+        prompt="Explain the relation between alterity and trace. Cite Levinas explicitly.",
+        pipeline_id="research.balanced",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == []
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {"d1", "l1"}
+
+
 def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
     request = RAGRunRequest(
         prompt=(
@@ -506,6 +564,45 @@ def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeyp
     assert "Source document author: Jacques Derrida" in candidate_text
     assert "Quoted author: Emmanuel Levinas" in candidate_text
 
+
+
+def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None:
+    drafts = [
+        '```json\n{"title":"Bad \\*structured answer","major_themes":[]}\n```',
+        "The trace is not a presence [[E0]].",
+    ]
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return drafts[len(prompts) - 1]
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 2
+    assert "OUTPUT_CONTRACT_CORRECTION" in prompts[1]
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+    assert any("structured JSON" in warning for warning in result["warnings"])
+    generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
+    assert generation_stage["detail"]["attempts"] == 2
+    assert generation_stage["detail"]["prose_contract_retry"] is True
 
 
 @pytest.mark.parametrize("decompose", [False, True])

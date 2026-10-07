@@ -363,6 +363,31 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
     return issues
 
 
+def partition_scope_compatible_records(
+    records: Sequence[Mapping[str, Any]],
+    allowed_works: Sequence[str],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Drop non-pinned Records that escape an inferred exclusive work scope."""
+
+    allowed = {str(work).strip() for work in allowed_works if str(work).strip()}
+    if not allowed:
+        return [dict(item) for item in records], []
+
+    kept: list[dict[str, Any]] = []
+    excluded: list[dict[str, str]] = []
+    for item in records:
+        record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+        work = source_work_label(record)
+        if item.get("selected_evidence") or work in allowed:
+            kept.append(dict(item))
+            continue
+        excluded.append({
+            "record_id": str(record.get("record_id") or item.get("id") or "unknown"),
+            "work": work,
+        })
+    return kept, excluded
+
+
 def partition_sufficient_records(
     records: Sequence[Mapping[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -424,6 +449,43 @@ def strip_evidence_markers(text: str) -> str:
         value = re.sub(pattern, "", value)
     value = re.sub(r"\s+([.,;:!?])", r"\1", value)
     return re.sub(r"\s{2,}", " ", value).strip()
+
+
+_JSON_OUTPUT_REQUEST_PATTERN = re.compile(
+    r"(?is)(?:\b(?:return|respond|output|format|provide|give)\b.{0,40}\bjson\b|"
+    r"\bjson\s+(?:object|array|format)\b)"
+)
+_JSON_CODE_FENCE_PATTERN = re.compile(
+    r"(?is)^\s*```(?:json)?\s*(.*?)\s*```\s*$"
+)
+
+
+def _requests_json_output(prompt: str, instructions: str) -> bool:
+    """Return whether the researcher explicitly requested JSON output."""
+
+    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(f"{prompt}\n{instructions}"))
+
+
+def _json_like_answer(text: str) -> bool:
+    """Detect JSON-shaped output even when a local model emits malformed JSON."""
+
+    candidate = str(text or "").strip()
+    fenced = _JSON_CODE_FENCE_PATTERN.fullmatch(candidate)
+    if fenced:
+        candidate = fenced.group(1).strip()
+        # A fenced JSON object/array already violates the prose contract even if
+        # the model produced invalid escapes or otherwise malformed JSON.
+        if candidate.startswith(("{", "[")):
+            return True
+    if not candidate.startswith(("{", "[")):
+        return False
+    try:
+        return isinstance(json.loads(candidate), (dict, list))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        closing = "}" if candidate.startswith("{") else "]"
+        return candidate.endswith(closing) and bool(
+            re.search(r'"[^"]{1,80}"\s*:', candidate[:4000])
+        )
 
 
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
@@ -823,6 +885,45 @@ def _mentioned_work_groups(
     return distinct
 
 
+_COMPARATIVE_SCOPE_PATTERN = re.compile(
+    r"\b(?:compare|comparison|contrast|versus|vs\.?)\b",
+    flags=re.IGNORECASE,
+)
+_NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN = re.compile(
+    r"\b(?:cite|citation|include|mention|consult|draw\s+on|use)\b",
+    flags=re.IGNORECASE,
+)
+_STRONG_SINGLE_SOURCE_SUBJECT_PATTERN = re.compile(
+    r"(?:['’]s\b|\bwhat\s+does\b|\baccording\s+to\b|"
+    r"\b(?:novels?|works?|writings?|texts?)\s+by\b|\bin\s+the\s+(?:novels?|works?|writings?|texts?)\s+of\b)",
+    flags=re.IGNORECASE,
+)
+
+
+def _exclusive_scope_works(
+    groups: Sequence[Sequence[str]],
+    question: str,
+) -> list[str]:
+    """Return an inferred closed work scope only when the request is unambiguous.
+
+    A single named in-corpus author/work group can close documentary scope when
+    the named source is the subject of the question. Mere source directives such
+    as "cite X" remain coverage requests unless the same wording also contains a
+    strong single-source subject signal. Comparisons and multiple source groups
+    always remain open.
+    """
+
+    text = str(question or "")
+    if len(groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
+        return []
+    if (
+        _NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN.search(text)
+        and not _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN.search(text)
+    ):
+        return []
+    return sorted({str(work).strip() for work in groups[0] if str(work).strip()})
+
+
 def _explicit_scope_work_groups(
     store: ChromaStore,
     collections: Sequence[Mapping[str, Any]],
@@ -1176,6 +1277,38 @@ def run_rag_pipeline(
         })
         query_metadata["limit_retrieval"] = effective_retrieve_k
 
+    explicit_scope_text = "\n".join(
+        value
+        for value in (
+            str(request.prompt or "").strip(),
+            str(request.instructions or "").strip(),
+        )
+        if value
+    )
+    explicit_scope_groups = _explicit_scope_work_groups(
+        store,
+        collections,
+        explicit_scope_text,
+    )
+    exclusive_scope_works = _exclusive_scope_works(
+        explicit_scope_groups,
+        explicit_scope_text,
+    )
+    retrieval_metadata_filter = (
+        combine_metadata_filters(metadata_filter, {"work": {"$in": exclusive_scope_works}})
+        if exclusive_scope_works
+        else metadata_filter
+    )
+    filter_detail["inferred_exclusive_works"] = exclusive_scope_works
+    if pipeline_plan.scope_stage_id and exclusive_scope_works:
+        scope_stage = next(
+            (stage for stage in reversed(stages) if stage["name"] == "research_scope"),
+            None,
+        )
+        if scope_stage is not None:
+            scope_stage["detail"]["active"] = True
+            scope_stage["detail"]["inferred_exclusive_works"] = exclusive_scope_works
+
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
@@ -1211,8 +1344,8 @@ def run_rag_pipeline(
         if {"similarity", "mmr"} & set(effective_search_types):
             try:
                 semantic_kwargs: dict[str, Any] = {}
-                if metadata_filter:
-                    semantic_kwargs["where"] = metadata_filter
+                if retrieval_metadata_filter:
+                    semantic_kwargs["where"] = retrieval_metadata_filter
                 if document_filter:
                     semantic_kwargs["where_document"] = document_filter
                 semantic_candidates = _scope_rag_candidates(
@@ -1263,8 +1396,8 @@ def run_rag_pipeline(
                 f"Lexical · {collection['name']} · {collection.get('_rag_route', '')}",
             )
             lexical_kwargs: dict[str, Any] = {}
-            if metadata_filter:
-                lexical_kwargs["where"] = metadata_filter
+            if retrieval_metadata_filter:
+                lexical_kwargs["where"] = retrieval_metadata_filter
             if document_filter:
                 lexical_kwargs["where_document"] = document_filter
             lexical_candidates = _scope_rag_candidates(
@@ -1306,24 +1439,9 @@ def run_rag_pipeline(
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-    # Explicitly named authors/works are corpus-scope constraints, not merely
-    # generation instructions. Query decomposition may correctly move wording
-    # such as "cite the named author" into prompt_instructions; if retrieval used only the
-    # cleaned research question, that target could disappear before evidence
-    # selection. Reserve one relevant Record for each named in-corpus scope.
-    explicit_scope_text = "\n".join(
-        value
-        for value in (
-            str(request.prompt or "").strip(),
-            str(request.instructions or "").strip(),
-        )
-        if value
-    )
-    explicit_scope_groups = _explicit_scope_work_groups(
-        store,
-        collections,
-        explicit_scope_text,
-    )
+    # Comparative/multi-author requests keep one seed per named source group.
+    # Single unambiguous author/work requests were already constrained above;
+    # the seed remains useful as a coverage guarantee within that closed scope.
     explicit_scope_seed_ids: set[str] = set()
     explicit_scope_seed_detail: list[dict[str, Any]] = []
     scoped_query = "\n".join(
@@ -1833,6 +1951,18 @@ def run_rag_pipeline(
         })
 
     stage_start = time.perf_counter()
+    context_candidates, excluded_scope_records = partition_scope_compatible_records(
+        context_candidates,
+        exclusive_scope_works,
+    )
+    if excluded_scope_records:
+        warnings.append(
+            "Excluded out-of-scope records from inferred author/work scope: "
+            + "; ".join(
+                f"{item['record_id']} ({item['work'] or 'unknown work'})"
+                for item in excluded_scope_records
+            )
+        )
     context_candidates, insufficient_records = partition_sufficient_records(
         context_candidates
     )
@@ -1863,6 +1993,7 @@ def run_rag_pipeline(
             "evidence_count": len(evidence),
             "characters": len(retrieval_context),
             "sufficiency_issues": sufficiency_issues,
+            "excluded_out_of_scope_records": excluded_scope_records,
             "excluded_insufficient_records": insufficient_records,
         },
     })
@@ -1925,6 +2056,7 @@ def run_rag_pipeline(
         "filter_plan": filter_detail,
         "explicit_scope_groups": explicit_scope_seed_detail,
         "explicit_scope_seed_count": len(explicit_scope_seed_ids),
+        "inferred_exclusive_scope_works": exclusive_scope_works,
         "response_language": request.response_language,
         "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
         "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
@@ -1998,22 +2130,54 @@ def run_rag_pipeline(
         prior_claim_memory=prior_claim_memory or "(none selected)",
         context=retrieval_context,
     )
-    raw_answer = chat_complete(
-        provider=provider,
-        model=model,
-        base_url=request.base_url,
-        api_key=request.api_key,
-        prompt=generation_prompt,
-        options=request.generation,
-        json_mode=False,
-        max_tokens=(
-            request.generation.num_predict
-            if request.generation and request.generation.num_predict
-            else 8192
-        ),
-        cancelled=cancelled,
-        on_delta=on_generation_delta,
+    generation_max_tokens = (
+        request.generation.num_predict
+        if request.generation and request.generation.num_predict
+        else 8192
     )
+
+    def generate_answer(
+        prompt_text: str,
+        delta_callback: Callable[[str], None] | None,
+    ) -> str:
+        return chat_complete(
+            provider=provider,
+            model=model,
+            base_url=request.base_url,
+            api_key=request.api_key,
+            prompt=prompt_text,
+            options=request.generation,
+            json_mode=False,
+            max_tokens=generation_max_tokens,
+            cancelled=cancelled,
+            on_delta=delta_callback,
+        )
+
+    raw_answer = generate_answer(generation_prompt, on_generation_delta)
+    generation_attempts = 1
+    prose_contract_retry = False
+    if (
+        not _requests_json_output(request.prompt, query_metadata["prompt_instructions"])
+        and _json_like_answer(raw_answer)
+    ):
+        prose_contract_retry = True
+        generation_attempts += 1
+        warnings.append(
+            "Generation returned structured JSON for a prose Research request; regenerated once."
+        )
+        correction_prompt = generation_prompt + """
+
+<OUTPUT_CONTRACT_CORRECTION>
+The previous draft violated the requested answer form by returning JSON or a JSON code fence.
+Return only cohesive scholarly prose with evidence markers. Do not return JSON, a schema,
+field names such as title/introduction/themes, or a fenced code block.
+</OUTPUT_CONTRACT_CORRECTION>
+"""
+        raw_answer = generate_answer(correction_prompt, None)
+        if _json_like_answer(raw_answer):
+            raise ValueError(
+                "Research generation violated the prose output contract after one retry."
+            )
     stages.append({
         "name": "generation",
         "seconds": time.perf_counter() - stage_start,
@@ -2021,6 +2185,8 @@ def run_rag_pipeline(
             "provider": provider,
             "model": model,
             "characters": len(raw_answer),
+            "attempts": generation_attempts,
+            "prose_contract_retry": prose_contract_retry,
         },
     })
     update("generation", 1, 1, "Draft generated")
