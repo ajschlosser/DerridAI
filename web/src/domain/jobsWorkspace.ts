@@ -43,7 +43,7 @@ type Helper =
   | "navigateTo"
   | "notifyOperationsChanged"
   | "persistJobPreferences"
-  | "persistPrefs"
+  | "persistResearchPreferences"
   | "recordFingerprint"
   | "refreshCorpusBuildsHomeCardOnly"
   | "refreshOperationsPanelOnly"
@@ -73,7 +73,7 @@ export function createJobsWorkspace(deps: Deps) {
     navigateTo,
     notifyOperationsChanged,
     persistJobPreferences,
-    persistPrefs,
+    persistResearchPreferences,
     recordFingerprint,
     refreshCorpusBuildsHomeCardOnly,
     refreshOperationsPanelOnly,
@@ -104,15 +104,19 @@ export function createJobsWorkspace(deps: Deps) {
     const disappearedRagIds = previousJobs
       .filter((job) => job.type === "rag" && !knownJobIds.has(job.id))
       .map((job) => job.id);
+    let jobBookkeepingChanged = false;
+    let researchPreferencesChanged = false;
     if (disappearedRagIds.length && Array.isArray(state.ragConfig.run_history)) {
       const removed = new Set(disappearedRagIds);
       state.ragConfig.run_history = state.ragConfig.run_history.filter(
         (item: Any) => !removed.has(item.job_id),
       );
-      for (const id of disappearedRagIds) pruneClientJobState(id, { removeHistory: false });
-      persistPrefs();
+      researchPreferencesChanged = true;
+      for (const id of disappearedRagIds) {
+        const pruned = pruneClientJobState(id, { removeHistory: false, persist: false });
+        jobBookkeepingChanged ||= pruned.jobPreferencesChanged;
+      }
     }
-    let jobBookkeepingChanged = false;
     for (const id of Object.keys(state.jobApplied || {}))
       if (!knownJobIds.has(id)) {
         delete state.jobApplied[id];
@@ -124,6 +128,7 @@ export function createJobsWorkspace(deps: Deps) {
         jobBookkeepingChanged = true;
       }
     if (jobBookkeepingChanged) persistJobPreferences();
+    if (researchPreferencesChanged) persistResearchPreferences();
     for (const job of state.jobs) await syncUpsertJobReceipts(job);
     syncJobProgressToasts(previous);
     // Operations chrome renders from the jobs/operations projection. Reconciliation
@@ -230,26 +235,51 @@ export function createJobsWorkspace(deps: Deps) {
     realtime.stop();
   }
   registerJobsPause(pauseRuntime);
-  function pruneClientJobState(jobId: Any, { removeHistory = true } = {}) {
+  function pruneClientJobState(
+    jobId: Any,
+    { removeHistory = true, persist = true } = {},
+  ) {
+    const hadJobApplied = Object.prototype.hasOwnProperty.call(state.jobApplied || {}, jobId);
+    const hadUpsertApplied = Object.prototype.hasOwnProperty.call(
+      state.upsertJobApplied || {},
+      jobId,
+    );
+    const beforeHistory = Array.isArray(state.ragConfig.run_history)
+      ? state.ragConfig.run_history.length
+      : 0;
+
     state.jobs = state.jobs.filter((job: Any) => job.id !== jobId);
     delete state.jobApplied?.[jobId];
     delete state.upsertJobApplied?.[jobId];
     delete jobCompletionNotified[jobId];
     clearTimeout(completedJobToastTimers[jobId]);
     delete completedJobToastTimers[jobId];
-    document.querySelector(`[data-job-operation="${CSS.escape(jobId)}"]`)?.remove();
     if (removeHistory && Array.isArray(state.ragConfig.run_history)) {
       state.ragConfig.run_history = state.ragConfig.run_history.filter(
         (item: Any) => item.job_id !== jobId,
       );
     }
+
+    const jobPreferencesChanged = hadJobApplied || hadUpsertApplied;
+    const researchPreferencesChanged =
+      removeHistory &&
+      Array.isArray(state.ragConfig.run_history) &&
+      state.ragConfig.run_history.length !== beforeHistory;
+    if (persist) {
+      if (jobPreferencesChanged) persistJobPreferences();
+      if (researchPreferencesChanged) persistResearchPreferences();
+    }
+
+    // Operation chrome derives from job state. Publish that state transition;
+    // do not reach into a rendered card from the job-data layer.
+    notifyOperationsChanged();
     updateOperationStackCount();
+    return { jobPreferencesChanged, researchPreferencesChanged };
   }
   async function removeFinishedJob(jobId: Any, { refresh = true } = {}) {
     try {
       await api(`/api/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
       pruneClientJobState(jobId);
-      persistPrefs();
       if (refresh) await refreshJobs({ rerender: state.view === "home" });
       else updateOperationStackCount();
     } catch (error) {
