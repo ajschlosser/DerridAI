@@ -95,6 +95,29 @@ def _parser() -> argparse.ArgumentParser:
         help="Write the machine-readable pipeline capability identity.",
     )
 
+    pipeline_export = pipeline_commands.add_parser(
+        "export",
+        help="Export an immutable built-in pipeline as a portable definition.",
+    )
+    pipeline_export.add_argument("--pipeline-id", required=True)
+    pipeline_export.add_argument("--version", required=True, type=int)
+    pipeline_export.add_argument(
+        "--output",
+        type=Path,
+        help="Write portable JSON here instead of stdout.",
+    )
+
+    pipeline_validate = pipeline_commands.add_parser(
+        "validate",
+        help="Validate a portable pipeline definition exported by DerridAI.",
+    )
+    pipeline_validate.add_argument("--config", required=True, type=Path)
+    pipeline_validate.add_argument(
+        "--json",
+        action="store_true",
+        help="Write the normalized portable pipeline document.",
+    )
+
     corpus = commands.add_parser(
         "corpus",
         help="Build scholarly corpus artifacts.",
@@ -229,6 +252,96 @@ def _pipeline_capabilities(*, as_json: bool) -> int:
     return int(ExitCode.OK)
 
 
+def _write_text_output(
+    text: str,
+    *,
+    output: Path | None,
+    label: str,
+) -> int:
+    """Write text atomically when a destination is requested."""
+
+    if output is None:
+        sys.stdout.write(text)
+        return int(ExitCode.OK)
+
+    destination = output.expanduser().resolve()
+    temporary = destination.with_name(f".{destination.name}.tmp")
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(destination)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        print(f"{label} failed: {exc}", file=sys.stderr)
+        return int(ExitCode.OUTPUT_IO)
+
+    print(destination)
+    return int(ExitCode.OK)
+
+
+def _pipeline_export(
+    pipeline_id: str,
+    version: int,
+    *,
+    output: Path | None,
+) -> int:
+    """Export one code-owned definition without loading server persistence."""
+
+    from .pipelines.defaults import built_in_pipeline
+    from .pipelines.portable import export_pipeline_document
+
+    pipeline = built_in_pipeline(pipeline_id, version)
+    if pipeline is None:
+        print(
+            "Pipeline export failed: the standalone CLI can directly export only "
+            "built-in definitions compiled into this build. Export saved custom "
+            "definitions from Pipeline Studio.",
+            file=sys.stderr,
+        )
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    document = export_pipeline_document(pipeline)
+    rendered = (
+        json.dumps(document.model_dump(mode="json"), ensure_ascii=False, indent=2)
+        + "\n"
+    )
+    return _write_text_output(rendered, output=output, label="Pipeline export")
+
+
+def _pipeline_validate(path: Path, *, as_json: bool) -> int:
+    """Validate a portable definition using the same strict parser as the API."""
+
+    from .pipelines.portable import parse_pipeline_document
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        document = parse_pipeline_document(payload)
+    except OSError as exc:
+        print(f"Pipeline configuration error: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+    except (json.JSONDecodeError, ValueError, ValidationError) as exc:
+        print(f"Pipeline configuration error: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    if as_json:
+        print(
+            json.dumps(
+                document.model_dump(mode="json"),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+    else:
+        print(
+            f"Pipeline {document.pipeline.pipeline_id}@{document.pipeline.version} "
+            f"is valid ({document.pipeline_hash})."
+        )
+    return int(ExitCode.OK)
+
+
 def _progress_printer(build: dict[str, Any]) -> None:
     progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
     stage = str(build.get("stage") or build.get("status") or "working")
@@ -300,6 +413,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _migrate_config(args.config, output=args.output)
     if args.command == "pipeline" and args.pipeline_command == "capabilities":
         return _pipeline_capabilities(as_json=args.json)
+    if args.command == "pipeline" and args.pipeline_command == "export":
+        return _pipeline_export(
+            args.pipeline_id,
+            args.version,
+            output=args.output,
+        )
+    if args.command == "pipeline" and args.pipeline_command == "validate":
+        return _pipeline_validate(args.config, as_json=args.json)
     if args.command == "corpus" and args.corpus_command == "build":
         return _build_corpus(args)
 

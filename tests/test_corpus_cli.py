@@ -153,3 +153,86 @@ def test_cli_validate_returns_stable_config_error_code(tmp_path, capsys):
 
     assert code == ExitCode.USAGE_OR_CONFIG
     assert "Configuration error:" in captured.err
+
+
+
+def test_cli_pipeline_export_and_validate_round_trip(tmp_path, capsys):
+    """CLI export/import parsing preserves the canonical portable pipeline hash."""
+
+    export_path = tmp_path / "pipeline.json"
+    code = main(
+        [
+            "pipeline",
+            "export",
+            "--pipeline-id",
+            "corpus.metadata_enrichment.current",
+            "--version",
+            "2",
+            "--output",
+            str(export_path),
+        ]
+    )
+    exported = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    assert export_path.is_file()
+    assert str(export_path.resolve()) in exported.out
+    document = json.loads(export_path.read_text(encoding="utf-8"))
+    assert document["format"] == "derridai-pipeline"
+    assert document["pipeline"]["pipeline_id"] == "corpus.metadata_enrichment.current"
+
+    code = main(["pipeline", "validate", "--config", str(export_path), "--json"])
+    validated = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    normalized = json.loads(validated.out)
+    assert normalized["pipeline_hash"] == document["pipeline_hash"]
+    assert normalized["pipeline"] == document["pipeline"]
+    assert validated.err == ""
+
+
+def test_cli_pipeline_validate_rejects_tampered_portable_document(tmp_path, capsys):
+    export_path = tmp_path / "pipeline.json"
+    assert (
+        main(
+            [
+                "pipeline",
+                "export",
+                "--pipeline-id",
+                "corpus.metadata_enrichment.current",
+                "--version",
+                "2",
+                "--output",
+                str(export_path),
+            ]
+        )
+        == ExitCode.OK
+    )
+    capsys.readouterr()
+
+    document = json.loads(export_path.read_text(encoding="utf-8"))
+    document["pipeline"]["name"] = "Tampered"
+    export_path.write_text(json.dumps(document), encoding="utf-8")
+
+    code = main(["pipeline", "validate", "--config", str(export_path)])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.USAGE_OR_CONFIG
+    assert "pipeline_hash does not match" in captured.err
+
+
+def test_cli_pipeline_export_rejects_unknown_or_custom_identity(capsys):
+    code = main(
+        [
+            "pipeline",
+            "export",
+            "--pipeline-id",
+            "not.compiled.here",
+            "--version",
+            "1",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.USAGE_OR_CONFIG
+    assert "Export saved custom definitions from Pipeline Studio" in captured.err
