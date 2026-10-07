@@ -17,7 +17,6 @@
  */
 
 import { toast } from "../composables/notifications";
-import { createPrefsPersistence } from "./prefsPersistence";
 
 // Workspace persistence: saving files and preferences to IndexedDB, debounced, and restoring them at start-up. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -57,13 +56,9 @@ export function createWorkspacePersistence(deps: Deps) {
     serializableFile,
     trf,
   } = deps;
-  const { workspacePrefs, persistPrefs, flushWorkspacePrefs } = createPrefsPersistence({
-    state,
-    put: (key, value) => idbPut(key, value),
-  });
-  // The legacy code queries the page freely; untyped, as it was written.
-  async function persistFileNow(file: Any) {
-    invalidateCorpusCache(String(file?.id || "") || null);
+  const pendingFiles = new Map<string, Any>();
+
+  async function writeFileNow(file: Any) {
     try {
       await idbPut("files", serializableFile(file));
     } catch (error: Any) {
@@ -71,14 +66,54 @@ export function createWorkspacePersistence(deps: Deps) {
       toast(trf("runtime.toast.persistence_failed", { detail: error.message }), { tone: "danger" });
     }
   }
+
+  /**
+   * Persists an already-mutated file without invalidating corpus projections.
+   *
+   * Mutation owners invalidate exactly once when they change Records. Keeping
+   * storage I/O pure prevents a debounced save from causing a second/third
+   * corpus refresh after the user's edit already rendered.
+   */
+  async function persistFileNow(file: Any) {
+    const id = String(file?.id || "");
+    if (id) {
+      const timer = fileTimers.get(id);
+      if (timer) clearTimeout(timer);
+      fileTimers.delete(id);
+      pendingFiles.delete(id);
+    }
+    await writeFileNow(file);
+  }
+
   function persistFile(file: Any) {
-    invalidateCorpusCache(String(file?.id || "") || null);
-    clearTimeout(fileTimers.get(file.id));
+    const id = String(file?.id || "");
+    if (!id) return;
+    pendingFiles.set(id, file);
+    clearTimeout(fileTimers.get(id));
     const timer = setTimeout(() => {
-      fileTimers.delete(file.id);
-      persistFileNow(file);
+      fileTimers.delete(id);
+      const pending = pendingFiles.get(id);
+      pendingFiles.delete(id);
+      if (pending) void writeFileNow(pending);
     }, 250);
-    fileTimers.set(file.id, timer);
+    fileTimers.set(id, timer);
+  }
+
+  async function flushPendingFileWrites() {
+    const pending = [...pendingFiles.entries()];
+    for (const [id] of pending) {
+      const timer = fileTimers.get(id);
+      if (timer) clearTimeout(timer);
+      fileTimers.delete(id);
+    }
+    pendingFiles.clear();
+    for (const [, file] of pending) await writeFileNow(file);
+  }
+
+  function cancelPendingFileWrites() {
+    for (const timer of fileTimers.values()) clearTimeout(timer);
+    fileTimers.clear();
+    pendingFiles.clear();
   }
   async function restoreWorkspace() {
     try {
@@ -224,9 +259,8 @@ export function createWorkspacePersistence(deps: Deps) {
   return {
     persistFileNow,
     persistFile,
-    workspacePrefs,
-    persistPrefs,
-    flushWorkspacePrefs,
+    flushPendingFileWrites,
+    cancelPendingFileWrites,
     restoreWorkspace,
   };
 }
