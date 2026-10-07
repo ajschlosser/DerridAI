@@ -524,6 +524,17 @@ The following invariants are release-blocking:
 10. Saved historical pipeline versions remain auditable after newer UI/CLI
     versions are released.
 
+## Current CLI migration boundary
+
+Version 2 now embeds the exact installed definitions, canonical hashes, and strategy
+versions used by the unattended Corpus Builder feature set. Before source extraction,
+the CLI rejects a v2 run when the installed assignment differs from the pinned
+definition. This is intentionally conservative: Corpus Builder call sites still
+resolve their assignments through the shared manager, so direct execution from an
+embedded definition and immutable per-build assignment pinning remain part of C3.
+The CLI does not claim that the current preflight alone prevents an administrator
+from changing a system assignment after a long-running build has started.
+
 ## Implementation sequence
 
 Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
@@ -532,12 +543,12 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | --------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | C0. Establish authority boundary  | DONE        | Existing `PipelineDefinition`, purpose registry, strategy registry, and generated Pipeline Studio catalog are declared canonical. |
 | C1. Document shared contract      | DONE        | This document defines ownership, versioning, migration, export/import, and drift rules.                                           |
-| C2. Contract identity             | TODO        | Add explicit pipeline-contract/application/strategy-version capability identity to catalog and binary diagnostics.                |
-| C3. CLI v2 envelope               | TODO        | Introduce a run-envelope version that embeds/references canonical `PipelineDefinition` and typed overrides.                       |
-| C4. Legacy CLI migration          | TODO        | Deterministically migrate current v1 `CorpusProcessingConfig` settings into the v2 envelope/shared contract.                      |
+| C2. Contract identity             | DONE        | The API catalog and native CLI expose one application/contract/strategy-version compatibility identity.                           |
+| C3. CLI v2 envelope               | IN PROGRESS | The v2 run envelope embeds exact definitions, hashes, strategy versions, and typed overrides; direct execution from embedded definitions is still pending. |
+| C4. Legacy CLI migration          | DONE        | `derridai config migrate` deterministically wraps v1 settings with the currently resolved Corpus Builder pipeline bundle.         |
 | C5. Pipeline Studio export/import | TODO        | Export/import canonical definition plus optional run envelope without secrets.                                                    |
 | C6. Generated frontend contracts  | IN PROGRESS | Continue replacing hand-maintained workflow semantics with server-derived catalog/types/fixtures.                                 |
-| C7. Drift CI                      | TODO        | Add backend/frontend/CLI property coverage and catalog compatibility checks.                                                      |
+| C7. Drift CI                      | IN PROGRESS | Backend/CLI tests cover compatibility identity, migration, hashes, and required strategies; broader frontend/property drift gates remain. |
 | C8. Round-trip CI                 | TODO        | Preserve pipeline hash through Studio/API/CLI export-import.                                                                      |
 | C9. Execution parity CI           | TODO        | Run the same resolved definitions through server and headless paths and compare semantics.                                        |
 | C10. Binary capability CI         | TODO        | Verify compiled strategy catalog matches the source-tree catalog.                                                                 |
