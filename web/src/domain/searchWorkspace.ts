@@ -64,7 +64,7 @@ type Helper =
   | "openStoreRecordEditor"
   | "openTouchup"
   | "persistListPreferences"
-  | "persistPrefs"
+  | "persistRecordViewPreferences"
   | "persistSearchPreferences"
   | "persistVectorPreferences"
   | "recordDbStatus"
@@ -121,7 +121,7 @@ export function createSearchWorkspace(deps: Deps) {
     openStoreRecordEditor,
     openTouchup,
     persistListPreferences,
-    persistPrefs,
+    persistRecordViewPreferences,
     persistSearchPreferences,
     persistVectorPreferences,
     recordDbStatus,
@@ -784,7 +784,8 @@ export function createSearchWorkspace(deps: Deps) {
         if (isResearcher()) {
           state.activeStore = result.collection;
           state.researcherRecordId = result.id;
-          persistPrefs();
+          persistVectorPreferences();
+          persistRecordViewPreferences();
           navigateTo("record");
         } else openStoreRecordEditor({ ...result.record, _chroma_id: result.id });
         return true;
