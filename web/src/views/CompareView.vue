@@ -167,7 +167,10 @@ function persist() {
     sourceA.value === "scratch" && sourceB.value === "scratch" ? "paste" : "workspace";
   window.clearTimeout(draftTimer);
   const draft = compareDraft();
-  draftTimer = window.setTimeout(() => void saveCompareDraft(draft), 300);
+  draftTimer = window.setTimeout(() => {
+    draftTimer = 0;
+    void saveCompareDraft(draft);
+  }, 300);
 }
 function refreshLibrary() {
   library.value = getCompareLibrary();
@@ -294,7 +297,11 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   ++libraryRequest;
-  window.clearTimeout(draftTimer);
+  if (draftTimer) {
+    window.clearTimeout(draftTimer);
+    draftTimer = 0;
+    void saveCompareDraft(compareDraft());
+  }
 });
 </script>
 <template>
