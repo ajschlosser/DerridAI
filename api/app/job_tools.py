@@ -305,8 +305,10 @@ class LLMToolJobManager(PersistentJobStateMixin):
         resume_dictionary: dict[str, str] | None = None
         retry_keys: list[str] | None = None
         if config.resume_job_id:
-            with self._lock:
-                prior = copy.deepcopy(self._jobs.get(config.resume_job_id))
+            try:
+                prior = self._get_job_record(config.resume_job_id)
+            except KeyError:
+                prior = None
             if not prior:
                 raise ValueError("The translation job selected for resume no longer exists.")
             if prior.get("mode") != "language_dictionary":
