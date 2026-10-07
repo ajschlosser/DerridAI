@@ -27,6 +27,12 @@ import json
 import pytest
 from app.corpus_cli import ExitCode, main
 from app.corpus_cli_config import CorpusProcessingConfig, load_processing_config
+from app.corpus_run_config import (
+    HEADLESS_CORPUS_PIPELINE_FEATURES,
+    CorpusRunConfigV2,
+    load_run_config,
+    migrate_v1_config,
+)
 from pydantic import ValidationError
 
 
@@ -153,3 +159,90 @@ def test_cli_validate_returns_stable_config_error_code(tmp_path, capsys):
 
     assert code == ExitCode.USAGE_OR_CONFIG
     assert "Configuration error:" in captured.err
+
+
+
+def test_v1_config_migrates_to_pipeline_bound_v2_envelope(tmp_path):
+    config = CorpusProcessingConfig.model_validate(
+        {
+            "version": 1,
+            "provider": {"model": "qwen3:14b"},
+            "publication": {"profile": "celf"},
+        }
+    )
+
+    migrated = migrate_v1_config(config)
+
+    assert migrated.format == "derridai-corpus-run"
+    assert migrated.version == 2
+    assert migrated.provider.model == "qwen3:14b"
+    assert migrated.publication.profile == "celf"
+    assert set(migrated.pipelines.assignments) == set(
+        HEADLESS_CORPUS_PIPELINE_FEATURES
+    )
+    for binding in migrated.pipelines.assignments.values():
+        assert len(binding.pipeline_hash) == 64
+        assert binding.required_strategies
+        assert set(binding.required_strategies) == {
+            stage.strategy for stage in binding.definition.stages
+        }
+
+    path = tmp_path / "corpus-run.yaml"
+    path.write_text(
+        __import__("app.corpus_run_config", fromlist=["dump_run_config"]).dump_run_config(
+            migrated
+        ),
+        encoding="utf-8",
+    )
+    loaded = load_run_config(path)
+    assert isinstance(loaded, CorpusRunConfigV2)
+    assert loaded.public_snapshot() == migrated.public_snapshot()
+
+
+def test_v2_config_rejects_tampered_pipeline_hash():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    feature = HEADLESS_CORPUS_PIPELINE_FEATURES[0]
+    payload["pipelines"]["assignments"][feature]["pipeline_hash"] = "0" * 64
+
+    with pytest.raises(ValidationError, match="Pipeline hash mismatch"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_cli_migrate_emits_v2_yaml(tmp_path, capsys):
+    source = tmp_path / "legacy.yaml"
+    source.write_text("version: 1\nprovider:\n  model: qwen3:14b\n", encoding="utf-8")
+
+    code = main(["config", "migrate", "--config", str(source)])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    migrated_path = tmp_path / "migrated.yaml"
+    migrated_path.write_text(captured.out, encoding="utf-8")
+    migrated = load_run_config(migrated_path)
+    assert isinstance(migrated, CorpusRunConfigV2)
+    assert migrated.provider.model == "qwen3:14b"
+
+
+def test_cli_pipeline_capabilities_reports_contract_identity(capsys):
+    code = main(["pipeline", "capabilities", "--json"])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    payload = json.loads(captured.out)
+    assert payload["pipeline_contract_version"] >= 1
+    assert payload["application_version"]
+    assert "llm.structured_metadata" in payload["strategies"]
+
+
+def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
+    code = main(["doctor", "--json"])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    payload = json.loads(captured.out)
+    assert payload["status"] == "ok"
+    assert payload["missing_features"] == []
+    assert set(payload["headless_corpus_pipelines"]) == set(
+        HEADLESS_CORPUS_PIPELINE_FEATURES
+    )
