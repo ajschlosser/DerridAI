@@ -30,8 +30,16 @@ describe("domain preference persistence", () => {
       sidebarCollapsed: true,
     };
 
+    const research = domainPreferenceRecord(state, "research");
     const search = domainPreferenceRecord(state, "search");
     const layout = domainPreferenceRecord(state, "layout");
+
+    expect(research).toEqual({
+      key: "research-preferences",
+      ragConfig: { prompt: "must not leak" },
+    });
+    expect(research).not.toHaveProperty("files");
+    expect(research).not.toHaveProperty("globalSearch");
 
     expect(search).toMatchObject({
       key: "search-preferences",
@@ -63,6 +71,7 @@ describe("domain preference persistence", () => {
     };
     const persistence = createDomainPreferencePersistence({ state, put, delay: 100 });
 
+    persistence.persistResearchPreferences();
     persistence.persistSearchPreferences();
     state.sidebarCollapsed = true;
     persistence.persistLayoutPreferences();
@@ -71,9 +80,10 @@ describe("domain preference persistence", () => {
 
     await vi.advanceTimersByTimeAsync(110);
 
-    expect(put).toHaveBeenCalledTimes(2);
+    expect(put).toHaveBeenCalledTimes(3);
     expect(put.mock.calls.map((call) => (call[1] as { key: string }).key).sort()).toEqual([
       "layout-preferences",
+      "research-preferences",
       "search-preferences",
     ]);
     expect(
@@ -90,6 +100,11 @@ describe("domain preference persistence", () => {
       selectedEvidence: {},
     };
 
+    (state as Record<string, unknown>).ragConfig = { k: 64, response_language: "auto" };
+    applyDomainPreferenceRecord(state, {
+      key: "research-preferences",
+      ragConfig: { k: 12 },
+    });
     applyDomainPreferenceRecord(state, {
       key: "search-preferences",
       globalSearch: "domain",
@@ -105,6 +120,7 @@ describe("domain preference persistence", () => {
       selectedEvidence: { a: { key: "a" } },
     });
 
+    expect(state.ragConfig).toEqual({ k: 12, response_language: "auto" });
     expect(state.globalSearch).toBe("domain");
     expect(state.globalPage).toBe(2);
     expect(state.sidebarCollapsed).toBe(true);
