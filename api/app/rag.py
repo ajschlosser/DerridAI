@@ -1614,7 +1614,39 @@ def run_rag_pipeline(
     filter_detail["mentioned_source_authors"] = mentioned_scope_authors
     filter_detail["inferred_source_authors"] = exclusive_scope_authors
     filter_detail["inferred_exclusive_works"] = exclusive_scope_works
-    if pipeline_plan.scope_stage_id and exclusive_scope_works:
+
+    inferred_scope_exemptions = 0
+    if (exclusive_scope_works or exclusive_scope_authors) and selected_candidates:
+        allowed_works = set(exclusive_scope_works)
+        allowed_authors = {
+            _normalized_scope_text(author)
+            for author in exclusive_scope_authors
+        }
+        for item in selected_candidates:
+            record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+            work_matches = (
+                not allowed_works
+                or source_work_label(record) in allowed_works
+            )
+            author_matches = (
+                not allowed_authors
+                or _normalized_scope_text(source_author(record)) in allowed_authors
+            )
+            if not (work_matches and author_matches):
+                inferred_scope_exemptions += 1
+        if inferred_scope_exemptions:
+            # Pinned evidence is an intentional exception to inferred scope.
+            # Record the actual out-of-scope pin count rather than silently
+            # presenting the final evidence packet as scope-pure.
+            filter_detail["selected_evidence_inferred_scope_exempt_count"] = (
+                inferred_scope_exemptions
+            )
+            filter_detail["selected_evidence_exempt_count"] = max(
+                int(filter_detail.get("selected_evidence_exempt_count") or 0),
+                inferred_scope_exemptions,
+            )
+
+    if pipeline_plan.scope_stage_id and (exclusive_scope_works or exclusive_scope_authors):
         scope_stage = next(
             (stage for stage in reversed(stages) if stage["name"] == "research_scope"),
             None,
@@ -1622,6 +1654,13 @@ def run_rag_pipeline(
         if scope_stage is not None:
             scope_stage["detail"]["active"] = True
             scope_stage["detail"]["inferred_exclusive_works"] = exclusive_scope_works
+            scope_stage["detail"]["inferred_source_authors"] = exclusive_scope_authors
+            scope_stage["detail"]["selected_evidence_exempt_count"] = filter_detail.get(
+                "selected_evidence_exempt_count", 0
+            )
+            scope_stage["detail"]["selected_evidence_inferred_scope_exempt_count"] = (
+                inferred_scope_exemptions
+            )
 
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
