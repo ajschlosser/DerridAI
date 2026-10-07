@@ -19,6 +19,7 @@
 import { state } from "./sharedUrlState";
 import { syncUrl } from "./sharedNavigation";
 import { persistPrefs } from "./sharedWorkspaceStorage";
+import { invalidateShellStatusProjection } from "./shellStatusProjection";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -57,6 +58,7 @@ export function setActiveStore(name?: string) {
         : {};
   }
   state.activeStore = next;
+  invalidateShellStatusProjection();
   persistPrefs();
   syncUrl({ replace: true });
 }
