@@ -276,44 +276,21 @@ class CorpusRunConfigV2(_StrictConfigModel):
             for feature, binding in self.pipelines.assignments.items()
         }
 
-    def assert_installed_pipeline_bindings(self) -> None:
-        """Fail before source extraction if installed assignments have drifted.
+    def assert_runtime_pipeline_capabilities(self) -> None:
+        """Recheck executable strategy versions before source extraction.
 
-        This is a conservative bridge while Corpus Builder call sites are taught
-        to consume embedded definitions directly. A v2 run never silently falls
-        back to a different active assignment.
+        The run envelope owns its definitions and overrides, so mutable system
+        assignments are intentionally irrelevant once the file has been loaded.
         """
 
-        from .pipelines.manager import pipeline_manager
-
-        for feature, binding in self.pipelines.assignments.items():
+        for binding in self.pipelines.assignments.values():
+            validate_pipeline_strategy_requirements(binding.required_strategies)
             if binding.overrides is not None:
-                raise ValueError(
-                    f"Pipeline feature {feature!r} includes run overrides. "
-                    "The v2 envelope can validate and preserve them, but the "
-                    "headless Corpus Builder does not execute embedded overrides yet."
+                resolve_pipeline_config(
+                    binding.definition,
+                    run_overrides=binding.overrides,
                 )
-            try:
-                resolved = pipeline_manager.resolve(feature)
-            except KeyError as exc:
-                raise ValueError(
-                    f"Pipeline feature {feature!r} is not available in this DerridAI installation."
-                ) from exc
-            installed = PipelineDefinition.model_validate(resolved["pipeline"])
-            installed_hash = str(resolved.get("pipeline_hash") or pipeline_hash(installed))
-            expected = binding.definition
-            if (
-                installed.pipeline_id != expected.pipeline_id
-                or installed.version != expected.version
-                or installed_hash != binding.pipeline_hash
-            ):
-                raise ValueError(
-                    f"Pipeline feature {feature!r} is pinned to "
-                    f"{expected.pipeline_id}@{expected.version} ({binding.pipeline_hash[:12]}), "
-                    f"but this installation resolves "
-                    f"{installed.pipeline_id}@{installed.version} ({installed_hash[:12]}). "
-                    "Import/activate the pinned definition or migrate the run configuration."
-                )
+
 
 
 CorpusRunConfig = CorpusProcessingConfig | CorpusRunConfigV2
