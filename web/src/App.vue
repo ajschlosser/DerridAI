@@ -81,6 +81,7 @@ import { triggerImport } from "./domain/sharedFileLifecycle";
 import { pauseRuntime } from "./domain/jobsPause";
 import { toggleSidebar } from "./domain/sidebarToggle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
+import { measureInteractionToNextFrame } from "./domain/interactionTiming";
 
 const router = useRouter();
 const route = useRoute();
@@ -436,7 +437,10 @@ function navigateNative(path: string, intentId = "") {
     if (expectedView && sharedState.view !== expectedView) syncSharedStateFromRoute();
     return;
   }
-  if (intentId) pendingNavId.value = intentId;
+  if (intentId) {
+    pendingNavId.value = intentId;
+    measureInteractionToNextFrame("derridai.navigation.intent_to_frame");
+  }
   void router
     .push(target)
     .then((failure) => {
