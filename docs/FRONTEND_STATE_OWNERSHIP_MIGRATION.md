@@ -123,10 +123,10 @@ Work order:
 - [x] A1. Make settled native navigation perform exactly one shell refresh and one preference scheduling action.
 - [x] A2. Add immediate sidebar navigation intent state (`pendingNavId` or equivalent) that is visible before route work,
       keyboard accessible, and cleared on route settle/failure.
-- [ ] A3. Decompose the shell snapshot into stable navigation/layout/context and independent counters/status projections.
+- [x] A3. Decompose the shell snapshot into stable navigation/layout/context and independent counters/status projections.
 - [x] A4. Remove `pendingUpsertRows()` and every corpus-size-dependent selector from shell render paths.
-- [ ] A5. Replace shell polling/recomputation of corpus/job counts with domain-maintained read-only summary projections.
-- [ ] A6. Remove direct DOM updates for the global operations button; render the badge from the jobs/operations projection.
+- [x] A5. Replace shell polling/recomputation of corpus/job counts with domain-maintained read-only summary projections.
+- [x] A6. Remove direct DOM updates for the global operations button; render the badge from the jobs/operations projection.
 - [x] A7. Make semantic-map source refresh depend on semantic-map inputs rather than every `route.fullPath` change, and avoid
       corpus-wide `flatMap` allocation when enforcing bounded source limits.
 - [ ] A8. Reduce root `App.vue` feature ownership by moving feature-only dialog/workflow hosts under their owning routes or
@@ -189,9 +189,13 @@ Acceptance:
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
 
-Implementation status on `task/frontend-state-ownership-performance`: A1, A2, A4, A7, B1, B2, B4, and B6 are implemented with focused
-regression coverage. Bounded User Timing measures now record Research prompt/instruction input-to-next-frame latency and
-sidebar navigation intent-to-next-frame latency. Repository validation has not yet been run in this environment.
+Implementation status on `task/frontend-state-ownership-performance`: A1-A7 are complete except A8. Shell navigation,
+route/file context, and application-status projections now invalidate independently; corpus/store aggregates are cached
+behind domain invalidation and cheap collection-identity checks, while active-store, health, and evidence primitives stay
+live. Job reconciliation no longer rewrites shell DOM. B1, B2, B4, and B6 are complete; B5 now has a pure snapshot read and
+explicit visible-row presence effect, while its deeper incremental/cached projection work remains open. Bounded User Timing
+measures record Research prompt/instruction input-to-next-frame latency and sidebar navigation intent-to-next-frame latency.
+Repository validation has not yet been run in this environment.
 
 This tranche should be small enough to review independently and should land before larger store/persistence work.
 
