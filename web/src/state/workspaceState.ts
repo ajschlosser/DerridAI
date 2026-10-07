@@ -57,6 +57,8 @@ export function createVectorState() {
     storePresence: {} as Loose,
     storePresenceIds: {} as Loose,
     storePresenceCheckedAt: {} as Loose,
+    /** Bumped when presence/receipt data changes so native views can update declaratively. */
+    presenceVersion: 0,
     /** Bumped by the runtime when it re-renders this workspace, so Vue code can watch for in-place changes. */
     version: 0,
   };
