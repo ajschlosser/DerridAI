@@ -17,15 +17,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import UiButton from "./ui/UiButton.vue";
 import UiDialog from "./ui/UiDialog.vue";
 import { useI18nStore } from "../stores/i18n";
 import { state as sharedState } from "../domain/sharedUrlState";
 import * as touchupRuntime from "../domain/touchupActions";
 import { persistPrefs } from "../domain/sharedWorkspaceStorage";
+import {
+  useTouchupWorkspaceRequest,
+  type TouchupWorkspaceItem,
+} from "../features/touchup/touchupWorkspaceRequest";
 
-type JsonRecord = Record<string, unknown>;
 type TouchupProfile = { id: string; name?: string; model?: string; [key: string]: unknown };
 type TouchupProposal = {
   changes?: Record<string, unknown>;
@@ -33,15 +36,9 @@ type TouchupProposal = {
   [key: string]: unknown;
 };
 type TouchupStatus = { available?: boolean; configured_model?: string; [key: string]: unknown };
-type TouchupItem = {
-  file: { name?: string; records: JsonRecord[] };
-  index: number;
-  record: JsonRecord;
-  key: string;
-};
-type TouchupResult = { item: TouchupItem; proposal: TouchupProposal | null; error?: unknown };
+type TouchupResult = { item: TouchupWorkspaceItem; proposal: TouchupProposal | null; error?: unknown };
 type WorkspaceInfo = {
-  items: TouchupItem[];
+  items: TouchupWorkspaceItem[];
   initialMode: string;
   availableFields: string[];
   attributionPreset: string[];
@@ -57,6 +54,7 @@ type WorkspaceInfo = {
 const EMPTY_PROPOSAL: TouchupProposal = { changes: {}, rationale: {} };
 
 const i18n = useI18nStore();
+const touchupRequest = useTouchupWorkspaceRequest();
 const open = ref(false);
 const info = ref<WorkspaceInfo>({
   items: [],
@@ -111,7 +109,7 @@ const statusLabel = computed(() => {
   return status.value.available ? i18n.t("llm.provider_ready") : i18n.t("llm.provider_unavailable");
 });
 
-function reset(next: { items: TouchupItem[]; initialMode: string }) {
+function reset(next: { items: TouchupWorkspaceItem[]; initialMode: string }) {
   info.value = touchupRuntime.touchupWorkspaceInfo(next.items, next.initialMode);
   mode.value = next.initialMode === "auto" ? "auto" : (info.value.defaultMode as typeof mode.value);
   profileId.value = info.value.providerProfileId;
@@ -131,13 +129,10 @@ function reset(next: { items: TouchupItem[]; initialMode: string }) {
   open.value = true;
   void refreshStatus();
 }
-function onOpen(event: Event) {
-  const detail = (event as CustomEvent<{ items: TouchupItem[]; initialMode: string }>).detail;
-  if (detail?.items?.length) reset(detail);
-}
 function close() {
   stopped.value = true;
   open.value = false;
+  touchupRequest.clear();
 }
 async function refreshStatus() {
   if (!profileId.value) return;
@@ -209,10 +204,10 @@ function fieldsFor(result: TouchupResult) {
 function proposalFor(key: string) {
   return results.value[key]?.proposal || EMPTY_PROPOSAL;
 }
-function checked(item: TouchupItem, field: string) {
+function checked(item: TouchupWorkspaceItem, field: string) {
   return (approvals.value[item.key] || []).includes(field);
 }
-function setChecked(item: TouchupItem, field: string, value: boolean) {
+function setChecked(item: TouchupWorkspaceItem, field: string, value: boolean) {
   const fields = new Set(approvals.value[item.key] || []);
   value ? fields.add(field) : fields.delete(field);
   approvals.value[item.key] = [...fields];
@@ -295,8 +290,13 @@ function apply(all = false, reviewOnly = false) {
   touchupRuntime.touchupApplyResults(items.value, results.value, approvals.value, all, reviewOnly);
   close();
 }
-onMounted(() => window.addEventListener("derridai:open-touchup", onOpen));
-onBeforeUnmount(() => window.removeEventListener("derridai:open-touchup", onOpen));
+watch(
+  touchupRequest.current,
+  (request) => {
+    if (request?.items.length) reset(request);
+  },
+  { immediate: true },
+);
 watch(profileId, () => {
   if (open.value && !status.value) void refreshStatus();
 });
