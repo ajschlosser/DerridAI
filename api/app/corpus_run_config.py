@@ -52,6 +52,7 @@ from .pipelines.models import (
     PipelineDefinition,
     PipelineStageDefinition,
 )
+from .pipelines.overrides import resolve_pipeline_config
 from .pipelines.service import pipeline_hash
 
 RUN_ENVELOPE_FORMAT = "derridai-corpus-run"
@@ -166,6 +167,10 @@ class CorpusPipelineBinding(_StrictConfigModel):
                 raise ValueError(
                     "Pipeline overrides must target the embedded pipeline ID/version."
                 )
+            resolve_pipeline_config(
+                self.definition,
+                run_overrides=self.overrides,
+            )
         return self
 
 
@@ -195,8 +200,8 @@ class CorpusPipelineBundle(_StrictConfigModel):
 class CorpusRunConfigV2(_StrictConfigModel):
     """Portable run envelope around canonical pipeline definitions."""
 
-    format: Literal["derridai-corpus-run"] = RUN_ENVELOPE_FORMAT
-    version: Literal[2] = RUN_ENVELOPE_VERSION
+    format: Literal["derridai-corpus-run"]
+    version: Literal[2]
     source: SourceConfig = Field(default_factory=SourceConfig)
     processing: ProcessingConfig = Field(default_factory=ProcessingConfig)
     metadata: MetadataConfig = Field(default_factory=MetadataConfig)
@@ -205,6 +210,24 @@ class CorpusRunConfigV2(_StrictConfigModel):
     review: AutomaticReviewConfig = Field(default_factory=AutomaticReviewConfig)
     publication: PublicationConfig = Field(default_factory=PublicationConfig)
     pipelines: CorpusPipelineBundle
+
+    @model_validator(mode="after")
+    def validate_pipeline_bundle(self) -> "CorpusRunConfigV2":
+        missing = sorted(
+            set(HEADLESS_CORPUS_PIPELINE_FEATURES)
+            - set(self.pipelines.assignments)
+        )
+        if missing:
+            raise ValueError(
+                "The v2 run envelope is missing required Corpus Builder pipeline "
+                "binding(s): " + ", ".join(missing)
+            )
+
+        from .pipelines.workflows import compile_for_feature
+
+        for feature, binding in self.pipelines.assignments.items():
+            compile_for_feature(feature, binding.definition)
+        return self
 
     def _v1_adapter(self) -> CorpusProcessingConfig:
         """Project envelope-only settings through the existing request adapter."""
@@ -243,6 +266,12 @@ class CorpusRunConfigV2(_StrictConfigModel):
         from .pipelines.manager import pipeline_manager
 
         for feature, binding in self.pipelines.assignments.items():
+            if self.pipelines.assignments[feature].overrides is not None:
+                raise ValueError(
+                    f"Pipeline feature {feature!r} includes run overrides. "
+                    "The v2 envelope can validate and preserve them, but the "
+                    "headless Corpus Builder does not execute embedded overrides yet."
+                )
             try:
                 resolved = pipeline_manager.resolve(feature)
             except KeyError as exc:
