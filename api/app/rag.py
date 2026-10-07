@@ -1039,6 +1039,7 @@ def _explicitly_named_works(
             exact_display = re.search(
                 rf"(?<!\w){re.escape(display_work)}(?!\w)",
                 display_question,
+                flags=re.IGNORECASE,
             )
             cue = re.search(
                 rf"\b(?:in|from|book|work|text|novel)\s+{re.escape(tokens[0])}\b",
