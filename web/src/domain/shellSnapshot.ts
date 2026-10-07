@@ -134,8 +134,24 @@ function currentContext() {
     meta: dynamicMeta ? metaText : tr(`context.${key}.meta`, metaText),
   };
 }
-export function getShellSnapshot() {
-  const ctx = currentContext();
+/**
+ * Route/file context needed by breadcrumbs and feature views that still consume
+ * shell compatibility state. It is independent from sidebar navigation and
+ * status counters, so callers can refresh only the slice they actually changed.
+ */
+export function getShellContextSnapshot() {
+  return {
+    view: state.view,
+    files: state.files.map((file: Any) => describeRecordsFile(file, state.activeFileId)),
+    context: currentContext(),
+  };
+}
+
+/**
+ * Small status projection used by application chrome. None of these values
+ * scans record contents; work is bounded by loaded file/store/evidence counts.
+ */
+export function getShellStatusSnapshot() {
   // Shell chrome only needs the aggregate count. Counting file lengths avoids
   // rebuilding the corpus-wide flattened row cache after every record edit.
   const totalLoaded = state.files.reduce(
@@ -148,15 +164,23 @@ export function getShellSnapshot() {
     0,
   );
   return {
-    view: state.view,
-    files: state.files.map((file: Any) => describeRecordsFile(file, state.activeFileId)),
-    context: ctx,
     totalLoaded,
     corpusStoreCount: corpusStores.length,
     dbRecords,
     hasCorpusDb: hasCorpusDb(),
     activeStore: state.activeStore,
     selectedEvidenceCount: selectedEvidenceEntries().length,
+  };
+}
+
+/**
+ * Compatibility snapshot for callers that still need the complete shell model.
+ * Native shell code should prefer the independently refreshable projections.
+ */
+export function getShellSnapshot() {
+  return {
+    ...getShellContextSnapshot(),
+    ...getShellStatusSnapshot(),
     nav: getNavItems(),
   };
 }
