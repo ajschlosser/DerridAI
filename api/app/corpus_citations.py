@@ -57,9 +57,9 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
         )
     citation_head = " ".join(part for part in (last, str(year or "")) if part).strip()
     if pages:
-        inline = f"{citation_head}: {pages}" if citation_head else f"{work}: {pages}".strip(": ")
+        inline = f"{citation_head}: {pages}" if citation_head else ""
     else:
-        inline = citation_head or work
+        inline = citation_head
 
     parts = author.split()
     reversed_name = (
