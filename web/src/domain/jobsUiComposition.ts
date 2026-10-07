@@ -258,7 +258,7 @@ const { openJobDetails, openJobResults, openLlmTaskLauncher, openPdfDraftRecord 
     openWorkMetadataProposalResult: late(() => openWorkMetadataProposalResult),
     pages: late(() => pages),
     persistFileNow: late(() => persistFileNow),
-    persistPrefs: late(() => persistPrefs),
+    persistJobPreferences: late(() => persistJobPreferences),
     providerDisplayName: late(() => providerDisplayName),
     providerProfile: late(() => providerProfile),
     providerProfiles: late(() => providerProfiles),
