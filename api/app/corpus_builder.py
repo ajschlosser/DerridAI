@@ -4777,7 +4777,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             current_build["source_unit_embedding_projection"] = source_embedding_projection
             self.repo.save_build(current_build)
             memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema), request=request)
                 if bool(request.get("memory_prefill", True))
                 else {"status": "disabled"}
             )
