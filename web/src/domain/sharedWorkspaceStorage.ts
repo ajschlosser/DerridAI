@@ -20,6 +20,7 @@ import { bindJobsState } from "../state/jobsState";
 import { bindWorkspaceGroups, sessionState } from "../state/workspaceState";
 import { createWorkspaceDb, DB_NAME } from "../services/workspaceDb";
 import { createPrefsPersistence } from "./prefsPersistence";
+import { createDomainPreferencePersistence } from "./domainPreferencePersistence";
 
 // The browser-local workspace database and the preference save over the shared workspace state, usable without the
 // legacy runtime. The runtime uses this same connection and save, so there is one IndexedDB handle and one debounce.
@@ -36,6 +37,20 @@ export const workspaceDb = createWorkspaceDb(workspaceDbName);
 const prefsState = bindJobsState(bindWorkspaceGroups({})) as Loose;
 
 export const { workspacePrefs, persistPrefs, flushWorkspacePrefs } = createPrefsPersistence({
+  state: prefsState,
+  put: workspaceDb.put,
+});
+
+export const {
+  persistSearchPreferences,
+  persistListPreferences,
+  persistLayoutPreferences,
+  persistReviewPreferences,
+  persistVectorPreferences,
+  persistJobPreferences,
+  flushDomainPreferences,
+  cancelPendingDomainPreferences,
+} = createDomainPreferencePersistence({
   state: prefsState,
   put: workspaceDb.put,
 });
