@@ -275,7 +275,7 @@ def test_lexical_search_pages_candidates_and_decodes_only_final_results(
     assert len(scan_calls) > 1
     assert all(call["limit"] is not None for call in scan_calls)
     assert all(call["limit"] <= 512 for call in scan_calls)
-    assert all(call["include"] == ["documents", "metadatas"] for call in scan_calls)
+    assert all(call["include"] == ["documents"] for call in scan_calls)
 
     final_calls = [call for call in collection.calls if call["ids"] is not None]
     assert len(final_calls) == 1
