@@ -31,6 +31,7 @@ import { canAccessPage, canUse, hasCapability, isResearcher } from "./sharedSess
 import { refreshStores } from "./sharedStores";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
+import { corpusState } from "../state/workspaceState";
 import {
   applyCompressedTableUrlState,
   navigateTo,
@@ -61,6 +62,7 @@ export const searchWorkspace = createSearchWorkspace({
   canUse,
   clearReviewSelection: evidenceSelection.clearReviewSelection,
   copyCitation,
+  corpusGeneration: () => `${corpusState.structureVersion}:${corpusState.contentVersion}`,
   dbEvidenceKey: evidenceSelection.dbEvidenceKey,
   dbSearchFilterDescriptors: searchFacets.dbSearchFilterDescriptors,
   dbSearchWhere,
