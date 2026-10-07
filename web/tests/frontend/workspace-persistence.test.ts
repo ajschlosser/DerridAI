@@ -44,6 +44,33 @@ describe("workspace preference persistence", () => {
     expect(() => structuredClone(saved)).not.toThrow();
   });
 
+  it("rejects a corpus-domain active file that is no longer present", async () => {
+    const state = createRuntimeState();
+    state.storageReady = false;
+    const persistence = createWorkspacePersistence({
+      state,
+      fileTimers: new Map(),
+      applyUiTheme: vi.fn(),
+      ensureProviderProfiles: vi.fn(),
+      idbGet: vi.fn(async () => null),
+      idbGetAll: vi.fn(async () => [
+        { id: "available", name: "available.jsonl", records: [], dirty: [], errors: [] },
+      ]),
+      idbPut: vi.fn(),
+      invalidateCorpusCache: vi.fn(),
+      restoreCurrentPdfAsset: vi.fn(async () => undefined),
+      restorePreferenceOverlays: vi.fn(async () => {
+        state.activeFileId = "deleted";
+      }),
+      serializableFile: vi.fn(),
+      trf: vi.fn((key: string) => key),
+    });
+
+    await persistence.restoreWorkspace();
+
+    expect(state.activeFileId).toBe("available");
+  });
+
   it("applies domain overlays before final validation and before storage becomes writable", async () => {
     const state = createRuntimeState();
     state.storageReady = false;
