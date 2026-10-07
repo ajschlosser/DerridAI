@@ -841,6 +841,24 @@ def _mentions_scope_author(question: str, author: str) -> bool:
     return bool(surname and len(surname) >= 4 and surname in set(query.split()))
 
 
+def _explicitly_named_works(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Return corpus work titles explicitly named in the researcher's text."""
+
+    query = _normalized_scope_text(question)
+    if not query:
+        return []
+    return sorted({
+        work
+        for summary in work_summaries
+        if (work := str(summary.get("scope_label") or "").strip())
+        and (normalized_work := _normalized_scope_text(work))
+        and normalized_work in query
+    })
+
+
 def _mentioned_work_groups(
     work_summaries: Sequence[Mapping[str, Any]],
     question: str,
@@ -858,14 +876,14 @@ def _mentioned_work_groups(
     if not query:
         return []
 
+    explicitly_named = set(_explicitly_named_works(work_summaries, question))
     groups: list[list[str]] = []
     author_works: dict[str, set[str]] = {}
     for summary in work_summaries:
         work = str(summary.get("scope_label") or "").strip()
         if not work:
             continue
-        normalized_work = _normalized_scope_text(work)
-        if normalized_work and normalized_work in query:
+        if work in explicitly_named:
             groups.append([work])
 
         author_values = summary.get("source_authors")
@@ -913,50 +931,47 @@ _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN = re.compile(
 def _exclusive_scope_works(
     groups: Sequence[Sequence[str]],
     question: str,
+    *,
+    explicitly_named_works: Sequence[str] = (),
 ) -> list[str]:
-    """Return an inferred closed work scope only when the request is unambiguous.
+    """Return a closed documentary scope only when the request establishes one.
 
-    A named in-corpus author can close documentary scope when that author is the
-    subject of the question. Multiple explicit work titles also form a closed
-    set: "these two novels, Work A and Work B" must not reopen the entire corpus.
-    Mere source directives such as "cite X" remain coverage requests unless the
-    same wording also contains a strong source-subject signal.
+    Explicit work titles are the strongest deterministic signal: when the
+    researcher names Work A and Work B as the objects of the request, retrieval
+    is limited to exactly those works. A single named author can also close scope
+    when that author is the subject. Citation/additive directives remain open,
+    and author-level comparisons remain open unless work titles were enumerated.
     """
 
     text = str(question or "")
-    normalized_groups = [
-        sorted({str(work).strip() for work in group if str(work).strip()})
-        for group in groups
-    ]
-    normalized_groups = [group for group in normalized_groups if group]
-    if not normalized_groups:
-        return []
+    explicit_works = sorted({
+        str(work).strip()
+        for work in explicitly_named_works
+        if str(work).strip()
+    })
     if (
         _NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN.search(text)
         and not _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN.search(text)
     ):
         return []
+    if explicit_works:
+        return explicit_works
 
-    if len(normalized_groups) == 1:
-        return normalized_groups[0]
-
-    # Explicitly named works are emitted as singleton groups. When every
-    # distinct target is a singleton, the researcher has enumerated the
-    # documentary scope. This also covers comparisons between named works.
-    if all(len(group) == 1 for group in normalized_groups):
-        return sorted({work for group in normalized_groups for work in group})
-
-    if _COMPARATIVE_SCOPE_PATTERN.search(text):
+    normalized_groups = [
+        sorted({str(work).strip() for work in group if str(work).strip()})
+        for group in groups
+    ]
+    normalized_groups = [group for group in normalized_groups if group]
+    if len(normalized_groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
         return []
-    return []
+    return normalized_groups[0]
 
 
-def _explicit_scope_work_groups(
+def _scope_work_summaries(
     store: ChromaStore,
     collections: Sequence[Mapping[str, Any]],
-    question: str,
-) -> list[list[str]]:
-    """Collect author/work targets from the searched corpus inventory."""
+) -> list[dict[str, Any]]:
+    """Collect normalized author/work inventory for deterministic scope routing."""
 
     work_summaries: dict[str, dict[str, Any]] = {}
     work_stats = getattr(store, "work_stats", None)
@@ -985,14 +1000,26 @@ def _explicit_scope_work_groups(
             if author:
                 summary["source_authors"].add(author)
 
-    normalized = [
+    return [
         {
             "scope_label": item["scope_label"],
             "source_authors": sorted(item["source_authors"]),
         }
         for item in work_summaries.values()
     ]
-    return _mentioned_work_groups(normalized, question)
+
+
+def _explicit_scope_work_groups(
+    store: ChromaStore,
+    collections: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[list[str]]:
+    """Collect author/work targets from the searched corpus inventory."""
+
+    return _mentioned_work_groups(
+        _scope_work_summaries(store, collections),
+        question,
+    )
 
 
 def _scope_rag_candidates(
@@ -1317,20 +1344,26 @@ def run_rag_pipeline(
         )
         if value
     )
-    explicit_scope_groups = _explicit_scope_work_groups(
-        store,
-        collections,
+    scope_work_summaries = _scope_work_summaries(store, collections)
+    explicit_scope_groups = _mentioned_work_groups(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    explicitly_named_works = _explicitly_named_works(
+        scope_work_summaries,
         explicit_scope_text,
     )
     exclusive_scope_works = _exclusive_scope_works(
         explicit_scope_groups,
         explicit_scope_text,
+        explicitly_named_works=explicitly_named_works,
     )
     retrieval_metadata_filter = (
         combine_metadata_filters(metadata_filter, {"work": {"$in": exclusive_scope_works}})
         if exclusive_scope_works
         else metadata_filter
     )
+    filter_detail["explicitly_named_works"] = explicitly_named_works
     filter_detail["inferred_exclusive_works"] = exclusive_scope_works
     if pipeline_plan.scope_stage_id and exclusive_scope_works:
         scope_stage = next(
