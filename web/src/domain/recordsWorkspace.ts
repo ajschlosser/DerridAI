@@ -118,15 +118,14 @@ export function createRecordsWorkspace(deps: Deps) {
     urlFromState,
     workspaceEvidenceSelectionKey,
   } = deps;
-  let baseRowsCache:
-    | {
-        file: Any;
-        version: number;
-        rows: Any[];
-        flagged: number;
-        available: string[];
-      }
-    | null = null;
+  type BaseRowsCache = {
+    file: Any;
+    version: number;
+    rows: Any[];
+    flagged: number;
+    available: string[];
+  };
+  let baseRowsCache: BaseRowsCache | null = null;
   let queryRowsCache:
     | {
         file: Any;
@@ -138,12 +137,12 @@ export function createRecordsWorkspace(deps: Deps) {
     | null = null;
   let normalizedTextCache = new WeakMap<object, string>();
 
-  function baseRowsForFile(file: Any) {
+  function baseRowsForFile(file: Any): BaseRowsCache {
     const version = Number(corpusVersion()) || 0;
     if (baseRowsCache?.file === file && baseRowsCache.version === version) return baseRowsCache;
 
     const rows = file.records.map((record: Any, index: number) => ({ file, record, index }));
-    baseRowsCache = {
+    const next: BaseRowsCache = {
       file,
       version,
       rows,
@@ -156,9 +155,10 @@ export function createRecordsWorkspace(deps: Deps) {
         "text",
       ]),
     };
+    baseRowsCache = next;
     queryRowsCache = null;
     normalizedTextCache = new WeakMap();
-    return baseRowsCache;
+    return next;
   }
 
   function normalizedRecordText(record: Any) {
