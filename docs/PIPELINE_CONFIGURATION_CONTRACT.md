@@ -119,7 +119,7 @@ second default, range, enum, capability, or execution meaning.
 If richer presentation metadata is needed, extend the strategy/purpose contract
 with presentation-safe metadata rather than reproducing execution rules in Vue.
 
-## The CLI configuration is an envelope around the same pipeline
+## The CLI configuration is an envelope around the same pipelines
 
 The headless CLI needs settings that are not themselves pipeline graph settings:
 source ingestion, workspace selection, metadata schema selection, credentials,
@@ -138,19 +138,38 @@ source:
   ocr_mode: auto
   ocr_languages: eng+fra+deu
 
-pipeline:
-  definition:
-    pipeline_id: corpus-builder
-    version: 12
-    name: Scholarly corpus build
-    purpose: corpus_metadata_enrichment
-    status: active
-    entry_stage_ids: [prepare]
-    stages: [...]
-  overrides:
-    pipeline_id: corpus-builder
-    pipeline_version: 12
-    stages: { ... }
+pipelines:
+  assignments:
+    corpus_document_manifest:
+      definition:
+        pipeline_id: corpus.document_manifest.current
+        version: 1
+        name: Corpus document manifest — current
+        purpose: corpus_document_manifest
+        status: active
+        entry_stage_ids: [primary]
+        stages: [...]
+      pipeline_hash: "..."
+      required_strategies:
+        llm.document_manifest: 1
+      overrides: null
+
+    corpus_metadata_enrichment:
+      definition:
+        pipeline_id: corpus.metadata_enrichment.current
+        version: 2
+        name: Corpus metadata enrichment — validation-driven escalation
+        purpose: corpus_metadata_enrichment
+        status: active
+        entry_stage_ids: [primary]
+        stages: [...]
+      pipeline_hash: "..."
+      required_strategies:
+        llm.structured_metadata: 1
+      overrides:
+        pipeline_id: corpus.metadata_enrichment.current
+        pipeline_version: 2
+        stages: { ... }
 
 metadata:
   schema_id: default
@@ -169,22 +188,17 @@ publication:
   profile: research
 ```
 
-The exact corpus pipeline purpose(s) may evolve as Corpus Builder moves further
-onto the generic pipeline executor. The contract rule does not depend on a
-particular purpose name.
+Corpus Builder already executes several independently versioned feature pipelines,
+so the portable run envelope is a feature-to-definition bundle rather than one
+synthetic "corpus builder" pipeline. The exact feature set may evolve as more
+Corpus Builder work moves onto the generic pipeline executor.
 
-The CLI must also support referring to an installed/saved pipeline by immutable
-identity when appropriate:
-
-```yaml
-pipeline:
-  ref:
-    pipeline_id: corpus-builder
-    version: 12
-```
-
-A portable file intended to run independently of a server should embed the
-resolved definition. A server-attached workflow may use a reference.
+Each portable binding carries the canonical definition, its canonical hash, and
+the strategy implementation versions required to execute it. Optional run
+overrides remain bound to that exact definition ID/version. The current native CLI
+embeds definitions so a file is self-describing; a future server-attached import
+surface may additionally support immutable references, but it must resolve and
+freeze them before execution begins.
 
 ## Transitional status of CorpusProcessingConfig
 
