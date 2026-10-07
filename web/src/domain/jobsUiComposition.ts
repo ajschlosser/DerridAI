@@ -107,7 +107,12 @@ import "./clipboardCopy";
 import { getUrlSyncHook, navSnapshot, navigateTo, renderView } from "./sharedNavigation";
 import "./sharedUrlState";
 import "./navigation";
-import { persistPrefs, refreshShell, shell } from "./sharedWorkspaceStorage";
+import {
+  persistLayoutPreferences,
+  persistPrefs,
+  refreshShell,
+  shell,
+} from "./sharedWorkspaceStorage";
 import * as sharedRecordEditing from "./sharedRecordEditing";
 import { createOperationsPanelBridge } from "./operationsPanelBridge";
 import "./fileDerivedState";
@@ -217,7 +222,7 @@ const {
   jobProviderSummary: late(() => jobProviderSummary),
   openJobDetails: late(() => openJobDetails),
   openJobResults: late(() => openJobResults),
-  persistPrefs: late(() => persistPrefs),
+  persistPrefs: late(() => persistLayoutPreferences),
   removeFinishedJob,
   tr: late(() => tr),
   trf: late(() => trf),
