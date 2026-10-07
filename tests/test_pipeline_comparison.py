@@ -342,6 +342,31 @@ def test_single_named_author_closes_retrieval_scope() -> None:
         "Totality and Infinity"
     ]
 
+def test_single_citation_directive_remains_open_but_reserves_source() -> None:
+    request = RAGRunRequest(
+        prompt="Explain the relation between alterity and trace. Cite Levinas explicitly.",
+        pipeline_id="research.balanced",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == []
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {"d1", "l1"}
+
 def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
     request = RAGRunRequest(
         prompt=(
