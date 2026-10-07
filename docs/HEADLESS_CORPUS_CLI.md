@@ -137,12 +137,11 @@ runtime capabilities is unavailable.
 
 ## YAML configuration contract
 
-The YAML document is a versioned application contract independent of the web form
-and REST request model. Version 1 remains a compatibility input. Version 2 is the
-preferred run envelope: it retains the same source/provider/review/publication
-settings while embedding the exact resolved Corpus Builder pipeline definitions,
-canonical hashes, and required strategy versions. `derridai config migrate` converts
-a v1 file using the current installed assignments.
+The YAML document is a versioned application contract independent of the web form and REST request
+model. Version 1 remains a compatibility input. Version 2 is the preferred run envelope: it retains
+the same source/provider/review/publication settings while embedding the exact resolved Corpus
+Builder pipeline definitions, canonical hashes, and required strategy versions. `derridai config
+migrate` converts a v1 file using the current installed assignments.
 
 Legacy v1 shape:
 
@@ -243,11 +242,11 @@ those objects into every Record.
 `--celf` is a command-line override for `publication.profile: celf`. Internally
 this is an output profile rather than a boolean.
 
-A v2 build performs pipeline compatibility preflight before source extraction. It
-rejects missing strategies and an installed assignment whose ID/version/hash differs
-from the embedded binding. Direct execution from embedded definitions is still a
-migration step; until that lands, the preflight is a drift guard rather than a claim
-that system assignments cannot change during an already-running build.
+A v2 build performs pipeline compatibility preflight before source extraction. It rejects missing
+strategies and an installed assignment whose ID/version/hash differs from the embedded binding.
+Direct execution from embedded definitions is still a migration step; until that lands, the
+preflight is a drift guard rather than a claim that system assignments cannot change during an
+already-running build.
 
 ## Automatic review semantics
 
@@ -310,18 +309,18 @@ Initial exit-code categories:
 
 Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 
-| Phase                                | Status      | Work                                                                                                                                                                                              |
-| ------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0. Architecture                      | DONE        | Establish native-binary/Nuitka direction, shared-engine boundary, output profiles, automatic-authority rules, and versioned YAML contract.                                                        |
-| 1. CLI/config spine                  | IN PROGRESS | v1 validation/build wiring is implemented; v2 embeds pipeline definitions/hashes/strategy versions and v1 migration is implemented; direct embedded-definition execution remains.                  |
-| 2. Headless runner                   | IN PROGRESS | Synchronous source-to-publication orchestration through the shared Corpus Builder is implemented; compiled-binary end-to-end acceptance remains.                                                  |
-| 3. Automatic settlement              | IN PROGRESS | The headless runner uses shared autonomous settlement without granting human authority; broader end-to-end regression coverage remains.                                                           |
-| 4. Research projection               | IN PROGRESS | Schema-driven allow-list research `.jsonl.zst` output and atomic replacement are implemented; a research reproducibility/integrity sidecar remains.                                               |
-| 5. cELF projection                   | IN PROGRESS | cELF output routes through canonical publication/conformance and copies the canonical integrity sidecar; compiled-binary acceptance remains.                                                      |
-| 6. Runtime diagnostics               | IN PROGRESS | `derridai doctor` and `pipeline capabilities` report pipeline compatibility/bindings; source-kind helper/NLP/provider/workspace checks remain.                                                   |
-| 7. Native packaging                  | IN PROGRESS | Add Nuitka build configuration and target-OS CI matrix; prove standalone artifacts first, then evaluate onefile.                                                                                  |
-| 8. Cross-platform acceptance         | TODO        | Run the same deterministic fixture corpus on Ubuntu, Windows 11-compatible runner, macOS x86_64, and macOS arm64; compare semantic output/integrity expectations.                                 |
-| 9. Documentation/release integration | TODO        | Update README, USER_GUIDE, ARCHITECTURE, CONTRIBUTING, release gates, artifact signing/checksums, and installation instructions.                                                                  |
+| Phase                                | Status      | Work                                                                                                                                                                              |
+| ------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0. Architecture                      | DONE        | Establish native-binary/Nuitka direction, shared-engine boundary, output profiles, automatic-authority rules, and versioned YAML contract.                                        |
+| 1. CLI/config spine                  | IN PROGRESS | v1 validation/build wiring is implemented; v2 embeds pipeline definitions/hashes/strategy versions and v1 migration is implemented; direct embedded-definition execution remains. |
+| 2. Headless runner                   | IN PROGRESS | Synchronous source-to-publication orchestration through the shared Corpus Builder is implemented; compiled-binary end-to-end acceptance remains.                                  |
+| 3. Automatic settlement              | IN PROGRESS | The headless runner uses shared autonomous settlement without granting human authority; broader end-to-end regression coverage remains.                                           |
+| 4. Research projection               | IN PROGRESS | Schema-driven allow-list research `.jsonl.zst` output and atomic replacement are implemented; a research reproducibility/integrity sidecar remains.                               |
+| 5. cELF projection                   | IN PROGRESS | cELF output routes through canonical publication/conformance and copies the canonical integrity sidecar; compiled-binary acceptance remains.                                      |
+| 6. Runtime diagnostics               | IN PROGRESS | `derridai doctor` and `pipeline capabilities` report pipeline compatibility/bindings; source-kind helper/NLP/provider/workspace checks remain.                                    |
+| 7. Native packaging                  | IN PROGRESS | Add Nuitka build configuration and target-OS CI matrix; prove standalone artifacts first, then evaluate onefile.                                                                  |
+| 8. Cross-platform acceptance         | TODO        | Run the same deterministic fixture corpus on Ubuntu, Windows 11-compatible runner, macOS x86_64, and macOS arm64; compare semantic output/integrity expectations.                 |
+| 9. Documentation/release integration | TODO        | Update README, USER_GUIDE, ARCHITECTURE, CONTRIBUTING, release gates, artifact signing/checksums, and installation instructions.                                                  |
 
 ## Acceptance criteria
 
