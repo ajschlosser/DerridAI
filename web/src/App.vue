@@ -64,6 +64,7 @@ import { pauseRuntime } from "./domain/jobsPause";
 import { toggleSidebar } from "./domain/sidebarToggle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 import { measureInteractionToNextFrame } from "./domain/interactionTiming";
+import { flushWorkspaceSessionWrites } from "./domain/workspaceSessionPersistence";
 
 const router = useRouter();
 const route = useRoute();
@@ -507,6 +508,8 @@ async function startRuntime() {
 
 async function logout() {
   pauseRuntime();
+  await flushWorkspaceSessionWrites();
+  runtime.setUserContext(null);
   runtimeStarted.value = false;
   await auth.logout();
   await router.replace("/");
@@ -517,6 +520,8 @@ async function handleAuthExpired() {
   handlingAuthExpiry.value = true;
   try {
     pauseRuntime();
+    await flushWorkspaceSessionWrites();
+    runtime.setUserContext(null);
     runtimeStarted.value = false;
     auth.expireSession(i18n.t("auth.session_expired"));
     if (router.currentRoute.value.path !== "/") await router.replace("/");
@@ -576,14 +581,33 @@ watch(
 );
 
 watch(
-  () => auth.user?.id,
-  (id) => {
-    if (!id) {
+  () =>
+    auth.user
+      ? `${String(auth.user.role || "")}:${String(auth.user.id || "")}`
+      : "",
+  (identity, previousIdentity) => {
+    if (!identity) {
       pauseRuntime();
+      runtime.setUserContext(null);
       runtimeStarted.value = false;
       shell.resetNav();
       return;
     }
+
+    if (previousIdentity && previousIdentity !== identity) {
+      // Authentication can replace one signed-in identity without a full page
+      // reload. Flush the old user's local changes while its DB is still bound,
+      // then let the next runtime bootstrap restore the new user's workspace.
+      void (async () => {
+        pauseRuntime();
+        await flushWorkspaceSessionWrites();
+        runtime.setUserContext(null);
+        runtimeStarted.value = false;
+        await startRuntime();
+      })();
+      return;
+    }
+
     void startRuntime();
   },
 );
