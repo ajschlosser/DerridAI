@@ -560,7 +560,7 @@ def _generation_contract_issues(
         })
         if unknown_ids:
             issues.append("unknown_evidence_markers:" + ",".join(unknown_ids))
-        if not used_ids and not _insufficient_evidence_answer(answer):
+        if not used_ids:
             issues.append("missing_evidence_markers")
     return issues
 
@@ -2545,7 +2545,7 @@ field-name wrappers such as title/introduction/themes, and fenced code blocks.
         _bind_sources(
             raw_answer,
             evidence,
-            request.include_works_cited,
+            request.include_works_cited and prose_required,
         )
         if request.bind_citations
         else _STRAY_MEMORY_TAG_PATTERN.sub("", raw_answer)
