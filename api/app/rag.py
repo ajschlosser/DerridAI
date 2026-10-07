@@ -21,6 +21,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -813,8 +814,17 @@ def _normalized_scope_text(value: Any) -> str:
     """Normalize author/work names for deterministic prompt-scope matching."""
 
     folded = str(value or "").casefold().replace("’", "'")
-    folded = re.sub(r"'s\b", "", folded)
-    return re.sub(r"[^\wÀ-ÿ]+", " ", folded, flags=re.UNICODE).strip()
+    # Research prompts routinely omit source-title diacritics (for example
+    # "Du cote" for "Du côté") and use either Proust's or Prousts'. Scope
+    # routing must tolerate those orthographic differences without asking the
+    # model to guess source identity.
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+    folded = re.sub(r"(?<=\w)(?:'s|s')(?=\W|$)", "", folded)
+    return re.sub(r"[^\w]+", " ", folded, flags=re.UNICODE).strip()
 
 
 def _mentions_scope_author(question: str, author: str) -> bool:
@@ -829,6 +839,24 @@ def _mentions_scope_author(question: str, author: str) -> bool:
     parts = [part for part in normalized_author.split() if part]
     surname = parts[-1] if parts else ""
     return bool(surname and len(surname) >= 4 and surname in set(query.split()))
+
+
+def _explicitly_named_works(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Return corpus work titles explicitly named in the researcher's text."""
+
+    query = _normalized_scope_text(question)
+    if not query:
+        return []
+    return sorted({
+        work
+        for summary in work_summaries
+        if (work := str(summary.get("scope_label") or "").strip())
+        and (normalized_work := _normalized_scope_text(work))
+        and normalized_work in query
+    })
 
 
 def _mentioned_work_groups(
@@ -848,14 +876,14 @@ def _mentioned_work_groups(
     if not query:
         return []
 
+    explicitly_named = set(_explicitly_named_works(work_summaries, question))
     groups: list[list[str]] = []
     author_works: dict[str, set[str]] = {}
     for summary in work_summaries:
         work = str(summary.get("scope_label") or "").strip()
         if not work:
             continue
-        normalized_work = _normalized_scope_text(work)
-        if normalized_work and normalized_work in query:
+        if work in explicitly_named:
             groups.append([work])
 
         author_values = summary.get("source_authors")
@@ -903,33 +931,47 @@ _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN = re.compile(
 def _exclusive_scope_works(
     groups: Sequence[Sequence[str]],
     question: str,
+    *,
+    explicitly_named_works: Sequence[str] = (),
 ) -> list[str]:
-    """Return an inferred closed work scope only when the request is unambiguous.
+    """Return a closed documentary scope only when the request establishes one.
 
-    A single named in-corpus author/work group can close documentary scope when
-    the named source is the subject of the question. Mere source directives such
-    as "cite X" remain coverage requests unless the same wording also contains a
-    strong single-source subject signal. Comparisons and multiple source groups
-    always remain open.
+    Explicit work titles are the strongest deterministic signal: when the
+    researcher names Work A and Work B as the objects of the request, retrieval
+    is limited to exactly those works. A single named author can also close scope
+    when that author is the subject. Citation/additive directives remain open,
+    and author-level comparisons remain open unless work titles were enumerated.
     """
 
     text = str(question or "")
-    if len(groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
-        return []
+    explicit_works = sorted({
+        str(work).strip()
+        for work in explicitly_named_works
+        if str(work).strip()
+    })
     if (
         _NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN.search(text)
         and not _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN.search(text)
     ):
         return []
-    return sorted({str(work).strip() for work in groups[0] if str(work).strip()})
+    if explicit_works:
+        return explicit_works
+
+    normalized_groups = [
+        sorted({str(work).strip() for work in group if str(work).strip()})
+        for group in groups
+    ]
+    normalized_groups = [group for group in normalized_groups if group]
+    if len(normalized_groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
+        return []
+    return normalized_groups[0]
 
 
-def _explicit_scope_work_groups(
+def _scope_work_summaries(
     store: ChromaStore,
     collections: Sequence[Mapping[str, Any]],
-    question: str,
-) -> list[list[str]]:
-    """Collect author/work targets from a compact metadata-only inventory."""
+) -> list[dict[str, Any]]:
+    """Collect compact author/work inventory for deterministic scope routing."""
 
     collection_names = [
         name
@@ -945,10 +987,11 @@ def _explicit_scope_work_groups(
     scope_inventory = getattr(store, "research_scope_inventory", None)
     if callable(scope_inventory):
         try:
-            return _mentioned_work_groups(
-                scope_inventory(collection_names),
-                question,
-            )
+            return [
+                dict(item)
+                for item in scope_inventory(collection_names)
+                if isinstance(item, Mapping)
+            ]
         except Exception:
             logger.debug(
                 "Could not inspect compact Work/author inventory for Research scope",
@@ -957,7 +1000,7 @@ def _explicit_scope_work_groups(
 
     # Compatibility fallback for lightweight test doubles or older store
     # implementations. Production ChromaStore must not take this path because
-    # work_stats() loads every source document to compute word counts.
+    # work_stats() materializes every source document to compute word counts.
     work_summaries: dict[str, dict[str, Any]] = {}
     work_stats = getattr(store, "work_stats", None)
     if not callable(work_stats):
@@ -985,14 +1028,26 @@ def _explicit_scope_work_groups(
             if author:
                 summary["source_authors"].add(author)
 
-    normalized = [
+    return [
         {
             "scope_label": item["scope_label"],
             "source_authors": sorted(item["source_authors"]),
         }
         for item in work_summaries.values()
     ]
-    return _mentioned_work_groups(normalized, question)
+
+
+def _explicit_scope_work_groups(
+    store: ChromaStore,
+    collections: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[list[str]]:
+    """Collect author/work targets from the searched corpus inventory."""
+
+    return _mentioned_work_groups(
+        _scope_work_summaries(store, collections),
+        question,
+    )
 
 
 def _scope_rag_candidates(
@@ -1139,11 +1194,10 @@ def run_rag_pipeline(
             parsed_query.get("prompt_query_fr")
             or request.prompt
         ).strip(),
-        "prompt_instructions": str(
-            (None if thread_context else parsed_query.get("prompt_instructions"))
-            or request.instructions
-            or ""
-        ).strip(),
+        # User instructions are authoritative request data. Query decomposition
+        # may transform retrieval wording, but it must never invent, remove, or
+        # reinterpret generation instructions.
+        "prompt_instructions": str(request.instructions or "").strip(),
         # Retrieval/reranking limits are deterministic controls, not LLM
         # decisions. Pipeline Studio supplies the baseline; Settings and run
         # override layers have already been resolved into the effective pipeline.
@@ -1171,6 +1225,12 @@ def run_rag_pipeline(
                 "derived_query_fr": query_metadata["prompt_query_fr"],
             },
         })
+    decomposed_instructions = str(parsed_query.get("prompt_instructions") or "").strip()
+    if decomposed_instructions and decomposed_instructions != query_metadata["prompt_instructions"]:
+        warnings.append(
+            "Query decomposition proposed instructions that differ from the user's request; "
+            "the proposal was ignored."
+        )
     stages.append({
         "name": "query_metadata",
         "seconds": time.perf_counter() - stage_start,
@@ -1312,20 +1372,26 @@ def run_rag_pipeline(
         )
         if value
     )
-    explicit_scope_groups = _explicit_scope_work_groups(
-        store,
-        collections,
+    scope_work_summaries = _scope_work_summaries(store, collections)
+    explicit_scope_groups = _mentioned_work_groups(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    explicitly_named_works = _explicitly_named_works(
+        scope_work_summaries,
         explicit_scope_text,
     )
     exclusive_scope_works = _exclusive_scope_works(
         explicit_scope_groups,
         explicit_scope_text,
+        explicitly_named_works=explicitly_named_works,
     )
     retrieval_metadata_filter = (
         combine_metadata_filters(metadata_filter, {"work": {"$in": exclusive_scope_works}})
         if exclusive_scope_works
         else metadata_filter
     )
+    filter_detail["explicitly_named_works"] = explicitly_named_works
     filter_detail["inferred_exclusive_works"] = exclusive_scope_works
     if pipeline_plan.scope_stage_id and exclusive_scope_works:
         scope_stage = next(
@@ -2184,7 +2250,7 @@ def run_rag_pipeline(
     generation_attempts = 1
     prose_contract_retry = False
     if (
-        not _requests_json_output(request.prompt, query_metadata["prompt_instructions"])
+        not _requests_json_output(request.prompt, request.instructions or "")
         and _json_like_answer(raw_answer)
     ):
         prose_contract_retry = True
