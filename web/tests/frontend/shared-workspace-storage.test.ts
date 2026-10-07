@@ -77,7 +77,7 @@ describe("shared workspace storage", () => {
     expect(workspaceDbName()).toBe(admin);
   });
 
-  it("shell refreshes the installed hook and ignores a non-function", () => {
+  it("shell refreshes the installed hook and ignores a non-function without owning persistence", () => {
     const hook = vi.fn();
     setShellRefreshHook(hook);
     shell();
