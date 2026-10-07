@@ -96,13 +96,12 @@ Return exactly one JSON object:
 {{
   "prompt_query": "the actual research question in English",
   "prompt_query_fr": "the same research question in French",
-  "prompt_instructions": "only instructions actually supplied by the user",
   "response_language": "en"
 }}
 
 Rules:
 - Do not answer the research question.
-- Do not invent instructions.
+- Do not return, rewrite, summarize, or infer user instructions.
 - Preserve philosophical terminology.
 - prompt_query_fr is required even when the original prompt is English.
 - response_language should be "fr" only when the user clearly requests a French answer or writes primarily in French; otherwise "en".
