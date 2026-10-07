@@ -60,6 +60,7 @@ type Helper =
   | "canAccessPage"
   | "cancelBackgroundJob"
   | "cloneAuditValue"
+  | "commitRecordFiles"
   | "formatTimestamp"
   | "fullCitation"
   | "isResearcher"
@@ -110,6 +111,7 @@ export function createJobDialogs(deps: Deps) {
     canAccessPage,
     cancelBackgroundJob,
     cloneAuditValue,
+    commitRecordFiles,
     formatTimestamp,
     fullCitation,
     isResearcher,
@@ -457,6 +459,7 @@ export function createJobDialogs(deps: Deps) {
         }
       }
 
+      const touchedFiles = new Map<string, Any>();
       for (const [key, target] of byKey.entries()) {
         if (mode === "selected" && !target.fields.length) continue;
         const record = target.item.file.records[target.item.index];
@@ -480,7 +483,9 @@ export function createJobDialogs(deps: Deps) {
           model: job.model,
           batchId,
           rationale: target.rationale,
+          deferCommit: true,
         });
+        touchedFiles.set(String(target.item.file.id), target.item.file);
         if (target.resolveRecord) _fullyReviewed++;
 
         resolveItems.push({
@@ -503,7 +508,9 @@ export function createJobDialogs(deps: Deps) {
             model: job.model,
             batchId,
             rationale: {},
+            deferCommit: true,
           });
+          touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
@@ -520,7 +527,9 @@ export function createJobDialogs(deps: Deps) {
             model: job.model,
             batchId,
             rationale: {},
+            deferCommit: true,
           });
+          touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
@@ -530,6 +539,8 @@ export function createJobDialogs(deps: Deps) {
         toast(copy.noResultsSelected, { tone: "warning" });
         return false;
       }
+
+      commitRecordFiles(touchedFiles.values());
 
       try {
         job = await resolveOnServer("accept", resolveItems);
