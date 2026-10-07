@@ -64,6 +64,7 @@ HEADLESS_CORPUS_PIPELINE_FEATURES: tuple[str, ...] = (
     "corpus_document_manifest",
     "corpus_segmentation",
     "corpus_metadata_enrichment",
+    "evidence_recovery",
     "corpus_text_touchup",
     "metadata_prefill",
     "metadata_precedents",
