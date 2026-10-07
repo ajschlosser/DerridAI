@@ -1171,7 +1171,12 @@ class ChromaStore:
             return self._RESPONSE_CACHE_PUBLIC
         return collection.name
 
-    def _public_store(self, collection) -> dict[str, Any]:
+    def _public_store(
+        self,
+        collection,
+        *,
+        include_count: bool = True,
+    ) -> dict[str, Any]:
         metadata = dict(getattr(collection, "metadata", None) or {})
         provider, model = self._embedding_spec(collection)
         language_codes, role, source_collection = self._language_spec(collection)
@@ -1209,10 +1214,9 @@ class ChromaStore:
             if key not in private
         }
         manifest = self._manifest_spec(collection)
-        return {
+        result = {
             "name": self._public_collection_name(collection),
             "storage_name": collection.name,
-            "count": collection.count(),
             "metadata": public_metadata,
             "embedding_provider": provider,
             "embedding_model": model,
@@ -1222,6 +1226,38 @@ class ChromaStore:
             **manifest,
             "last_build_error": metadata.get("__derridai_last_build_error"),
         }
+        if include_count:
+            result["count"] = collection.count()
+        return result
+
+    def list_store_descriptors(self) -> list[dict[str, Any]]:
+        """List collection routing metadata without loading vector segments.
+
+        Research source routing only needs collection identity, language role,
+        and manifest metadata. Calling count() for every collection can make
+        embedded Chroma load every unrelated vector segment into the API process.
+        Counts are resolved later only for collections the Research run actually
+        searches.
+        """
+
+        stores: list[dict[str, Any]] = []
+        for collection in self.client.list_collections():
+            name = collection.name if hasattr(collection, "name") else str(collection)
+            col = (
+                collection
+                if hasattr(collection, "metadata")
+                else self.client.get_collection(name)
+            )
+            metadata = dict(getattr(col, "metadata", None) or {})
+            if bool(metadata.get("derridai_hidden_system_collection")):
+                continue
+            stores.append(self._public_store(col, include_count=False))
+        return sorted(stores, key=lambda item: item["name"].casefold())
+
+    def collection_count(self, name: str) -> int:
+        """Count one selected collection after Research routing is resolved."""
+
+        return int(self._collection(name).count())
 
     @_notes_collection_change()
     def set_language_tags(
