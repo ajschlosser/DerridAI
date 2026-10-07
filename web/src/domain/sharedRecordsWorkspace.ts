@@ -17,7 +17,6 @@
  */
 
 import { createRecordsWorkspace } from "./recordsWorkspace";
-import { corpusCache } from "./corpusCache";
 import { copyCitation, copyJsonToClipboard } from "./clipboardCopy";
 import { pageInfo, setActiveStore, setListFilterValue } from "./listPaging";
 import { toggleSort } from "./recordTableHelpers";
@@ -46,6 +45,7 @@ import {
 import { dbUnavailableReason, hasCorpusDb, recordStores } from "./storeAvailability";
 import { getTableColumns, tableAvailableFields } from "./tableColumns";
 import { openTouchup } from "./touchupLauncher";
+import { corpusState } from "../state/workspaceState";
 
 // The Records workspace over the shared state, usable without the legacy runtime. The runtime and `useRecordsWorkspace`
 // use this same instance.
@@ -56,7 +56,10 @@ export const recordsWorkspace = createRecordsWorkspace({
   clearReviewSelection: evidenceSelection.clearReviewSelection,
   copyCitation,
   copyJsonToClipboard,
-  corpusVersion: () => corpusCache.version,
+  corpusVersion: (file: { id?: unknown }) =>
+    `${corpusState.structureVersion}:${Number(
+      corpusState.fileVersions[String(file?.id || "")] || 0,
+    )}`,
   dbUnavailableReason,
   evidenceIsSelected: evidenceSelection.evidenceIsSelected,
   getTableColumns,
