@@ -471,7 +471,7 @@ class ChromaStore:
         # separate compact metadata-only cache so every Research run does not
         # materialize entire corpus documents through work_stats().
         self._research_scope_cache: dict[
-            tuple[tuple[str, int], ...], list[dict[str, Any]]
+            tuple[int, tuple[str, ...]], list[dict[str, Any]]
         ] = {}
         self._research_filter_epoch = 0
 
@@ -1957,9 +1957,13 @@ class ChromaStore:
             return []
 
         collections = [self._collection(name) for name in unique_names]
-        key = tuple(
-            (str(getattr(collection, "id", name)), int(collection.count()))
-            for name, collection in zip(unique_names, collections)
+        epoch = int(getattr(self, "_research_filter_epoch", 0))
+        key = (
+            epoch,
+            tuple(
+                str(getattr(collection, "id", name))
+                for name, collection in zip(unique_names, collections)
+            ),
         )
         cache = getattr(self, "_research_scope_cache", None)
         if cache is None:
