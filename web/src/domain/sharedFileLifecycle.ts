@@ -26,7 +26,12 @@ import { hasCapability, isResearcher } from "./sharedSession";
 import { applyCompressedTableUrlState, renderView, syncUrl } from "./sharedNavigation";
 import { tr, trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs, shell, workspaceDb } from "./sharedWorkspaceStorage";
+import {
+  persistCorpusPreferences,
+  persistListPreferences,
+  shell,
+  workspaceDb,
+} from "./sharedWorkspaceStorage";
 import { persistFileNow } from "./sharedWorkspacePersistence";
 import { decompressUrlState } from "./urlState";
 
@@ -44,7 +49,8 @@ const lifecycle = createFileLifecycle({
   isResearcher,
   parseJsonl,
   persistFileNow,
-  persistPrefs,
+  persistCorpusPreferences,
+  persistListPreferences,
   renderView: () => renderView(),
   shell,
   stableJsonlFileIdentity,
