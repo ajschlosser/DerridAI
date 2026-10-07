@@ -57,7 +57,7 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
         )
     citation_head = " ".join(part for part in (last, str(year or "")) if part).strip()
     if pages:
-        inline = f"{citation_head}: {pages}" if citation_head else ""
+        inline = f"{citation_head}: {pages}" if citation_head else pages
     else:
         inline = citation_head
 
