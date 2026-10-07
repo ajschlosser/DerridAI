@@ -22,7 +22,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute } from "vue-router";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
 import { label as compatibilityFieldLabel } from "../domain/sharedRecordHelpers";
-import { updateSearchQuery } from "../domain/sharedSearchQuery";
+import { setSearchQueryDraft, updateSearchQuery } from "../domain/sharedSearchQuery";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
@@ -353,10 +353,14 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
 }
 function applyQuery(value: string) {
   query.value = value;
-  updateSearchQuery(value, { replace: true });
+  // Keep typing on the Search-owned draft path. Persistence and shareable URL
+  // compression are committed only after the loaded-record debounce or on an
+  // explicit database search.
+  setSearchQueryDraft(value);
   if (databaseMode.value) return;
   window.clearTimeout(localSearchTimer);
   localSearchTimer = window.setTimeout(() => {
+    updateSearchQuery(value, { replace: true });
     void load({ refresh: false, autoRun: false });
     window.clearTimeout(recentTimer);
     recentTimer = window.setTimeout(() => recordRecentSearch(), 650);
