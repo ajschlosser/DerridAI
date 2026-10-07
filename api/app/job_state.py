@@ -179,6 +179,7 @@ class PersistentJobStateMixin:
                 if job.get("id")
             }
             self._recent_terminal_summaries: dict[str, JobPayload] = {}
+            self._persistence_io_lock = threading.Lock()
 
         thread = Thread(
             target=self._persistence_loop,
@@ -198,9 +199,10 @@ class PersistentJobStateMixin:
             ]
 
     def _checkpoint_active_jobs(self) -> None:
-        jobs = self._active_snapshots()
-        if jobs:
-            job_repository.upsert_many(jobs)
+        with self._persistence_io_lock:
+            jobs = self._active_snapshots()
+            if jobs:
+                job_repository.upsert_many(jobs)
 
     def _persistence_loop(self) -> None:
         while True:
@@ -271,7 +273,8 @@ class PersistentJobStateMixin:
             job = copy.deepcopy(self._jobs.get(job_id))
         if job is None:
             return
-        job_repository.upsert(job)
+        with self._persistence_io_lock:
+            job_repository.upsert(job)
         if str(job.get("status") or "") not in self.ACTIVE_STATUSES:
             self._prune_resident_finished()
 
@@ -279,7 +282,8 @@ class PersistentJobStateMixin:
         with self._lock:
             jobs = [copy.deepcopy(job) for job in self._jobs.values()]
         if jobs:
-            job_repository.upsert_many(jobs)
+            with self._persistence_io_lock:
+                job_repository.upsert_many(jobs)
         self._prune_resident_finished()
 
     def _all_job_records(self) -> JobPayloadList:
@@ -381,19 +385,21 @@ class PersistentJobStateMixin:
         return list(footprints.values())
 
     def clear_all(self) -> int:
-        """Drop in-memory and durable history for this manager."""
-        durable_count = job_repository.clear_type(self.JOB_TYPE)
-        with self._lock:
-            resident_count = len(self._jobs)
-            self._jobs.clear()
-            self._recent_terminal_summaries.clear()
+        """Drop in-memory and durable history without checkpoint resurrection."""
+        with self._persistence_io_lock:
+            with self._lock:
+                resident_count = len(self._jobs)
+                self._jobs.clear()
+                self._recent_terminal_summaries.clear()
 
-            provider_active = getattr(self, "_provider_active", None)
-            if isinstance(provider_active, dict):
-                provider_active.clear()
+                provider_active = getattr(self, "_provider_active", None)
+                if isinstance(provider_active, dict):
+                    provider_active.clear()
 
-            active = getattr(self, "_active", None)
-            if isinstance(active, dict):
-                active.clear()
+                active = getattr(self, "_active", None)
+                if isinstance(active, dict):
+                    active.clear()
+
+            durable_count = job_repository.clear_type(self.JOB_TYPE)
 
         return max(durable_count, resident_count)
