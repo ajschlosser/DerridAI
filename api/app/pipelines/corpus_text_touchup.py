@@ -27,6 +27,8 @@ text changes only when a person approves it.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .models import PipelineDefinition
 from .structured_llm_stage import (
     StructuredStageFeature,
@@ -53,5 +55,8 @@ class TextTouchupSession(StructuredStageSession):
     """One resolved text touch-up pipeline used for one proposal, recorded as its own trace."""
 
     @classmethod
-    def open(cls) -> TextTouchupSession:
-        return cls.open_for(TEXT_TOUCHUP)
+    def open(
+        cls,
+        request: dict[str, Any] | None = None,
+    ) -> TextTouchupSession:
+        return cls.open_for(TEXT_TOUCHUP, request=request)
