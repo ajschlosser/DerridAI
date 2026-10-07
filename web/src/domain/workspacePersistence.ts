@@ -40,6 +40,7 @@ type Helper =
 type Deps = {
   state: Loose;
   fileTimers: Map<string, ReturnType<typeof setTimeout>>;
+  restorePreferenceOverlays?: () => Promise<void>;
 } & Record<Helper, Fn>;
 
 export function createWorkspacePersistence(deps: Deps) {
@@ -55,6 +56,7 @@ export function createWorkspacePersistence(deps: Deps) {
     restoreCurrentPdfAsset,
     serializableFile,
     trf,
+    restorePreferenceOverlays,
   } = deps;
   const pendingFiles = new Map<string, Any>();
 
@@ -202,29 +204,8 @@ export function createWorkspacePersistence(deps: Deps) {
           if (prefs[key] !== undefined) state[key] = prefs[key];
         }
         state.appConfig = { ...preservedAppDefaults, ...(prefs.appConfig || {}) };
-        applyUiTheme(state.appConfig.ui_color_theme);
         state.llmConfig = { ...preservedLlmDefaults, ...(prefs.llmConfig || {}) };
         state.ragConfig = { ...state.ragConfig, ...(prefs.ragConfig || {}) };
-        if (
-          !state.faqExpanded ||
-          typeof state.faqExpanded !== "object" ||
-          Array.isArray(state.faqExpanded)
-        )
-          state.faqExpanded = {};
-        state.ragConfig.locales = Array.isArray(state.ragConfig.locales)
-          ? state.ragConfig.locales.filter((value: Any) => value === "en" || value === "fr")
-          : ["en", "fr"];
-        if (!state.ragConfig.locales.length) state.ragConfig.locales = ["en", "fr"];
-        state.ragConfig.prompt = String(state.ragConfig.prompt || "");
-        state.ragConfig.instructions = String(state.ragConfig.instructions || "");
-        if (!Array.isArray(state.ragConfig.history)) state.ragConfig.history = [];
-        state.ragConfig.history = state.ragConfig.history.slice(0, 100);
-        if (!Array.isArray(state.ragConfig.run_history)) state.ragConfig.run_history = [];
-        state.ragConfig.run_history = state.ragConfig.run_history.slice(0, 250);
-        if (!state.appConfig.default_review_preset) state.appConfig.default_review_preset = "text";
-        if (!state.appConfig.default_llm_run_mode)
-          state.appConfig.default_llm_run_mode = "foreground";
-        ensureProviderProfiles();
         if (Number.isFinite(+prefs.pageSize)) state.pageSize = +prefs.pageSize;
         if (typeof prefs.view === "string") state.view = prefs.view;
         state.reviewSelection = new Set(prefs.reviewSelection || []);
@@ -233,15 +214,43 @@ export function createWorkspacePersistence(deps: Deps) {
           : state.files[0]?.id || null;
       } else {
         state.activeFileId = state.files[0]?.id || null;
-        ensureProviderProfiles();
         try {
           state.appConfig.ui_color_theme =
             localStorage.getItem("derridai.ui.theme") || state.appConfig.ui_color_theme || "green";
         } catch {
           // Best effort: keep going with what we have.
         }
-        applyUiTheme(state.appConfig.ui_color_theme);
       }
+
+      // Domain records are the authoritative post-migration preferences. Apply
+      // them before final validation/theme/provider setup and before storage is
+      // marked ready, so no watcher can persist legacy fallback values over
+      // newer domain-owned state during startup.
+      if (restorePreferenceOverlays) await restorePreferenceOverlays();
+
+      if (
+        !state.faqExpanded ||
+        typeof state.faqExpanded !== "object" ||
+        Array.isArray(state.faqExpanded)
+      )
+        state.faqExpanded = {};
+      state.ragConfig.locales = Array.isArray(state.ragConfig.locales)
+        ? state.ragConfig.locales.filter((value: Any) => value === "en" || value === "fr")
+        : ["en", "fr"];
+      if (!state.ragConfig.locales.length) state.ragConfig.locales = ["en", "fr"];
+      state.ragConfig.prompt = String(state.ragConfig.prompt || "");
+      state.ragConfig.instructions = String(state.ragConfig.instructions || "");
+      if (!Array.isArray(state.ragConfig.history)) state.ragConfig.history = [];
+      state.ragConfig.history = state.ragConfig.history.slice(0, 100);
+      if (!Array.isArray(state.ragConfig.run_history)) state.ragConfig.run_history = [];
+      state.ragConfig.run_history = state.ragConfig.run_history.slice(0, 250);
+      if (!state.appConfig.default_review_preset) state.appConfig.default_review_preset = "text";
+      if (!state.appConfig.default_llm_run_mode)
+        state.appConfig.default_llm_run_mode = "foreground";
+      if (!Number.isFinite(+state.pageSize)) state.pageSize = 100;
+      ensureProviderProfiles();
+      applyUiTheme(state.appConfig.ui_color_theme);
+
       const validPrefixes = new Set(state.files.map((f: Any) => f.id));
       state.reviewSelection = new Set(
         [...state.reviewSelection].filter((key) => validPrefixes.has(String(key).split("::")[0])),
