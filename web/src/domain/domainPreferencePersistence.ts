@@ -14,6 +14,7 @@ type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 export const DOMAIN_PREFERENCE_KEYS = {
   research: "research-preferences",
   search: "search-preferences",
+  settings: "settings-preferences",
   list: "list-preferences",
   layout: "layout-preferences",
   review: "review-preferences",
@@ -24,6 +25,8 @@ export const DOMAIN_PREFERENCE_KEYS = {
 export type DomainPreferenceName = keyof typeof DOMAIN_PREFERENCE_KEYS;
 
 const RESEARCH_FIELDS = ["ragConfig"] as const;
+
+const SETTINGS_FIELDS = ["appConfig", "llmConfig"] as const;
 
 const SEARCH_FIELDS = [
   "globalSearch",
@@ -98,6 +101,7 @@ export function domainPreferenceRecord(state: Loose, name: DomainPreferenceName)
   const key = DOMAIN_PREFERENCE_KEYS[name];
   if (name === "research") return { key, ...pick(state, RESEARCH_FIELDS) };
   if (name === "search") return { key, ...pick(state, SEARCH_FIELDS) };
+  if (name === "settings") return { key, ...pick(state, SETTINGS_FIELDS) };
   if (name === "list") return { key, ...pick(state, LIST_FIELDS) };
   if (name === "layout") return { key, ...pick(state, LAYOUT_FIELDS) };
   if (name === "vector") return { key, ...pick(state, VECTOR_FIELDS) };
@@ -130,7 +134,18 @@ export function applyDomainPreferenceRecord(state: Loose, value: unknown): void 
         ...(record.ragConfig && typeof record.ragConfig === "object" ? record.ragConfig : {}),
       };
   } else if (key === DOMAIN_PREFERENCE_KEYS.search) assignFields(state, record, SEARCH_FIELDS);
-  else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
+  else if (key === DOMAIN_PREFERENCE_KEYS.settings) {
+    if (record.appConfig !== undefined)
+      state.appConfig = {
+        ...(state.appConfig && typeof state.appConfig === "object" ? state.appConfig : {}),
+        ...(record.appConfig && typeof record.appConfig === "object" ? record.appConfig : {}),
+      };
+    if (record.llmConfig !== undefined)
+      state.llmConfig = {
+        ...(state.llmConfig && typeof state.llmConfig === "object" ? state.llmConfig : {}),
+        ...(record.llmConfig && typeof record.llmConfig === "object" ? record.llmConfig : {}),
+      };
+  } else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.layout) assignFields(state, record, LAYOUT_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.vector) assignFields(state, record, VECTOR_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.jobs) assignFields(state, record, JOB_FIELDS);
@@ -187,6 +202,7 @@ export function createDomainPreferencePersistence(deps: {
   return {
     persistResearchPreferences: () => persist("research"),
     persistSearchPreferences: () => persist("search"),
+    persistSettingsPreferences: () => persist("settings"),
     persistListPreferences: () => persist("list"),
     persistLayoutPreferences: () => persist("layout"),
     persistReviewPreferences: () => persist("review"),
