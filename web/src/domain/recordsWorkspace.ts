@@ -120,7 +120,7 @@ export function createRecordsWorkspace(deps: Deps) {
   } = deps;
   type BaseRowsCache = {
     file: Any;
-    version: number;
+    version: string;
     rows: Any[];
     flagged: number;
     available: string[];
@@ -128,7 +128,7 @@ export function createRecordsWorkspace(deps: Deps) {
   let baseRowsCache: BaseRowsCache | null = null;
   let queryRowsCache: {
     file: Any;
-    version: number;
+    version: string;
     query: string;
     filtersKey: string;
     rows: Any[];
@@ -136,7 +136,7 @@ export function createRecordsWorkspace(deps: Deps) {
   let normalizedTextCache = new WeakMap<object, string>();
 
   function baseRowsForFile(file: Any): BaseRowsCache {
-    const version = Number(corpusVersion()) || 0;
+    const version = String(corpusVersion(file) ?? "");
     const cached = baseRowsCache;
     if (cached && cached.file === file && cached.version === version) return cached;
 
