@@ -48,6 +48,28 @@ describe("semantic map sources", () => {
     expect(records.map((item: { id: string }) => item.id).sort()).toEqual(["r1", "r2"]);
   });
 
+  it("stops walking local files once the bounded source set is full", () => {
+    const later = { id: "later" } as { id: string; records?: unknown[] };
+    Object.defineProperty(later, "records", {
+      get: () => {
+        throw new Error("later file should not be traversed");
+      },
+    });
+    Object.assign(state, {
+      files: [
+        {
+          id: "f1",
+          records: Array.from({ length: 450 }, (_, index) =>
+            record(`r-${index}`, "Glas"),
+          ),
+        },
+        later,
+      ],
+    });
+
+    expect(listSemanticMapSources().records).toHaveLength(400);
+  });
+
   it("opens a local record and falls back to Search for an unknown one", () => {
     Object.assign(state, { files: [{ id: "f1", records: [record("r1", "Glas")] }] });
     expect(openSemanticRecord("r1")).toBe(true);
