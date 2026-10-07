@@ -40,7 +40,7 @@ import {
 } from "./sharedNavigation";
 import {
   persistListPreferences,
-  persistPrefs,
+  persistRecordViewPreferences,
   persistSearchPreferences,
   persistVectorPreferences,
   refreshShell,
@@ -77,7 +77,7 @@ export const searchWorkspace = createSearchWorkspace({
   openStoreRecordEditor: recordDialogs.openStoreRecordEditor,
   openTouchup,
   persistListPreferences,
-  persistPrefs,
+  persistRecordViewPreferences,
   persistSearchPreferences,
   persistVectorPreferences,
   recordDbStatus,
