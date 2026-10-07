@@ -30,6 +30,8 @@ boundary where it is.
 
 from __future__ import annotations
 
+from typing import Any
+
 from .models import PipelineDefinition
 from .structured_llm_stage import (
     StructuredStageFeature,
@@ -56,5 +58,8 @@ class SegmentationSession(StructuredStageSession):
     """One resolved segmentation pipeline used for a pass's boundary calls, recorded as a single trace."""
 
     @classmethod
-    def open(cls) -> SegmentationSession:
-        return cls.open_for(SEGMENTATION)
+    def open(
+        cls,
+        request: dict[str, Any] | None = None,
+    ) -> SegmentationSession:
+        return cls.open_for(SEGMENTATION, request=request)
