@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { createUpdateSearchQuery } from "./searchQuery";
+import { createUpdateSearchQuery, setSearchQueryDraft as setDraft } from "./searchQuery";
 import { persistPrefs } from "./sharedWorkspaceStorage";
 import { syncUrl } from "./sharedNavigation";
 import { state } from "./sharedUrlState";
 
-// The Search query setter over the shared workspace state, usable without the legacy runtime.
+// Search query commands over the shared state. Draft updates are intentionally
+// side-effect free so typing can paint before persistence and URL compression.
+export const setSearchQueryDraft = (value: unknown) => setDraft(state, value);
 export const updateSearchQuery = createUpdateSearchQuery({ state, persistPrefs, syncUrl });
