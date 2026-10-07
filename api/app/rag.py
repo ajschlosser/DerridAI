@@ -746,7 +746,30 @@ def _resolve_search_collections(
     source_name: str,
     locales: list[str],
 ) -> list[dict[str, Any]]:
-    stores = store.list_stores()
+    descriptor_loader = getattr(store, "list_store_descriptors", None)
+    stores = (
+        descriptor_loader()
+        if callable(descriptor_loader)
+        else store.list_stores()
+    )
+
+    def with_selected_counts(
+        rows: Sequence[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Resolve counts only after source/language routing selected stores."""
+
+        count_loader = getattr(store, "collection_count", None)
+        counts: dict[str, int] = {}
+        output: list[dict[str, Any]] = []
+        for item in rows:
+            row = dict(item)
+            name = str(row.get("name") or "")
+            if row.get("count") is None and name and callable(count_loader):
+                if name not in counts:
+                    counts[name] = int(count_loader(name))
+                row["count"] = counts[name]
+            output.append(row)
+        return output
     source = next((item for item in stores if item["name"] == source_name), None)
     if source is None:
         raise ValueError(f"Collection {source_name!r} does not exist.")
@@ -770,7 +793,7 @@ def _resolve_search_collections(
             return []
         row = dict(source)
         row["_rag_locales"] = list(codes & requested_set) or list(codes)
-        return [row]
+        return with_selected_counts([row])
 
     resolved: list[dict[str, Any]] = []
     for locale in requested:
@@ -803,7 +826,7 @@ def _resolve_search_collections(
         row["_rag_locales"] = list(source.get("language_codes") or ["en", "fr"])
         row["_rag_route"] = "source"
         resolved.append(row)
-    return resolved
+    return with_selected_counts(resolved)
 
 
 def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) -> list[RetrievalCandidate]:
@@ -1753,13 +1776,28 @@ def run_rag_pipeline(
                 lexical_kwargs["where"] = retrieval_metadata_filter
             if document_filter:
                 lexical_kwargs["where_document"] = document_filter
-            lexical_candidates = _scope_rag_candidates(
-                store.lexical_search(
+            collection_count = max(1, int(collection["count"]))
+            lexical_pool_limit = min(collection_lexical_fetch_k, collection_count)
+            if isinstance(store, ChromaStore):
+                # Production Chroma can score the same deep lexical candidate
+                # window while hydrating only the Records that can survive RRF.
+                # Lightweight test/fake stores keep the historical call shape.
+                lexical_rows = store.lexical_search(
                     collection["name"],
                     query,
-                    min(collection_lexical_fetch_k, max(1, collection["count"])),
+                    min(collection_retrieve_k, collection_count),
                     **lexical_kwargs,
-                ),
+                    candidate_pool_size=lexical_pool_limit,
+                )
+            else:
+                lexical_rows = store.lexical_search(
+                    collection["name"],
+                    query,
+                    lexical_pool_limit,
+                    **lexical_kwargs,
+                )
+            lexical_candidates = _scope_rag_candidates(
+                lexical_rows,
                 collection,
                 locale_codes,
             )
