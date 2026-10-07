@@ -550,17 +550,17 @@ deterministically freezing the current/default bundle before execution.
 
 Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 
-| Step                              | Status      | Work                                                                                                                                                       |
-| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| C0. Establish authority boundary  | DONE        | Existing `PipelineDefinition`, purpose registry, strategy registry, and generated Pipeline Studio catalog are declared canonical.                          |
-| C1. Document shared contract      | DONE        | This document defines ownership, versioning, migration, export/import, and drift rules.                                                                    |
-| C2. Contract identity             | DONE        | The API catalog and native CLI expose one application/contract/strategy-version compatibility identity.                                                    |
-| C3. CLI v2 envelope               | DONE        | The v2 envelope embeds exact definitions, hashes, strategy versions, and typed overrides; headless execution resolves the frozen run bindings.          |
-| C4. Legacy CLI migration          | DONE        | `derridai config migrate` deterministically wraps v1 settings with the currently resolved Corpus Builder pipeline bundle.                                  |
+| Step                              | Status      | Work                                                                                                                                                            |
+| --------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| C0. Establish authority boundary  | DONE        | Existing `PipelineDefinition`, purpose registry, strategy registry, and generated Pipeline Studio catalog are declared canonical.                               |
+| C1. Document shared contract      | DONE        | This document defines ownership, versioning, migration, export/import, and drift rules.                                                                         |
+| C2. Contract identity             | DONE        | The API catalog and native CLI expose one application/contract/strategy-version compatibility identity.                                                         |
+| C3. CLI v2 envelope               | DONE        | The v2 envelope embeds exact definitions, hashes, strategy versions, and typed overrides; headless execution resolves the frozen run bindings.                  |
+| C4. Legacy CLI migration          | DONE        | `derridai config migrate` deterministically wraps v1 settings with the currently resolved Corpus Builder pipeline bundle.                                       |
 | C5. Pipeline Studio export/import | DONE        | Pipeline Studio/API export and strict idempotent import preserve canonical definitions; headless corpus definitions can also export a secret-free run envelope. |
-| C6. Generated frontend contracts  | IN PROGRESS | Continue replacing hand-maintained workflow semantics with server-derived catalog/types/fixtures.                                                          |
-| C7. Drift CI                      | IN PROGRESS | Backend/CLI tests cover compatibility identity, migration, hashes, and required strategies; broader frontend/property drift gates remain.                  |
-| C8. Round-trip CI                 | DONE        | Backend and frontend/CLI coverage preserve canonical hashes through portable export/import and reject tampering or unknown executable fields.             |
-| C9. Execution parity CI           | TODO        | Run the same resolved definitions through server and headless paths and compare semantics.                                                                 |
-| C10. Binary capability CI         | DONE        | Native build manifests record the source-tree contract; each compiled binary must report the identical contract in smoke CI.                              |
-| C11. Corpus Builder convergence   | IN PROGRESS | Incrementally move execution-affecting Corpus Builder settings onto registered pipeline strategies without behavior regressions.                           |
+| C6. Generated frontend contracts  | IN PROGRESS | Continue replacing hand-maintained workflow semantics with server-derived catalog/types/fixtures.                                                               |
+| C7. Drift CI                      | IN PROGRESS | Backend/CLI tests cover compatibility identity, migration, hashes, and required strategies; broader frontend/property drift gates remain.                       |
+| C8. Round-trip CI                 | DONE        | Backend and frontend/CLI coverage preserve canonical hashes through portable export/import and reject tampering or unknown executable fields.                   |
+| C9. Execution parity CI           | TODO        | Run the same resolved definitions through server and headless paths and compare semantics.                                                                      |
+| C10. Binary capability CI         | DONE        | Native build manifests record the source-tree contract; each compiled binary must report the identical contract in smoke CI.                                    |
+| C11. Corpus Builder convergence   | IN PROGRESS | Incrementally move execution-affecting Corpus Builder settings onto registered pipeline strategies without behavior regressions.                                |
