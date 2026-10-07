@@ -59,7 +59,8 @@ type Helper =
   | "openRecordHistoryBrowser"
   | "openTouchup"
   | "pdfDisplayTitle"
-  | "persistPrefs"
+  | "persistListPreferences"
+  | "persistRecordViewPreferences"
   | "refreshServerAnnotations"
   | "refreshStores"
   | "researcherDbRecords"
@@ -105,7 +106,8 @@ export function createRecordWorkspace(deps: Deps) {
     openRecordHistoryBrowser,
     openTouchup,
     pdfDisplayTitle,
-    persistPrefs,
+    persistListPreferences,
+    persistRecordViewPreferences,
     refreshServerAnnotations,
     refreshStores,
     researcherDbRecords,
@@ -257,7 +259,7 @@ export function createRecordWorkspace(deps: Deps) {
     const pointer = { kind: "workspace", fileId: file.id, index };
     if (JSON.stringify(state.lastViewedRecord) !== JSON.stringify(pointer)) {
       state.lastViewedRecord = pointer;
-      persistPrefs();
+      persistRecordViewPreferences();
     }
     const text = String(record.text || "");
     const q = String(state.recordFind || "");
@@ -345,7 +347,7 @@ export function createRecordWorkspace(deps: Deps) {
       const next = list[index + step];
       if (next) {
         state.researcherRecordId = String(next._chroma_id || next.record_id || "");
-        persistPrefs();
+        persistRecordViewPreferences();
         syncUrl({ replace: true });
         shell();
       }
@@ -356,14 +358,14 @@ export function createRecordWorkspace(deps: Deps) {
     const index = selectedIndex(file),
       next = Math.max(0, Math.min(file.records.length - 1, index + step));
     state.selected[file.id] = next;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
     shell();
     return getRecordWorkspaceSnapshot();
   }
   function setRecordWorkspaceFind(value: Any) {
     state.recordFind = String(value || "");
-    persistPrefs();
+    persistRecordViewPreferences();
     syncUrl({ replace: true });
     return state.recordFind;
   }
