@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const storage = vi.hoisted(() => ({
   persistPrefs: vi.fn(),
@@ -57,20 +57,65 @@ vi.mock("../../src/domain/navigation", () => ({
 
 import { repaintAfterLocationChange } from "../../src/domain/sharedNavigation";
 
+function controlAnimationFrames() {
+  let nextId = 0;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  vi.stubGlobal(
+    "requestAnimationFrame",
+    vi.fn((callback: FrameRequestCallback) => {
+      const id = ++nextId;
+      callbacks.set(id, callback);
+      return id;
+    }),
+  );
+  return {
+    runFrame() {
+      const current = [...callbacks.values()];
+      callbacks.clear();
+      for (const callback of current) callback(performance.now());
+    },
+  };
+}
+
 describe("location-change repaint scope", () => {
   beforeEach(() => {
     document.body.innerHTML = "";
     vi.clearAllMocks();
   });
 
-  it("refreshes native Vue chrome exactly once", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("lets the native destination paint before compatibility shell work", () => {
+    const frames = controlAnimationFrames();
+
     repaintAfterLocationChange();
 
-    expect(storage.persistPrefs).toHaveBeenCalledTimes(1);
-    expect(storage.refreshShell).toHaveBeenCalledTimes(1);
+    expect(storage.persistPrefs).not.toHaveBeenCalled();
+    expect(storage.refreshShell).not.toHaveBeenCalled();
     expect(storage.shell).not.toHaveBeenCalled();
     expect(operations.unmountOperationsPanel).toHaveBeenCalledTimes(1);
     expect(navigation.syncUrl).not.toHaveBeenCalled();
+
+    frames.runFrame();
+    expect(storage.refreshShell).not.toHaveBeenCalled();
+
+    frames.runFrame();
+    expect(storage.refreshShell).toHaveBeenCalledTimes(1);
+  });
+
+  it("coalesces rapid native route settlements to one post-paint shell refresh", () => {
+    const frames = controlAnimationFrames();
+
+    repaintAfterLocationChange();
+    repaintAfterLocationChange();
+    frames.runFrame();
+    frames.runFrame();
+
+    expect(storage.persistPrefs).not.toHaveBeenCalled();
+    expect(storage.refreshShell).toHaveBeenCalledTimes(1);
+    expect(operations.unmountOperationsPanel).toHaveBeenCalledTimes(2);
   });
 
   it("refreshes a legacy surface exactly once before compatibility rendering", () => {
