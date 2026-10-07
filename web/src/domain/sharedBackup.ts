@@ -25,7 +25,7 @@ import { serializableRecordsFile } from "./recordsFiles";
 import { providerProfilesService } from "./sharedProviderProfiles";
 import { tr, trf } from "./sharedTranslate";
 import { fileTimers, persistFileNow } from "./sharedWorkspacePersistence";
-import { workspaceDb, workspacePrefs } from "./sharedWorkspaceStorage";
+import { cancelPendingDomainPreferences, workspaceDb, workspacePrefs } from "./sharedWorkspaceStorage";
 
 // Dropping the browser-local workspace, and full backup / restore, over the shared state and database, usable without
 // the legacy runtime. Backup/restore needs both the workspace groups and background-job state because active jobs block
@@ -34,6 +34,7 @@ const backupState = bindJobsState(bindWorkspaceGroups({}));
 
 export async function deleteWorkspaceDatabase() {
   cancelPendingPrefs();
+  cancelPendingDomainPreferences();
   for (const timer of fileTimers.values()) clearTimeout(timer);
   fileTimers.clear();
   await workspaceDb.drop();
