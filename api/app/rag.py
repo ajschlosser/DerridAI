@@ -464,17 +464,32 @@ def strip_evidence_markers(text: str) -> str:
 _JSON_OUTPUT_REQUEST_PATTERN = re.compile(
     r"(?is)(?:"
     r"\b(?:return|respond|output|format|provide|give|answer)\b.{0,50}\bjson\b|"
-    r"\b(?:as|in)\s+(?:valid\s+)?json\b|"
-    r"\bjson\s+please\b"
+    r"\b(?:as|in|en)\s+(?:valid\s+)?json\b|"
+    r"\bjson\s+(?:please|s['’]il\s+vous\s+pla[iî]t)\b"
+    r")"
+)
+_JSON_OUTPUT_NEGATION_PATTERN = re.compile(
+    r"(?is)(?:"
+    r"\b(?:do\s+not|don't|dont|never)\b.{0,60}\bjson\b|"
+    r"\bno\s+json\b|"
+    r"\bnot\s+(?:as|in)\s+json\b|"
+    r"\b(?:ne|n')\b.{0,60}\bpas\b.{0,60}\bjson\b|"
+    r"\b(?:pas\s+de|sans)\s+json\b"
     r")"
 )
 _JSON_CODE_FENCE_PATTERN = re.compile(
     r"(?is)\`\`\`(?:json)?\s*(.*?)\s*\`\`\`"
 )
 def _requests_json_output(prompt: str, instructions: str) -> bool:
-    """Return whether the researcher explicitly requested JSON output."""
+    """Return whether the researcher explicitly requested JSON output.
 
-    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(f"{prompt}\n{instructions}"))
+    Negative directives are removed before positive matching so instructions
+    such as "do not answer as JSON" can never disable the prose safeguard.
+    """
+
+    combined = f"{prompt}\n{instructions}"
+    positive_space = _JSON_OUTPUT_NEGATION_PATTERN.sub(" ", combined)
+    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(positive_space))
 
 
 def _json_payload_like(candidate: str) -> bool:
