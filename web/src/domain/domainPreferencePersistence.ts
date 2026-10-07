@@ -15,6 +15,8 @@ export const DOMAIN_PREFERENCE_KEYS = {
   research: "research-preferences",
   search: "search-preferences",
   settings: "settings-preferences",
+  works: "works-preferences",
+  recordView: "record-view-preferences",
   list: "list-preferences",
   layout: "layout-preferences",
   review: "review-preferences",
@@ -43,6 +45,24 @@ const SEARCH_FIELDS = [
   "globalAdvancedOpen",
   "searchFacetFilters",
   "storeSearchSort",
+] as const;
+
+const WORKS_FIELDS = [
+  "worksSearch",
+  "workOverview",
+  "worksSort",
+  "worksNeedsReview",
+  "worksDbStatus",
+  "worksAuthor",
+  "worksView",
+] as const;
+
+const RECORD_VIEW_FIELDS = [
+  "researcherRecordId",
+  "researcherCompareA",
+  "researcherCompareB",
+  "dashboardMetricIndex",
+  "lastViewedRecord",
 ] as const;
 
 const LIST_FIELDS = [
@@ -102,6 +122,8 @@ export function domainPreferenceRecord(state: Loose, name: DomainPreferenceName)
   if (name === "research") return { key, ...pick(state, RESEARCH_FIELDS) };
   if (name === "search") return { key, ...pick(state, SEARCH_FIELDS) };
   if (name === "settings") return { key, ...pick(state, SETTINGS_FIELDS) };
+  if (name === "works") return { key, ...pick(state, WORKS_FIELDS) };
+  if (name === "recordView") return { key, ...pick(state, RECORD_VIEW_FIELDS) };
   if (name === "list") return { key, ...pick(state, LIST_FIELDS) };
   if (name === "layout") return { key, ...pick(state, LAYOUT_FIELDS) };
   if (name === "vector") return { key, ...pick(state, VECTOR_FIELDS) };
@@ -145,7 +167,10 @@ export function applyDomainPreferenceRecord(state: Loose, value: unknown): void 
         ...(state.llmConfig && typeof state.llmConfig === "object" ? state.llmConfig : {}),
         ...(record.llmConfig && typeof record.llmConfig === "object" ? record.llmConfig : {}),
       };
-  } else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
+  } else if (key === DOMAIN_PREFERENCE_KEYS.works) assignFields(state, record, WORKS_FIELDS);
+  else if (key === DOMAIN_PREFERENCE_KEYS.recordView)
+    assignFields(state, record, RECORD_VIEW_FIELDS);
+  else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.layout) assignFields(state, record, LAYOUT_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.vector) assignFields(state, record, VECTOR_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.jobs) assignFields(state, record, JOB_FIELDS);
@@ -203,6 +228,8 @@ export function createDomainPreferencePersistence(deps: {
     persistResearchPreferences: () => persist("research"),
     persistSearchPreferences: () => persist("search"),
     persistSettingsPreferences: () => persist("settings"),
+    persistWorksPreferences: () => persist("works"),
+    persistRecordViewPreferences: () => persist("recordView"),
     persistListPreferences: () => persist("list"),
     persistLayoutPreferences: () => persist("layout"),
     persistReviewPreferences: () => persist("review"),
