@@ -114,6 +114,9 @@ class DocumentNlpPackJobManager(PersistentJobStateMixin):
             if error:
                 job["fatal_error"] = job["error_message"] = error
         self._persist_job(job_id)
+        with self._lock:
+            self._threads.pop(job_id, None)
+            self._cancel.pop(job_id, None)
 
     def list(self) -> JobPayloadList:
         jobs = [copy.deepcopy(job) for job in self._all_job_records()]
