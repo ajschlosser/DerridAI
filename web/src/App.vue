@@ -34,7 +34,6 @@ import AuthScreen from "./components/AuthScreen.vue";
 import CommandSearch from "./components/CommandSearch.vue";
 import AppNotifications from "./components/AppNotifications.vue";
 import MessageDialogHost from "./components/MessageDialogHost.vue";
-import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
 import TopbarChrome from "./components/shell/TopbarChrome.vue";
@@ -812,7 +811,6 @@ watch(
     @navigate="navigate"
     @search="searchCorpus"
   />
-  <LlmReviewWorkspace />
   <AppNotifications />
   <MessageDialogHost />
   <LazyFeatureDialogHosts />
