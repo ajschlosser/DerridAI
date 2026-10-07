@@ -29,16 +29,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .corpus_run_config import (
-    CorpusRunConfig,
-    CorpusRunConfigV2,
-    migrate_v1_config,
-)
 from .config import APP_VERSION
 from .corpus_output_profiles import (
     atomic_copy,
     write_research_jsonl_zst,
     write_run_manifest,
+)
+from .corpus_run_config import (
+    CorpusRunConfig,
+    CorpusRunConfigV2,
+    migrate_v1_config,
 )
 from .metadata_schema import MetadataSchema
 
