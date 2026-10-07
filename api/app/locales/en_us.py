@@ -16,7 +16,9 @@
 
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
+EN_US: dict[str, str] = {'loading.loading': "Loading…",
+ 'loading.unavailable': "Unavailable",
+ 'loading.health': "Checking storage connection…",
  'loading.health_failed': "Storage connection information is unavailable.",
  'loading.providers': "Loading provider choices…",
  'loading.providers_failed': "Provider choices are unavailable. Retry before creating a collection or changing its provider.",
@@ -3248,6 +3250,10 @@ EN_US: dict[str, str] = {'loading.health': "Checking storage connection…",
  'pdf_corpus.hands_free_published': 'Published.',
  'pdf_corpus.hands_free_left': 'Left for you',
  'pdf_corpus.hands_free_more': 'and {count} more in the review queue.',
+ 'schemas.loading': 'Loading schemas…',
+ 'schemas.loading_schema': 'Loading schema…',
+ 'schemas.retry': 'Retry',
+ 'schemas.updating': 'Updating…',
  'schemas.saved': 'Schema saved.',
  'schemas.version': 'Schema version',
  'schemas.version_help': 'The version number goes up on its own each time you save a change, so a build can always say which version of the schema it used.',
