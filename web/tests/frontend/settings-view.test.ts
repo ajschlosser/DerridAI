@@ -227,8 +227,8 @@ describe("SettingsView", () => {
     // Settings now consumes narrow domain stores rather than the compatibility
     // workspace object. Keep the test fixture objects shared so assertions below
     // still observe the exact mutations performed by the view.
-    configState.appConfig = runtime.state.appConfig;
-    configState.ragConfig = runtime.state.ragConfig;
+    configState.appConfig = runtime.state.appConfig as never;
+    configState.ragConfig = runtime.state.ragConfig as never;
     statusState.health = runtime.state.health;
     statusState.providerStatuses = runtime.state.providerStatuses;
     corpusState.files = runtime.state.files;
