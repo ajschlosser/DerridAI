@@ -17,14 +17,12 @@
  */
 
 import { esc } from "./html";
-import { allRows } from "./corpusCache";
 import { jobsState } from "../state/jobsState";
 import { getNavItems } from "./navItems";
 import { describeRecordsFile } from "./recordsFiles";
 import { canUse } from "./sharedSession";
-import { pendingUpsertRows } from "./sharedDbPresence";
 import { evidenceSelection } from "./sharedSearchSupport";
-import { activeFile, needsReviewItems, selectedRecord } from "./sharedRecordScopes";
+import { activeFile, selectedRecord } from "./sharedRecordScopes";
 import { responseCacheStore } from "./sharedStores";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
@@ -141,9 +139,12 @@ function currentContext() {
 }
 export function getShellSnapshot() {
   const ctx = currentContext();
-  const totalLoaded = allRows().length;
-  const flagged = needsReviewItems().length;
-  const pending = state.activeStore ? pendingUpsertRows().length : 0;
+  // Shell chrome only needs the aggregate count. Counting file lengths avoids
+  // rebuilding the corpus-wide flattened row cache after every record edit.
+  const totalLoaded = state.files.reduce(
+    (sum: number, file: Any) => sum + (Array.isArray(file.records) ? file.records.length : 0),
+    0,
+  );
   const corpusStores = recordStores();
   const dbRecords = corpusStores.reduce(
     (sum: number, store: Any) => sum + (Number(store.count) || 0),
@@ -158,8 +159,6 @@ export function getShellSnapshot() {
     files: state.files.map((file: Any) => describeRecordsFile(file, state.activeFileId)),
     context: ctx,
     totalLoaded,
-    flagged,
-    pending,
     activeJobs,
     corpusStoreCount: corpusStores.length,
     dbRecords,
