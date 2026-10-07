@@ -1057,8 +1057,15 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
             if "session" in pipeline or "error" in pipeline:
                 return
             try:
-                pipeline["session"] = EnrichmentSession.open()
-            except RuntimeError as exc:
+                declared = request.get("pipeline_definition")
+                if isinstance(declared, dict):
+                    from .pipelines.models import PipelineDefinition
+
+                    exact = PipelineDefinition.model_validate(declared)
+                    pipeline["session"] = EnrichmentSession.open(exact)
+                else:
+                    pipeline["session"] = EnrichmentSession.open()
+            except (RuntimeError, ValueError, ValidationError) as exc:
                 pipeline["error"] = exc
 
         def run_specs(

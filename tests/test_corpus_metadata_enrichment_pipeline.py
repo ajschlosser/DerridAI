@@ -930,3 +930,52 @@ def test_provider_graph_preserves_retryability_after_both_roles_fail(
     assert ledger["failure_class"] == "transient_provider"
     assert ledger["next_automatic_recovery_attempt"] == 1
     assert [call["model"] for call in calls] == ["primary-model", "review-model"]
+
+
+def test_request_bound_pipeline_executes_without_re_resolving_global_assignment(
+    monkeypatch,
+    manager,
+    traces,
+):
+    from app.pipelines.models import PipelineDefinition
+
+    source = built_in_pipeline(*BUILT_IN)
+    assert source is not None
+    exact = source.model_copy(
+        update={
+            "pipeline_id": "corpus.metadata_enrichment.request-bound",
+            "built_in": False,
+            "stages": [
+                source.stages[0].model_copy(
+                    update={"config": {"provider_role": "primary", "attempts": 2}}
+                ),
+                source.stages[1],
+            ],
+        }
+    )
+
+    monkeypatch.setattr(
+        manager_module.pipeline_manager,
+        "resolve",
+        lambda _feature: (_ for _ in ()).throw(
+            AssertionError("request-bound execution must not re-resolve assignment")
+        ),
+    )
+    calls = _provider(
+        monkeypatch,
+        {"primary-model": ["invalid", VALID]},
+    )
+    request = {
+        **REQUEST,
+        "pipeline_definition": exact.model_dump(mode="json"),
+        "pipeline_hash": pipeline_hash(exact),
+    }
+
+    record, (_family, result, error) = _enrich(manager, request)
+
+    assert error is None
+    assert result == {"label": "ok"}
+    assert [call["model"] for call in calls] == ["primary-model", "primary-model"]
+    identity = record["metadata_execution_ledger"]["discourse"]["pipeline"]
+    assert identity["pipeline_id"] == exact.pipeline_id
+    assert identity["pipeline_hash"] == pipeline_hash(exact)

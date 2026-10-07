@@ -200,36 +200,18 @@ class CorpusRunEnvelopeV2(_StrictRunModel):
         return self.model_dump(mode="json")
 
     def validate_current_headless_execution(self, manager: Any) -> PipelineDefinition:
-        """Ensure today's Corpus Builder executes the pipeline the file declares.
+        """Resolve the exact effective metadata pipeline a v2 headless run will execute.
 
-        The v2 format can carry portable definitions and typed overrides, but the
-        current Corpus Builder still resolves its metadata-enrichment pipeline
-        from the shared assignment registry. Until the executor accepts a per-run
-        definition directly, headless execution fails rather than silently
-        ignoring a different portable definition or override.
+        Validation is intentionally complete before source bytes are read. The returned
+        definition is carried into the shared Corpus Builder request so execution does
+        not race a later change to the system-wide Pipeline Studio assignment.
         """
 
         selected = self.pipeline.effective(manager)
         if selected.purpose != "corpus_metadata_enrichment":
             raise ValueError(
-                "The current headless corpus adapter requires a "
+                "The headless corpus adapter requires a "
                 "corpus_metadata_enrichment pipeline."
-            )
-
-        try:
-            active = manager.resolve("corpus_metadata_enrichment")
-        except KeyError as exc:
-            raise ValueError(
-                "No corpus_metadata_enrichment pipeline is assigned in this installation."
-            ) from exc
-        active_definition = PipelineDefinition.model_validate(active["pipeline"])
-        if pipeline_hash(selected) != pipeline_hash(active_definition):
-            raise ValueError(
-                "This v2 run declares a pipeline definition or override that differs "
-                "from the corpus_metadata_enrichment pipeline currently assigned to "
-                "the shared Corpus Builder. Per-run pipeline injection is not yet "
-                "available; assign the same definition in Pipeline Studio or use a "
-                "matching exported run configuration."
             )
         return selected
 

@@ -40,6 +40,7 @@ from .graph_execution import (
 from .models import PipelineDefinition, PipelineStageDefinition
 from .purposes import purpose_registry
 from .registry import strategy_registry
+from .service import pipeline_hash
 from .structured_llm_stage import (
     DEFAULT_ATTEMPTS,
     PROVIDER_ROLES,
@@ -116,8 +117,20 @@ class EnrichmentSession(StructuredStageSession):
         )
 
     @classmethod
-    def open(cls) -> EnrichmentSession:
-        return cls.open_for(ENRICHMENT)
+    def open(
+        cls,
+        pipeline: PipelineDefinition | None = None,
+    ) -> EnrichmentSession:
+        """Open the assigned pipeline, or one exact per-run definition when supplied."""
+
+        if pipeline is None:
+            return cls.open_for(ENRICHMENT)
+        plan = compile_enrichment_pipeline(pipeline)
+        return cls(
+            spec=ENRICHMENT,
+            plan=plan,
+            resolved_hash=pipeline_hash(pipeline),
+        )
 
     def _invoke_task(
         self, stage: PipelineStageDefinition, inputs: Mapping[str, Any]

@@ -269,10 +269,11 @@ class HeadlessCorpusRunner:
                     f"{kind} corpus ingestion is unavailable; missing {missing}."
                 )
 
-        # A v2 file names the pipeline it expects to execute. Validate that
-        # identity before reading or extracting a potentially large source. The
-        # current Corpus Builder still resolves this pipeline through its shared
-        # assignment registry, so a mismatch must fail rather than be ignored.
+        selected_pipeline = None
+        # A v2 file names the exact pipeline it expects to execute. Resolve and
+        # validate it before source I/O, then carry that immutable definition into
+        # the shared Corpus Builder request rather than re-resolving an assignment
+        # later in the background worker.
         if isinstance(config, CorpusRunEnvelopeV2):
             contract_manager = self._pipeline_contract_manager
             if contract_manager is None:
@@ -281,7 +282,9 @@ class HeadlessCorpusRunner:
                 contract_manager = pipeline_manager
 
             try:
-                config.validate_current_headless_execution(contract_manager)
+                selected_pipeline = config.validate_current_headless_execution(
+                    contract_manager
+                )
             except ValueError as exc:
                 raise PipelineExecutionError(str(exc)) from exc
 
@@ -309,6 +312,11 @@ class HeadlessCorpusRunner:
             config,
             str(asset["asset_id"]),
         )
+        if selected_pipeline is not None:
+            from .pipelines.service import pipeline_hash
+
+            request["pipeline_definition"] = selected_pipeline.model_dump(mode="json")
+            request["pipeline_hash"] = pipeline_hash(selected_pipeline)
         try:
             build = manager.create(request)
         except ValueError as exc:

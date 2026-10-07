@@ -170,7 +170,7 @@ def test_current_headless_execution_accepts_the_same_assigned_pipeline():
     assert pipeline_hash(selected) == pipeline_hash(pipeline)
 
 
-def test_current_headless_execution_rejects_unapplied_per_run_override():
+def test_current_headless_execution_applies_per_run_override_exactly():
     pipeline = _metadata_pipeline()
     config = migrate_v1_to_v2(
         CorpusProcessingConfig.model_validate({"version": 1}),
@@ -182,8 +182,11 @@ def test_current_headless_execution_rejects_unapplied_per_run_override():
         stages={"primary": {"attempts": 2}},
     )
 
-    with pytest.raises(ValueError, match="Per-run pipeline injection is not yet available"):
-        config.validate_current_headless_execution(_PipelineManager(pipeline))
+    selected = config.validate_current_headless_execution(_PipelineManager(pipeline))
+
+    primary = next(stage for stage in selected.stages if stage.id == "primary")
+    assert primary.config["attempts"] == 2
+    assert pipeline_hash(selected) != pipeline_hash(pipeline)
 
 
 def test_loader_accepts_v2_yaml(tmp_path):

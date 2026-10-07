@@ -216,3 +216,68 @@ def test_injected_engine_does_not_depend_on_host_capability_probe(
     result = runner.run(source, config, output=tmp_path / "out.jsonl.zst")
 
     assert result.status == "ok"
+
+
+def test_v2_headless_run_carries_effective_pipeline_into_shared_engine(tmp_path):
+    from app.corpus_run_config import migrate_v1_to_v2
+    from app.pipelines.defaults import built_in_pipeline
+    from app.pipelines.models import PipelineConfigOverrideSet
+    from app.pipelines.service import PipelineService, pipeline_hash
+
+    source = tmp_path / "source.txt"
+    source.write_text("A source-bound passage.", encoding="utf-8")
+    pipeline = built_in_pipeline("corpus.metadata_enrichment.current", 2)
+    assert pipeline is not None
+    config = migrate_v1_to_v2(
+        CorpusProcessingConfig.model_validate({"version": 1}),
+        pipeline=pipeline,
+    )
+    config.pipeline.overrides = PipelineConfigOverrideSet(
+        pipeline_id=pipeline.pipeline_id,
+        pipeline_version=pipeline.version,
+        stages={"primary": {"attempts": 2}},
+    )
+    expected = config.pipeline.effective(
+        type(
+            "ContractManager",
+            (),
+            {
+                "service": PipelineService(),
+                "get_definition": staticmethod(
+                    lambda pipeline_id, version=None: (
+                        pipeline
+                        if pipeline_id == pipeline.pipeline_id
+                        and (version is None or version == pipeline.version)
+                        else None
+                    )
+                ),
+            },
+        )()
+    )
+
+    runner, _repository, manager = _runner(tmp_path)
+    runner._pipeline_contract_manager = type(
+        "ContractManager",
+        (),
+        {
+            "service": PipelineService(),
+            "get_definition": staticmethod(
+                lambda pipeline_id, version=None: (
+                    pipeline
+                    if pipeline_id == pipeline.pipeline_id
+                    and (version is None or version == pipeline.version)
+                    else None
+                )
+            ),
+        },
+    )()
+
+    result = runner.run(source, config, output=tmp_path / "out.jsonl.zst")
+
+    assert result.status == "ok"
+    assert manager.created_request is not None
+    declared = manager.created_request["pipeline_definition"]
+    assert declared["pipeline_id"] == pipeline.pipeline_id
+    assert manager.created_request["pipeline_hash"] == pipeline_hash(expected)
+    primary = next(stage for stage in declared["stages"] if stage["id"] == "primary")
+    assert primary["config"]["attempts"] == 2
