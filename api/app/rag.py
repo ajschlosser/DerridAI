@@ -452,11 +452,11 @@ def strip_evidence_markers(text: str) -> str:
 
 
 _JSON_OUTPUT_REQUEST_PATTERN = re.compile(
-    r"(?is)(?:\\b(?:return|respond|output|format|provide|give)\\b.{0,40}\\bjson\\b|"
-    r"\\bjson\\s+(?:object|array|format)\\b)"
+    r"(?is)(?:\b(?:return|respond|output|format|provide|give)\b.{0,40}\bjson\b|"
+    r"\bjson\s+(?:object|array|format)\b)"
 )
 _JSON_CODE_FENCE_PATTERN = re.compile(
-    r"(?is)^\\s*```(?:json)?\\s*(.*?)\\s*```\\s*$"
+    r"(?is)^\s*```(?:json)?\s*(.*?)\s*```\s*$"
 )
 
 
@@ -879,7 +879,7 @@ def _mentioned_work_groups(
 
 
 _COMPARATIVE_SCOPE_PATTERN = re.compile(
-    r"\\b(?:compare|comparison|contrast|versus|vs\\.?)\\b",
+    r"\b(?:compare|comparison|contrast|versus|vs\.?)\b",
     flags=re.IGNORECASE,
 )
 
