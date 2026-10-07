@@ -120,7 +120,7 @@ publish chrome data, Agent A defines the projection contract and Agent B impleme
 
 Work order:
 
-- [x] A1. Make settled native navigation perform exactly one shell refresh and one preference scheduling action.
+- [x] A1. Keep native route settlement off the first-paint path: the router commits immediately, compatibility shell work runs after the destination paints, and native navigation does not schedule the monolithic legacy workspace preference write.
 - [x] A2. Add immediate sidebar navigation intent state (`pendingNavId` or equivalent) that is visible before route work,
       keyboard accessible, and cleared on route settle/failure.
 - [x] A3. Decompose the shell snapshot into stable navigation/layout/context and independent counters/status projections.
@@ -184,14 +184,14 @@ Only one agent edits a shared integration file at a time. Coordinate these expli
 Acceptance:
 
 - Research typing no longer invokes shell refresh.
-- Native route settlement invokes one shell refresh, not two.
+- Native route settlement does not perform compatibility persistence or shell projection work before the destination paints; one coalesced shell refresh follows after paint.
 - Sidebar gets immediate pending feedback.
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
 
-Implementation status on `task/frontend-state-ownership-performance`: Agent A's A1-A8 tranche is complete. Shell navigation,
-route/file context, and application-status projections now invalidate independently; corpus/store aggregates are cached
-behind domain invalidation and cheap collection-identity checks, while active-store, health, and evidence primitives stay
+Implementation status on `task/frontend-state-ownership-performance`: Agent A's A1-A8 tranche is complete. A post-merge follow-up removed the remaining first-paint regression in A1: native route settlement now applies URL state immediately, skips the monolithic legacy workspace preference write, and defers one coalesced compatibility shell refresh until after the destination has painted. Shell navigation,
+route/file context, and application-status projections now invalidate independently; corpus/store and selected-evidence aggregates are cached
+behind domain invalidation and cheap collection-identity checks, while active-store and health primitives stay
 live. Job reconciliation no longer rewrites shell DOM. Feature dialogs and the touch-up workflow are now activated through
 small feature-owned request refs and lazy hosts instead of being statically owned by `App.vue`. B1, B2, B4, B5, and B6 are complete. Records snapshot reads are side-effect free, visible-row presence refresh is an
 explicit async effect, and corpus-derived row metadata is cached by corpus generation with prefix-query narrowing for
