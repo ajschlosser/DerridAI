@@ -76,7 +76,7 @@ def test_citation_strings_without_year_do_not_emit_empty_year_gap():
         "page_start": 9,
         "page_end": 10,
     })
-    assert inline == "Proust: 9-10"
+    assert inline == "Proust, Du côté de chez Swann: 9-10"
 
 
 class LocalProjection:
