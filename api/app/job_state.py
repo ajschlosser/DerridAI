@@ -321,26 +321,28 @@ class PersistentJobStateMixin:
             return self._jobs.setdefault(job_id, persisted)
 
     def _delete_finished_record(self, job_id: str, *, active_error: str) -> None:
-        job = self._get_job_record(job_id)
-        if str(job.get("status") or "") in self.ACTIVE_STATUSES:
-            raise ValueError(active_error)
-        with self._lock:
-            self._jobs.pop(job_id, None)
-            self._recent_terminal_summaries.pop(job_id, None)
-        if not job_repository.delete(job_id):
-            raise KeyError(job_id)
-
-    def _clear_finished_records(self) -> int:
-        with self._lock:
-            finished_ids = [
-                job_id
-                for job_id, job in self._jobs.items()
-                if str(job.get("status") or "") not in self.ACTIVE_STATUSES
-            ]
-            for job_id in finished_ids:
+        with self._persistence_io_lock:
+            job = self._get_job_record(job_id)
+            if str(job.get("status") or "") in self.ACTIVE_STATUSES:
+                raise ValueError(active_error)
+            with self._lock:
                 self._jobs.pop(job_id, None)
                 self._recent_terminal_summaries.pop(job_id, None)
-        return job_repository.clear_finished(self.JOB_TYPE)
+            if not job_repository.delete(job_id):
+                raise KeyError(job_id)
+
+    def _clear_finished_records(self) -> int:
+        with self._persistence_io_lock:
+            with self._lock:
+                finished_ids = [
+                    job_id
+                    for job_id, job in self._jobs.items()
+                    if str(job.get("status") or "") not in self.ACTIVE_STATUSES
+                ]
+                for job_id in finished_ids:
+                    self._jobs.pop(job_id, None)
+                    self._recent_terminal_summaries.pop(job_id, None)
+            return job_repository.clear_finished(self.JOB_TYPE)
 
     def _snapshot_finished_records(self) -> JobPayloadList:
         return [
