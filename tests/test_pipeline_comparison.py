@@ -1016,7 +1016,7 @@ def test_insufficiency_statement_still_requires_run_local_evidence_binding(monke
 
     monkeypatch.setattr("app.rag.chat_complete", generate)
     request = RAGRunRequest(
-        prompt="Does the passage establish presence?",
+        prompt="What is the trace?",
         model="test-model",
         pipeline_id="research.current",
         pipeline_version=1,
