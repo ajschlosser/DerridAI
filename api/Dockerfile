@@ -17,8 +17,19 @@
 
 FROM python:3.12-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# DerridAI owns application-level concurrency. Bound native allocator/thread
+# pools so PyTorch/BLAS/tokenizers/Chroma do not multiply that concurrency or
+# leave one large glibc malloc arena behind for every short-lived worker thread.
+# Compose may override these defaults for controlled benchmarks.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    MALLOC_ARENA_MAX=4 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    RAYON_NUM_THREADS=2 \
+    TOKENIZERS_PARALLELISM=false
 
 WORKDIR /app
 
