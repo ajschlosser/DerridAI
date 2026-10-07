@@ -81,6 +81,7 @@ vi.mock("../../src/composables/useNewerData", () => ({
 
 import SearchView from "../../src/views/SearchView.vue";
 import { useAuthStore } from "../../src/stores/auth";
+import { corpusState, createCorpusState, touchCorpus } from "../../src/state/workspaceState";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -177,6 +178,7 @@ async function mountSearch() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(corpusState, createCorpusState());
   localStorage.clear();
   runtime.getSearchWorkspaceSnapshot.mockResolvedValue(snapshot());
   runtime.getSearchShareHref.mockReturnValue("http://localhost/search");
@@ -227,6 +229,22 @@ describe("Search workspace loading boundaries", () => {
     expect(wrapper.find("[data-search-loading]").exists()).toBe(false);
     expect(wrapper.get("input[type='search']").attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".search-results-panel").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("refreshes while mounted when the loaded corpus structure changes", async () => {
+    const wrapper = await mountSearch();
+    await flushPromises();
+    expect(wrapper.get(".search-scope-switch").text()).toContain("2");
+
+    runtime.getSearchWorkspaceSnapshot.mockResolvedValue(
+      snapshot({ total_loaded_records: 3, total: 3 }),
+    );
+    touchCorpus(null, true);
+    await flushPromises();
+
+    expect(runtime.getSearchWorkspaceSnapshot).toHaveBeenCalledTimes(2);
+    expect(wrapper.get(".search-scope-switch").text()).toContain("3");
     wrapper.unmount();
   });
 
