@@ -111,6 +111,7 @@ import {
   persistJobPreferences,
   persistLayoutPreferences,
   persistPrefs,
+  persistResearchPreferences,
   refreshShell,
   shell,
 } from "./sharedWorkspaceStorage";
@@ -321,7 +322,9 @@ const {
   hasCorpusDb: late(() => hasCorpusDb),
   isResearcher: late(() => isResearcher),
   navigateTo: late(() => navigateTo),
+  persistJobPreferences: late(() => persistJobPreferences),
   persistPrefs: late(() => persistPrefs),
+  persistResearchPreferences: late(() => persistResearchPreferences),
   providerDisplayName: late(() => providerDisplayName),
   providerProfile: late(() => providerProfile),
   providerProfiles: late(() => providerProfiles),
