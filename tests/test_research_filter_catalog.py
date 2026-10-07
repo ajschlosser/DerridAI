@@ -195,6 +195,36 @@ def test_research_scope_inventory_is_metadata_only_cached_and_invalidated(monkey
     assert len(collection.calls) > calls
 
 
+def test_research_store_descriptors_do_not_count_vector_collections() -> None:
+    from types import SimpleNamespace
+
+    from app.chroma_store import ChromaStore
+
+    collection = SimpleNamespace(
+        name="corpus",
+        metadata={
+            ChromaStore._PROVIDER_KEY: "precomputed",
+            ChromaStore._ROLE_KEY: "general",
+            ChromaStore._STATUS_KEY: "ready",
+            ChromaStore._SOURCE_COUNT_KEY: 12,
+        },
+    )
+
+    def forbidden_count():
+        raise AssertionError("descriptor listing must not load vector counts")
+
+    collection.count = forbidden_count
+    store = object.__new__(ChromaStore)
+    store._client = SimpleNamespace(list_collections=lambda: [collection])
+    store.default_embedding_spec = lambda: ("precomputed", None)
+
+    descriptors = store.list_store_descriptors()
+
+    assert [item["name"] for item in descriptors] == ["corpus"]
+    assert "count" not in descriptors[0]
+    assert descriptors[0]["source_record_count"] == 12
+
+
 def test_response_cache_write_preserves_corpus_derived_caches() -> None:
     from app.chroma_store import ChromaStore, _notes_collection_change
 
