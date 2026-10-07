@@ -120,8 +120,8 @@ publish chrome data, Agent A defines the projection contract and Agent B impleme
 
 Work order:
 
-- [ ] A1. Make settled native navigation perform exactly one shell refresh and one preference scheduling action.
-- [ ] A2. Add immediate sidebar navigation intent state (`pendingNavId` or equivalent) that is visible before route work,
+- [x] A1. Make settled native navigation perform exactly one shell refresh and one preference scheduling action.
+- [x] A2. Add immediate sidebar navigation intent state (`pendingNavId` or equivalent) that is visible before route work,
       keyboard accessible, and cleared on route settle/failure.
 - [ ] A3. Decompose the shell snapshot into stable navigation/layout/context and independent counters/status projections.
 - [ ] A4. Remove `pendingUpsertRows()` and every corpus-size-dependent selector from shell render paths.
@@ -150,8 +150,8 @@ projection for Agent A.
 
 Work order:
 
-- [ ] B1. Remove Research configuration/draft mutations from shell invalidation.
-- [ ] B2. Keep Research prompt/instructions component/page-owned on the input path; stop global workspace serialization while
+- [x] B1. Remove Research configuration/draft mutations from shell invalidation.
+- [x] B2. Keep Research prompt/instructions component/page-owned on the input path; stop global workspace serialization while
       typing. Preserve draft restoration through a Research-specific repository if draft persistence remains desired.
 - [ ] B3. Split global preference persistence into domain repositories/timers, starting with Research, layout, Search,
       Records, and Compare. Retain migration reads from the existing `prefs` object until all domains move.
@@ -188,6 +188,10 @@ Acceptance:
 - Sidebar gets immediate pending feedback.
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
+
+Implementation status on `task/frontend-state-ownership-performance`: A1, A2, B1, and B2 are implemented with focused
+regression coverage. Interaction instrumentation is still open, and repository validation has not yet been run in this
+environment.
 
 This tranche should be small enough to review independently and should land before larger store/persistence work.
 
