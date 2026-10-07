@@ -249,6 +249,19 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return completed
 
 
+def _run_expect_code(
+    command: list[str],
+    expected: int,
+) -> subprocess.CompletedProcess[str]:
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    if completed.returncode != expected:
+        raise RuntimeError(
+            f"Command returned {completed.returncode}, expected {expected}: "
+            f"{' '.join(command)}\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+        )
+    return completed
+
+
 def main() -> int:
     args = _parser().parse_args()
     manifest_path = args.manifest.resolve()
@@ -384,6 +397,83 @@ publication:
                 raise RuntimeError("Compiled publication did not preserve the fixture source text.")
             if any("api_key" in json.dumps(record) for record in records):
                 raise RuntimeError("Compiled publication unexpectedly exposed provider credentials.")
+            first_record = records[0]
+            spans = first_record.get("source_spans")
+            if not isinstance(spans, list) or not spans:
+                raise RuntimeError("Compiled research publication omitted source locators.")
+            if first_record.get("region_type") != "main_text":
+                raise RuntimeError("Compiled metadata-schema projection lost region_type.")
+            if first_record.get("primary_text") is not True:
+                raise RuntimeError("Compiled metadata-schema projection lost primary_text.")
+            if not first_record.get("discourse_role"):
+                raise RuntimeError("Compiled metadata-schema projection lost discourse_role.")
+            for operational in (
+                "field_assertions",
+                "metadata_execution_ledger",
+                "metadata_stage_results",
+            ):
+                if operational in first_record:
+                    raise RuntimeError(
+                        f"Research projection leaked operational field {operational!r}."
+                    )
+
+            text_source = root / "fixture.txt"
+            text_source.write_text(
+                "A second deterministic source exercises UTF-8 text ingestion.",
+                encoding="utf-8",
+            )
+            text_output = root / "fixture-text.jsonl.zst"
+            text_result = json.loads(
+                _run(
+                    [
+                        str(binary),
+                        "corpus",
+                        "build",
+                        "--source",
+                        str(text_source),
+                        "--config",
+                        str(migrated),
+                        "--output",
+                        str(text_output),
+                        "--workspace",
+                        str(root / "workspace-text"),
+                        "--json",
+                        "--quiet",
+                    ]
+                ).stdout
+            )
+            if text_result.get("status") != "ok" or not text_output.is_file():
+                raise RuntimeError(
+                    f"Compiled UTF-8 source fixture failed: {text_result!r}"
+                )
+
+            unsupported = root / "unsupported.bin"
+            unsupported.write_bytes(b"\x00\x01not-a-supported-source\x02")
+            unsupported_output = root / "unsupported.jsonl.zst"
+            rejected = _run_expect_code(
+                [
+                    str(binary),
+                    "corpus",
+                    "build",
+                    "--source",
+                    str(unsupported),
+                    "--config",
+                    str(migrated),
+                    "--output",
+                    str(unsupported_output),
+                    "--workspace",
+                    str(root / "workspace-unsupported"),
+                    "--json",
+                    "--quiet",
+                ],
+                3,
+            )
+            if "unavailable" not in rejected.stderr.casefold() and "unsupported" not in rejected.stderr.casefold():
+                raise RuntimeError(
+                    "Unsupported-source rejection did not report an actionable source error."
+                )
+            if unsupported_output.exists():
+                raise RuntimeError("Unsupported source created a partial publication.")
 
             celf_output = root / "fixture-celf.jsonl.zst"
             celf_result = json.loads(
