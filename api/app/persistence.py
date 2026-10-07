@@ -1405,18 +1405,14 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         """Finalize non-resumable jobs whose worker process disappeared."""
         recovered = 0
         now = _iso_now()
-        placeholders = ",".join("?" for _ in self.RESTART_RESUMABLE_TYPES)
-        exclusion = (
-            f" AND job_type NOT IN ({placeholders})"
-            if self.RESTART_RESUMABLE_TYPES
-            else ""
-        )
-        params = tuple(sorted(self.RESTART_RESUMABLE_TYPES))
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT id,payload_json FROM jobs "
-                "WHERE status IN ('queued','running','cancelling')" + exclusion,
-                params,
+                """
+                SELECT id,payload_json
+                FROM jobs
+                WHERE status IN ('queued','running','cancelling')
+                  AND job_type != 'upsert'
+                """
             ).fetchall()
             for row in rows:
                 job = _json_loads(row["payload_json"], {})
@@ -1514,14 +1510,16 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
 
     def load_active(self, job_type: str) -> list[dict[str, Any]]:
         """Load only work that must remain resident for live worker coordination."""
-        placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
-        params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                f"SELECT payload_json FROM jobs "
-                f"WHERE job_type=? AND status IN ({placeholders}) "
-                f"ORDER BY created_at DESC",  # noqa: S608
-                params,
+                """
+                SELECT payload_json
+                FROM jobs
+                WHERE job_type=?
+                  AND status IN ('queued','running','cancelling')
+                ORDER BY created_at DESC
+                """,
+                (str(job_type),),
             ).fetchall()
         return [
             item
@@ -1542,17 +1540,18 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
 
     def footprints(self, job_type: str) -> list[tuple[str, str, int, bool]]:
         """Return retention metadata without deserializing historical payloads."""
-        placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
-        params: list[Any] = [*sorted(self.ACTIVE_STATUSES), str(job_type)]
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                f"""
+                """
                 SELECT id, created_at, LENGTH(CAST(payload_json AS BLOB)) AS stored_bytes,
-                       CASE WHEN status IN ({placeholders}) THEN 1 ELSE 0 END AS active
+                       CASE
+                           WHEN status IN ('queued','running','cancelling') THEN 1
+                           ELSE 0
+                       END AS active
                 FROM jobs
                 WHERE job_type=?
-                """,  # noqa: S608
-                params,
+                """,
+                (str(job_type),),
             ).fetchall()
         return [
             (
@@ -1571,13 +1570,14 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
             return bool(cursor.rowcount)
 
     def clear_finished(self, job_type: str) -> int:
-        placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
-        params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             cursor = conn.execute(
-                f"DELETE FROM jobs WHERE job_type=? "
-                f"AND status NOT IN ({placeholders})",  # noqa: S608
-                params,
+                """
+                DELETE FROM jobs
+                WHERE job_type=?
+                  AND status NOT IN ('queued','running','cancelling')
+                """,
+                (str(job_type),),
             )
             conn.commit()
             return int(cursor.rowcount or 0)
@@ -1598,13 +1598,14 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         """Replace retained finished records for one manager during backup restore."""
         restored = 0
         now = _iso_now()
-        placeholders = ",".join("?" for _ in self.ACTIVE_STATUSES)
-        params: list[Any] = [str(job_type), *sorted(self.ACTIVE_STATUSES)]
         with self._lock, self._connect() as conn:
             conn.execute(
-                f"DELETE FROM jobs WHERE job_type=? "
-                f"AND status NOT IN ({placeholders})",  # noqa: S608
-                params,
+                """
+                DELETE FROM jobs
+                WHERE job_type=?
+                  AND status NOT IN ('queued','running','cancelling')
+                """,
+                (str(job_type),),
             )
             for raw in jobs or []:
                 if not isinstance(raw, dict):
