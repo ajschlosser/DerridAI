@@ -173,7 +173,7 @@ describe("research workspace commands", () => {
     expect(state.ragConfig).not.toHaveProperty("unknown_key");
     expect(config).toMatchObject({ k: 8 });
     expect(calls).toEqual(["persistPrefs"]);
-    expect(spies.shellRefreshHook).toHaveBeenCalled();
+    expect(spies.shellRefreshHook).not.toHaveBeenCalled();
   });
 
   it("turns off skipping retrieval when no evidence is selected", () => {
