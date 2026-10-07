@@ -43,6 +43,9 @@ describe("useRecordsWorkspace refreshes when the loaded corpus changes", () => {
     expect(runtime.getRecordsListSnapshot).not.toHaveBeenCalled();
 
     corpusState.activeFileId = "f1";
+    // Let the active-file watcher settle while no snapshot exists; selecting a
+    // file before the Records workspace has loaded must not cause an eager read.
+    await nextTick();
     records.load();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(1);
 
