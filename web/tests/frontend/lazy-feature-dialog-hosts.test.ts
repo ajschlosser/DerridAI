@@ -10,7 +10,7 @@
 
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import LazyFeatureDialogHosts from "../../src/components/shell/LazyFeatureDialogHosts.vue";
 import {
   closeRecordPreviewDialog,
@@ -57,6 +57,7 @@ describe("lazy feature dialog hosts", () => {
       copyKey: "f1::0",
       openFull: () => undefined,
     });
+    await vi.dynamicImportSettled();
     await flushPromises();
 
     expect(wrapper.find(".record-preview-dialog").exists()).toBe(true);
