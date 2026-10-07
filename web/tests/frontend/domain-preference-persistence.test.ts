@@ -27,6 +27,7 @@ describe("domain preference persistence", () => {
       searchFacetFilters: { work: ["Glas"] },
       ragConfig: { prompt: "must not leak" },
       files: [{ id: "large-corpus" }],
+      activeFileId: "large-corpus",
       sidebarCollapsed: true,
     };
 
@@ -40,6 +41,7 @@ describe("domain preference persistence", () => {
       "settings",
     );
     const search = domainPreferenceRecord(state, "search");
+    const corpus = domainPreferenceRecord(state, "corpus");
     const layout = domainPreferenceRecord(state, "layout");
 
     expect(research).toEqual({
@@ -66,6 +68,13 @@ describe("domain preference persistence", () => {
     expect(search).not.toHaveProperty("ragConfig");
     expect(search).not.toHaveProperty("files");
     expect(search).not.toHaveProperty("sidebarCollapsed");
+
+    expect(corpus).toEqual({
+      key: "corpus-preferences",
+      activeFileId: "large-corpus",
+    });
+    expect(corpus).not.toHaveProperty("files");
+    expect(corpus).not.toHaveProperty("globalSearch");
 
     expect(layout).toMatchObject({
       key: "layout-preferences",
@@ -134,6 +143,10 @@ describe("domain preference persistence", () => {
       globalPage: 2,
     });
     applyDomainPreferenceRecord(state, {
+      key: "corpus-preferences",
+      activeFileId: "domain-file",
+    });
+    applyDomainPreferenceRecord(state, {
       key: "layout-preferences",
       sidebarCollapsed: true,
     });
@@ -148,6 +161,7 @@ describe("domain preference persistence", () => {
     expect(state.llmConfig).toEqual({ model: "phi4", num_ctx: 8192 });
     expect(state.globalSearch).toBe("domain");
     expect(state.globalPage).toBe(2);
+    expect(state.activeFileId).toBe("domain-file");
     expect(state.sidebarCollapsed).toBe(true);
     expect(state.reviewSelection).toBeInstanceOf(Set);
     expect([...(state.reviewSelection as Set<string>)]).toEqual(["a", "b"]);
