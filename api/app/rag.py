@@ -471,20 +471,6 @@ _JSON_OUTPUT_REQUEST_PATTERN = re.compile(
 _JSON_CODE_FENCE_PATTERN = re.compile(
     r"(?is)\`\`\`(?:json)?\s*(.*?)\s*\`\`\`"
 )
-_INSUFFICIENT_EVIDENCE_PATTERN = re.compile(
-    r"(?is)(?:"
-    r"\b(?:evidence|sources?|passages?|records?)\b.{0,100}"
-    r"\b(?:insufficient|inadequate|not\s+enough|does\s+not\s+support|"
-    r"do\s+not\s+support|cannot\s+support|can't\s+support|unable\s+to\s+support)\b|"
-    r"\b(?:insufficient|inadequate|not\s+enough)\b.{0,100}"
-    r"\b(?:evidence|sources?|passages?|records?)\b|"
-    r"\b(?:preuves?|sources?|passages?)\b.{0,100}"
-    r"\b(?:insuffisant(?:e|es|s)?|ne\s+suffi(?:t|sent)\s+pas|"
-    r"ne\s+permet(?:tent)?\s+pas)\b"
-    r")"
-)
-
-
 def _requests_json_output(prompt: str, instructions: str) -> bool:
     """Return whether the researcher explicitly requested JSON output."""
 
@@ -525,12 +511,6 @@ def _json_like_answer(text: str) -> bool:
         if len(surrounding) <= 200 or len(payload) >= max(200, len(surrounding) * 2):
             return True
     return False
-
-
-def _insufficient_evidence_answer(text: str) -> bool:
-    """Recognize a narrow evidence-insufficiency answer that needs no fake citation."""
-
-    return bool(_INSUFFICIENT_EVIDENCE_PATTERN.search(str(text or "")))
 
 
 def _generation_contract_issues(
