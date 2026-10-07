@@ -2115,25 +2115,30 @@ def run_rag_pipeline(
         prior_claim_memory=prior_claim_memory or "(none selected)",
         context=retrieval_context,
     )
-    generation_kwargs = {
-        "provider": provider,
-        "model": model,
-        "base_url": request.base_url,
-        "api_key": request.api_key,
-        "options": request.generation,
-        "json_mode": False,
-        "max_tokens": (
-            request.generation.num_predict
-            if request.generation and request.generation.num_predict
-            else 8192
-        ),
-        "cancelled": cancelled,
-    }
-    raw_answer = chat_complete(
-        prompt=generation_prompt,
-        on_delta=on_generation_delta,
-        **generation_kwargs,
+    generation_max_tokens = (
+        request.generation.num_predict
+        if request.generation and request.generation.num_predict
+        else 8192
     )
+
+    def generate_answer(
+        prompt_text: str,
+        delta_callback: Callable[[str], None] | None,
+    ) -> str:
+        return chat_complete(
+            provider=provider,
+            model=model,
+            base_url=request.base_url,
+            api_key=request.api_key,
+            prompt=prompt_text,
+            options=request.generation,
+            json_mode=False,
+            max_tokens=generation_max_tokens,
+            cancelled=cancelled,
+            on_delta=delta_callback,
+        )
+
+    raw_answer = generate_answer(generation_prompt, on_generation_delta)
     generation_attempts = 1
     prose_contract_retry = False
     if (
@@ -2153,11 +2158,7 @@ Return only cohesive scholarly prose with evidence markers. Do not return JSON, 
 field names such as title/introduction/themes, or a fenced code block.
 </OUTPUT_CONTRACT_CORRECTION>
 """
-        raw_answer = chat_complete(
-            prompt=correction_prompt,
-            on_delta=None,
-            **generation_kwargs,
-        )
+        raw_answer = generate_answer(correction_prompt, None)
         if _json_like_answer(raw_answer):
             raise ValueError(
                 "Research generation violated the prose output contract after one retry."
