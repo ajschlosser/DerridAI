@@ -26,6 +26,7 @@ from app.rag import (
     _cross_encoder_rerank,
     _explicitly_named_works,
     _lexical_rerank,
+    _requests_json_output,
     _scope_work_summaries,
     run_rag_pipeline,
 )
@@ -929,6 +930,21 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
     generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
     assert generation_stage["detail"]["attempts"] == 2
     assert generation_stage["detail"]["prose_contract_retry"] is True
+
+
+@pytest.mark.parametrize(
+    ("prompt", "instructions", "expected"),
+    [
+        ("What is the trace? Answer as JSON.", "", True),
+        ("What is the trace?", "Réponds en JSON.", True),
+        ("What is the trace?", "Do not answer as JSON.", False),
+        ("What is the trace?", "Ne réponds pas en JSON.", False),
+    ],
+)
+def test_json_output_request_detection_respects_positive_and_negative_directives(
+    prompt, instructions, expected
+) -> None:
+    assert _requests_json_output(prompt, instructions) is expected
 
 
 def test_prose_research_retries_when_generation_omits_evidence_markers(monkeypatch) -> None:
