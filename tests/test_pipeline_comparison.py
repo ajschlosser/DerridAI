@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
@@ -928,8 +929,6 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
     generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
     assert generation_stage["detail"]["attempts"] == 2
     assert generation_stage["detail"]["prose_contract_retry"] is True
-
-
 
 
 def test_prose_research_retries_when_generation_omits_evidence_markers(monkeypatch) -> None:
