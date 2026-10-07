@@ -128,7 +128,7 @@ import "./sharedStoreRecords";
 import { createResearchWorkspace } from "./researchWorkspace";
 import "./sharedAnnotations";
 import "../state/jobsState";
-import { recordFingerprint } from "./corpusCache";
+import { invalidateCorpusCache, recordFingerprint } from "./corpusCache";
 import { refreshStores } from "./sharedStores";
 import { canAccessPage, hasCapability, isResearcher } from "./sharedSession";
 import "./databaseCreationRequest";
@@ -185,6 +185,7 @@ const {
   formatTimestamp: late(() => formatTimestamp),
   humanDuration: late(() => humanDuration),
   isResearcher: late(() => isResearcher),
+  invalidateCorpusCache: late(() => invalidateCorpusCache),
   jobElapsedSeconds: late(() => jobElapsedSeconds),
   openJobDetails: late(() => openJobDetails),
   openJobResults: late(() => openJobResults),
