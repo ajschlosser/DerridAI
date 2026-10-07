@@ -3609,7 +3609,6 @@ class ChromaStore:
         )
         top_ids = [item[2] for item in ranked]
         payload = col.get(
-            **scan_args,
             ids=top_ids,
             include=["documents", "metadatas"],
         )
