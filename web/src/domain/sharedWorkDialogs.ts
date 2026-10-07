@@ -34,7 +34,11 @@ import { providerProfilesService } from "./sharedProviderProfiles";
 import { refreshStores } from "./sharedStores";
 import { tr, trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import {
+  persistCorpusPreferences,
+  persistJobPreferences,
+  shell,
+} from "./sharedWorkspaceStorage";
 import { recordStores } from "./storeAvailability";
 import { parseProposedMetadataValue, representativeWorkMetadata } from "./workMetadata";
 
@@ -55,7 +59,8 @@ export const workDialogs = createWorkDialogs({
   parseProposedMetadataValue,
   parseWorkMetadataValue,
   persistFileNow,
-  persistPrefs,
+  persistCorpusPreferences,
+  persistJobPreferences,
   providerProfile: providerProfilesService.providerProfile,
   providerProfiles: providerProfilesService.providerProfiles,
   providerRequestConfig,
