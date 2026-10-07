@@ -44,6 +44,7 @@ export const { workspacePrefs, persistPrefs, flushWorkspacePrefs } = createPrefs
 export const {
   persistResearchPreferences,
   persistSearchPreferences,
+  persistSettingsPreferences,
   persistListPreferences,
   persistLayoutPreferences,
   persistReviewPreferences,
