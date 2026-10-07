@@ -46,7 +46,7 @@ function setup(activeFile: unknown = { id: "f1", name: "a.jsonl", records: [] })
     get: (target, name: string) => {
       if (name in target) return target[name];
       return vi.fn(() => {
-        if (name === "persistPrefs" || name === "syncUrl") calls.push(name);
+        if (name.startsWith("persist") || name === "syncUrl") calls.push(name);
       });
     },
   });
@@ -82,7 +82,7 @@ describe("records workspace commands", () => {
     ctx.workspace.setRecordsListQuery("hospitality");
     expect(ctx.state.searches.f1).toBe("hospitality");
     expect(ctx.state.pages.f1).toBe(1);
-    expect(ctx.calls).toEqual(["persistPrefs", "syncUrl"]);
+    expect(ctx.calls).toEqual(["persistListPreferences", "syncUrl"]);
   });
 
   it("does nothing without an active file", () => {
