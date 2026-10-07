@@ -73,7 +73,7 @@ type Helper =
   | "openWorkMetadataProposalResult"
   | "pages"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistJobPreferences"
   | "providerDisplayName"
   | "providerProfile"
   | "providerProfiles"
@@ -124,7 +124,7 @@ export function createJobDialogs(deps: Deps) {
     openWorkMetadataProposalResult,
     pages,
     persistFileNow,
-    persistPrefs,
+    persistJobPreferences,
     providerDisplayName,
     providerProfile,
     providerProfiles,
@@ -160,7 +160,6 @@ export function createJobDialogs(deps: Deps) {
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
         return toast(copy.operationRemoved, { tone: "success" });
       }
@@ -297,7 +296,6 @@ export function createJobDialogs(deps: Deps) {
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
         return toast(copy.operationRemoved, { tone: "success" });
       }
@@ -548,7 +546,7 @@ export function createJobDialogs(deps: Deps) {
       try {
         job = await resolveOnServer("accept", resolveItems);
         state.jobApplied[job.id] = new Date().toISOString();
-        persistPrefs();
+        persistJobPreferences();
         shell();
         renderView();
         await refreshJobs({ rerender: state.view === "home" });
@@ -709,7 +707,6 @@ export function createJobDialogs(deps: Deps) {
     // binding, evidence inspection, accessibility, and i18n stay identical no
     // matter where the result was launched (Operations, job history, etc.).
     state.view = "rag";
-    persistPrefs();
     shellRefreshHook?.();
     const href = `/rag?job=${encodeURIComponent(job.id)}`;
     // The hook is assigned later by the app shell, so it is read when needed.
