@@ -53,7 +53,7 @@ from .pipelines.models import (
     PipelineStageDefinition,
 )
 from .pipelines.overrides import resolve_pipeline_config
-from .pipelines.service import pipeline_hash
+from .pipelines.service import pipeline_hash, pipeline_service
 
 RUN_ENVELOPE_FORMAT = "derridai-corpus-run"
 RUN_ENVELOPE_VERSION = 2
@@ -223,10 +223,23 @@ class CorpusRunConfigV2(_StrictConfigModel):
                 "binding(s): " + ", ".join(missing)
             )
 
-        from .pipelines.workflows import compile_for_feature
-
         for feature, binding in self.pipelines.assignments.items():
-            compile_for_feature(feature, binding.definition)
+            if binding.definition.purpose != feature:
+                raise ValueError(
+                    f"Pipeline feature {feature!r} requires purpose {feature!r}, "
+                    f"not {binding.definition.purpose!r}."
+                )
+            validation = pipeline_service.validate(binding.definition)
+            errors = [
+                issue.message
+                for issue in validation.issues
+                if issue.level == "error"
+            ]
+            if errors:
+                raise ValueError(
+                    f"Pipeline feature {feature!r} contains an invalid definition: "
+                    + "; ".join(errors)
+                )
         return self
 
     def _v1_adapter(self) -> CorpusProcessingConfig:
@@ -266,7 +279,7 @@ class CorpusRunConfigV2(_StrictConfigModel):
         from .pipelines.manager import pipeline_manager
 
         for feature, binding in self.pipelines.assignments.items():
-            if self.pipelines.assignments[feature].overrides is not None:
+            if binding.overrides is not None:
                 raise ValueError(
                     f"Pipeline feature {feature!r} includes run overrides. "
                     "The v2 envelope can validate and preserve them, but the "
