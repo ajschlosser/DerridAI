@@ -25,7 +25,7 @@ import { hasCapability } from "./sharedSession";
 import { dbSearchWhere, display, label, pages, recordFields } from "./sharedRecordHelpers";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs, refreshShell } from "./sharedWorkspaceStorage";
+import { persistReviewPreferences, refreshShell } from "./sharedWorkspaceStorage";
 import { localRecordKey } from "./recordTableHelpers";
 import { storeReceipt } from "./storeAvailability";
 import { invalidateShellStatusProjection } from "./shellStatusProjection";
@@ -50,7 +50,7 @@ export const evidenceSelection = createEvidenceSelection({
   invalidateShellStatus: invalidateShellStatusProjection,
   hasCapability,
   localRecordKey,
-  persistPrefs,
+  persistPrefs: persistReviewPreferences,
   ragEvidenceRecordPayload,
   recordDbStatus,
   shellRefreshHook: refreshShell,
