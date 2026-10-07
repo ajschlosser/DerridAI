@@ -108,6 +108,7 @@ import { getUrlSyncHook, navSnapshot, navigateTo, renderView } from "./sharedNav
 import "./sharedUrlState";
 import "./navigation";
 import {
+  persistJobPreferences,
   persistLayoutPreferences,
   persistPrefs,
   refreshShell,
@@ -151,6 +152,7 @@ createJobsWorkspace({
   jobProviderSummary: late(() => jobProviderSummary),
   navigateTo: late(() => navigateTo),
   notifyOperationsChanged: late(() => notifyOperationsChanged),
+  persistJobPreferences: late(() => persistJobPreferences),
   persistPrefs: late(() => persistPrefs),
   recordFingerprint: late(() => recordFingerprint),
   refreshCorpusBuildsHomeCardOnly: late(() => refreshCorpusBuildsHomeCardOnly),
