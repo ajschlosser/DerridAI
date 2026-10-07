@@ -22,6 +22,8 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from ..corpus_cli_config import CorpusProcessingConfig
+from ..corpus_run_config import migrate_v1_to_v2
 from ..http_auth import request_user, require_admin
 from ..models import RAGRunRequest
 from ..pipelines.access import resolve_research_pipeline
@@ -49,8 +51,6 @@ from ..pipelines.latency import strategy_latency
 from ..pipelines.manager import pipeline_manager
 from ..pipelines.metrics import aggregate_pipeline_metrics
 from ..pipelines.models import PipelineAssignment, PipelineDefinition
-from ..corpus_cli_config import CorpusProcessingConfig
-from ..corpus_run_config import migrate_v1_to_v2
 from ..pipelines.portable import export_pipeline_document, parse_pipeline_document
 from ..pipelines.purposes import WORKFLOW_CATEGORIES, purpose_registry
 from ..pipelines.service import pipeline_hash
