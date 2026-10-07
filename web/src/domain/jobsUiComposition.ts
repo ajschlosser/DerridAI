@@ -189,7 +189,6 @@ const {
   openLlmTaskLauncher: late(() => openLlmTaskLauncher),
   showAppModal: late(() => showAppModal),
   operationViewModel: late(() => operationViewModel),
-  persistPrefs: late(() => persistPrefs),
   pruneClientJobState,
   ragGradeEvidencePayload: late(() => ragGradeEvidencePayload),
   ragGradeHtml: late(() => ragGradeHtml),
