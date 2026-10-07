@@ -286,6 +286,18 @@ class PersistentJobStateMixin:
                 job_repository.upsert_many(jobs)
         self._prune_resident_finished()
 
+    def _list_job_records(self) -> JobPayloadList:
+        """Merge lightweight durable summaries with newer resident live state."""
+        persisted = {
+            str(job["id"]): job
+            for job in job_repository.load_summaries(self.JOB_TYPE)
+            if job.get("id")
+        }
+        with self._lock:
+            for job_id, job in self._jobs.items():
+                persisted[str(job_id)] = copy.deepcopy(job)
+        return list(persisted.values())
+
     def _all_job_records(self) -> JobPayloadList:
         """Merge durable history with newer resident live state."""
         persisted = {
