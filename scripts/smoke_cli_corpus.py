@@ -35,6 +35,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+import fitz
 import zstandard as zstd
 
 
@@ -263,12 +264,19 @@ def main() -> int:
     try:
         with tempfile.TemporaryDirectory(prefix="derridai-native-corpus-") as tmp:
             root = Path(tmp)
-            source = root / "fixture.txt"
-            source.write_text(
-                "Responsibility cannot be reduced to a calculation of reciprocal exchange. "
-                "The claim is presented here as the primary argument of this fixture.",
-                encoding="utf-8",
+            source = root / "fixture.pdf"
+            document = fitz.open()
+            page = document.new_page()
+            page.insert_text(
+                (72, 96),
+                "Responsibility cannot be reduced to a calculation of reciprocal exchange.",
             )
+            page.insert_text(
+                (72, 120),
+                "The claim is presented here as the primary argument of this fixture.",
+            )
+            document.save(source)
+            document.close()
             output = root / "fixture.jsonl.zst"
             workspace = root / "workspace"
             config = root / "corpus-run.yaml"
@@ -376,6 +384,37 @@ publication:
                 raise RuntimeError("Compiled publication did not preserve the fixture source text.")
             if any("api_key" in json.dumps(record) for record in records):
                 raise RuntimeError("Compiled publication unexpectedly exposed provider credentials.")
+
+            celf_output = root / "fixture-celf.jsonl.zst"
+            celf_result = json.loads(
+                _run(
+                    [
+                        str(binary),
+                        "corpus",
+                        "build",
+                        "--source",
+                        str(source),
+                        "--config",
+                        str(migrated),
+                        "--output",
+                        str(celf_output),
+                        "--workspace",
+                        str(root / "workspace-celf"),
+                        "--celf",
+                        "--json",
+                        "--quiet",
+                    ]
+                ).stdout
+            )
+            if celf_result.get("celf_conformant") is not True:
+                raise RuntimeError(
+                    f"Compiled cELF publication did not report conformance: {celf_result!r}"
+                )
+            if not celf_output.is_file() or celf_output.stat().st_size == 0:
+                raise RuntimeError("Compiled cELF build produced no publication artifact.")
+            integrity = celf_output.with_name(f"{celf_output.name}.sha512")
+            if not integrity.is_file() or not integrity.read_text(encoding="utf-8").strip():
+                raise RuntimeError("Compiled cELF publication omitted its SHA-512 integrity sidecar.")
     finally:
         server.shutdown()
         server.server_close()
