@@ -62,7 +62,7 @@ PLAN=$(printf '%s\n' "$CHANGED" | "$PY" scripts/preflight_plan.py --format shell
 }
 eval "$PLAN"
 
-say "plan: backend=$BACKEND frontend=$FRONTEND unit=$FRONTEND_UNIT build=$FRONTEND_BUILD sdk=$SDK storybook=$STORYBOOK e2e=$E2E a11y=$A11Y legacy=$LEGACY contract=$CONTRACT publication=$PUBLICATION"
+say "plan: backend=$BACKEND frontend=$FRONTEND unit=$FRONTEND_UNIT build=$FRONTEND_BUILD sdk=$SDK storybook=$STORYBOOK e2e=$E2E a11y=$A11Y legacy=$LEGACY contract=$CONTRACT publication=$PUBLICATION container=$CONTAINER"
 
 # 1. Freshness: CI tests the merge with master, so a stale branch is tested against a tree
 #    the author never ran.
@@ -159,9 +159,13 @@ if [ "$FRONTEND" = true ]; then
   fi
 fi
 
-# 8. Playwright (browser, accessibility and publication acceptance) suites never run locally; CI runs them.
+# 8. Browser/publication/container acceptance stays CI-owned. Local preflight reports
+#    the obligation without duplicating long-running environment validation.
 if [ "$STORYBOOK" = true ] || [ "$LEGACY" = true ] || [ "$E2E" = true ] || [ "$A11Y" = true ] || [ "$PUBLICATION" = true ]; then
   say "browser gates are not run locally; CI runs the affected surfaces"
+fi
+if [ "$CONTAINER" = true ]; then
+  say "production container smoke is not run locally by preflight; CI runs it"
 fi
 
 [ "$fail" -eq 0 ] && say "ok"
