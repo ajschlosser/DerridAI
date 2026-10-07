@@ -579,8 +579,8 @@ function go(path: string, view?: string) {
   else window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path } }));
 }
 function providerReady(profile: ProviderProfile) {
-  const status = status.providerStatuses?.[profile.id];
-  return Boolean(status?.available);
+  const providerStatus = status.providerStatuses?.[profile.id];
+  return Boolean(providerStatus?.available);
 }
 async function saveNotifications() {
   config.appConfig.desktop_notifications = notificationsOn.value;
