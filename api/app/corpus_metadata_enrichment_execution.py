@@ -2156,6 +2156,7 @@ Neighbor context (context only; never cite it as evidence): {json.dumps(neighbor
                         value=value, blocks=source_blocks, field=field, field_metadata=field_metadata,
                         source_document_id=source_document_id, projection=evidence_projection,
                         llm_choice=evidence_llm_choice, llm_skip_reason=evidence_llm_skip_reason,
+                        request=request,
                     )
                 except Exception as exc:  # noqa: BLE001 - logged and left pending review, never silent
                     logger.warning("Evidence recovery pipeline did not run for %s: %s", field, exc)
