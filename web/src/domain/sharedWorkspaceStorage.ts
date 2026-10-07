@@ -45,6 +45,7 @@ export const {
   persistResearchPreferences,
   persistSearchPreferences,
   persistSettingsPreferences,
+  persistAnnotationsPreferences,
   persistWorksPreferences,
   persistRecordViewPreferences,
   persistListPreferences,
