@@ -17,6 +17,7 @@
  */
 
 import { createRecordsWorkspace } from "./recordsWorkspace";
+import { corpusCache } from "./corpusCache";
 import { copyCitation, copyJsonToClipboard } from "./clipboardCopy";
 import { pageInfo, setActiveStore, setListFilterValue } from "./listPaging";
 import { toggleSort } from "./recordTableHelpers";
@@ -55,6 +56,7 @@ export const recordsWorkspace = createRecordsWorkspace({
   clearReviewSelection: evidenceSelection.clearReviewSelection,
   copyCitation,
   copyJsonToClipboard,
+  corpusVersion: () => corpusCache.version,
   dbUnavailableReason,
   evidenceIsSelected: evidenceSelection.evidenceIsSelected,
   getTableColumns,
