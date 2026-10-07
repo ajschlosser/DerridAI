@@ -25,6 +25,7 @@ import {
   recordFingerprint,
 } from "../../src/domain/corpusCache";
 import { state } from "../../src/domain/sharedUrlState";
+import { corpusState } from "../../src/state/workspaceState";
 
 describe("shared corpus cache", () => {
   beforeEach(() => {
@@ -52,6 +53,21 @@ describe("shared corpus cache", () => {
     invalidateCorpusCache();
     expect(corpusCache.version).toBe(before + 1);
     expect(memoCorpus("k", build)).toBe(2);
+  });
+
+  it("tracks structure, global content, and per-file invalidation independently", () => {
+    const structure = corpusState.structureVersion;
+    const content = corpusState.contentVersion;
+    const file = Number(corpusState.fileVersions.f1 || 0);
+
+    invalidateCorpusCache("f1");
+    expect(corpusState.contentVersion).toBe(content + 1);
+    expect(corpusState.structureVersion).toBe(structure);
+    expect(corpusState.fileVersions.f1).toBe(file + 1);
+
+    invalidateCorpusCache(null, true);
+    expect(corpusState.structureVersion).toBe(structure + 1);
+    expect(corpusState.contentVersion).toBe(content + 1);
   });
 
   it("does not reuse a fingerprint after an in-place edit and invalidation", () => {
