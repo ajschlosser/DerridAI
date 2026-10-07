@@ -71,7 +71,13 @@ export function useRecordsWorkspace() {
   // snapshot again then, so the rail and table do not keep showing the corpus as it was (a file imported while Records was
   // open used to appear only after leaving and coming back).
   watch(
-    () => [corpusState.version, corpusState.activeFileId],
+    () => [
+      corpusState.structureVersion,
+      corpusState.activeFileId,
+      corpusState.activeFileId
+        ? Number(corpusState.fileVersions[corpusState.activeFileId] || 0)
+        : 0,
+    ],
     () => {
       if (snapshot.value) load();
     },
