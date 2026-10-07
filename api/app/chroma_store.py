@@ -3423,9 +3423,12 @@ class ChromaStore:
         ranking completed. Repeated Research runs therefore drove the API process
         to a new allocator high-water mark even after Python released the objects.
 
-        This implementation pages through the same bounded candidate window and
-        retains only compact term-frequency statistics plus Chroma ids. Full
-        Record payloads are decoded only for the final top-N results.
+        This implementation pages through document text only. Metadata filters
+        are still applied by Chroma, but large cELF metadata payloads (especially
+        FieldAssertions and audit/provenance JSON) are never transferred for the
+        lexical candidate scan. Only compact term-frequency statistics plus
+        Chroma ids are retained, and complete Records are fetched for final top-N
+        results after ranking.
         """
 
         query = str(query or "").strip()
@@ -3467,33 +3470,6 @@ class ChromaStore:
         if where_document:
             scan_args["where_document"] = where_document
 
-        ranking_fields = (
-            "work",
-            "record_id",
-            "document_author",
-            "speaker",
-            "quoted_speaker",
-            "position_holder",
-            "target",
-        )
-
-        def metadata_text(metadata: dict[str, Any] | None) -> str:
-            raw = metadata or {}
-            values: list[str] = []
-            for field in ranking_fields:
-                value = raw.get(field)
-                if field == "record_id" and value is None:
-                    value = raw.get("_record_id")
-                if value is None:
-                    continue
-                if isinstance(value, str) and value.startswith(_JSON_PREFIX):
-                    try:
-                        value = json.loads(value[len(_JSON_PREFIX):])
-                    except json.JSONDecodeError:
-                        pass
-                values.append(str(value or ""))
-            return " ".join(values)
-
         # (chroma id, document length, per-query-term frequencies,
         #  exact-phrase match, original scan ordinal)
         compact_candidates: list[
@@ -3505,7 +3481,7 @@ class ChromaStore:
             requested = min(page_size, scan_limit - offset)
             page = col.get(
                 **scan_args,
-                include=["documents", "metadatas"],
+                include=["documents"],
                 limit=requested,
                 offset=offset,
             )
@@ -3513,16 +3489,13 @@ class ChromaStore:
             if not ids:
                 break
             documents = list(page.get("documents") or [])
-            metadatas = list(page.get("metadatas") or [])
 
             for index, chroma_id in enumerate(ids):
-                document = documents[index] if index < len(documents) else ""
-                metadata = (
-                    metadatas[index]
-                    if index < len(metadatas) and isinstance(metadatas[index], dict)
-                    else {}
+                searchable = (
+                    documents[index]
+                    if index < len(documents)
+                    else ""
                 )
-                searchable = f"{document} {metadata_text(metadata)}"
                 folded = searchable.casefold()
                 tokens = self._lexical_tokens(searchable)
                 frequencies = [0] * len(query_terms)
