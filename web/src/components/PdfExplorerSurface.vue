@@ -49,12 +49,10 @@ import { recordPresenters } from "../domain/sharedRecordPresenters";
 import { pages } from "../domain/sharedRecordHelpers";
 import { activeFile, selectedRecord } from "../domain/sharedRecordScopes";
 import { evidenceSelection } from "../domain/sharedSearchSupport";
-import { state as sharedState } from "../domain/sharedUrlState";
 import { shell } from "../domain/sharedWorkspaceStorage";
 import { recordOptionLabel } from "../domain/recordOptionLabel";
-import { selectedIndex } from "../domain/sharedUrlState";
 import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
-import { isEvidenceSelected, reviewKey } from "../domain/evidenceSelection";
+import { reviewKey } from "../domain/evidenceSelection";
 import { enhanceCollapsibles } from "../domain/collapsiblePanels";
 import { persistCurrentPdfAsset } from "../domain/pdfAssetPersistence";
 import { loadPdfMetadata } from "../domain/pdfMetadata";
@@ -64,10 +62,14 @@ import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
 import UiTooltip from "./ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
-import { corpusState } from "../state/workspaceState";
+import { corpusState, translationState } from "../state/workspaceState";
+import { useListsStore, usePdfStore, useReviewStore } from "../stores/workspace";
 import { createPdfExplorerCopy } from "../domain/pdfExplorerCopy";
 
 const i18n = useI18nStore();
+const lists = useListsStore();
+const pdfStore = usePdfStore();
+const review = useReviewStore();
 const copy = computed(() =>
   createPdfExplorerCopy(
     (key, fallback) => i18n.t(key, fallback),
@@ -78,8 +80,16 @@ const copy = computed(() =>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-const state = sharedState as unknown as Any;
-const selectedAsEvidence = (key: string) => isEvidenceSelected(state, key);
+const pdf = pdfStore.pdf as Any;
+const selectedAsEvidence = (key: string) => Boolean(review.selectedEvidence?.[key]);
+const selectedRecordIndex = (file: Any) =>
+  Math.max(
+    0,
+    Math.min(
+      (file?.records?.length || 1) - 1,
+      Number((lists.selected as Record<string, unknown>)?.[file?.id] ?? 0),
+    ),
+  );
 
 const mainEl = ref<HTMLElement>();
 const fileInputEl = ref<HTMLInputElement>();
@@ -110,7 +120,7 @@ const recordSearchInput = ref("");
 const recordSearchKey = ref("");
 const suggestionsOpen = ref(false);
 
-// state.pdf is the legacy runtime's own (non-reactive) object; a computed() that reads it directly would cache its
+// pdf is the legacy runtime's own (non-reactive) object; a computed() that reads it directly would cache its
 // first value forever, since nothing marks it dirty. Mirror the fields the template needs live into plain refs,
 // refreshed whenever refresh() runs, and write both the ref and the shared state back together on input.
 const relatedSearchQuery = ref("");
@@ -118,11 +128,11 @@ const searchQuery = ref("");
 const pdfText = ref("");
 function setRelatedSearchQuery(value: string) {
   relatedSearchQuery.value = value;
-  state.pdf.relatedSearch = value;
+  pdf.relatedSearch = value;
 }
 function setSearchQuery(value: string) {
   searchQuery.value = value;
-  state.pdf.search = value;
+  pdf.search = value;
 }
 
 const related = computed(() => {
@@ -184,17 +194,17 @@ function selectedRelated() {
 }
 
 async function refresh() {
-  loaded.value = Boolean(state.pdf.file);
-  canRender.value = Boolean(state.pdf.doc);
-  extractReady.value = Boolean(state.pdf.doc || state.pdf.file);
-  linked.value = loaded.value ? sharedPdfLinking.linkedPdfRows(state.pdf.page) : [];
+  loaded.value = Boolean(pdf.file);
+  canRender.value = Boolean(pdf.doc);
+  extractReady.value = Boolean(pdf.doc || pdf.file);
+  linked.value = loaded.value ? sharedPdfLinking.linkedPdfRows(pdf.page) : [];
   allRelated.value = loaded.value ? sharedPdfLinking.allLinkedRowsForLoadedPdf() : [];
   selectedFile.value = activeFile();
   selected.value = selectedRecord();
-  hasRecordOptions.value = state.files.some((file: Any) => file.records.length > 0);
+  hasRecordOptions.value = corpusState.files.some((file: Any) => file.records.length > 0);
   const currentRecordKey =
     selectedFile.value && selected.value
-      ? `${selectedFile.value.id}::${selectedIndex(selectedFile.value)}`
+      ? `${selectedFile.value.id}::${selectedRecordIndex(selectedFile.value)}`
       : "";
   currentOption.value =
     selectedFile.value && selected.value
@@ -203,7 +213,7 @@ async function refresh() {
           label: recordOptionLabel(
             selectedFile.value,
             selected.value,
-            selectedIndex(selectedFile.value),
+            selectedRecordIndex(selectedFile.value),
           ),
         }
       : null;
@@ -212,12 +222,12 @@ async function refresh() {
     ...new Set(allRelated.value.map((item: Any) => String(item.record.work || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
   pdfProvider.value = defaultProviderProfile();
-  pageInputValue.value = state.pdf.page;
+  pageInputValue.value = pdf.page;
   recordSearchInput.value = currentOption.value?.label || "";
   recordSearchKey.value = currentOption.value?.value || "";
-  pdfText.value = state.pdf.text || "";
-  searchQuery.value = state.pdf.search || "";
-  relatedSearchQuery.value = state.pdf.relatedSearch || "";
+  pdfText.value = pdf.text || "";
+  searchQuery.value = pdf.search || "";
+  relatedSearchQuery.value = pdf.relatedSearch || "";
 
   await nextTick();
   // The legacy renderer only ran this after the one code path that happened to route through renderView() (which
@@ -229,14 +239,14 @@ async function refresh() {
   // it after every refresh makes the affordance reliably present whenever a card is actually tall enough for it.
   enhanceCollapsibles(mainEl.value);
   decorateDisabledControls(mainEl.value);
-  translateLegacyDom(sharedState, mainEl.value);
+  translateLegacyDom({ translations: translationState.translations }, mainEl.value);
   if (canRender.value) void renderCanvas();
 }
 
 async function renderCanvas() {
   await nextTick();
   if (!canvasEl.value) return;
-  await renderPdfCanvas(state.pdf.page);
+  await renderPdfCanvas(pdf.page);
 }
 
 function openPdfPicker() {
@@ -249,30 +259,30 @@ async function onFileChange(event: Event) {
   if (!file) return;
   openingPdf.value = true;
   try {
-    if (state.pdf.url) URL.revokeObjectURL(state.pdf.url);
+    if (pdf.url) URL.revokeObjectURL(pdf.url);
     const buffer = await file.arrayBuffer();
-    state.pdf.file = file;
-    state.pdf.url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
-    state.pdf.name = file.name;
-    state.pdf.title = file.name.replace(/\.pdf$/i, "");
-    state.pdf.author = "";
-    state.pdf.page = 1;
-    state.pdf.rotation = 0;
-    state.pdf.text = "";
-    state.pdf.search = "";
-    state.pdf.relatedSearch = "";
-    state.pdf.extractError = "";
-    state.pdf.extractionSource = "";
+    pdf.file = file;
+    pdf.url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
+    pdf.name = file.name;
+    pdf.title = file.name.replace(/\.pdf$/i, "");
+    pdf.author = "";
+    pdf.page = 1;
+    pdf.rotation = 0;
+    pdf.text = "";
+    pdf.search = "";
+    pdf.relatedSearch = "";
+    pdf.extractError = "";
+    pdf.extractionSource = "";
     try {
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      state.pdf.doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
-      const metadata = await loadPdfMetadata(state.pdf.doc, file.name);
-      state.pdf.title = metadata.title || state.pdf.title;
-      state.pdf.author = metadata.author || "";
+      pdf.doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
+      const metadata = await loadPdfMetadata(pdf.doc, file.name);
+      pdf.title = metadata.title || pdf.title;
+      pdf.author = metadata.author || "";
     } catch (error: Any) {
       console.error("PDF.js initialization failed", error);
-      state.pdf.doc = null;
-      state.pdf.extractError = copy.value.jsInitFailed(error.message);
+      pdf.doc = null;
+      pdf.extractError = copy.value.jsInitFailed(error.message);
     }
     await persistCurrentPdfAsset();
     shell();
@@ -291,21 +301,21 @@ async function onFileChange(event: Event) {
 }
 
 async function setPage(page: Any) {
-  const max = state.pdf.doc?.numPages || Math.max(1, page);
-  state.pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
-  state.pdf.text = "";
-  state.pdf.extractError = "";
-  state.pdf.extractionSource = "";
+  const max = pdf.doc?.numPages || Math.max(1, page);
+  pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
+  pdf.text = "";
+  pdf.extractError = "";
+  pdf.extractionSource = "";
   await persistCurrentPdfAsset();
   syncUrl({ replace: true });
   await refresh();
 }
 
 function goPrev() {
-  void setPage(state.pdf.page - 1);
+  void setPage(pdf.page - 1);
 }
 function goNext() {
-  void setPage(state.pdf.page + 1);
+  void setPage(pdf.page + 1);
 }
 function goToPage() {
   void setPage(pageInputEl.value?.value);
@@ -317,27 +327,27 @@ function onPageInputKeydown(event: KeyboardEvent) {
 }
 
 async function rotateLeft() {
-  state.pdf.rotation = (Number(state.pdf.rotation || 0) + 270) % 360;
+  pdf.rotation = (Number(pdf.rotation || 0) + 270) % 360;
   await persistCurrentPdfAsset();
   await refresh();
 }
 async function rotateRight() {
-  state.pdf.rotation = (Number(state.pdf.rotation || 0) + 90) % 360;
+  pdf.rotation = (Number(pdf.rotation || 0) + 90) % 360;
   await persistCurrentPdfAsset();
   await refresh();
 }
 
 async function extractPage() {
-  const pageToExtract = Number(pageInputEl.value?.value || state.pdf.page);
-  state.pdf.page = Math.max(1, Math.min(state.pdf.doc?.numPages || pageToExtract, pageToExtract));
+  const pageToExtract = Number(pageInputEl.value?.value || pdf.page);
+  pdf.page = Math.max(1, Math.min(pdf.doc?.numPages || pageToExtract, pageToExtract));
   extractingPage.value = true;
   try {
-    const result = await extractPdfPageSmart(state.pdf.page);
-    state.pdf.text = result.text;
-    state.pdf.extractionSource = result.source;
-    state.pdf.extractError = result.warning || "";
+    const result = await extractPdfPageSmart(pdf.page);
+    pdf.text = result.text;
+    pdf.extractionSource = result.source;
+    pdf.extractError = result.warning || "";
   } catch (error: Any) {
-    state.pdf.extractError = error.message;
+    pdf.extractError = error.message;
   }
   extractingPage.value = false;
   await refresh();
@@ -347,11 +357,11 @@ async function extractAll() {
   extractingAll.value = true;
   try {
     const result = await extractPdfAllSmart();
-    state.pdf.text = result.text;
-    state.pdf.extractionSource = result.source;
-    state.pdf.extractError = result.warning || "";
+    pdf.text = result.text;
+    pdf.extractionSource = result.source;
+    pdf.extractError = result.warning || "";
   } catch (error: Any) {
-    state.pdf.extractError = error.message;
+    pdf.extractError = error.message;
   }
   extractingAll.value = false;
   await refresh();
@@ -376,24 +386,24 @@ function returnToSelectedRecord() {
   if (!selectedFile.value) return;
   navigateTo("record", {
     fileId: selectedFile.value.id,
-    index: selectedIndex(selectedFile.value),
+    index: selectedRecordIndex(selectedFile.value),
   });
 }
 function openLinkedRecord(fileId: string, index: number) {
   navigateTo("record", { fileId, index });
 }
 function unlinkRecord(fileId: string, index: number) {
-  const file = state.files.find((item: Any) => item.id === fileId);
+  const file = corpusState.files.find((item: Any) => item.id === fileId);
   if (!file) return;
   sharedPdfLinking.unlinkPdfLink(
     file,
     index,
-    { pdf_file: state.pdf.name, pdf_page: state.pdf.page },
+    { pdf_file: pdf.name, pdf_page: pdf.page },
     { stayInPdf: true },
   );
 }
 function evidenceKey(fileId: string, index: number) {
-  const file = state.files.find((item: Any) => item.id === fileId);
+  const file = corpusState.files.find((item: Any) => item.id === fileId);
   return file ? evidenceSelection.workspaceEvidenceSelectionKey(file, index) : "";
 }
 
@@ -427,7 +437,7 @@ function linkCurrentPdf() {
     key = exact?.value || "";
   }
   const item = lookupRecord(key);
-  if (item) sharedPdfLinking.linkPdfPage(item.file, item.index, state.pdf.page);
+  if (item) sharedPdfLinking.linkPdfPage(item.file, item.index, pdf.page);
   else toast(copy.value.chooseAutocomplete, { tone: "warning" });
 }
 
@@ -508,8 +518,8 @@ onBeforeUnmount(() => {
             <span>{{ copy.document }}</span>
             <h2>{{ pdfTitle }}</h2>
             <p>
-              {{ state.pdf.name }}{{ state.pdf.author ? ` · ${state.pdf.author}` : ""
-              }}{{ state.pdf.doc ? ` · ${copy.pagesCount(state.pdf.doc.numPages)}` : "" }}
+              {{ pdf.name }}{{ pdf.author ? ` · ${pdf.author}` : ""
+              }}{{ pdf.doc ? ` · ${copy.pagesCount(pdf.doc.numPages)}` : "" }}
             </p>
           </template>
           <template v-else>
@@ -536,7 +546,7 @@ onBeforeUnmount(() => {
             <button
               class="btn small icon-only"
               id="pdfPrev"
-              :disabled="state.pdf.page <= 1"
+              :disabled="pdf.page <= 1"
               @click="goPrev"
               v-text="'←'"
             ></button>
@@ -548,16 +558,16 @@ onBeforeUnmount(() => {
                 ref="pageInputEl"
                 type="number"
                 min="1"
-                :max="state.pdf.doc?.numPages || 999999"
+                :max="pdf.doc?.numPages || 999999"
                 :value.attr="pageInputValue"
                 @keydown="onPageInputKeydown"
             /></label>
-            <span class="pdf-page-total">/ {{ state.pdf.doc?.numPages || "?" }}</span>
+            <span class="pdf-page-total">/ {{ pdf.doc?.numPages || "?" }}</span>
             <button class="btn small" id="pdfGo" @click="goToPage">{{ copy.go }}</button>
             <button
               class="btn small icon-only"
               id="pdfNext"
-              :disabled="state.pdf.doc && state.pdf.page >= state.pdf.doc.numPages"
+              :disabled="pdf.doc && pdf.page >= pdf.doc.numPages"
               @click="goNext"
               v-text="'→'"
             ></button>
@@ -593,7 +603,7 @@ onBeforeUnmount(() => {
               ></button>
             </UiTooltip>
             <span class="note">{{
-              state.pdf.rotation ? copy.rotationAmount(state.pdf.rotation) : copy.upright
+              pdf.rotation ? copy.rotationAmount(pdf.rotation) : copy.upright
             }}</span>
           </div>
           <div class="pdf-command-divider"></div>
@@ -602,7 +612,7 @@ onBeforeUnmount(() => {
             id="extractPage"
             :disabled="!extractReady"
             @click="extractPage"
-            v-text="extractingPage ? copy.extractingPage(state.pdf.page) : copy.extractPage"
+            v-text="extractingPage ? copy.extractingPage(pdf.page) : copy.extractPage"
           ></button>
           <details class="pdf-toolbar-menu">
             <summary class="btn small">{{ copy.moreTextTools }}</summary>
@@ -640,7 +650,7 @@ onBeforeUnmount(() => {
               <button
                 class="btn small"
                 id="pdfLlmLink"
-                :disabled="!state.files.length"
+                :disabled="!corpusState.files.length"
                 @click="openLlmLink"
                 v-text="copy.matchLink"
               ></button>
@@ -669,7 +679,7 @@ onBeforeUnmount(() => {
         <div class="pdf-context-row">
           <div class="pdf-context-pill">
             <span>{{ copy.source }}</span
-            ><b>p. {{ state.pdf.page }}</b>
+            ><b>p. {{ pdf.page }}</b>
           </div>
           <div class="pdf-context-pill">
             <span>{{ copy.works }}</span>
@@ -697,11 +707,11 @@ onBeforeUnmount(() => {
       <article class="card pdf-viewer-card">
         <div class="cardhead pdf-viewer-head">
           <div>
-            <b>{{ copy.page }} {{ state.pdf.page }}</b>
+            <b>{{ copy.page }} {{ pdf.page }}</b>
             <div class="note" v-text="viewerNoteText"></div>
           </div>
           <span class="pdf-view-badge">{{
-            state.pdf.rotation ? copy.rotation(state.pdf.rotation) : copy.fitWidth
+            pdf.rotation ? copy.rotation(pdf.rotation) : copy.fitWidth
           }}</span>
         </div>
         <div v-if="canRender" class="pdf-canvas-wrap">
@@ -713,7 +723,7 @@ onBeforeUnmount(() => {
           class="pdf-frame"
           id="pdfFrame"
           :title="pdfTitle"
-          :src="`${state.pdf.url}#page=${state.pdf.page}`"
+          :src="`${pdf.url}#page=${pdf.page}`"
         ></iframe>
       </article>
       <aside class="pdf-side-stack">
@@ -723,8 +733,8 @@ onBeforeUnmount(() => {
               <b>{{ copy.pageText }}</b>
               <div class="note">
                 {{
-                  state.pdf.extractionSource
-                    ? copy.sourceLabel(state.pdf.extractionSource)
+                  pdf.extractionSource
+                    ? copy.sourceLabel(pdf.extractionSource)
                     : copy.extractThenClean
                 }}
               </div>
@@ -738,15 +748,15 @@ onBeforeUnmount(() => {
               />
             </div>
           </div>
-          <div v-if="state.pdf.extractError" class="info warn" style="margin: 14px">
-            {{ state.pdf.extractError }}
+          <div v-if="pdf.extractError" class="info warn" style="margin: 14px">
+            {{ pdf.extractError }}
           </div>
           <div class="pdftext" v-html="highlightedText"></div>
         </article>
         <article class="card panel pdf-current-links">
           <div class="toolbar compact-toolbar">
             <div>
-              <b>{{ copy.recordsOnPage(state.pdf.page) }}</b>
+              <b>{{ copy.recordsOnPage(pdf.page) }}</b>
               <div class="note" v-text="linkedCountText"></div>
             </div>
           </div>
@@ -793,7 +803,7 @@ onBeforeUnmount(() => {
               :disabled="!hasRecordOptions"
               @click="linkCurrentPdf"
             >
-              <AppIcon name="plus" />{{ copy.linkPage(state.pdf.page) }}
+              <AppIcon name="plus" />{{ copy.linkPage(pdf.page) }}
             </button>
           </div>
           <div class="pdf-linked-list">
@@ -968,7 +978,7 @@ onBeforeUnmount(() => {
                     v-for="page in recordPages"
                     :key="page"
                     class="pdf-page-chip"
-                    :class="{ active: Number(page) === Number(state.pdf.page) }"
+                    :class="{ active: Number(page) === Number(pdf.page) }"
                     :data-related-page="page"
                     :title="copy.openPdfPage(page)"
                     @click="setPage(page)"
