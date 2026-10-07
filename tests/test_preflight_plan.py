@@ -26,6 +26,7 @@ def test_documentation_change_only_requires_formatting():
     assert not plan.backend
     assert not plan.frontend
     assert not plan.contract
+    assert not plan.container
 
 
 def test_backend_graphql_change_requires_contract_and_generated_checks():
@@ -140,6 +141,21 @@ def test_related_unit_selector_change_runs_full_frontend_units_only():
     assert plan.unit_full
     assert not plan.e2e
 
+
+def test_container_configuration_and_dependency_changes_require_container_gate():
+    for path in (
+        "docker-compose.yml",
+        "api/Dockerfile",
+        "api/requirements-nlp.txt",
+        "web/Dockerfile",
+        "web/package-lock.json",
+    ):
+        assert build_plan([path]).container, path
+
+    assert not build_plan(["api/app/bibliography.py"]).container
+    assert not build_plan(["web/src/views/ResearchView.vue"]).container
+
+
 def test_preflight_script_change_tests_automation_without_every_frontend_gate():
     plan = build_plan(["scripts/preflight.sh"])
 
@@ -164,3 +180,4 @@ def test_workflow_change_exercises_all_quality_gate_shapes():
     assert plan.a11y_full
     assert plan.legacy
     assert plan.sdk
+    assert plan.container
