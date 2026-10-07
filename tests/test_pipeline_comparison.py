@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
-from app.rag import _cross_encoder_rerank, _lexical_rerank, run_rag_pipeline
+from app.rag import _cross_encoder_rerank, _lexical_rerank, _scope_work_summaries, run_rag_pipeline
 
 
 def _result(pipeline_id: str, ids: list[str], *, elapsed: float = 0.1):
@@ -231,6 +231,23 @@ def test_research_dry_run_stops_before_generation(monkeypatch) -> None:
     assert "text" not in result["diagnostics"]["pre_rerank"][0]
     assert [item["record"]["record_id"] for item in result["evidence"]] == ["r1"]
     assert all(stage["name"] != "generation" for stage in result["stages"])
+
+
+def test_scope_inventory_failure_never_falls_back_to_full_document_scan() -> None:
+    class FailingCompactInventoryStore:
+        def research_scope_inventory(self, names):
+            assert names == ["corpus"]
+            raise RuntimeError("projection unavailable")
+
+        def work_stats(self, name):
+            raise AssertionError(
+                "compact inventory failure must not trigger full-document work_stats"
+            )
+
+    assert _scope_work_summaries(
+        FailingCompactInventoryStore(),
+        [{"name": "corpus"}, {"name": "corpus"}],
+    ) == []
 
 
 class _ExplicitScopeStore:
