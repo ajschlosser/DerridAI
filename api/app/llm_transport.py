@@ -40,6 +40,19 @@ from .structured_json import StructuredJsonTruncatedError, finish_reason_is_trun
 logger = logging.getLogger(__name__)
 
 
+def _filtered_extra_options(
+    extra_options: dict[str, Any] | None,
+    *,
+    reserved: set[str],
+) -> dict[str, Any]:
+    """Copy provider extras while excluding transport-owned request controls."""
+
+    return {
+        key: value
+        for key, value in (extra_options or {}).items()
+        if key not in reserved
+    }
+
 def _response_error_metadata(
     response: httpx.Response,
 ) -> tuple[str, str | None, str | None]:
@@ -207,10 +220,12 @@ def chat_complete(
             body["response_format"] = {"type": "json_object"}
         # Provider-specific extras may tune generation, but they must not override
         # transport-owned request shape or force structured output onto prose tasks.
-        reserved_extra_options = {"model", "messages", "response_format", "stream"}
-        for key_name, value in (tuning.extra_options or {}).items():
-            if key_name not in reserved_extra_options:
-                body[key_name] = value
+        body.update(
+            _filtered_extra_options(
+                tuning.extra_options,
+                reserved={"model", "messages", "response_format", "stream"},
+            )
+        )
 
         timeout = httpx.Timeout(
             connect=settings.openai_connect_timeout_seconds,
@@ -364,11 +379,10 @@ def chat_complete(
     url = (base_url or settings.ollama_base_url).rstrip("/")
     # Ollama structured-output format is transport-owned; do not allow raw
     # profile options to smuggle request-shape controls into generation settings.
-    option_values: dict[str, Any] = {
-        key: value
-        for key, value in (tuning.extra_options or {}).items()
-        if key not in {"format", "model", "messages", "stream"}
-    }
+    option_values = _filtered_extra_options(
+        tuning.extra_options,
+        reserved={"format", "model", "messages", "stream"},
+    )
     for key_name, value in {
         "num_ctx": tuning.num_ctx,
         "num_predict": max_tokens or tuning.num_predict,
