@@ -52,6 +52,22 @@ def pipeline_contract_identity(
     }
 
 
+def validate_pipeline_contract_version(version: int) -> None:
+    """Require a contract version that this runtime explicitly declares readable."""
+
+    parsed = int(version)
+    if parsed < MINIMUM_READABLE_PIPELINE_VERSION:
+        raise ValueError(
+            f"Pipeline contract version {parsed} is older than this DerridAI runtime "
+            f"can read (minimum {MINIMUM_READABLE_PIPELINE_VERSION})."
+        )
+    if parsed > PIPELINE_CONTRACT_VERSION:
+        raise ValueError(
+            f"Pipeline contract version {parsed} is newer than this DerridAI runtime "
+            f"supports (current {PIPELINE_CONTRACT_VERSION})."
+        )
+
+
 def pipeline_strategy_requirements(
     definition: PipelineDefinition,
     *,
