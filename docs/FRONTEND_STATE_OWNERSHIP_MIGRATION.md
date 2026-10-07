@@ -163,7 +163,7 @@ Work order:
       render.
 - [ ] B7. Replace broad corpus `version` consumers with narrower structure/content/review/evidence invalidation or normalized
       reactive state.
-- [ ] B8. Retire native-view imports of writable `sharedUrlState.state`, replacing them with feature stores/controllers.
+- [x] B8. Retire native-view imports of writable `sharedUrlState.state`, replacing them with feature stores/controllers.
 
 ### Shared integration points
 
