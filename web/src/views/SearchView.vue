@@ -28,6 +28,7 @@ import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import { useShellStore } from "../stores/shell";
+import { corpusState } from "../state/workspaceState";
 import AppIcon from "../components/AppIcon.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
@@ -737,6 +738,21 @@ watch(
 watch(
   () => i18n.locale,
   () => {
+    void load({ refresh: false, autoRun: false });
+  },
+);
+watch(
+  () => [corpusState.structureVersion, corpusState.contentVersion] as const,
+  ([structureVersion, contentVersion], [priorStructureVersion, priorContentVersion]) => {
+    if (
+      structureVersion === priorStructureVersion &&
+      contentVersion === priorContentVersion
+    )
+      return;
+    // Corpus imports/removals and Record edits can happen while Search remains
+    // mounted without changing its route. Refresh the Search-owned projection
+    // from the scoped corpus generations rather than coupling it back to every
+    // route.fullPath update.
     void load({ refresh: false, autoRun: false });
   },
 );
