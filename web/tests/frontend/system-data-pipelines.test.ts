@@ -722,8 +722,14 @@ describe("System Data Pipeline Studio", () => {
     const exported = vi.spyOn(pipelinesApi, "exportDefinition").mockResolvedValue(portable);
     const createUrl = vi.fn(() => "blob:pipeline");
     const revokeUrl = vi.fn();
-    vi.stubGlobal("URL", { ...URL, createObjectURL: createUrl, revokeObjectURL: revokeUrl });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: createUrl,
+      revokeObjectURL: revokeUrl,
+    });
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
 
     const { wrapper } = await mountStudio();
     const button = wrapper
@@ -765,7 +771,10 @@ describe("System Data Pipeline Studio", () => {
       "pipeline.json",
       { type: "application/json" },
     );
-    Object.defineProperty(input.element, "files", { value: [file], configurable: true });
+    Object.defineProperty(input.element, "files", {
+      value: [file],
+      configurable: true,
+    });
     await input.trigger("change");
     await flushPromises();
 
