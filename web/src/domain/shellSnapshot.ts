@@ -19,15 +19,13 @@
 import { esc } from "./html";
 import { getNavItems } from "./navItems";
 import { describeRecordsFile } from "./recordsFiles";
-import { evidenceSelection } from "./sharedSearchSupport";
 import { activeFile, selectedRecord } from "./sharedRecordScopes";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { hasCorpusDb, recordStores } from "./storeAvailability";
+import { getShellStatusProjection } from "./shellStatusProjection";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-const { selectedEvidenceEntries } = evidenceSelection;
 
 export function systemCardHtml() {
   const health = state.health;
@@ -152,25 +150,7 @@ export function getShellContextSnapshot() {
  * scans record contents; work is bounded by loaded file/store/evidence counts.
  */
 export function getShellStatusSnapshot() {
-  // Shell chrome only needs the aggregate count. Counting file lengths avoids
-  // rebuilding the corpus-wide flattened row cache after every record edit.
-  const totalLoaded = state.files.reduce(
-    (sum: number, file: Any) => sum + (Array.isArray(file.records) ? file.records.length : 0),
-    0,
-  );
-  const corpusStores = recordStores();
-  const dbRecords = corpusStores.reduce(
-    (sum: number, store: Any) => sum + (Number(store.count) || 0),
-    0,
-  );
-  return {
-    totalLoaded,
-    corpusStoreCount: corpusStores.length,
-    dbRecords,
-    hasCorpusDb: hasCorpusDb(),
-    activeStore: state.activeStore,
-    selectedEvidenceCount: selectedEvidenceEntries().length,
-  };
+  return getShellStatusProjection();
 }
 
 /**
