@@ -21,6 +21,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -813,8 +814,17 @@ def _normalized_scope_text(value: Any) -> str:
     """Normalize author/work names for deterministic prompt-scope matching."""
 
     folded = str(value or "").casefold().replace("’", "'")
-    folded = re.sub(r"'s\b", "", folded)
-    return re.sub(r"[^\wÀ-ÿ]+", " ", folded, flags=re.UNICODE).strip()
+    # Research prompts routinely omit source-title diacritics (for example
+    # "Du cote" for "Du côté") and use either Proust's or Prousts'. Scope
+    # routing must tolerate those orthographic differences without asking the
+    # model to guess source identity.
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+    folded = re.sub(r"(?<=\w)(?:'s|s')(?=\W|$)", "", folded)
+    return re.sub(r"[^\w]+", " ", folded, flags=re.UNICODE).strip()
 
 
 def _mentions_scope_author(question: str, author: str) -> bool:
