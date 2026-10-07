@@ -70,8 +70,14 @@ export function setShellRefreshHook(hook: unknown) {
 export function refreshShell() {
   shellRefreshHook();
 }
-/** Saves the preferences and refreshes the shell snapshot. */
+/**
+ * Refreshes the shell snapshot.
+ *
+ * Durable state is persisted by the feature/domain that owns the mutation.
+ * Keeping shell rendering side-effect free is critical: otherwise every record
+ * edit, navigation, health refresh, and background-job update serializes the
+ * entire compatibility workspace merely because chrome needs repainting.
+ */
 export function shell() {
-  persistPrefs();
   refreshShell();
 }
