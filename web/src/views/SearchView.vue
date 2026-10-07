@@ -295,7 +295,6 @@ function applySnapshot(next: SearchWorkspaceSnapshot) {
   if (next.scope !== "database") shownQuery.value = next.query;
   else if (!next.search_has_run) shownQuery.value = null;
   else if (shownQuery.value === null) shownQuery.value = next.query.trim();
-  shell.sync();
 }
 
 /**
