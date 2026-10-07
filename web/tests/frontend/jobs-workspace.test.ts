@@ -82,6 +82,20 @@ describe("jobs workspace", () => {
     expect(spies.notifyOperationsChanged).toHaveBeenCalledTimes(1);
   });
 
+  it("persists pruned job bookkeeping without serializing the whole workspace", async () => {
+    const api = vi.fn(async () => ({ jobs: [] }));
+    const { state, spies, workspace } = setup({ api });
+    state.jobApplied = { stale: true };
+    state.upsertJobApplied = { stale: 3 };
+
+    await workspace.refreshJobs();
+
+    expect(state.jobApplied).toEqual({});
+    expect(state.upsertJobApplied).toEqual({});
+    expect(spies.persistJobPreferences).toHaveBeenCalledTimes(1);
+    expect(spies.persistPrefs).toBeUndefined();
+  });
+
   it("never starts an idle polling loop", () => {
     const { state, workspace } = setup();
     state.jobs = [{ id: "a", status: "completed" }];
