@@ -19,8 +19,14 @@ from __future__ import annotations
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
-from app.rag import _bind_sources, _explicitly_named_works
-from app.rag import _cross_encoder_rerank, _lexical_rerank, _scope_work_summaries, run_rag_pipeline
+from app.rag import (
+    _bind_sources,
+    _cross_encoder_rerank,
+    _explicitly_named_works,
+    _lexical_rerank,
+    _scope_work_summaries,
+    run_rag_pipeline,
+)
 
 
 def _result(pipeline_id: str, ids: list[str], *, elapsed: float = 0.1):
@@ -482,6 +488,12 @@ def test_two_named_proust_works_close_scope_despite_missing_diacritics_and_posse
         "À l'ombre des jeunes filles en fleurs",
     }
 
+
+def test_single_word_work_title_uses_word_boundaries() -> None:
+    summaries = [{"scope_label": "Glas", "source_authors": ["Jacques Derrida"]}]
+
+    assert _explicitly_named_works(summaries, "Discuss glass and writing.") == []
+    assert _explicitly_named_works(summaries, "Discuss the work Glas.") == ["Glas"]
 
 def test_single_named_author_closes_retrieval_scope() -> None:
     request = RAGRunRequest(
