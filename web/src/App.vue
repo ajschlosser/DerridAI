@@ -611,7 +611,7 @@ watch(
       pauseRuntime();
       runtime.setUserContext(null);
       runtimeStarted.value = false;
-      shell.resetNav();
+      shell.reset();
       return;
     }
 
