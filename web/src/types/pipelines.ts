@@ -301,6 +301,27 @@ export type PipelineContractIdentity = {
   strategies: Record<string, { version: number }>;
 };
 
+export type PipelineContractRequirement = {
+  pipeline_contract_version: number;
+  strategies: Record<string, { version: number }>;
+};
+
+export type PipelineDocument = {
+  format: "derridai-pipeline";
+  version: 1;
+  contract: PipelineContractRequirement;
+  pipeline_hash: string;
+  pipeline: PipelineDefinition;
+};
+
+export type PipelineImportResult = {
+  document: PipelineDocument;
+  pipeline: PipelineDefinition;
+  pipeline_hash: string;
+  created: boolean;
+  same_as_existing: boolean;
+};
+
 export type PipelineCatalog = {
   /** Present on current servers; optional keeps clients readable against older catalogs. */
   contract?: PipelineContractIdentity;

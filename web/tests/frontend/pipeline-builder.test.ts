@@ -472,6 +472,49 @@ describe("new pipeline", () => {
   });
 });
 
+describe("portable pipeline controls", () => {
+  const props = {
+    pipelines: [draft()],
+    strategies: contractStrategies,
+    assignments: [],
+    purposes: contractPurposes,
+    vocabulary: contractVocabulary,
+    selectedKey: "research.custom@1",
+    workflow: "",
+    filters: { query: "", status: "" },
+    selectedPipeline: draft(),
+    selectedPurpose: contractPurpose("research"),
+    selectedAssignment: null,
+    assigned: false,
+    canAssign: false,
+    assigning: false,
+    cloning: false,
+    draft: null,
+    draftPurpose: null,
+    validation: null,
+    saving: false,
+  };
+
+  it("forwards export and import actions without altering the selected definition", async () => {
+    const wrapper = mount(PipelineDefinitionsWorkspace, {
+      props,
+      attachTo: document.body,
+    });
+
+    const exportButton = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Export pipeline"));
+    expect(exportButton).toBeDefined();
+    await exportButton!.trigger("click");
+    expect(wrapper.emitted("export")).toHaveLength(1);
+
+    await wrapper.get('input[type="file"]').trigger("change");
+    expect(wrapper.emitted("import")).toHaveLength(1);
+    expect(props.selectedPipeline.pipeline_id).toBe("research.custom");
+    wrapper.unmount();
+  });
+});
+
 describe("strategy details", () => {
   it("shows ports, declared cost and observed latency", () => {
     const wrapper = mount(PipelineStrategyInspector, {

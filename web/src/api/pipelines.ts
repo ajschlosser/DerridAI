@@ -23,6 +23,8 @@ import type {
   PipelineCatalog,
   PipelineDefinition,
   PipelineOperationalMetrics,
+  PipelineDocument,
+  PipelineImportResult,
   PipelineRunTrace,
   PipelineStrategyLatency,
   ResearchPipelineBenchmarkCase,
@@ -72,6 +74,17 @@ export const pipelinesApi = {
       `/api/system/pipelines/definitions/${encodeURIComponent(pipelineId)}/${version}/clone-draft`,
       { method: "POST" },
     ),
+
+  exportDefinition: (pipelineId: string, version: number) =>
+    apiRequest<PipelineDocument>(
+      `/api/system/pipelines/definitions/${encodeURIComponent(pipelineId)}/${version}/export`,
+    ),
+
+  importDefinition: (document: unknown) =>
+    apiRequest<PipelineImportResult>("/api/system/pipelines/definitions/import", {
+      method: "POST",
+      body: JSON.stringify(document),
+    }),
 
   createDefinition: (pipeline: PipelineDefinition) =>
     apiRequest<{
