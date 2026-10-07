@@ -922,51 +922,41 @@ class RAGJobManager(PersistentJobStateMixin):
             self._persist_job(job_id)
 
     def list(self) -> JobPayloadList:
-        with self._lock:
-            jobs = [self._copy(job, include_result=False) for job in self._jobs.values()]
+        jobs = [self._copy(job, include_result=False) for job in self._list_job_records()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
 
     def get(self, job_id: str) -> dict[str, Any]:
-        with self._lock:
-            if job_id not in self._jobs:
-                raise KeyError(job_id)
-            return self._copy(self._jobs[job_id], include_result=True)
+        return self._copy(self._get_job_record(job_id), include_result=True)
 
     def snapshot(self) -> JobPayloadList:
-        with self._lock:
-            return [
-                copy.deepcopy(self._copy(job, include_result=True))
-                for job in self._jobs.values()
-                if job.get("status") not in {"queued", "running", "cancelling"}
-            ]
+        return [
+            copy.deepcopy(self._copy(job, include_result=True))
+            for job in self._snapshot_finished_records()
+        ]
 
     def restore_snapshot(self, jobs: JobPayloadList) -> int:
-        restored = 0
+        restored_jobs: JobPayloadList = []
+        for raw in jobs or []:
+            if not isinstance(raw, dict):
+                continue
+            job_id = str(raw.get("id") or "").strip()
+            if not job_id or raw.get("status") in self.ACTIVE_STATUSES:
+                continue
+            job = copy.deepcopy(raw)
+            job.setdefault("result", None)
+            job.setdefault("events", [])
+            restored_jobs.append(job)
+        restored = job_repository.replace_finished(self.JOB_TYPE, restored_jobs)
         with self._lock:
-            self._jobs = {
-                job_id: job
-                for job_id, job in self._jobs.items()
-                if job.get("status") in {"queued", "running", "cancelling"}
-            }
-            for raw in jobs or []:
-                if not isinstance(raw, dict):
-                    continue
-                job_id = str(raw.get("id") or "").strip()
-                if not job_id or raw.get("status") in {"queued", "running", "cancelling"}:
-                    continue
-                job = copy.deepcopy(raw)
-                job.setdefault("result", None)
-                job.setdefault("events", [])
-                self._jobs[job_id] = job
-                restored += 1
-        retained = [copy.deepcopy(job) for job in self._jobs.values() if job.get("status") not in {"queued", "running", "cancelling"}]
-        job_repository.replace_finished(self.JOB_TYPE, retained)
+            for job_id, job in list(self._jobs.items()):
+                if str(job.get("status") or "") not in self.ACTIVE_STATUSES:
+                    self._jobs.pop(job_id, None)
+            self._recent_terminal_summaries.clear()
         return restored
 
     def cancel(self, job_id: str) -> dict[str, Any]:
+        self._load_job_for_mutation(job_id)
         with self._lock:
-            if job_id not in self._jobs:
-                raise KeyError(job_id)
             job = self._jobs[job_id]
             if job["status"] == "queued":
                 job["cancel_requested"] = True
@@ -996,20 +986,15 @@ class RAGJobManager(PersistentJobStateMixin):
                         "pipeline checkpoint."
                     ),
                 })
-            job_repository.upsert(copy.deepcopy(job))
-            return self._copy(job, include_result=True)
+            result = self._copy(job, include_result=True)
+        self._persist_job(job_id)
+        return result
 
     def delete(self, job_id: str) -> None:
-        with self._lock:
-            if job_id not in self._jobs:
-                raise KeyError(job_id)
-            job = self._jobs[job_id]
-            if job["status"] in {"queued", "running", "cancelling"}:
-                raise ValueError(
-                    "Running jobs must be cancelled before they can be removed."
-                )
-            del self._jobs[job_id]
-            job_repository.delete(job_id)
+        self._delete_finished_record(
+            job_id,
+            active_error="Running jobs must be cancelled before they can be removed.",
+        )
 
     def active_count(self) -> int:
         with self._lock:
@@ -1020,16 +1005,7 @@ class RAGJobManager(PersistentJobStateMixin):
             )
 
     def clear_finished(self) -> int:
-        with self._lock:
-            ids = [
-                job_id
-                for job_id, job in self._jobs.items()
-                if job["status"] not in {"queued", "running", "cancelling"}
-            ]
-            for job_id in ids:
-                del self._jobs[job_id]
-            job_repository.clear_finished(self.JOB_TYPE)
-            return len(ids)
+        return self._clear_finished_records()
 
     @staticmethod
     def _copy(job: dict[str, Any], *, include_result: bool) -> dict[str, Any]:

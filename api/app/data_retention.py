@@ -204,8 +204,9 @@ class BenchmarkRunRetention(OperationalStore):
 class JobHistoryRetention(OperationalStore):
     """Finished jobs, removed through each manager so memory and SQLite stay consistent.
 
-    Managers re-save their in-memory jobs every second, so deleting rows alone
-    would bring them back. Active jobs are never candidates.
+    Managers keep active jobs in memory while finished history lives in SQLite.
+    Deletion still goes through the manager so any small resident/realtime cache
+    is invalidated consistently. Active jobs are never candidates.
     """
 
     kind = "job_history"

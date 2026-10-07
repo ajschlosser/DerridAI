@@ -28,7 +28,6 @@ import uuid
 from typing import Any
 
 from .job_state import JobPayloadList, PersistentJobStateMixin, iso_now
-from .persistence import job_repository
 from .source_capture import CorpusCaptureService
 from .source_identity import CaptureError
 
@@ -140,23 +139,21 @@ class CaptureJobManager(PersistentJobStateMixin):
             if error:
                 job["fatal_error"] = job["error_message"] = error
         self._persist_job(job_id)
+        with self._lock:
+            self._threads.pop(job_id, None)
+            self._cancel.pop(job_id, None)
 
     def list(self) -> JobPayloadList:
-        with self._lock:
-            jobs = [copy.deepcopy(job) for job in self._jobs.values()]
+        jobs = [copy.deepcopy(job) for job in self._all_job_records()]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
 
     def get(self, job_id: str) -> dict[str, Any]:
-        with self._lock:
-            if job_id not in self._jobs:
-                raise KeyError(job_id)
-            return copy.deepcopy(self._jobs[job_id])
+        return copy.deepcopy(self._get_job_record(job_id))
 
     def cancel(self, job_id: str) -> dict[str, Any]:
+        self._load_job_for_mutation(job_id)
         with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise KeyError(job_id)
+            job = self._jobs[job_id]
             if job["status"] in ACTIVE:
                 job["status"] = "cancelling"
                 job["cancel_requested"] = True
@@ -169,26 +166,17 @@ class CaptureJobManager(PersistentJobStateMixin):
         return self.cancel(active["id"]) if active else None
 
     def delete(self, job_id: str) -> None:
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise KeyError(job_id)
-            if job["status"] in ACTIVE:
-                raise ValueError("Cancel the capture operation before deleting it.")
-            del self._jobs[job_id]
-        job_repository.delete(job_id)
+        self._delete_finished_record(
+            job_id,
+            active_error="Cancel the capture operation before deleting it.",
+        )
 
     def active_count(self) -> int:
         with self._lock:
             return sum(1 for job in self._jobs.values() if job["status"] in ACTIVE)
 
     def clear_finished(self) -> int:
-        with self._lock:
-            ids = [job_id for job_id, job in self._jobs.items() if job["status"] not in ACTIVE]
-            for job_id in ids:
-                del self._jobs[job_id]
-        job_repository.clear_finished(self.JOB_TYPE)
-        return len(ids)
+        return self._clear_finished_records()
 
     def wait(self, job_id: str, timeout: float = 30.0) -> dict[str, Any]:
         """Test/diagnostic helper: block until the job's thread finishes."""
