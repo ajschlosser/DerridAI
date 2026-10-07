@@ -59,6 +59,27 @@ def test_export_parse_round_trip_preserves_canonical_hash():
     }
 
 
+def test_portable_document_accepts_declared_readable_older_contract(monkeypatch):
+    import app.pipelines.compatibility as compatibility
+
+    payload = export_pipeline_document(_built_in()).model_dump(mode="json")
+    monkeypatch.setattr(compatibility, "PIPELINE_CONTRACT_VERSION", 3)
+    monkeypatch.setattr(compatibility, "MINIMUM_READABLE_PIPELINE_VERSION", 1)
+    payload["pipeline_contract_version"] = 2
+
+    document = PipelineDocument.model_validate(payload)
+
+    assert document.pipeline_contract_version == 2
+
+
+def test_portable_document_rejects_newer_contract():
+    payload = export_pipeline_document(_built_in()).model_dump(mode="json")
+    payload["pipeline_contract_version"] += 1
+
+    with pytest.raises(ValidationError, match="newer than this DerridAI runtime"):
+        PipelineDocument.model_validate(payload)
+
+
 def test_portable_document_rejects_unknown_execution_field():
     payload = export_pipeline_document(_built_in()).model_dump(mode="json")
     payload["pipeline"]["stages"][0]["unexpected"] = True

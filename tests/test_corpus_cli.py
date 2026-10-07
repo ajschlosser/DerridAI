@@ -179,6 +179,7 @@ def test_v1_config_migrates_to_pipeline_bound_v2_envelope(tmp_path):
 
     assert migrated.format == "derridai-corpus-run"
     assert migrated.version == 2
+    assert migrated.pipeline_contract_version >= 1
     assert migrated.provider.model == "qwen3:14b"
     assert migrated.publication.profile == "celf"
     assert set(migrated.pipelines.assignments) == set(
@@ -196,6 +197,25 @@ def test_v1_config_migrates_to_pipeline_bound_v2_envelope(tmp_path):
     loaded = load_run_config(path)
     assert isinstance(loaded, CorpusRunConfigV2)
     assert loaded.public_snapshot() == migrated.public_snapshot()
+
+
+def test_v2_config_rejects_newer_pipeline_contract():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    payload["pipeline_contract_version"] += 1
+
+    with pytest.raises(ValidationError, match="newer than this DerridAI runtime"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_v2_config_without_contract_version_reads_as_initial_contract():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    payload.pop("pipeline_contract_version")
+
+    loaded = CorpusRunConfigV2.model_validate(payload)
+
+    assert loaded.pipeline_contract_version == 1
 
 
 def test_v2_config_rejects_tampered_pipeline_hash():

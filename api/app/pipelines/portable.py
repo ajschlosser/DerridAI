@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .compatibility import (
     PIPELINE_CONTRACT_VERSION,
     pipeline_strategy_requirements,
+    validate_pipeline_contract_version,
     validate_pipeline_strategy_requirements,
 )
 from .models import InputBinding, PipelineDefinition, PipelineStageDefinition
@@ -121,12 +122,7 @@ class PipelineDocument(BaseModel):
 
     @model_validator(mode="after")
     def validate_identity(self) -> PipelineDocument:
-        if self.pipeline_contract_version != PIPELINE_CONTRACT_VERSION:
-            raise ValueError(
-                "Pipeline contract version "
-                f"{self.pipeline_contract_version} is not supported by this runtime "
-                f"(supports {PIPELINE_CONTRACT_VERSION})."
-            )
+        validate_pipeline_contract_version(self.pipeline_contract_version)
 
         actual_hash = pipeline_hash(self.pipeline)
         if actual_hash != self.pipeline_hash:
