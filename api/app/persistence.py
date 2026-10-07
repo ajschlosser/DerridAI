@@ -1508,6 +1508,24 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
             if isinstance(item, dict) and item.get("id")
         ]
 
+    def load_summaries(self, job_type: str) -> list[dict[str, Any]]:
+        """Load job metadata without materializing heavyweight result payloads."""
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT json_remove(payload_json, '$.result', '$.results') AS payload_json
+                FROM jobs
+                WHERE job_type=?
+                ORDER BY created_at DESC
+                """,
+                (str(job_type),),
+            ).fetchall()
+        return [
+            item
+            for item in (_json_loads(row["payload_json"], {}) for row in rows)
+            if isinstance(item, dict) and item.get("id")
+        ]
+
     def load_active(self, job_type: str) -> list[dict[str, Any]]:
         """Load only work that must remain resident for live worker coordination."""
         with self._lock, self._connect() as conn:
