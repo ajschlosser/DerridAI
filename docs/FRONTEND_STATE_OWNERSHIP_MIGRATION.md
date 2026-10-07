@@ -129,7 +129,7 @@ Work order:
 - [x] A6. Remove direct DOM updates for the global operations button; render the badge from the jobs/operations projection.
 - [x] A7. Make semantic-map source refresh depend on semantic-map inputs rather than every `route.fullPath` change, and avoid
       corpus-wide `flatMap` allocation when enforcing bounded source limits.
-- [ ] A8. Reduce root `App.vue` feature ownership by moving feature-only dialog/workflow hosts under their owning routes or
+- [x] A8. Reduce root `App.vue` feature ownership by moving feature-only dialog/workflow hosts under their owning routes or
       lazy feature hosts.
 
 ### Agent B - feature state ownership, input paths, persistence, and URL state
@@ -189,10 +189,12 @@ Acceptance:
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
 
-Implementation status on `task/frontend-state-ownership-performance`: A1-A7 are complete except A8. Shell navigation,
+Implementation status on `task/frontend-state-ownership-performance`: Agent A's A1-A8 tranche is complete. Shell navigation,
 route/file context, and application-status projections now invalidate independently; corpus/store aggregates are cached
 behind domain invalidation and cheap collection-identity checks, while active-store, health, and evidence primitives stay
-live. Job reconciliation no longer rewrites shell DOM. B1, B2, B4, and B6 are complete; B5 now has a pure snapshot read and
+live. Job reconciliation no longer rewrites shell DOM. Feature dialogs and the touch-up workflow are now activated through
+small feature-owned request refs and lazy hosts instead of being statically owned by `App.vue`. B1, B2, B4, and B6 are
+complete; B5 now has a pure snapshot read and
 explicit visible-row presence effect, while its deeper incremental/cached projection work remains open. Bounded User Timing
 measures record Research prompt/instruction input-to-next-frame latency and sidebar navigation intent-to-next-frame latency.
 Repository validation has not yet been run in this environment.
