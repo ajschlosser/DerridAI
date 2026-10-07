@@ -98,6 +98,12 @@ import {
 import { overridesForPipeline, withOverridesForPipeline } from "../domain/pipelineOverrides";
 import type { ResearchPipelineOptions } from "../types/pipelines";
 
+type ProviderStatus = {
+  available?: boolean;
+  checked_at?: string;
+  error?: string;
+};
+
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
@@ -150,7 +156,14 @@ const busy = ref("");
 
 const isAdmin = computed(() => auth.isAdmin);
 const canAppearance = computed(() => auth.can("appearance.manage") || isAdmin.value);
-const chromaPath = computed(() => String(status.health?.chroma?.path || "/data/chroma"));
+const chromaPath = computed(() =>
+  String(
+    (status.health as { chroma?: { path?: string } } | null)?.chroma?.path || "/data/chroma",
+  ),
+);
+const providerStatuses = computed(
+  () => status.providerStatuses as Record<string, ProviderStatus>,
+);
 const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderProfile[]);
 const defaultProfileId = computed(() =>
   String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),
@@ -579,8 +592,7 @@ function go(path: string, view?: string) {
   else window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path } }));
 }
 function providerReady(profile: ProviderProfile) {
-  const providerStatus = status.providerStatuses?.[profile.id];
-  return Boolean(providerStatus?.available);
+  return Boolean(providerStatuses.value[profile.id]?.available);
 }
 async function saveNotifications() {
   config.appConfig.desktop_notifications = notificationsOn.value;
@@ -1193,7 +1205,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           v-if="isAdmin && section === 'services'"
           :profiles="profiles"
           :default-profile-id="defaultProfileId"
-          :provider-statuses="status.providerStatuses || {}"
+          :provider-statuses="providerStatuses"
           :audio="audio"
           :audio-draft="audioDraft"
           :audio-status="audioStatus"
