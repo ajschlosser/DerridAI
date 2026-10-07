@@ -907,6 +907,94 @@ def _mentions_scope_author(question: str, author: str) -> bool:
     return bool(surname and len(surname) >= 4 and surname in set(query.split()))
 
 
+def _mentioned_scope_authors(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Return distinct corpus source authors explicitly named in the request."""
+
+    authors: set[str] = set()
+    for summary in work_summaries:
+        values = summary.get("source_authors")
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        for value in values:
+            author = str(value or "").strip()
+            if author and _mentions_scope_author(question, author):
+                authors.add(author)
+    return sorted(authors, key=str.casefold)
+
+
+def _author_scope_works(
+    work_summaries: Sequence[Mapping[str, Any]],
+    author: str,
+) -> list[str]:
+    """Return compact-inventory works attributed to one source author."""
+
+    target = _normalized_scope_text(author)
+    works: set[str] = set()
+    for summary in work_summaries:
+        values = summary.get("source_authors")
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        if any(_normalized_scope_text(value) == target for value in values):
+            work = str(summary.get("scope_label") or "").strip()
+            if work:
+                works.add(work)
+    return sorted(works)
+
+
+def _source_subject_authors(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Infer one documentary source author from narrow grammatical cues."""
+
+    folded = str(question or "").casefold().replace("’", "'")
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+    if not folded or _COMPARATIVE_SCOPE_PATTERN.search(folded):
+        return []
+
+    scored: dict[str, int] = {}
+    for author in _mentioned_scope_authors(work_summaries, question):
+        normalized = _normalized_scope_text(author)
+        parts = [part for part in normalized.split() if part]
+        aliases = [normalized]
+        if parts and len(parts[-1]) >= 4:
+            aliases.append(parts[-1])
+        best = 0
+        for alias in dict.fromkeys(aliases):
+            escaped = re.escape(alias).replace(r"\ ", r"\s+")
+            patterns = (
+                (4, rf"\baccording\s+to\s+{escaped}\b"),
+                (4, rf"\bselon\s+{escaped}\b"),
+                (4, rf"\bd[' ]apres\s+{escaped}\b"),
+                (3, rf"\b(?:what|how)\s+does\s+{escaped}\b"),
+                (3, rf"\bque\s+dit\s+{escaped}\b"),
+                (3, rf"\b{escaped}(?:'s|s')(?=\s|[,.?!:;]|$)"),
+                (2, rf"\b(?:novels?|works?|writings?|texts?)\s+by\s+{escaped}\b"),
+                (2, rf"\b{escaped}\s+on\b"),
+            )
+            for priority, pattern in patterns:
+                if re.search(pattern, folded, flags=re.IGNORECASE):
+                    best = max(best, priority)
+        if best:
+            scored[author] = best
+
+    if not scored:
+        return []
+    highest = max(scored.values())
+    winners = sorted(
+        (author for author, priority in scored.items() if priority == highest),
+        key=str.casefold,
+    )
+    return winners if len(winners) == 1 else []
+
+
 def _explicitly_named_works(
     work_summaries: Sequence[Mapping[str, Any]],
     question: str,
