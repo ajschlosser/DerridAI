@@ -29,6 +29,13 @@ from .config import settings
 
 _MODEL_CACHE: dict[str, Any] = {}
 _MODEL_CACHE_LOCK = threading.Lock()
+# Reuse one inference thread for the process lifetime. Creating a fresh native
+# inference thread for every rerank causes glibc/native runtimes to create
+# allocator arenas that can remain resident after the thread exits.
+_INFERENCE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="cross-encoder",
+)
 
 
 def _load_model(CrossEncoder: Any, model_name: str) -> Any:
@@ -99,12 +106,18 @@ def predict_scores(
 
     try:
         model = _load_model(CrossEncoder, model_name)
-        executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="cross-encoder")
-        future = executor.submit(model.predict, [[query, text] for query, text in pairs])
+        future = _INFERENCE_EXECUTOR.submit(
+            model.predict,
+            [[query, text] for query, text in pairs],
+        )
         try:
             scores = future.result(timeout=timeout_seconds)
-        finally:
-            executor.shutdown(wait=False, cancel_futures=True)
+        except TimeoutError:
+            # A running native inference call cannot be safely killed from a
+            # Python thread. Cancel if it has not started; otherwise the single
+            # shared worker remains the process-wide bound until it returns.
+            future.cancel()
+            raise
         values = list(scores.tolist() if hasattr(scores, "tolist") else scores)
         if len(values) != len(pairs):
             raise ValueError(
