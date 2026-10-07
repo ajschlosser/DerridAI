@@ -4049,7 +4049,11 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
         # embedded-metadata fallback below applies, with the reason in the build warning.
         session: DocumentManifestSession | None = None
         try:
-            session = DocumentManifestSession.open()
+            session = (
+                DocumentManifestSession.open(request)
+                if request.get("_pipeline_bindings")
+                else DocumentManifestSession.open()
+            )
             result = self._document_manifest_call(
                 session, request, prompt, max_tokens=limits["manifest_num_predict"], build_id=build_id,
             )
@@ -4777,7 +4781,7 @@ Return one JSON object matching the schema. `main_text_start_page` and `main_tex
             current_build["source_unit_embedding_projection"] = source_embedding_projection
             self.repo.save_build(current_build)
             memory_prefill = (
-                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema))
+                prefill_records(records, source_blocks, nlp_schema, self._progressive_metadata_index, build_id=build_id, registry=build_registry(self.repo, build_id, schema=nlp_schema), request=request)
                 if bool(request.get("memory_prefill", True))
                 else {"status": "disabled"}
             )
@@ -6055,7 +6059,11 @@ is not permitted to see are filtered exactly as they are in the interactive revi
         # One trace per proposal. Without a resolvable pipeline no model is asked and the request fails
         # with the reason, as any failed touch-up does; reviewed text is never touched here.
         try:
-            session = TextTouchupSession.open()
+            session = (
+                TextTouchupSession.open(active_request)
+                if active_request.get("_pipeline_bindings")
+                else TextTouchupSession.open()
+            )
         except RuntimeError as exc:
             raise ValueError(str(exc)) from exc
         try:

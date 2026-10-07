@@ -153,6 +153,39 @@ def write_research_jsonl_zst(
     )
 
 
+
+def write_run_manifest(
+    path: str | Path,
+    payload: dict[str, Any],
+) -> None:
+    """Atomically write a deterministic JSON sidecar for one finished artifact."""
+
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    encoded = (
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            indent=2,
+        )
+        + "\n"
+    ).encode("utf-8")
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=str(target.parent),
+    )
+    temporary = Path(tmp_name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
 def atomic_copy(source: str | Path, destination: str | Path) -> None:
     """Copy one completed artifact with an atomic final rename."""
     source_path = Path(source)

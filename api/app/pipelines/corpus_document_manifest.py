@@ -29,6 +29,8 @@ reviewer-confirmed layout, media-specific page semantics, ingest metadata).
 
 from __future__ import annotations
 
+from typing import Any
+
 from .models import PipelineDefinition
 from .structured_llm_stage import (
     StructuredStageFeature,
@@ -55,5 +57,8 @@ class DocumentManifestSession(StructuredStageSession):
     """One resolved document-manifest pipeline used for one analysis, recorded as its own trace."""
 
     @classmethod
-    def open(cls) -> DocumentManifestSession:
-        return cls.open_for(DOCUMENT_MANIFEST)
+    def open(
+        cls,
+        request: dict[str, Any] | None = None,
+    ) -> DocumentManifestSession:
+        return cls.open_for(DOCUMENT_MANIFEST, request=request)

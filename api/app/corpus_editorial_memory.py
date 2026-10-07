@@ -393,13 +393,18 @@ class EditorialMemoryMixin:
         metadata_pipeline_trace: dict[str, Any] | None = None
         if use_progressive:
             try:
-                from .pipelines.manager import pipeline_manager
+                from .pipelines.execution_resolution import (
+                    resolve_execution_pipeline,
+                )
                 from .pipelines.metadata_precedents import (
                     compile_metadata_precedent_pipeline,
                 )
                 from .pipelines.models import PipelineDefinition
 
-                resolved_pipeline = pipeline_manager.resolve("metadata_precedents")
+                resolved_pipeline = resolve_execution_pipeline(
+                    "metadata_precedents",
+                    build.get("request") if isinstance(build.get("request"), dict) else None,
+                )
                 resolved_definition = PipelineDefinition.model_validate(
                     resolved_pipeline["pipeline"]
                 )

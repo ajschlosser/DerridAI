@@ -27,6 +27,17 @@ import json
 import pytest
 from app.corpus_cli import ExitCode, main
 from app.corpus_cli_config import CorpusProcessingConfig, load_processing_config
+from app.corpus_run_config import (
+    HEADLESS_CORPUS_PIPELINE_FEATURES,
+    CorpusRunConfigV2,
+    dump_run_config,
+    load_run_config,
+    migrate_v1_config,
+)
+from app.pipelines.execution_resolution import (
+    RUN_PIPELINE_BINDINGS_KEY,
+    resolve_execution_pipeline,
+)
 from pydantic import ValidationError
 
 
@@ -153,3 +164,164 @@ def test_cli_validate_returns_stable_config_error_code(tmp_path, capsys):
 
     assert code == ExitCode.USAGE_OR_CONFIG
     assert "Configuration error:" in captured.err
+
+
+def test_v1_config_migrates_to_pipeline_bound_v2_envelope(tmp_path):
+    config = CorpusProcessingConfig.model_validate(
+        {
+            "version": 1,
+            "provider": {"model": "qwen3:14b"},
+            "publication": {"profile": "celf"},
+        }
+    )
+
+    migrated = migrate_v1_config(config)
+
+    assert migrated.format == "derridai-corpus-run"
+    assert migrated.version == 2
+    assert migrated.provider.model == "qwen3:14b"
+    assert migrated.publication.profile == "celf"
+    assert set(migrated.pipelines.assignments) == set(
+        HEADLESS_CORPUS_PIPELINE_FEATURES
+    )
+    for binding in migrated.pipelines.assignments.values():
+        assert len(binding.pipeline_hash) == 64
+        assert binding.required_strategies
+        assert set(binding.required_strategies) == {
+            stage.strategy for stage in binding.definition.stages
+        }
+
+    path = tmp_path / "corpus-run.yaml"
+    path.write_text(dump_run_config(migrated), encoding="utf-8")
+    loaded = load_run_config(path)
+    assert isinstance(loaded, CorpusRunConfigV2)
+    assert loaded.public_snapshot() == migrated.public_snapshot()
+
+
+def test_v2_config_rejects_tampered_pipeline_hash():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    feature = HEADLESS_CORPUS_PIPELINE_FEATURES[0]
+    payload["pipelines"]["assignments"][feature]["pipeline_hash"] = "0" * 64
+
+    with pytest.raises(ValidationError, match="Pipeline hash mismatch"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_cli_migrate_emits_v2_yaml(tmp_path, capsys):
+    source = tmp_path / "legacy.yaml"
+    source.write_text("version: 1\nprovider:\n  model: qwen3:14b\n", encoding="utf-8")
+
+    code = main(["config", "migrate", "--config", str(source)])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    migrated_path = tmp_path / "migrated.yaml"
+    migrated_path.write_text(captured.out, encoding="utf-8")
+    migrated = load_run_config(migrated_path)
+    assert isinstance(migrated, CorpusRunConfigV2)
+    assert migrated.provider.model == "qwen3:14b"
+
+
+def test_cli_pipeline_capabilities_reports_contract_identity(capsys):
+    code = main(["pipeline", "capabilities", "--json"])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    payload = json.loads(captured.out)
+    assert payload["pipeline_contract_version"] >= 1
+    assert payload["application_version"]
+    assert "llm.structured_metadata" in payload["strategies"]
+
+
+def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
+    code = main(["doctor", "--json"])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    payload = json.loads(captured.out)
+    assert payload["status"] == "ok"
+    assert payload["missing_features"] == []
+    assert set(payload["headless_corpus_pipelines"]) == set(
+        HEADLESS_CORPUS_PIPELINE_FEATURES
+    )
+
+
+
+def test_v2_config_requires_every_headless_pipeline_binding():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    payload["pipelines"]["assignments"].pop("corpus_segmentation")
+
+    with pytest.raises(ValidationError, match="missing required Corpus Builder pipeline"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_v2_config_rejects_unknown_embedded_pipeline_fields():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    feature = HEADLESS_CORPUS_PIPELINE_FEATURES[0]
+    payload["pipelines"]["assignments"][feature]["definition"]["surprise"] = True
+
+    with pytest.raises(ValidationError, match="unknown field"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_v2_config_rejects_strategy_version_drift():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    feature = "corpus_metadata_enrichment"
+    requirements = payload["pipelines"]["assignments"][feature]["required_strategies"]
+    strategy_id = next(iter(requirements))
+    requirements[strategy_id] += 1
+
+    with pytest.raises(ValidationError, match="provides v"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+
+def test_frozen_run_binding_executes_without_consulting_active_assignment(monkeypatch):
+    import app.pipelines.manager as manager_module
+
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    request = {
+        RUN_PIPELINE_BINDINGS_KEY: migrated.execution_pipeline_bindings(),
+    }
+
+    def unexpected_resolve(_feature):
+        raise AssertionError("active assignment must not be consulted")
+
+    monkeypatch.setattr(manager_module.pipeline_manager, "resolve", unexpected_resolve)
+    resolved = resolve_execution_pipeline("corpus_metadata_enrichment", request)
+
+    binding = migrated.pipelines.assignments["corpus_metadata_enrichment"]
+    assert resolved["pipeline"]["pipeline_id"] == binding.definition.pipeline_id
+    assert resolved["pipeline_hash"] == binding.pipeline_hash
+    assert resolved["source"] == "run_envelope"
+
+
+def test_frozen_run_binding_applies_typed_overrides():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    binding = payload["pipelines"]["assignments"]["corpus_metadata_enrichment"]
+    definition = binding["definition"]
+    binding["overrides"] = {
+        "pipeline_id": definition["pipeline_id"],
+        "pipeline_version": definition["version"],
+        "stages": {"primary": {"attempts": 2}},
+    }
+    config = CorpusRunConfigV2.model_validate(payload)
+
+    resolved = resolve_execution_pipeline(
+        "corpus_metadata_enrichment",
+        {RUN_PIPELINE_BINDINGS_KEY: config.execution_pipeline_bindings()},
+    )
+
+    primary = next(
+        stage for stage in resolved["pipeline"]["stages"] if stage["id"] == "primary"
+    )
+    assert primary["config"]["attempts"] == 2
+    assert resolved["pipeline_hash"] != binding["pipeline_hash"]
+    assert resolved["config_resolution"]["run_overrides"]["stages"]["primary"] == {
+        "attempts": 2
+    }

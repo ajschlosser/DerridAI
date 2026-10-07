@@ -294,7 +294,16 @@ export type PipelineRunTrace = {
   stages: PipelineStageTrace[];
 };
 
+export type PipelineContractIdentity = {
+  pipeline_contract_version: number;
+  minimum_readable_pipeline_version: number;
+  application_version: string;
+  strategies: Record<string, { version: number }>;
+};
+
 export type PipelineCatalog = {
+  /** Runtime compatibility identity; older servers may omit it. */
+  compatibility?: PipelineContractIdentity;
   purposes: PipelinePurpose[];
   vocabulary: PipelineWorkflowVocabulary;
   strategies: PipelineStrategy[];

@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from .compatibility import pipeline_contract_identity
 from .contracts import input_ports
 from .defaults import (
     BUILT_IN_ASSIGNMENTS,
@@ -32,8 +33,6 @@ from .models import PipelineAssignment, PipelineDefinition
 from .purposes import purpose_registry, workflow_vocabulary
 from .service import PipelineService, pipeline_hash, pipeline_service
 from .store import PipelineStore, pipeline_store
-from .workflows import PURPOSE_ADAPTERS, compile_for_feature, purpose_catalog
-from .workflows import runtime_support as adapter_runtime_support
 
 
 class PipelineManager:
@@ -173,6 +172,8 @@ class PipelineManager:
         clone identity is.
         """
 
+        from .workflows import PURPOSE_ADAPTERS
+
         purpose = purpose_registry.get(purpose_id)
         adapter = PURPOSE_ADAPTERS.get(purpose_id)
         if purpose is None or adapter is None:
@@ -276,7 +277,10 @@ class PipelineManager:
 
         # Compiling is the runtime-support check: administrators can save
         # experimental graphs, but only graphs the purpose's adapter can run may
-        # become active execution configuration.
+        # become active execution configuration. Keep the workflow adapters lazy
+        # so read-only resolution remains usable by the narrow native CLI.
+        from .workflows import compile_for_feature
+
         compile_for_feature(assignment.feature, pipeline)
 
         normalized = assignment.model_copy(update={"source": actor_source})
@@ -309,10 +313,15 @@ class PipelineManager:
     def runtime_support(self, pipeline: PipelineDefinition) -> dict[str, Any]:
         """Describe whether a saved graph can currently drive production code."""
 
+        from .workflows import runtime_support as adapter_runtime_support
+
         return adapter_runtime_support(pipeline)
 
     def catalog(self) -> dict[str, Any]:
+        from .workflows import purpose_catalog
+
         return {
+            "compatibility": pipeline_contract_identity(self.service.registry),
             "purposes": purpose_catalog(self.service.registry),
             "vocabulary": workflow_vocabulary(),
             "strategies": self.service.strategies(),
