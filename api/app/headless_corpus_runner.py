@@ -27,7 +27,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .corpus_run_config import CorpusRunConfig
+from .corpus_run_config import CorpusRunConfig, CorpusRunConfigV2
 from .corpus_output_profiles import atomic_copy, write_research_jsonl_zst
 from .metadata_schema import MetadataSchema
 
@@ -175,6 +175,12 @@ class HeadlessCorpusRunner:
             mode="json",
             exclude_none=True,
         )
+        if isinstance(config, CorpusRunConfigV2):
+            # This server-owned key is added only after the public request model
+            # has validated the ordinary Corpus Builder fields. The build worker
+            # persists it for resume/reproducibility and pipeline adapters prefer
+            # these immutable bindings over mutable system assignments.
+            validated["_pipeline_bindings"] = config.execution_pipeline_bindings()
         return validated, desired_autonomous
 
     def _wait_for_build(
