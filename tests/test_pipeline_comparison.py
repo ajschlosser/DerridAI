@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
+from app.rag import _bind_sources, _explicitly_named_works
 from app.rag import _cross_encoder_rerank, _lexical_rerank, _scope_work_summaries, run_rag_pipeline
 
 
