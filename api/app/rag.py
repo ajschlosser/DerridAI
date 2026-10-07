@@ -882,6 +882,15 @@ _COMPARATIVE_SCOPE_PATTERN = re.compile(
     r"\b(?:compare|comparison|contrast|versus|vs\.?)\b",
     flags=re.IGNORECASE,
 )
+_NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN = re.compile(
+    r"\b(?:cite|citation|include|mention|consult|draw\s+on|use)\b",
+    flags=re.IGNORECASE,
+)
+_STRONG_SINGLE_SOURCE_SUBJECT_PATTERN = re.compile(
+    r"(?:['’]s\b|\bwhat\s+does\b|\baccording\s+to\b|"
+    r"\b(?:novels?|works?|writings?|texts?)\s+by\b|\bin\s+the\s+(?:novels?|works?|writings?|texts?)\s+of\b)",
+    flags=re.IGNORECASE,
+)
 
 
 def _exclusive_scope_works(
@@ -890,13 +899,20 @@ def _exclusive_scope_works(
 ) -> list[str]:
     """Return an inferred closed work scope only when the request is unambiguous.
 
-    A single named in-corpus author/work group is treated as the documentary
-    subject of an ordinary characterization question. Explicit comparison
-    language or multiple named source groups keeps retrieval open so comparative
-    Research can still draw from every requested author/work.
+    A single named in-corpus author/work group can close documentary scope when
+    the named source is the subject of the question. Mere source directives such
+    as "cite X" remain coverage requests unless the same wording also contains a
+    strong single-source subject signal. Comparisons and multiple source groups
+    always remain open.
     """
 
-    if len(groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(str(question or "")):
+    text = str(question or "")
+    if len(groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
+        return []
+    if (
+        _NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN.search(text)
+        and not _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN.search(text)
+    ):
         return []
     return sorted({str(work).strip() for work in groups[0] if str(work).strip()})
 
