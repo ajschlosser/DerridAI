@@ -774,6 +774,153 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
 
 
 
+
+def test_prose_research_retries_when_generation_omits_evidence_markers(monkeypatch) -> None:
+    drafts = [
+        "The trace is not a presence.",
+        "The trace is not a presence [[E0]].",
+    ]
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return drafts[len(prompts) - 1]
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 2
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+    assert any("omitted required evidence markers" in warning for warning in result["warnings"])
+    generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
+    assert generation_stage["detail"]["output_contract_retry"] is True
+    assert generation_stage["detail"]["contract_issues_initial"] == ["missing_evidence_markers"]
+    assert generation_stage["detail"]["contract_issues_final"] == []
+
+
+def test_prose_research_retries_unknown_evidence_marker(monkeypatch) -> None:
+    drafts = [
+        "The trace is not a presence [[E99]].",
+        "The trace is not a presence [[E0]].",
+    ]
+
+    def generate(**_kwargs):
+        return drafts.pop(0)
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+    assert any("outside the current evidence packet" in warning for warning in result["warnings"])
+
+
+def test_research_fails_after_persistent_ungrounded_generation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.rag.chat_complete",
+        lambda **_kwargs: "The trace is not a presence.",
+    )
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    with pytest.raises(ValueError, match="output/evidence contract"):
+        run_rag_pipeline(request, _LexicalOnlyStore())
+
+
+def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) -> None:
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return '{"answer":"The trace is not a presence."}'
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace? Answer as JSON.",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 1
+    assert result["raw_answer"].startswith('{"answer"')
+    generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
+    assert generation_stage["detail"]["output_contract_retry"] is False
+
+
+def test_works_cited_never_implies_binding_when_answer_has_no_evidence_markers() -> None:
+    evidence = [{
+        "evidence_id": "E0",
+        "inline_citation": "Derrida 1976: 65",
+        "full_citation": "Derrida, Jacques. Of Grammatology. 1976.",
+        "record": {
+            "record_id": "r1",
+            "work": "Of Grammatology",
+            "document_author": "Jacques Derrida",
+        },
+    }]
+
+    answer = _bind_sources("An uncited generated claim.", evidence, True)
+
+    assert "Works Cited" not in answer
+    assert "Of Grammatology" not in answer
+
+
 def test_query_decomposition_cannot_invent_json_output_instructions(monkeypatch) -> None:
     generation_prompts: list[str] = []
     drafts = [
