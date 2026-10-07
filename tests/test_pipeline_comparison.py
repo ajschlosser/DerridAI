@@ -571,12 +571,12 @@ def test_author_comparison_keeps_documentary_scope_open() -> None:
 
 
 class _SameTitleScopeStore(_ExplicitScopeStore):
-    def work_stats(self, name):
-        assert name == "corpus"
-        return [
-            {"work": "Shared Title", "document_author": "Marcel Proust", "count": 1},
-            {"work": "Shared Title", "document_author": "Jacques Derrida", "count": 1},
-        ]
+    def research_scope_inventory(self, names):
+        assert names == ["corpus"]
+        return [{
+            "scope_label": "Shared Title",
+            "source_authors": ["Jacques Derrida", "Marcel Proust"],
+        }]
 
     def lexical_search(self, name, query, limit, where=None, where_document=None):
         assert name == "corpus"
