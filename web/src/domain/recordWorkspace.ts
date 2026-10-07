@@ -256,11 +256,6 @@ export function createRecordWorkspace(deps: Deps) {
         mode: "workspace",
         reason: tr("record.no_record_selected"),
       };
-    const pointer = { kind: "workspace", fileId: file.id, index };
-    if (JSON.stringify(state.lastViewedRecord) !== JSON.stringify(pointer)) {
-      state.lastViewedRecord = pointer;
-      persistRecordViewPreferences();
-    }
     const text = String(record.text || "");
     const q = String(state.recordFind || "");
     const links = pdfLinks(record);
@@ -318,6 +313,39 @@ export function createRecordWorkspace(deps: Deps) {
       },
     };
   }
+  function rememberRecordWorkspaceSnapshot(snapshot: Any) {
+    if (!snapshot?.available) return;
+    const pointer =
+      snapshot.mode === "database"
+        ? {
+            kind: "database",
+            store: String(snapshot.collection || ""),
+            id: String(snapshot.record_id || ""),
+          }
+        : {
+            kind: "workspace",
+            fileId: String(snapshot.file_id || ""),
+            index: Number(snapshot.current_index),
+          };
+    if (
+      (pointer.kind === "database" && (!pointer.store || !pointer.id)) ||
+      (pointer.kind === "workspace" &&
+        (!pointer.fileId || !Number.isInteger(pointer.index) || pointer.index < 0))
+    )
+      return;
+
+    const current = state.lastViewedRecord || {};
+    const unchanged =
+      current.kind === pointer.kind &&
+      (pointer.kind === "database"
+        ? current.store === pointer.store && String(current.id || "") === pointer.id
+        : current.fileId === pointer.fileId && Number(current.index) === pointer.index);
+    if (unchanged) return;
+
+    state.lastViewedRecord = pointer;
+    persistRecordViewPreferences();
+  }
+
   async function getRecordObjectGraph(recordOverride: Any = null) {
     const source =
       recordOverride && typeof recordOverride === "object"
@@ -664,6 +692,7 @@ export function createRecordWorkspace(deps: Deps) {
     recordWorkspaceRecord,
     researcherCurrentRecord,
     getRecordWorkspaceSnapshot,
+    rememberRecordWorkspaceSnapshot,
     getRecordObjectGraph,
     getDerridaiNormativeModel,
     recordWorkspaceNavigate,
