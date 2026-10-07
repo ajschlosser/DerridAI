@@ -19,7 +19,6 @@
 // Background jobs on the client: loading the job list, following it live over the realtime socket (with fallback
 // polling), cancelling, removing and clearing jobs, applying finished upserts, submitting LLM jobs and the progress
 // toasts and desktop notifications they raise. The runtime's state object and helpers are passed in as dependencies.
-import { icon } from "./html";
 import { isActiveJobStatus, jobIdsToPruneFromDock } from "./operationsDock";
 import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
 import type { RealtimeClient } from "../realtime/client";
@@ -119,14 +118,8 @@ export function createJobsWorkspace(deps: Deps) {
       if (!knownJobIds.has(id)) delete state.upsertJobApplied[id];
     for (const job of state.jobs) await syncUpsertJobReceipts(job);
     syncJobProgressToasts(previous);
-    const operationsButton = document.querySelector("#operationsBtn");
-    if (operationsButton) {
-      const active = state.jobs.filter((job: Any) =>
-        ["queued", "running", "cancelling"].includes(job.status),
-      ).length;
-      operationsButton.classList.toggle("soft", active > 0);
-      operationsButton.innerHTML = `${icon("history")}Operations <span class="button-count">${active}</span>`;
-    }
+    // Operations chrome renders from the jobs/operations projection. Reconciliation
+    // publishes state changes but never reaches into shell DOM directly.
     notifyOperationsChanged();
     if (rerender && state.view === "home") refreshCorpusBuildsHomeCardOnly();
     if (state.view === "rag") refreshRagProgressPanel();
