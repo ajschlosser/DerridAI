@@ -320,25 +320,61 @@ class CorpusRunConfigV2(_StrictConfigModel):
 CorpusRunConfig = CorpusProcessingConfig | CorpusRunConfigV2
 
 
-def _binding_for_feature(feature: str) -> CorpusPipelineBinding:
-    from .pipelines.manager import pipeline_manager
+def _binding_for_feature(
+    feature: str,
+    *,
+    use_system_assignments: bool,
+) -> CorpusPipelineBinding:
+    if use_system_assignments:
+        from .pipelines.manager import pipeline_manager
 
-    resolved = pipeline_manager.resolve(feature)
-    definition = PipelineDefinition.model_validate(resolved["pipeline"])
+        resolved = pipeline_manager.resolve(feature)
+        definition = PipelineDefinition.model_validate(resolved["pipeline"])
+        resolved_hash = str(
+            resolved.get("pipeline_hash") or pipeline_hash(definition)
+        )
+    else:
+        from .pipelines.defaults import built_in_assignment, built_in_pipeline
+
+        assignment = built_in_assignment(feature)
+        if assignment is None:
+            raise KeyError(feature)
+        definition = built_in_pipeline(
+            assignment.pipeline_id,
+            assignment.pipeline_version,
+        )
+        if definition is None:
+            raise KeyError(
+                f"{assignment.pipeline_id}@{assignment.pipeline_version}"
+            )
+        resolved_hash = pipeline_hash(definition)
+
     return CorpusPipelineBinding(
         definition=definition,
-        pipeline_hash=str(resolved.get("pipeline_hash") or pipeline_hash(definition)),
+        pipeline_hash=resolved_hash,
         required_strategies=pipeline_strategy_requirements(definition),
     )
 
 
-def migrate_v1_config(config: CorpusProcessingConfig) -> CorpusRunConfigV2:
-    """Wrap a v1 CLI config in the canonical v2 pipeline run envelope."""
+def migrate_v1_config(
+    config: CorpusProcessingConfig,
+    *,
+    use_system_assignments: bool = True,
+) -> CorpusRunConfigV2:
+    """Wrap a v1 CLI config in the canonical v2 pipeline run envelope.
+
+    Server-side exports preserve current Pipeline Studio assignments. Native CLI
+    migration can instead bind the code-owned defaults compiled into the binary,
+    avoiding any dependency on server persistence.
+    """
 
     bindings: dict[str, CorpusPipelineBinding] = {}
     for feature in HEADLESS_CORPUS_PIPELINE_FEATURES:
         try:
-            bindings[feature] = _binding_for_feature(feature)
+            bindings[feature] = _binding_for_feature(
+                feature,
+                use_system_assignments=use_system_assignments,
+            )
         except KeyError as exc:
             raise ValueError(
                 f"Cannot migrate v1 configuration: required pipeline feature "

@@ -52,6 +52,8 @@ const props = defineProps<{
   canAssign: boolean;
   assigning: boolean;
   cloning: boolean;
+  exporting?: boolean;
+  importing?: boolean;
   /** True while a blank draft is being prepared. */
   creating?: boolean;
   draft: PipelineDefinition | null;
@@ -70,6 +72,8 @@ const emit = defineEmits<{
   "update:filters": [filters: PipelineDefinitionFilters];
   "update:draft": [draft: PipelineDefinition];
   clone: [];
+  export: [];
+  import: [event: Event];
   create: [purposeId: string];
   assign: [];
   resetAssignment: [];
@@ -81,6 +85,7 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
 const newOpen = ref(false);
+const importInput = ref<HTMLInputElement | null>(null);
 
 function create(purposeId: string) {
   newOpen.value = false;
@@ -110,6 +115,32 @@ function create(purposeId: string) {
             : ''
         "
         @click="newOpen = true"
+      />
+      <input
+        ref="importInput"
+        type="file"
+        accept="application/json,.json"
+        class="sr-only"
+        :disabled="importing || Boolean(draft)"
+        @change="emit('import', $event)"
+      />
+      <UiButton
+        icon="upload"
+        :label="
+          importing
+            ? t('pipelines.importing', 'Importing…')
+            : t('pipelines.import_pipeline', 'Import pipeline…')
+        "
+        :disabled="importing || Boolean(draft)"
+        :disabled-reason="
+          draft
+            ? t(
+                'pipelines.import_while_editing',
+                'Finish or cancel the version you are editing before importing another pipeline.',
+              )
+            : ''
+        "
+        @click="importInput?.click()"
       />
     </div>
 
@@ -141,7 +172,9 @@ function create(purposeId: string) {
         :can-assign="canAssign"
         :assigning="assigning"
         :cloning="cloning"
+        :exporting="exporting"
         @clone="emit('clone')"
+        @export="emit('export')"
         @assign="emit('assign')"
         @reset-assignment="emit('resetAssignment')"
       />

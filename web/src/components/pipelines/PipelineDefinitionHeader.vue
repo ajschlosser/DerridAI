@@ -49,8 +49,9 @@ const props = defineProps<{
   canAssign: boolean;
   assigning: boolean;
   cloning: boolean;
+  exporting?: boolean;
 }>();
-const emit = defineEmits<{ clone: []; assign: []; resetAssignment: [] }>();
+const emit = defineEmits<{ clone: []; export: []; assign: []; resetAssignment: [] }>();
 
 const i18n = useI18nStore();
 const t = (key: string, fallback: string) => i18n.t(key, fallback);
@@ -126,6 +127,26 @@ const moreItems = computed<UiMenuItem[]>(() =>
             t(
               'pipelines.assign_help',
               'Making a version active changes the system-wide pipeline assignment for this feature. It does not rewrite previous runs: each run keeps the exact pipeline version it used.',
+            )
+          "
+        />
+      </span>
+      <span class="action-with-help">
+        <UiButton
+          icon="download"
+          :label="
+            exporting
+              ? t('pipelines.exporting', 'Exporting…')
+              : t('pipelines.export_pipeline', 'Export pipeline')
+          "
+          :disabled="exporting"
+          @click="emit('export')"
+        />
+        <UiTooltip
+          :text="
+            t(
+              'pipelines.export_pipeline_help',
+              'Download this immutable definition with its canonical hash and exact strategy-version requirements.',
             )
           "
         />

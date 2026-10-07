@@ -208,9 +208,19 @@ def test_v2_config_rejects_tampered_pipeline_hash():
         CorpusRunConfigV2.model_validate(payload)
 
 
-def test_cli_migrate_emits_v2_yaml(tmp_path, capsys):
+def test_cli_migrate_emits_v2_yaml(tmp_path, capsys, monkeypatch):
     source = tmp_path / "legacy.yaml"
     source.write_text("version: 1\nprovider:\n  model: qwen3:14b\n", encoding="utf-8")
+
+    import app.pipelines.manager as manager_module
+
+    monkeypatch.setattr(
+        manager_module.pipeline_manager,
+        "resolve",
+        lambda _feature: (_ for _ in ()).throw(
+            AssertionError("native migration must not consult server persistence")
+        ),
+    )
 
     code = main(["config", "migrate", "--config", str(source)])
     captured = capsys.readouterr()
@@ -234,7 +244,9 @@ def test_cli_pipeline_capabilities_reports_contract_identity(capsys):
     assert "llm.structured_metadata" in payload["strategies"]
 
 
-def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
+def test_cli_doctor_reports_native_runtime_capabilities(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("DERRIDAI_CLI_DATA_ROOT", str(tmp_path / "data"))
+
     code = main(["doctor", "--json"])
     captured = capsys.readouterr()
 
@@ -245,6 +257,12 @@ def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
     assert set(payload["headless_corpus_pipelines"]) == set(
         HEADLESS_CORPUS_PIPELINE_FEATURES
     )
+    assert payload["pipeline_contract"]["pipeline_contract_version"] >= 1
+    assert payload["filesystem"]["workspace"]["writable"] is True
+    assert payload["filesystem"]["output"]["writable"] is True
+    assert payload["provider_reachability"]["checked"] is False
+    assert "tesseract" in payload["helpers"]
+    assert "audio" in payload["source_kinds"]
 
 
 
@@ -325,3 +343,84 @@ def test_frozen_run_binding_applies_typed_overrides():
     assert resolved["config_resolution"]["run_overrides"]["stages"]["primary"] == {
         "attempts": 2
     }
+
+
+
+def test_cli_pipeline_export_validate_round_trip(tmp_path, capsys):
+    path = tmp_path / "pipeline.json"
+
+    code = main(
+        [
+            "pipeline",
+            "export",
+            "--pipeline-id",
+            "corpus.metadata_enrichment.current",
+            "--version",
+            "2",
+            "--output",
+            str(path),
+        ]
+    )
+    exported = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    assert path.is_file()
+    assert str(path.resolve()) in exported.out
+    document = json.loads(path.read_text(encoding="utf-8"))
+    assert document["format"] == "derridai-pipeline"
+    assert document["pipeline"]["pipeline_id"] == "corpus.metadata_enrichment.current"
+
+    code = main(["pipeline", "validate", "--config", str(path), "--json"])
+    validated = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    normalized = json.loads(validated.out)
+    assert normalized["pipeline_hash"] == document["pipeline_hash"]
+    assert normalized["pipeline"] == document["pipeline"]
+    assert validated.err == ""
+
+
+def test_cli_pipeline_validate_rejects_tampering(tmp_path, capsys):
+    path = tmp_path / "pipeline.json"
+    assert (
+        main(
+            [
+                "pipeline",
+                "export",
+                "--pipeline-id",
+                "corpus.metadata_enrichment.current",
+                "--version",
+                "2",
+                "--output",
+                str(path),
+            ]
+        )
+        == ExitCode.OK
+    )
+    capsys.readouterr()
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["pipeline"]["name"] = "Tampered"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    code = main(["pipeline", "validate", "--config", str(path)])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.USAGE_OR_CONFIG
+    assert "pipeline_hash does not match" in captured.err
+
+
+def test_cli_pipeline_export_rejects_uncompiled_definition(capsys):
+    code = main(
+        [
+            "pipeline",
+            "export",
+            "--pipeline-id",
+            "custom.not.compiled",
+            "--version",
+            "1",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.USAGE_OR_CONFIG
+    assert "Pipeline Studio" in captured.err
