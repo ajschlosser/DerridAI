@@ -318,7 +318,7 @@ def test_single_named_author_closes_retrieval_scope() -> None:
     request = RAGRunRequest(
         prompt="Describe the major themes and stakes of Levinas's philosophy.",
         pipeline_id="research.balanced",
-        pipeline_version=1,
+        pipeline_version=3,
         source_collection="corpus",
         locales=["en"],
         search_types=["lexical"],
@@ -341,6 +341,9 @@ def test_single_named_author_closes_retrieval_scope() -> None:
     assert result["retrieval"]["filter_plan"]["inferred_exclusive_works"] == [
         "Totality and Infinity"
     ]
+    scope_stage = next(stage for stage in result["stages"] if stage["name"] == "research_scope")
+    assert scope_stage["detail"]["active"] is True
+    assert scope_stage["detail"]["inferred_exclusive_works"] == ["Totality and Infinity"]
 
 
 def test_single_citation_directive_remains_open_but_reserves_source() -> None:
@@ -565,7 +568,7 @@ def test_cross_encoder_receives_source_identity_separately_from_mentions(monkeyp
 
 def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None:
     drafts = [
-        '{"title":"Bad structured answer","major_themes":[]}',
+        '```json\\n{"title":"Bad \\\\*structured answer","major_themes":[]}\\n```',
         "The trace is not a presence [[E0]].",
     ]
     prompts: list[str] = []
