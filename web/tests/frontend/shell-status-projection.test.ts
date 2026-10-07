@@ -35,7 +35,7 @@ describe("shell status projection", () => {
     invalidateShellStatusProjection();
   });
 
-  it("reuses aggregate values while reading cheap live primitives on each shell read", () => {
+  it("reuses aggregate values while reading only cheap primitives live", () => {
     state.files = [{ records: [{}, {}] }];
     state.activeStore = "first";
     state.selectedEvidence = { a: { key: "a" } };
@@ -48,9 +48,26 @@ describe("shell status projection", () => {
     const second = getShellStatusProjection();
 
     expect(first.totalLoaded).toBe(2);
+    expect(first.selectedEvidenceCount).toBe(1);
     expect(second.totalLoaded).toBe(2);
     expect(second.activeStore).toBe("second");
-    expect(second.selectedEvidenceCount).toBe(2);
+    expect(second.selectedEvidenceCount).toBe(1);
+
+    invalidateShellStatusProjection();
+    expect(getShellStatusProjection().selectedEvidenceCount).toBe(2);
+  });
+
+  it("detects top-level evidence replacement without scanning it on every shell read", () => {
+    state.selectedEvidence = { a: { key: "a" } };
+    invalidateShellStatusProjection();
+    expect(getShellStatusProjection().selectedEvidenceCount).toBe(1);
+
+    state.selectedEvidence = {
+      a: { key: "a" },
+      b: { key: "b" },
+      c: { key: "c" },
+    };
+    expect(getShellStatusProjection().selectedEvidenceCount).toBe(3);
   });
 
   it("detects top-level file/store replacement without a manual invalidation", () => {

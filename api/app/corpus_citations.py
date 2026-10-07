@@ -55,7 +55,15 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
             + (f" [{span['speaker']}]" if span.get("speaker") else "")
             for span in timed_spans
         )
-    citation_head = " ".join(part for part in (last, str(year or "")) if part).strip()
+    if year:
+        citation_head = " ".join(part for part in (last, str(year)) if part).strip()
+    elif last and work:
+        # Author-only page citations are ambiguous when a Research answer uses
+        # multiple works by the same author. Without a year, retain the work
+        # title in the inline citation rather than fabricating bibliographic data.
+        citation_head = f"{last}, {work}"
+    else:
+        citation_head = last
     if pages:
         inline = f"{citation_head}: {pages}" if citation_head else pages
     else:

@@ -29,6 +29,28 @@ import {
 import { persistPrefs, refreshShell, shell } from "./sharedWorkspaceStorage";
 import { unmountOperationsPanel } from "./operationsPanelHost";
 
+let nativeShellRefreshEpoch = 0;
+
+function refreshNativeShellAfterPaint() {
+  const epoch = ++nativeShellRefreshEpoch;
+  const refresh = () => {
+    if (epoch === nativeShellRefreshEpoch) refreshShell();
+  };
+
+  if (typeof globalThis.requestAnimationFrame !== "function") {
+    globalThis.setTimeout(refresh, 0);
+    return;
+  }
+
+  // Router afterEach hooks run before Vue has necessarily painted the committed
+  // destination. One rAF still runs before that paint; the second schedules the
+  // compatibility shell refresh for the following frame so shell projection work
+  // cannot keep the previous page visible.
+  globalThis.requestAnimationFrame(() => {
+    globalThis.requestAnimationFrame(refresh);
+  });
+}
+
 // Navigation over the shared workspace state, usable without the legacy runtime. The runtime uses this same instance
 // (one URL-sync hook, one snapshot). `renderView` is the tail of every view transition: unmount the legacy operations
 // panel, guard access and normalise the URL.
@@ -45,14 +67,24 @@ export function renderView() {
   return null;
 }
 
-/** Persist and repaint after the shared URL state has been applied (by the runtime or by the router). */
+/**
+ * Reconcile compatibility state after a location change without blocking a
+ * native Vue route's first paint.
+ */
 export function repaintAfterLocationChange() {
+  if (!document.querySelector("#main")) {
+    // The router is authoritative for native pages. Applying URL state has
+    // already updated the compatibility model; do not serialize the legacy
+    // workspace preference record on every route change. Defer the one shell
+    // compatibility refresh until after the destination has painted.
+    unmountOperationsPanel();
+    refreshNativeShellAfterPaint();
+    return;
+  }
+
+  // Legacy surfaces still own their compatibility render lifecycle.
   persistPrefs();
-  // Native Vue rendering already refreshes the shell inside renderView(). Legacy
-  // surfaces still need one explicit refresh before their compatibility render.
-  // Keeping those paths separate prevents route settlement from rebuilding the
-  // full shell snapshot twice before the browser can paint.
-  if (document.querySelector("#main")) refreshShell();
+  refreshShell();
   renderView();
 }
 

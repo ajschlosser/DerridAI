@@ -338,27 +338,25 @@ class _ProustScopeStore:
             }
         ]
 
-    def research_scope_inventory(self, names):
-        assert names == ["corpus"]
+    def work_stats(self, name):
+        assert name == "corpus"
         return [
             {
-                "scope_label": "Du côté de chez Swann",
-                "source_authors": ["Marcel Proust"],
+                "work": "Du côté de chez Swann",
+                "document_author": "Marcel Proust",
+                "count": 1,
             },
             {
-                "scope_label": "À l'ombre des jeunes filles en fleurs",
-                "source_authors": ["Marcel Proust"],
+                "work": "À l'ombre des jeunes filles en fleurs",
+                "document_author": "Marcel Proust",
+                "count": 1,
             },
             {
-                "scope_label": "Of Grammatology",
-                "source_authors": ["Jacques Derrida"],
+                "work": "Of Grammatology",
+                "document_author": "Jacques Derrida",
+                "count": 1,
             },
         ]
-
-    def work_stats(self, name):
-        raise AssertionError(
-            "Research scope inference must not materialize full-document work_stats"
-        )
 
     def lexical_search(self, name, query, limit, where=None, where_document=None):
         assert name == "corpus"

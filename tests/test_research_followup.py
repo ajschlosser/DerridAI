@@ -106,6 +106,8 @@ def test_pipeline_keeps_original_question_current_evidence_and_visible_fallback(
         assert result["research_thread"]["context_consumed"]
         assert result["research_thread"]["contextualization"]["fallback"] == failure
         assert result["query_metadata"]["prompt_query"] == (question if failure else "What does Levinas say about responsibility?")
-        assert bool(result["warnings"]) == failure
+        # A failed contextualization warns about fallback; a successful model
+        # that invents instructions now warns that the drift was ignored.
+        assert bool(result["warnings"]) is True
     else:
         assert len(calls) == 1 and result["query_metadata"]["prompt_query"] == question
