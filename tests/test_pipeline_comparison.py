@@ -342,6 +342,7 @@ def test_single_named_author_closes_retrieval_scope() -> None:
         "Totality and Infinity"
     ]
 
+
 def test_single_citation_directive_remains_open_but_reserves_source() -> None:
     request = RAGRunRequest(
         prompt="Explain the relation between alterity and trace. Cite Levinas explicitly.",
@@ -366,6 +367,7 @@ def test_single_citation_directive_remains_open_but_reserves_source() -> None:
 
     assert result["retrieval"]["inferred_exclusive_scope_works"] == []
     assert {item["record"]["record_id"] for item in result["evidence"]} == {"d1", "l1"}
+
 
 def test_balanced_research_reserves_explicitly_named_author_scope() -> None:
     request = RAGRunRequest(
@@ -574,7 +576,7 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
 
     monkeypatch.setattr("app.rag.chat_complete", generate)
     request = RAGRunRequest(
-        prompt="Describe the major themes of the trace.",
+        prompt="What is the trace?",
         model="test-model",
         pipeline_id="research.current",
         pipeline_version=1,
@@ -598,6 +600,7 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
     generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
     assert generation_stage["detail"]["attempts"] == 2
     assert generation_stage["detail"]["prose_contract_retry"] is True
+
 
 @pytest.mark.parametrize("decompose", [False, True])
 def test_first_turn_characterization_preserves_query_generation_and_citation_contract(monkeypatch, decompose):
