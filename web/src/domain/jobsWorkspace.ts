@@ -19,7 +19,6 @@
 // Background jobs on the client: loading the job list, following it live over the realtime socket (with fallback
 // polling), cancelling, removing and clearing jobs, applying finished upserts, submitting LLM jobs and the progress
 // toasts and desktop notifications they raise. The runtime's state object and helpers are passed in as dependencies.
-import { icon } from "./html";
 import { isActiveJobStatus, jobIdsToPruneFromDock } from "./operationsDock";
 import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
 import type { RealtimeClient } from "../realtime/client";
@@ -43,6 +42,7 @@ type Helper =
   | "jobProviderSummary"
   | "navigateTo"
   | "notifyOperationsChanged"
+  | "persistJobPreferences"
   | "persistPrefs"
   | "recordFingerprint"
   | "refreshCorpusBuildsHomeCardOnly"
@@ -73,6 +73,7 @@ export function createJobsWorkspace(deps: Deps) {
     jobProviderSummary,
     navigateTo,
     notifyOperationsChanged,
+    persistJobPreferences,
     persistPrefs,
     recordFingerprint,
     refreshCorpusBuildsHomeCardOnly,
@@ -113,20 +114,22 @@ export function createJobsWorkspace(deps: Deps) {
       for (const id of disappearedRagIds) pruneClientJobState(id, { removeHistory: false });
       persistPrefs();
     }
+    let jobBookkeepingChanged = false;
     for (const id of Object.keys(state.jobApplied || {}))
-      if (!knownJobIds.has(id)) delete state.jobApplied[id];
+      if (!knownJobIds.has(id)) {
+        delete state.jobApplied[id];
+        jobBookkeepingChanged = true;
+      }
     for (const id of Object.keys(state.upsertJobApplied || {}))
-      if (!knownJobIds.has(id)) delete state.upsertJobApplied[id];
+      if (!knownJobIds.has(id)) {
+        delete state.upsertJobApplied[id];
+        jobBookkeepingChanged = true;
+      }
+    if (jobBookkeepingChanged) persistJobPreferences();
     for (const job of state.jobs) await syncUpsertJobReceipts(job);
     syncJobProgressToasts(previous);
-    const operationsButton = document.querySelector("#operationsBtn");
-    if (operationsButton) {
-      const active = state.jobs.filter((job: Any) =>
-        ["queued", "running", "cancelling"].includes(job.status),
-      ).length;
-      operationsButton.classList.toggle("soft", active > 0);
-      operationsButton.innerHTML = `${icon("history")}Operations <span class="button-count">${active}</span>`;
-    }
+    // Operations chrome renders from the jobs/operations projection. Reconciliation
+    // publishes state changes but never reaches into shell DOM directly.
     notifyOperationsChanged();
     if (rerender && state.view === "home") refreshCorpusBuildsHomeCardOnly();
     if (state.view === "rag") refreshRagProgressPanel();
@@ -318,7 +321,7 @@ export function createJobsWorkspace(deps: Deps) {
       }
     }
     state.upsertJobApplied[job.id] = results.length;
-    persistPrefs();
+    persistJobPreferences();
     updateDbStatusElements();
     if (!["queued", "running", "cancelling"].includes(detail.status)) {
       try {

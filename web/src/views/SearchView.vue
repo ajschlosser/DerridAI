@@ -22,12 +22,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useRoute } from "vue-router";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
 import { label as compatibilityFieldLabel } from "../domain/sharedRecordHelpers";
-import { updateSearchQuery } from "../domain/sharedSearchQuery";
+import { setSearchQueryDraft, updateSearchQuery } from "../domain/sharedSearchQuery";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import { useShellStore } from "../stores/shell";
+import { corpusState } from "../state/workspaceState";
 import AppIcon from "../components/AppIcon.vue";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
@@ -111,6 +112,7 @@ const expandedText = reactive(new Set<string>());
 const columnWidths = reactive<Record<string, number>>(loadColumnWidths());
 let localSearchTimer = 0;
 let recentTimer = 0;
+let browserHistoryNavigation = false;
 let redirectedForDatabase = false;
 /**
  * Derived from the applied snapshot rather than assigned after it, so the workspace is never
@@ -353,10 +355,14 @@ async function load(options: { refresh?: boolean; autoRun?: boolean } = {}) {
 }
 function applyQuery(value: string) {
   query.value = value;
-  updateSearchQuery(value, { replace: true });
+  // Keep typing on the Search-owned draft path. Persistence and shareable URL
+  // compression are committed only after the loaded-record debounce or on an
+  // explicit database search.
+  setSearchQueryDraft(value);
   if (databaseMode.value) return;
   window.clearTimeout(localSearchTimer);
   localSearchTimer = window.setTimeout(() => {
+    updateSearchQuery(value, { replace: true });
     void load({ refresh: false, autoRun: false });
     window.clearTimeout(recentTimer);
     recentTimer = window.setTimeout(() => recordRecentSearch(), 650);
@@ -712,16 +718,39 @@ function onDialogCancel(event: Event, dialog: HTMLDialogElement | null) {
   dialog?.close();
 }
 
+function onBrowserHistoryNavigation() {
+  browserHistoryNavigation = true;
+}
+
 watch(
   () => route.fullPath,
   (next, prior) => {
-    if (next === prior) return;
+    if (next === prior || !browserHistoryNavigation) return;
+    browserHistoryNavigation = false;
+    // Search commands already update their owned state before syncing the URL.
+    // Re-reading on those router replace/push operations can race the command
+    // itself and discard a still-pending database result. Same-view browser
+    // history is different: runtimeLocationSync has just restored URL state,
+    // so refresh the page model after that settled pop navigation.
     void load({ refresh: false, autoRun: true });
   },
 );
 watch(
   () => i18n.locale,
   () => {
+    void load({ refresh: false, autoRun: false });
+  },
+);
+watch(
+  () => [corpusState.structureVersion, corpusState.contentVersion] as const,
+  ([structureVersion, contentVersion], [priorStructureVersion, priorContentVersion]) => {
+    if (structureVersion === priorStructureVersion && contentVersion === priorContentVersion) {
+      return;
+    }
+    // Corpus imports/removals and Record edits can happen while Search remains
+    // mounted without changing its route. Refresh the Search-owned projection
+    // from the scoped corpus generations rather than coupling it back to every
+    // route.fullPath update.
     void load({ refresh: false, autoRun: false });
   },
 );
@@ -737,10 +766,12 @@ async function loadNewer() {
   await load({ refresh: true });
 }
 onMounted(() => {
+  window.addEventListener("popstate", onBrowserHistoryNavigation);
   loadSavedState();
   void load({ refresh: true, autoRun: true });
 });
 onBeforeUnmount(() => {
+  window.removeEventListener("popstate", onBrowserHistoryNavigation);
   window.clearTimeout(localSearchTimer);
   window.clearTimeout(recentTimer);
   // Drop responses that are still in flight; the view they would have updated is gone.

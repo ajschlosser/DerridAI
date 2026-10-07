@@ -63,7 +63,7 @@ export function createWorkspacePersistence(deps: Deps) {
   });
   // The legacy code queries the page freely; untyped, as it was written.
   async function persistFileNow(file: Any) {
-    invalidateCorpusCache();
+    invalidateCorpusCache(String(file?.id || "") || null);
     try {
       await idbPut("files", serializableFile(file));
     } catch (error: Any) {
@@ -72,7 +72,7 @@ export function createWorkspacePersistence(deps: Deps) {
     }
   }
   function persistFile(file: Any) {
-    invalidateCorpusCache();
+    invalidateCorpusCache(String(file?.id || "") || null);
     clearTimeout(fileTimers.get(file.id));
     const timer = setTimeout(() => {
       fileTimers.delete(file.id);
@@ -94,7 +94,7 @@ export function createWorkspacePersistence(deps: Deps) {
       // getShellSnapshot/workIndex can be queried before IndexedDB restore finishes.
       // Always drop derived corpus indexes after reattaching persisted files so the
       // Works page and corpus metrics cannot remain stuck on a cached empty corpus.
-      invalidateCorpusCache();
+      invalidateCorpusCache(null, true);
       if (prefs) {
         const preservedAppDefaults = { ...state.appConfig };
         const preservedLlmDefaults = { ...state.llmConfig };

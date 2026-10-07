@@ -17,22 +17,15 @@
  */
 
 import { esc } from "./html";
-import { allRows } from "./corpusCache";
-import { jobsState } from "../state/jobsState";
 import { getNavItems } from "./navItems";
 import { describeRecordsFile } from "./recordsFiles";
-import { canUse } from "./sharedSession";
-import { pendingUpsertRows } from "./sharedDbPresence";
-import { evidenceSelection } from "./sharedSearchSupport";
-import { activeFile, needsReviewItems, selectedRecord } from "./sharedRecordScopes";
-import { responseCacheStore } from "./sharedStores";
+import { activeFile, selectedRecord } from "./sharedRecordScopes";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { dbUnavailableReason, hasCorpusDb, recordStores } from "./storeAvailability";
+import { getShellStatusProjection } from "./shellStatusProjection";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-const { selectedEvidenceEntries } = evidenceSelection;
 
 export function systemCardHtml() {
   const health = state.health;
@@ -139,37 +132,43 @@ function currentContext() {
     meta: dynamicMeta ? metaText : tr(`context.${key}.meta`, metaText),
   };
 }
-export function getShellSnapshot() {
-  const ctx = currentContext();
-  const totalLoaded = allRows().length;
-  const flagged = needsReviewItems().length;
-  const pending = state.activeStore ? pendingUpsertRows().length : 0;
-  const corpusStores = recordStores();
-  const dbRecords = corpusStores.reduce(
-    (sum: number, store: Any) => sum + (Number(store.count) || 0),
-    0,
-  );
-  const cacheCount = Number(responseCacheStore()?.count || 0);
-  const activeJobs = jobsState.jobs.filter((job: Any) =>
-    ["queued", "running", "cancelling"].includes(job.status),
-  ).length;
+/**
+ * Route/file context needed by breadcrumbs and feature views that still consume
+ * shell compatibility state. It is independent from sidebar navigation and
+ * status counters, so callers can refresh only the slice they actually changed.
+ */
+export function getShellContextSnapshot() {
   return {
     view: state.view,
     files: state.files.map((file: Any) => describeRecordsFile(file, state.activeFileId)),
-    context: ctx,
-    totalLoaded,
-    flagged,
-    pending,
-    activeJobs,
-    corpusStoreCount: corpusStores.length,
-    dbRecords,
-    cacheCount,
-    hasCorpusDb: hasCorpusDb(),
-    dbUnavailableReason: dbUnavailableReason(),
-    activeStore: state.activeStore,
-    canEdit: canUse("editLocalRecords") && state.view === "record" && Boolean(selectedRecord()),
-    selectedEvidenceCount: selectedEvidenceEntries().length,
-    systemHtml: systemCardHtml(),
-    nav: getNavItems(),
+    context: currentContext(),
   };
+}
+
+/**
+ * Small status projection used by application chrome. None of these values
+ * scans record contents; work is bounded by loaded file/store/evidence counts.
+ */
+export function getShellStatusSnapshot() {
+  return getShellStatusProjection();
+}
+
+/**
+ * Compatibility snapshot for callers that still need the complete shell model.
+ * Native shell code should prefer the independently refreshable projections.
+ */
+export function getShellSnapshot(
+  options: {
+    projection?: "all" | "context" | "status";
+    includeNavigation?: boolean;
+  } = {},
+) {
+  const projection = options.projection || "all";
+  const snapshot: Record<string, unknown> = {};
+  if (projection === "all" || projection === "context")
+    Object.assign(snapshot, getShellContextSnapshot());
+  if (projection === "all" || projection === "status")
+    Object.assign(snapshot, getShellStatusSnapshot());
+  if (options.includeNavigation !== false) snapshot.nav = getNavItems();
+  return snapshot;
 }

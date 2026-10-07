@@ -19,10 +19,15 @@
 import { reviewKey } from "./evidenceSelection";
 import { selectedRecord } from "./sharedRecordScopes";
 import { activeFile, selectedIndex } from "./sharedUrlState";
+import {
+  publishTouchupWorkspaceRequest,
+  type TouchupWorkspaceItem,
+} from "../features/touchup/touchupWorkspaceRequest";
 
-// Opens the touch-up workspace (`LlmReviewWorkspace.vue`, listening for `derridai:open-touchup`) over the given review
-// items, or over the selected record when none are given. Needs only the shared state, so Vue callers and the runtime
-// use the same function.
+// Opens the feature-owned touch-up workspace request over the given review items,
+// or over the selected record when none are given. The historical window event is
+// still emitted as a compatibility notification, but it is no longer responsible
+// for delivering the request to the Vue workspace.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
@@ -46,7 +51,7 @@ export function normalizeTouchupItems(inputItems: Any[] | null = null): Any[] {
 export function openTouchup(inputItems: Any[] | null = null, initialMode = "foreground"): void {
   const items = normalizeTouchupItems(inputItems);
   if (!items.length) return;
-  window.dispatchEvent(
-    new CustomEvent("derridai:open-touchup", { detail: { items, initialMode } }),
-  );
+  const request = { items: items as TouchupWorkspaceItem[], initialMode };
+  publishTouchupWorkspaceRequest(request);
+  window.dispatchEvent(new CustomEvent("derridai:open-touchup", { detail: request }));
 }

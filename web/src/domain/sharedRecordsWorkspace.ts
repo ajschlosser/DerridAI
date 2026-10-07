@@ -17,6 +17,7 @@
  */
 
 import { createRecordsWorkspace } from "./recordsWorkspace";
+import { corpusCache } from "./corpusCache";
 import { copyCitation, copyJsonToClipboard } from "./clipboardCopy";
 import { pageInfo, setActiveStore, setListFilterValue } from "./listPaging";
 import { toggleSort } from "./recordTableHelpers";
@@ -31,7 +32,11 @@ import { canUse, hasCapability } from "./sharedSession";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { navigateTo, syncUrl, urlFromState } from "./sharedNavigation";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import {
+  persistListPreferences,
+  persistReviewPreferences,
+  refreshShell,
+} from "./sharedWorkspaceStorage";
 import {
   recordDbStatus,
   refreshPresenceForRows,
@@ -51,6 +56,7 @@ export const recordsWorkspace = createRecordsWorkspace({
   clearReviewSelection: evidenceSelection.clearReviewSelection,
   copyCitation,
   copyJsonToClipboard,
+  corpusVersion: () => corpusCache.version,
   dbUnavailableReason,
   evidenceIsSelected: evidenceSelection.evidenceIsSelected,
   getTableColumns,
@@ -63,7 +69,8 @@ export const recordsWorkspace = createRecordsWorkspace({
   openOcrCleanupDialog: recordDialogs.openOcrCleanupDialog,
   openTouchup,
   pageInfo,
-  persistPrefs,
+  persistListPreferences,
+  persistReviewPreferences,
   recordDbStatus,
   recordStores,
   recordsListCell: recordPresenters.recordsListCell,
@@ -75,7 +82,7 @@ export const recordsWorkspace = createRecordsWorkspace({
   setActiveStore,
   setListFilterValue,
   setReviewSelected: evidenceSelection.setReviewSelected,
-  shell,
+  refreshShell,
   syncUrl,
   tableAvailableFields,
   toggleSort,

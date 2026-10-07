@@ -127,22 +127,41 @@ export function createCorpusState() {
   return {
     files: [] as Loose[],
     activeFileId: null as string | null,
-    /** Bumped whenever the loaded corpus changes, so Vue code can watch for in-place edits. */
+    /** Compatibility generation for consumers that genuinely depend on the entire corpus. */
     version: 0,
+    /** Bumped for record-content edits, irrespective of which file changed. */
+    contentVersion: 0,
+    /** Bumped when files are added, removed, replaced, or restored. */
+    structureVersion: 0,
+    /** Per-file content generations let an active-file workspace ignore edits elsewhere. */
+    fileVersions: {} as Record<string, number>,
   };
 }
 export const corpusState = shallowReactive(createCorpusState());
 
-/** Records that the loaded corpus changed. */
-export function touchCorpus(): void {
+/**
+ * Records a corpus invalidation at the narrowest available scope.
+ *
+ * `version` remains for compatibility, but native views should prefer
+ * `structureVersion`, `contentVersion`, or the relevant `fileVersions` entry.
+ */
+export function touchCorpus(fileId: string | null = null, structure = false): void {
   corpusState.version += 1;
+  if (structure) corpusState.structureVersion += 1;
+  else corpusState.contentVersion += 1;
+  if (fileId) {
+    corpusState.fileVersions = {
+      ...corpusState.fileVersions,
+      [fileId]: Number(corpusState.fileVersions[fileId] || 0) + 1,
+    };
+  }
 }
 
 /** Makes each field of `shared` read and write the shared state through `target`, enumerable like the plain field it replaces. */
 export function bindSharedState<T extends object, S extends object>(
   target: T,
   shared: S,
-  skip: readonly string[] = ["version"],
+  skip: readonly string[] = ["version", "contentVersion", "structureVersion", "fileVersions"],
 ): T & Omit<S, "version"> {
   for (const key of Object.keys(shared)) {
     if (skip.includes(key)) continue;

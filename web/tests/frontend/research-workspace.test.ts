@@ -38,7 +38,15 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (name === "persistPrefs") calls.push(name);
+          if (
+            [
+              "persistPrefs",
+              "persistResearchPreferences",
+              "persistSettingsPreferences",
+              "persistJobPreferences",
+            ].includes(name)
+          )
+            calls.push(name);
         });
         return spies[name];
       },
@@ -172,8 +180,28 @@ describe("research workspace commands", () => {
     });
     expect(state.ragConfig).not.toHaveProperty("unknown_key");
     expect(config).toMatchObject({ k: 8 });
-    expect(calls).toEqual(["persistPrefs"]);
-    expect(spies.shellRefreshHook).toHaveBeenCalled();
+    expect(calls).toEqual(["persistResearchPreferences"]);
+    expect(spies.persistPrefs).toBeUndefined();
+    expect(spies.shellRefreshHook).not.toHaveBeenCalled();
+  });
+
+  it("persists rerun configuration without serializing the whole workspace", () => {
+    const { calls, spies, workspace } = setup({
+      providerProfiles: () => [
+        { id: "p", type: "ollama", model: "model", base_url: "http://ollama" },
+      ],
+      navigateTo: vi.fn(),
+    });
+
+    workspace.prepareRagRerun({
+      prompt: "Original question",
+      provider: "ollama",
+      model: "model",
+      base_url: "http://ollama",
+    });
+
+    expect(calls).toEqual(["persistResearchPreferences", "persistSettingsPreferences"]);
+    expect(spies.persistPrefs).toBeUndefined();
   });
 
   it("turns off skipping retrieval when no evidence is selected", () => {

@@ -19,6 +19,7 @@
 import { api } from "./legacyApi";
 import { isResponseCacheStore } from "./recordPayloads";
 import { state } from "./sharedUrlState";
+import { invalidateShellStatusProjection } from "./shellStatusProjection";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -36,6 +37,7 @@ export async function refreshStores() {
   if (state.activeStore && !corpus.some((store) => store.name === state.activeStore))
     state.activeStore = "";
   if (!state.activeStore && corpus.length) state.activeStore = corpus[0].name;
+  invalidateShellStatusProjection();
   return state.stores;
 }
 

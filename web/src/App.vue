@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
+import LazyFeatureDialogHosts from "./components/shell/LazyFeatureDialogHosts.vue";
 import { createRouteLoading } from "./router/routeLoading";
 import { sharedUrlStateCodec, state as sharedState } from "./domain/sharedUrlState";
 import { createRuntimeLocationSync } from "./router/runtimeLocationSync";
@@ -33,25 +34,6 @@ import AuthScreen from "./components/AuthScreen.vue";
 import CommandSearch from "./components/CommandSearch.vue";
 import AppNotifications from "./components/AppNotifications.vue";
 import MessageDialogHost from "./components/MessageDialogHost.vue";
-import RemoveWorkDialog from "./components/RemoveWorkDialog.vue";
-import SeparateWorksDialog from "./components/SeparateWorksDialog.vue";
-import BulkFieldEditorDialog from "./components/BulkFieldEditorDialog.vue";
-import JobDetailsDialog from "./components/JobDetailsDialog.vue";
-import JobReviewDialog from "./components/JobReviewDialog.vue";
-import LlmTaskLauncherDialog from "./components/LlmTaskLauncherDialog.vue";
-import LlmToolResultDialog from "./components/LlmToolResultDialog.vue";
-import PdfDraftRecordDialog from "./components/PdfDraftRecordDialog.vue";
-import RecordPreviewDialog from "./components/RecordPreviewDialog.vue";
-import UpsertQueueDialog from "./components/UpsertQueueDialog.vue";
-import RecordFieldEditorDialog from "./components/RecordFieldEditorDialog.vue";
-import MergeFilesDialog from "./components/MergeFilesDialog.vue";
-import OcrCleanupDialog from "./components/OcrCleanupDialog.vue";
-import RecordHistoryDialog from "./components/RecordHistoryDialog.vue";
-import WorkMetadataEditorDialog from "./components/WorkMetadataEditorDialog.vue";
-import WorkMetadataLlmDialog from "./components/WorkMetadataLlmDialog.vue";
-import WorkMetadataProposalDialog from "./components/WorkMetadataProposalDialog.vue";
-import MixedWorkValuesDialog from "./components/MixedWorkValuesDialog.vue";
-import LlmReviewWorkspace from "./components/LlmReviewWorkspace.vue";
 import SemanticMapHost from "./components/semantic/SemanticMapHost.vue";
 import SidebarBrand from "./components/shell/SidebarBrand.vue";
 import TopbarChrome from "./components/shell/TopbarChrome.vue";
@@ -81,6 +63,7 @@ import { triggerImport } from "./domain/sharedFileLifecycle";
 import { pauseRuntime } from "./domain/jobsPause";
 import { toggleSidebar } from "./domain/sidebarToggle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
+import { measureInteractionToNextFrame } from "./domain/interactionTiming";
 
 const router = useRouter();
 const route = useRoute();
@@ -98,6 +81,7 @@ const commandPalette = ref<InstanceType<typeof NavigationCommandPalette> | null>
 const corpusFileInput = ref<HTMLInputElement | null>(null);
 const mobileNavDialog = ref<HTMLDialogElement | null>(null);
 const mobileNavTrigger = ref<HTMLButtonElement | null>(null);
+const pendingNavId = ref("");
 const narrowSidebar = useMatchMedia("(min-width: 781px) and (max-width: 900px)");
 const mobileLayout = useMatchMedia("(max-width: 780px)");
 const commandShortcut =
@@ -423,10 +407,11 @@ function syncSharedStateFromRoute() {
   repaintAfterLocationChange();
 }
 
-function navigateNative(path: string) {
+function navigateNative(path: string, intentId = "") {
   const current = router.currentRoute.value.fullPath;
   const target = router.resolve(path).fullPath;
   if (current === target) {
+    pendingNavId.value = "";
     // The router remains authoritative even if compatibility state drifted.
     // Re-derive that state from the settled URL instead of initiating a second
     // forward-navigation path through sharedNavigation.navigateTo().
@@ -434,15 +419,27 @@ function navigateNative(path: string) {
     if (expectedView && sharedState.view !== expectedView) syncSharedStateFromRoute();
     return;
   }
-  void router.push(target).catch(() => {
-    // The route feedback panel exposes the failure and recovery actions.
-  });
+  if (intentId) {
+    pendingNavId.value = intentId;
+    measureInteractionToNextFrame("derridai.navigation.intent_to_frame");
+  }
+  void router
+    .push(target)
+    .then((failure) => {
+      // Aborted/cancelled navigations resolve with a NavigationFailure rather
+      // than rejecting. Do not leave a stale busy state on the clicked item.
+      if (failure && pendingNavId.value === intentId) pendingNavId.value = "";
+    })
+    .catch(() => {
+      if (pendingNavId.value === intentId) pendingNavId.value = "";
+      // The route feedback panel exposes the failure and recovery actions.
+    });
 }
 
 function navigate(view: string) {
   const target = NAV_TARGETS[view];
   if (!target) return;
-  navigateNative(target.path);
+  navigateNative(target.path, view);
 }
 
 function openMobileNavigation() {
@@ -572,6 +569,13 @@ const runtimeLocationSync = createRuntimeLocationSync(router, {
 });
 
 watch(
+  () => route.fullPath,
+  () => {
+    pendingNavId.value = "";
+  },
+);
+
+watch(
   () => auth.user?.id,
   (id) => {
     if (!id) {
@@ -603,11 +607,13 @@ watch(
       <SidebarNavigator
         :groups="groupedNavItems"
         :collapsed="effectiveSidebarCollapsed"
+        :pending-id="pendingNavId"
         @navigate="navigate"
       />
       <SidebarUtilityNav
         :items="utilityNavItems"
         :collapsed="effectiveSidebarCollapsed"
+        :pending-id="pendingNavId"
         @navigate="navigate"
       />
       <SidebarStatus
@@ -792,7 +798,12 @@ watch(
         <AppIcon name="close" aria-hidden="true" />
       </button>
     </header>
-    <SidebarNavigator :groups="mobileNavGroups" :collapsed="false" @navigate="navigateFromMobile" />
+    <SidebarNavigator
+      :groups="mobileNavGroups"
+      :collapsed="false"
+      :pending-id="pendingNavId"
+      @navigate="navigateFromMobile"
+    />
   </dialog>
   <NavigationCommandPalette
     ref="commandPalette"
@@ -800,27 +811,9 @@ watch(
     @navigate="navigate"
     @search="searchCorpus"
   />
-  <LlmReviewWorkspace />
   <AppNotifications />
   <MessageDialogHost />
-  <MixedWorkValuesDialog />
-  <RemoveWorkDialog />
-  <MergeFilesDialog />
-  <BulkFieldEditorDialog />
-  <OcrCleanupDialog />
-  <RecordHistoryDialog />
-  <RecordFieldEditorDialog />
-  <UpsertQueueDialog />
-  <RecordPreviewDialog />
-  <JobDetailsDialog />
-  <JobReviewDialog />
-  <LlmToolResultDialog />
-  <LlmTaskLauncherDialog />
-  <PdfDraftRecordDialog />
-  <WorkMetadataEditorDialog />
-  <WorkMetadataLlmDialog />
-  <WorkMetadataProposalDialog />
-  <SeparateWorksDialog />
+  <LazyFeatureDialogHosts />
 </template>
 
 <style scoped>

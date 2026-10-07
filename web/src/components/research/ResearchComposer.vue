@@ -25,6 +25,7 @@ import ResearchFilterEditor from "./ResearchFilterEditor.vue";
 import ResearchScopeSuggestions from "./ResearchScopeSuggestions.vue";
 import type { ResearchFilterChange } from "./ResearchFilterEditor.vue";
 import { useI18nStore } from "../../stores/i18n";
+import { measureInteractionToNextFrame } from "../../domain/interactionTiming";
 import type {
   ResearchProfile,
   ResearchPromptMetadataPolicy,
@@ -140,6 +141,13 @@ function pickHistory(item: Record<string, unknown>) {
   historyOpen.value = false;
   historyQuery.value = "";
 }
+
+function updateDraftField(field: "prompt" | "instructions", event: Event) {
+  measureInteractionToNextFrame(`derridai.research.${field}.input_to_frame`);
+  const value = (event.target as HTMLTextAreaElement).value;
+  if (field === "prompt") emit("update:prompt", value);
+  else emit("update:instructions", value);
+}
 </script>
 
 <template>
@@ -168,7 +176,7 @@ function pickHistory(item: Record<string, unknown>) {
         :value="prompt"
         :disabled="!(canDraft ?? canConfigure)"
         :placeholder="i18n.t('research.question_placeholder')"
-        @input="emit('update:prompt', ($event.target as HTMLTextAreaElement).value)"
+        @input="updateDraftField('prompt', $event)"
       ></textarea>
       <div class="research-question-tools">
         <div class="research-history-popover">
@@ -235,7 +243,7 @@ function pickHistory(item: Record<string, unknown>) {
         :value="instructions"
         :disabled="!(canDraft ?? canConfigure)"
         :placeholder="i18n.t('research.instructions_placeholder')"
-        @input="emit('update:instructions', ($event.target as HTMLTextAreaElement).value)"
+        @input="updateDraftField('instructions', $event)"
       ></textarea>
       <ResearchScopeSuggestions
         :instructions="instructions"

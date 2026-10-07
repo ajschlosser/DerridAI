@@ -62,7 +62,10 @@ type Helper =
   | "openDatabaseCreationFromResearch"
   | "openStoreRecordEditor"
   | "openTouchup"
+  | "persistListPreferences"
   | "persistPrefs"
+  | "persistSearchPreferences"
+  | "persistVectorPreferences"
   | "recordDbStatus"
   | "recordStores"
   | "refreshPresenceForRows"
@@ -79,7 +82,7 @@ type Helper =
   | "selectedEvidenceEntries"
   | "selectedReviewItems"
   | "setReviewSelected"
-  | "shell"
+  | "refreshShell"
   | "syncUrl"
   | "tableAvailableFields"
   | "toggleDbEvidence"
@@ -115,7 +118,10 @@ export function createSearchWorkspace(deps: Deps) {
     openDatabaseCreationFromResearch,
     openStoreRecordEditor,
     openTouchup,
+    persistListPreferences,
     persistPrefs,
+    persistSearchPreferences,
+    persistVectorPreferences,
     recordDbStatus,
     recordStores,
     refreshPresenceForRows,
@@ -132,7 +138,7 @@ export function createSearchWorkspace(deps: Deps) {
     selectedEvidenceEntries,
     selectedReviewItems,
     setReviewSelected,
-    shell,
+    refreshShell,
     syncUrl,
     tableAvailableFields,
     toggleDbEvidence,
@@ -284,7 +290,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (isResearcher()) state.globalSearchMode = "database";
     if (autoRun && state.globalSearchAutoRun && searchScope() === "database" && stores.length) {
       state.globalSearchAutoRun = false;
-      persistPrefs();
+      persistSearchPreferences();
       await runSearchWorkspace({ silent: true });
     }
     const scope = searchScope();
@@ -404,15 +410,19 @@ export function createSearchWorkspace(deps: Deps) {
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: false });
-    shell();
+    refreshShell();
     return getSearchWorkspaceSnapshot({ refresh: true, autoRun: false });
   }
-  const updateSearchQuery = createUpdateSearchQuery({ state, persistPrefs, syncUrl });
+  const updateSearchQuery = createUpdateSearchQuery({
+    state,
+    persistPrefs: persistSearchPreferences,
+    syncUrl,
+  });
   function setSearchAdvancedOpen(value: Any) {
     state.globalAdvancedOpen = Boolean(value);
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchMethod(method: Any) {
@@ -439,7 +449,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchStore(name: Any) {
@@ -450,33 +460,35 @@ export function createSearchWorkspace(deps: Deps) {
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
+    persistVectorPreferences();
     syncUrl({ replace: true });
-    shell();
+    refreshShell();
   }
   function setSearchMmrOptions({ fetch_k, lambda_mult }: Loose = {}) {
     if (fetch_k != null) state.dbSearchFetchK = Math.max(1, Math.min(1000, Number(fetch_k) || 100));
     if (lambda_mult != null)
       state.dbSearchLambda = Math.max(0, Math.min(1, Number(lambda_mult) || 0));
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchLayout(layout: Any) {
     if (!["compact", "roomy", "cards"].includes(layout)) return;
     const key = searchScope() === "database" ? "database" : "traditional";
     state.searchResultLayouts = { ...(state.searchResultLayouts || {}), [key]: layout };
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchPage(page: Any) {
     state.globalPage = Math.max(1, Number(page) || 1);
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchPageSize(size: Any) {
     state.pageSize = Math.max(10, Math.min(500, Number(size) || 100));
     state.globalPage = 1;
-    persistPrefs();
+    persistListPreferences();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchColumns(columns: Any) {
@@ -495,7 +507,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.tableColumns.global = requested.length
       ? requested
       : fallback.filter((key) => available.includes(key));
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setSearchSort(key: Any) {
@@ -507,7 +519,7 @@ export function createSearchWorkspace(deps: Deps) {
       };
     } else toggleSort(state.globalSort, key);
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function toggleSearchFacet(field: Any, value: Any) {
@@ -519,13 +531,13 @@ export function createSearchWorkspace(deps: Deps) {
     else delete next[field];
     state.searchFacetFilters = next;
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function clearSearchFacetFilters() {
     state.searchFacetFilters = {};
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function clearSearchAllFilters() {
@@ -536,7 +548,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
     state.storeSearchError = "";
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function addSearchAdvancedFilter({
@@ -570,7 +582,7 @@ export function createSearchWorkspace(deps: Deps) {
       ];
     }
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function removeSearchAdvancedFilter(id: Any) {
@@ -587,7 +599,7 @@ export function createSearchWorkspace(deps: Deps) {
         (filter: Any) => String(filter.id) !== String(id),
       );
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   async function runSearchWorkspace({ silent = false } = {}) {
@@ -615,7 +627,7 @@ export function createSearchWorkspace(deps: Deps) {
     state.searchDatabaseRan = true;
     state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
     try {
       const safeWhere = safeDbSearchWhere(method);
@@ -644,7 +656,7 @@ export function createSearchWorkspace(deps: Deps) {
         });
     } finally {
       state.storeSearchLoading = false;
-      persistPrefs();
+      persistSearchPreferences();
       syncUrl({ replace: true });
     }
     return getSearchWorkspaceSnapshot({ refresh: false, autoRun: false });
@@ -707,8 +719,8 @@ export function createSearchWorkspace(deps: Deps) {
     if (item?.file) setReviewSelected(item.file, item.index, Boolean(selected));
   }
   function setSearchPageSelected(keys: Any, selected: Any) {
+    // setReviewSelected owns review-domain persistence for each changed row.
     for (const key of keys || []) setSearchResultSelected(key, selected);
-    persistPrefs();
   }
   function clearSearchSelection() {
     clearReviewSelection();
@@ -740,9 +752,11 @@ export function createSearchWorkspace(deps: Deps) {
     state.storeSearchError = "";
     if (searchScope() === "database" && (state.globalSearch || Object.keys(dbSearchWhere()).length))
       state.globalSearchAutoRun = true;
-    persistPrefs();
+    persistSearchPreferences();
+    persistListPreferences();
+    persistVectorPreferences();
     syncUrl({ replace: false });
-    shell();
+    refreshShell();
     return getSearchWorkspaceSnapshot({ refresh: true, autoRun: true });
   }
   function safeDbSearchWhere(method = state.dbSearchMethod) {

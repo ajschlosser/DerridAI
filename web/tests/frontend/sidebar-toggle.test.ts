@@ -18,7 +18,7 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-const calls = vi.hoisted(() => ({ persistPrefs: vi.fn(), shell: vi.fn() }));
+const calls = vi.hoisted(() => ({ persistLayoutPreferences: vi.fn(), refreshShell: vi.fn() }));
 vi.mock("../../src/domain/sharedWorkspaceStorage", () => calls);
 vi.mock("../../src/domain/sharedUrlState", () => ({ state: { sidebarCollapsed: false } }));
 
@@ -31,7 +31,7 @@ describe("toggleSidebar", () => {
     expect((state as { sidebarCollapsed: boolean }).sidebarCollapsed).toBe(true);
     toggleSidebar();
     expect((state as { sidebarCollapsed: boolean }).sidebarCollapsed).toBe(false);
-    expect(calls.persistPrefs).toHaveBeenCalledTimes(2);
-    expect(calls.shell).toHaveBeenCalledTimes(2);
+    expect(calls.persistLayoutPreferences).toHaveBeenCalledTimes(2);
+    expect(calls.refreshShell).toHaveBeenCalledTimes(2);
   });
 });

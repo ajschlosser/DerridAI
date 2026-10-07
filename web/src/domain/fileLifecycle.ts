@@ -128,7 +128,7 @@ export function createFileLifecycle(deps: Deps) {
         applyCompressedTableUrlState(decompressUrlState(requestedUrlState), state.view);
     } else if (first) state.activeFileId = first;
     // Always drop derived caches: a file that was already open may have been edited or emptied.
-    invalidateCorpusCache();
+    invalidateCorpusCache(null, true);
     persistPrefs();
     shell();
     renderView();
@@ -165,7 +165,7 @@ export function createFileLifecycle(deps: Deps) {
     delete state.pages[id];
     delete state.sorts[id];
     clearFileDerivedState(id);
-    invalidateCorpusCache();
+    invalidateCorpusCache(null, true);
     idbDelete("files", id).catch((error: Any) =>
       console.error("Could not remove saved file", error),
     );

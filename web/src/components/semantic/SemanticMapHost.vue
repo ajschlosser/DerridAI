@@ -23,6 +23,7 @@ import { useI18nStore } from "../../stores/i18n";
 import { useSemanticMapStore } from "../../stores/semanticMap";
 import type { SemanticMapSource } from "../../domain/semanticMap";
 import { listSemanticMapSources } from "../../domain/semanticMapSources";
+import { corpusState, vectorState } from "../../state/workspaceState";
 import SemanticMapFrame from "./SemanticMapFrame.vue";
 
 const i18n = useI18nStore();
@@ -50,7 +51,17 @@ function load() {
 }
 
 watch(
-  () => [map.enabled, map.placement, route.fullPath],
+  () => [
+    map.enabled,
+    map.placement,
+    route.query.file,
+    route.query.record,
+    corpusState.version,
+    corpusState.activeFileId,
+    vectorState.version,
+    vectorState.storeRecords,
+    vectorState.storeSearchResults,
+  ],
   async () => {
     if (map.enabled) load();
     await nextTick();

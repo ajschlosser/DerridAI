@@ -20,7 +20,8 @@ import { nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
-  getRecordsListSnapshot: vi.fn(() => ({ files: [], columns: [] })),
+  getRecordsListSnapshot: vi.fn(() => ({ files: [], columns: [], rows: [] })),
+  refreshRecordsListPresence: vi.fn(async () => undefined),
   ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   state: { view: "" },
 }));
@@ -41,9 +42,19 @@ describe("useRecordsWorkspace refreshes when the loaded corpus changes", () => {
     // Nothing was loaded yet, so a change does not load anything on its own.
     expect(runtime.getRecordsListSnapshot).not.toHaveBeenCalled();
 
+    corpusState.activeFileId = "f1";
+    // Let the active-file watcher settle while no snapshot exists; selecting a
+    // file before the Records workspace has loaded must not cause an eager read.
+    await nextTick();
     records.load();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(1);
-    touchCorpus();
+
+    // Record edits in another file no longer invalidate the active Records view.
+    touchCorpus("other-file");
+    await nextTick();
+    expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(1);
+
+    touchCorpus("f1");
     await nextTick();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(2);
 
@@ -51,6 +62,7 @@ describe("useRecordsWorkspace refreshes when the loaded corpus changes", () => {
     await nextTick();
     expect(runtime.getRecordsListSnapshot).toHaveBeenCalledTimes(3);
     corpusState.activeFileId = null;
+    corpusState.fileVersions = {};
   });
 
   it("tries to auto-load the corpus from Chroma when activated with nothing loaded", async () => {

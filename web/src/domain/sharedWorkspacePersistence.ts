@@ -25,13 +25,14 @@ import { trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { workspaceDb } from "./sharedWorkspaceStorage";
 import { createWorkspacePersistence } from "./workspacePersistence";
+import { applyDomainPreferenceRecord, DOMAIN_PREFERENCE_KEYS } from "./domainPreferencePersistence";
 
 // Saving and restoring the browser-local workspace over the shared state and database, usable without the legacy
 // runtime. The runtime uses this same instance. `fileTimers` is exported because deleting the workspace database must
 // cancel the pending debounced file saves.
 export const fileTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-export const { persistFileNow, persistFile, restoreWorkspace } = createWorkspacePersistence({
+const workspacePersistence = createWorkspacePersistence({
   state,
   trf,
   fileTimers,
@@ -44,3 +45,19 @@ export const { persistFileNow, persistFile, restoreWorkspace } = createWorkspace
   restoreCurrentPdfAsset,
   serializableFile: serializableRecordsFile,
 });
+
+export const { persistFileNow, persistFile } = workspacePersistence;
+
+export async function restoreWorkspace() {
+  await workspacePersistence.restoreWorkspace();
+  try {
+    const records = await Promise.all(
+      Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
+    );
+    for (const record of records) applyDomainPreferenceRecord(state, record);
+  } catch (error) {
+    // Legacy workspace preferences have already restored successfully. A
+    // domain-record read failure must not make the entire local workspace fail.
+    console.warn("Could not restore domain preference records", error);
+  }
+}

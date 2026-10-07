@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
   pipelines: vi.fn(),
   job: vi.fn(),
   follow: vi.fn(() => vi.fn()),
+  loadComposerDraft: vi.fn(),
+  saveComposerDraft: vi.fn(),
   auth: { user: { id: 1, role: "researcher" }, allowed: true },
   route: { name: "rag", query: {} as Record<string, string> },
 }));
@@ -61,6 +63,10 @@ vi.mock("../../src/domain/sharedResearchJobs", () => ({ getResearchJob: mocks.jo
 vi.mock("../../src/realtime/follow", () => ({ followResource: mocks.follow }));
 vi.mock("../../src/features/research/useResearchDraft", () => ({
   useResearchDraft: () => ({ draft: ref(null), follow: vi.fn(), clear: vi.fn() }),
+}));
+vi.mock("../../src/features/research/researchComposerDraft", () => ({
+  loadResearchComposerDraft: mocks.loadComposerDraft,
+  saveResearchComposerDraft: mocks.saveComposerDraft,
 }));
 vi.mock("../../src/api/pipelines", () => ({ pipelinesApi: { researchOptions: mocks.pipelines } }));
 import ResearchView from "../../src/views/ResearchView.vue";
@@ -143,6 +149,8 @@ beforeEach(() => {
   reactive(mocks.route).name = "rag";
   reactive(mocks.route).query = {};
   mocks.snapshot.mockResolvedValue(snapshot());
+  mocks.loadComposerDraft.mockResolvedValue(null);
+  mocks.saveComposerDraft.mockResolvedValue(undefined);
   mocks.update.mockImplementation((patch) => ({ ...snapshot().config, ...patch }));
   mocks.runs.mockResolvedValue([]);
   mocks.pipelines.mockResolvedValue({
@@ -154,6 +162,24 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
+  it("persists typing through the Research draft repository without updating global config", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = render();
+      await flushPromises();
+      await w.get(".composer").setValue("Local draft");
+      await vi.advanceTimersByTimeAsync(300);
+
+      expect(mocks.saveComposerDraft).toHaveBeenLastCalledWith({
+        prompt: "Local draft",
+        instructions: "",
+      });
+      expect(mocks.update).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not turn streamed token events into REST job refreshes", async () => {
     const liveJob = { id: "live", status: "running" };
     mocks.snapshot.mockResolvedValue({ ...snapshot(), jobs: [liveJob] });

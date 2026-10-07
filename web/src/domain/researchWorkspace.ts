@@ -51,7 +51,9 @@ type Helper =
   | "hasCorpusDb"
   | "isResearcher"
   | "navigateTo"
-  | "persistPrefs"
+  | "persistJobPreferences"
+  | "persistResearchPreferences"
+  | "persistSettingsPreferences"
   | "providerDisplayName"
   | "providerProfile"
   | "providerProfiles"
@@ -82,7 +84,9 @@ export function createResearchWorkspace(deps: Deps) {
     hasCorpusDb,
     isResearcher,
     navigateTo,
-    persistPrefs,
+    persistJobPreferences,
+    persistResearchPreferences,
+    persistSettingsPreferences,
     providerDisplayName,
     providerProfile,
     providerProfiles,
@@ -201,7 +205,7 @@ export function createResearchWorkspace(deps: Deps) {
       console.warn("Could not load Research pipeline visibility", error);
     }
 
-    persistPrefs();
+    persistResearchPreferences();
     return {
       config: researchConfigForUi(),
       stores: corpus.map((store: Any) => ({
@@ -276,15 +280,16 @@ export function createResearchWorkspace(deps: Deps) {
     for (const [key, value] of Object.entries(patch || {}))
       if (allowed.has(key)) state.ragConfig[key] = cloneAuditValue(value);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
-    persistPrefs();
-    shellRefreshHook?.();
+    // Research configuration is feature-owned. Updating it must not invalidate
+    // application chrome; shell-visible state is unaffected by these fields.
+    persistResearchPreferences();
     return researchConfigForUi();
   }
   function removeResearchEvidence(key: Any) {
     if (!hasCapability("evidence.select")) throw new Error(tr("permissions.evidence_denied"));
     setEvidence(String(key || ""), null, false);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
-    persistPrefs();
+    persistResearchPreferences();
     return selectedEvidenceEntries()
       .map(researchEvidenceForUi)
       .filter((item: Any) => item !== null);
@@ -293,7 +298,7 @@ export function createResearchWorkspace(deps: Deps) {
     if (!hasCapability("evidence.select")) throw new Error(tr("permissions.evidence_denied"));
     clearSelectedEvidence();
     state.ragConfig.skip_retrieval = false;
-    persistPrefs();
+    persistResearchPreferences();
     return [];
   }
   async function discoverResearchModels(profileId: Any) {
@@ -336,7 +341,7 @@ export function createResearchWorkspace(deps: Deps) {
       throw new Error("Your role cannot manage Research jobs.");
     await api(`/api/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
     pruneClientJobState(jobId);
-    persistPrefs();
+    persistJobPreferences();
     shellRefreshHook?.();
     return true;
   }
@@ -440,7 +445,7 @@ export function createResearchWorkspace(deps: Deps) {
       provider,
       model,
     });
-    persistPrefs();
+    persistResearchPreferences();
 
     const job = await api(endpoint, {
       method: "POST",
@@ -515,7 +520,7 @@ export function createResearchWorkspace(deps: Deps) {
     });
     state.jobs = [job, ...state.jobs.filter((existing: Any) => existing.id !== job.id)];
     rememberRagRun(job);
-    persistPrefs();
+    persistResearchPreferences();
     syncJobProgressToasts();
     startJobPolling();
     shellRefreshHook?.();
@@ -749,7 +754,8 @@ export function createResearchWorkspace(deps: Deps) {
       );
       if (gradeProfile) cfg.auto_grade_provider_profile_id = gradeProfile.id;
     }
-    persistPrefs();
+    persistResearchPreferences();
+    persistSettingsPreferences();
     navigateTo("rag");
   }
   return {

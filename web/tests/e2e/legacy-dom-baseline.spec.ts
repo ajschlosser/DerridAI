@@ -214,6 +214,9 @@ async function rawMarkup(
       .replace(/Build [0-9a-f]{7,8}\b/g, "Build <hash>")
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "<uuid>")
       .replace(/\bui-tooltip-\d+\b/g, "ui-tooltip-<id>")
+      // useId() values depend on component mount order. Citation menu ids are
+      // accessibility wiring, not user-visible DOM semantics.
+      .replace(/\bcitation-v-\d+\b/g, "citation-v-<id>")
       // Vue component instance ids are intentionally unstable across route-owned mounts.
       .replace(/\bresearch-filter-v-\d+\b/g, "research-filter-<id>")
       .replace(/\bresearch-filter-help-v-\d+\b/g, "research-filter-help-<id>")

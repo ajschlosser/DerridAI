@@ -22,13 +22,19 @@ type Deps = {
   syncUrl: (options: { replace: boolean }) => void;
 };
 
-// Set the global Search query and reflect it in the URL.
+/** Updates Search-owned query state without persistence or URL work. */
+export function setSearchQueryDraft(state: Record<string, unknown>, value: unknown): string {
+  state.globalSearch = String(value || "");
+  state.globalPage = 1;
+  return String(state.globalSearch);
+}
+
+// Commit the Search query to persistence and the shareable URL.
 export function createUpdateSearchQuery({ state, persistPrefs, syncUrl }: Deps) {
   return function updateSearchQuery(value: unknown, { replace = true } = {}): string {
-    state.globalSearch = String(value || "");
-    state.globalPage = 1;
+    const query = setSearchQueryDraft(state, value);
     persistPrefs();
     syncUrl({ replace });
-    return String(state.globalSearch);
+    return query;
   };
 }

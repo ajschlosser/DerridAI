@@ -19,6 +19,7 @@
 import { computeRecordFingerprint } from "./recordValues";
 import { touchCorpus } from "../state/workspaceState";
 import { state } from "./sharedUrlState";
+import { invalidateShellStatusProjection } from "./shellStatusProjection";
 
 // Corpus-derived data is read far more often than it changes. Keep one flattened index and memoized derived values
 // instead of rebuilding thousands of row wrapper objects on every render/chart/filter pass. Any persisted corpus edit
@@ -37,8 +38,9 @@ export const corpusCache: {
 // corpus-derived state changes so sync/status checks never reuse a pre-edit hash.
 let recordFingerprintCache = new WeakMap<object, string>();
 
-export function invalidateCorpusCache(): void {
-  touchCorpus();
+export function invalidateCorpusCache(fileId: string | null = null, structure = false): void {
+  touchCorpus(fileId, structure);
+  invalidateShellStatusProjection();
   corpusCache.rows = null;
   corpusCache.fields = null;
   corpusCache.memo.clear();

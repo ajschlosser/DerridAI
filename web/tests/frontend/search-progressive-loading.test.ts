@@ -29,6 +29,7 @@ const runtime = vi.hoisted(() => ({
   setSearchScope: vi.fn(),
   restoreSearchViewFromHref: vi.fn(),
   updateSearchQuery: vi.fn(),
+  setSearchQueryDraft: vi.fn(),
   setSearchMmrOptions: vi.fn(),
   setSearchStore: vi.fn(),
   setSearchMethod: vi.fn(),
@@ -55,6 +56,10 @@ const runtime = vi.hoisted(() => ({
 // Vue's template proxy probes the namespace for reactivity flags; a strict module
 // mock throws on unknown keys, so declare them.
 vi.mock("../../src/domain/sharedSearchWorkspace", () => ({ searchWorkspace: runtime }));
+vi.mock("../../src/domain/sharedSearchQuery", () => ({
+  setSearchQueryDraft: runtime.setSearchQueryDraft,
+  updateSearchQuery: runtime.updateSearchQuery,
+}));
 vi.mock("../../src/domain/shellSnapshot", () => ({
   getShellSnapshot: (...args: unknown[]) =>
     (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
@@ -76,6 +81,7 @@ vi.mock("../../src/composables/useNewerData", () => ({
 
 import SearchView from "../../src/views/SearchView.vue";
 import { useAuthStore } from "../../src/stores/auth";
+import { corpusState, createCorpusState, touchCorpus } from "../../src/state/workspaceState";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -172,6 +178,7 @@ async function mountSearch() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  Object.assign(corpusState, createCorpusState());
   localStorage.clear();
   runtime.getSearchWorkspaceSnapshot.mockResolvedValue(snapshot());
   runtime.getSearchShareHref.mockReturnValue("http://localhost/search");
@@ -179,6 +186,29 @@ beforeEach(() => {
 });
 
 describe("Search workspace loading boundaries", () => {
+  it("keeps keystrokes on draft state until the loaded-record debounce commits URL state", async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await mountSearch();
+      await flushPromises();
+      const input = wrapper.get(".search-command-surface input[type='search']");
+
+      await input.setValue("hospitality");
+
+      expect(runtime.setSearchQueryDraft).toHaveBeenLastCalledWith("hospitality");
+      expect(runtime.updateSearchQuery).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(149);
+      expect(runtime.updateSearchQuery).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runtime.updateSearchQuery).toHaveBeenCalledWith("hospitality", { replace: true });
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("renders the page frame before the first read lands instead of hiding the page", async () => {
     const read = deferred<ReturnType<typeof snapshot>>();
     runtime.getSearchWorkspaceSnapshot.mockReturnValueOnce(read.promise);
@@ -199,6 +229,22 @@ describe("Search workspace loading boundaries", () => {
     expect(wrapper.find("[data-search-loading]").exists()).toBe(false);
     expect(wrapper.get("input[type='search']").attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".search-results-panel").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("refreshes while mounted when the loaded corpus structure changes", async () => {
+    const wrapper = await mountSearch();
+    await flushPromises();
+    expect(wrapper.get(".search-scope-switch").text()).toContain("2");
+
+    runtime.getSearchWorkspaceSnapshot.mockResolvedValue(
+      snapshot({ total_loaded_records: 3, total: 3 }),
+    );
+    touchCorpus(null, true);
+    await flushPromises();
+
+    expect(runtime.getSearchWorkspaceSnapshot).toHaveBeenCalledTimes(2);
+    expect(wrapper.get(".search-scope-switch").text()).toContain("3");
     wrapper.unmount();
   });
 
@@ -225,6 +271,7 @@ describe("Search workspace loading boundaries", () => {
 
     const read = deferred<ReturnType<typeof snapshot>>();
     runtime.getSearchWorkspaceSnapshot.mockReturnValueOnce(read.promise);
+    window.dispatchEvent(new PopStateEvent("popstate"));
     await router.push("/search?page=2");
     await flushPromises();
     expect(wrapper.get(".search-results-panel").element).toBe(panel);
@@ -248,6 +295,7 @@ describe("Search workspace loading boundaries", () => {
     runtime.getSearchWorkspaceSnapshot.mockRejectedValueOnce(
       Object.assign(new Error("Forbidden"), { status: 403 }),
     );
+    window.dispatchEvent(new PopStateEvent("popstate"));
     await router.push("/search?page=3");
     await flushPromises();
 
@@ -266,6 +314,7 @@ describe("Search workspace loading boundaries", () => {
     runtime.getSearchWorkspaceSnapshot.mockImplementation(() =>
       Promise.resolve(snapshot({ layout: "cards", results: [result("NEW")], total: 1 })),
     );
+    window.dispatchEvent(new PopStateEvent("popstate"));
     await router.push("/search?page=4");
     await flushPromises();
     expect(wrapper.text()).toContain("NEW");

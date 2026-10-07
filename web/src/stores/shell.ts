@@ -42,18 +42,11 @@ export interface ShellSnapshot {
   files: ShellFile[];
   context: { kicker: string; title: string; meta: string };
   totalLoaded: number;
-  flagged: number;
-  pending: number;
-  activeJobs: number;
   corpusStoreCount: number;
   dbRecords: number;
-  cacheCount: number;
   hasCorpusDb: boolean;
-  dbUnavailableReason: string;
   activeStore: string;
-  canEdit: boolean;
   selectedEvidenceCount: number;
-  systemHtml: string;
   nav: ShellNavItem[];
 }
 
@@ -62,18 +55,11 @@ const emptySnapshot: ShellSnapshot = {
   files: [],
   context: { kicker: "Overview", title: "Dashboard", meta: "" },
   totalLoaded: 0,
-  flagged: 0,
-  pending: 0,
-  activeJobs: 0,
   corpusStoreCount: 0,
   dbRecords: 0,
-  cacheCount: 0,
   hasCorpusDb: false,
-  dbUnavailableReason: "",
   activeStore: "",
-  canEdit: false,
   selectedEvidenceCount: 0,
-  systemHtml: "",
   nav: [],
 };
 
@@ -85,9 +71,58 @@ export const useShellStore = defineStore("shell", () => {
   // must not draw a partial menu (only the Vue-side admin items) before this.
   const navReady = ref(false);
 
+  function syncContext() {
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellSnapshot({
+        projection: "context",
+        includeNavigation: false,
+      }) as Pick<ShellSnapshot, "view" | "files" | "context">),
+    };
+  }
+
+  function syncStatus() {
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellSnapshot({
+        projection: "status",
+        includeNavigation: false,
+      }) as Pick<
+        ShellSnapshot,
+        | "totalLoaded"
+        | "corpusStoreCount"
+        | "dbRecords"
+        | "hasCorpusDb"
+        | "activeStore"
+        | "selectedEvidenceCount"
+      >),
+    };
+  }
+
   function sync() {
-    snapshot.value = getShellSnapshot() as ShellSnapshot;
-    navReady.value = true;
+    // Generic compatibility refreshes update only context/status. Navigation is
+    // stable for the signed-in user and is recomputed only when it has not been
+    // initialized (or when an explicit navigation refresh is requested).
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellSnapshot({
+        projection: "context",
+        includeNavigation: false,
+      }) as Pick<ShellSnapshot, "view" | "files" | "context">),
+      ...(getShellSnapshot({
+        projection: "status",
+        includeNavigation: false,
+      }) as Pick<
+        ShellSnapshot,
+        | "totalLoaded"
+        | "corpusStoreCount"
+        | "dbRecords"
+        | "hasCorpusDb"
+        | "activeStore"
+        | "selectedEvidenceCount"
+      >),
+    };
+    if (!navReady.value) syncNav();
   }
 
   // Publish only the menu. Cheap and independent of workspace bootstrap, so it can run
@@ -115,5 +150,15 @@ export const useShellStore = defineStore("shell", () => {
     return groups;
   });
 
-  return { snapshot, ready, navReady, groupedNav, sync, syncNav, resetNav };
+  return {
+    snapshot,
+    ready,
+    navReady,
+    groupedNav,
+    sync,
+    syncContext,
+    syncStatus,
+    syncNav,
+    resetNav,
+  };
 });

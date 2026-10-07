@@ -20,6 +20,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import "../../src/domain/appBootstrap";
 import { normalizeTouchupItems, openTouchup } from "../../src/domain/touchupLauncher";
 import { state } from "../../src/domain/sharedUrlState";
+import {
+  clearTouchupWorkspaceRequest,
+  useTouchupWorkspaceRequest,
+} from "../../src/features/touchup/touchupWorkspaceRequest";
 
 const file = { id: "f1", records: [{ record_id: "a" }, { record_id: "b" }] };
 
@@ -27,6 +31,7 @@ describe("touch-up launcher", () => {
   afterEach(() => {
     state.files = [];
     state.activeFileId = null;
+    clearTouchupWorkspaceRequest();
     vi.restoreAllMocks();
   });
 
@@ -46,14 +51,16 @@ describe("touch-up launcher", () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 
-  it("dispatches the open event with the items and mode", () => {
+  it("publishes the feature request before emitting the compatibility event", () => {
+    const request = useTouchupWorkspaceRequest();
     const seen: CustomEvent[] = [];
     const listener = (event: Event) => seen.push(event as CustomEvent);
     window.addEventListener("derridai:open-touchup", listener);
     openTouchup([{ file, index: 0 }], "auto");
     window.removeEventListener("derridai:open-touchup", listener);
+    expect(request.current.value?.initialMode).toBe("auto");
+    expect(request.current.value?.items[0].key).toBe("f1::0");
     expect(seen).toHaveLength(1);
-    expect(seen[0].detail.initialMode).toBe("auto");
-    expect(seen[0].detail.items[0].key).toBe("f1::0");
+    expect(seen[0].detail).toEqual(request.current.value);
   });
 });

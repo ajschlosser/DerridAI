@@ -107,7 +107,15 @@ import "./clipboardCopy";
 import { getUrlSyncHook, navSnapshot, navigateTo, renderView } from "./sharedNavigation";
 import "./sharedUrlState";
 import "./navigation";
-import { persistPrefs, refreshShell, shell } from "./sharedWorkspaceStorage";
+import {
+  persistJobPreferences,
+  persistLayoutPreferences,
+  persistPrefs,
+  persistResearchPreferences,
+  persistSettingsPreferences,
+  refreshShell,
+  shell,
+} from "./sharedWorkspaceStorage";
 import * as sharedRecordEditing from "./sharedRecordEditing";
 import { createOperationsPanelBridge } from "./operationsPanelBridge";
 import "./fileDerivedState";
@@ -146,6 +154,7 @@ createJobsWorkspace({
   jobProviderSummary: late(() => jobProviderSummary),
   navigateTo: late(() => navigateTo),
   notifyOperationsChanged: late(() => notifyOperationsChanged),
+  persistJobPreferences: late(() => persistJobPreferences),
   persistPrefs: late(() => persistPrefs),
   recordFingerprint: late(() => recordFingerprint),
   refreshCorpusBuildsHomeCardOnly: late(() => refreshCorpusBuildsHomeCardOnly),
@@ -217,7 +226,7 @@ const {
   jobProviderSummary: late(() => jobProviderSummary),
   openJobDetails: late(() => openJobDetails),
   openJobResults: late(() => openJobResults),
-  persistPrefs: late(() => persistPrefs),
+  persistPrefs: late(() => persistLayoutPreferences),
   removeFinishedJob,
   tr: late(() => tr),
   trf: late(() => trf),
@@ -314,7 +323,9 @@ const {
   hasCorpusDb: late(() => hasCorpusDb),
   isResearcher: late(() => isResearcher),
   navigateTo: late(() => navigateTo),
-  persistPrefs: late(() => persistPrefs),
+  persistJobPreferences: late(() => persistJobPreferences),
+  persistResearchPreferences: late(() => persistResearchPreferences),
+  persistSettingsPreferences: late(() => persistSettingsPreferences),
   providerDisplayName: late(() => providerDisplayName),
   providerProfile: late(() => providerProfile),
   providerProfiles: late(() => providerProfiles),

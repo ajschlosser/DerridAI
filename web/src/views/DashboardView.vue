@@ -29,7 +29,6 @@ import { recordStores } from "../domain/storeAvailability";
 import { refreshStoreWorks } from "../domain/storeWorks";
 import { mountOperationsPanelHost, openJobResults } from "../domain/operationsPanelHooks";
 import { dashboardData } from "../domain/sharedDashboardData";
-import { state as sharedState } from "../domain/sharedUrlState";
 import { searchByMetadata } from "../domain/workspaceActions";
 import { compactNumber } from "../domain/numberFormatting";
 import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
@@ -45,7 +44,13 @@ import { refreshStores } from "../domain/sharedStores";
 import { syncUrl } from "../domain/sharedNavigation";
 import { formatTimestamp } from "../domain/recordTableHelpers";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
-import { persistPrefs } from "../domain/sharedWorkspaceStorage";
+import {
+  persistRecordViewPreferences,
+  persistSearchPreferences,
+  persistSettingsPreferences,
+  persistVectorPreferences,
+  persistWorksPreferences,
+} from "../domain/sharedWorkspaceStorage";
 import { navigateTo } from "../domain/sharedNavigation";
 import { mlaPageSpan } from "../domain/citations";
 import { icon } from "../domain/html";
@@ -56,8 +61,23 @@ import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import { useI18nStore } from "../stores/i18n";
 import { corpusState } from "../state/workspaceState";
 import { useJobsStore } from "../stores/jobs";
+import {
+  useAnnotationsStore,
+  useConfigStore,
+  useRecordViewStore,
+  useSearchStore,
+  useVectorStore,
+  useWorksStore,
+} from "../stores/workspace";
 
 const i18n = useI18nStore();
+const jobsStore = useJobsStore();
+const annotationsStore = useAnnotationsStore();
+const configStore = useConfigStore();
+const recordViewStore = useRecordViewStore();
+const searchStore = useSearchStore();
+const vectorStore = useVectorStore();
+const worksStore = useWorksStore();
 
 const mainEl = ref<HTMLElement>();
 const searchQueryInputEl = ref<HTMLInputElement>();
@@ -106,11 +126,11 @@ function metricBodyHtml() {
   return metric ? recordPresenters.dashboardMetricBody(metric) : "";
 }
 
-function applyDashboardCore(state: Record<string, Any>) {
+function applyDashboardCore() {
   totals.value = dashboardData.dashboardTotals();
   const workMap = isResearcher.value ? null : workIndex();
   const workItems: Any[] = isResearcher.value
-    ? (state.storeWorkStats || []).map((item: Any) => ({
+    ? (vectorStore.storeWorkStats || []).map((item: Any) => ({
         work: item.work,
         count: Number(item.count || 0),
         totalWords: Number(item.total_words || 0),
@@ -200,28 +220,27 @@ function applyDashboardCore(state: Record<string, Any>) {
           valueLabel: i18n.t("dashboard.words"),
         },
       ];
-  state.dashboardMetricIndex = Math.max(
+  recordViewStore.dashboardMetricIndex = Math.max(
     0,
-    Math.min(metricSets.value.length - 1, Number(state.dashboardMetricIndex) || 0),
+    Math.min(metricSets.value.length - 1, Number(recordViewStore.dashboardMetricIndex) || 0),
   );
-  activeMetricIndex.value = state.dashboardMetricIndex as number;
+  activeMetricIndex.value = Number(recordViewStore.dashboardMetricIndex) || 0;
 
   works.value = workItems.sort((a, b) => a.work.localeCompare(b.work));
   currentProvider.value = defaultProviderProfile();
-  currentLanguage.value = state.translations?.info?.name || state.translations?.locale || "";
-  currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
-  uiColorTheme.value = state.appConfig?.ui_color_theme || "green";
-  globalSearch.value = state.globalSearch || "";
-  globalSearchMode.value = state.globalSearchMode || "traditional";
+  const language = i18n.languages.find((item) => item.code === i18n.locale);
+  currentLanguage.value = language?.name || i18n.locale || "";
+  currentLanguageFlag.value = language?.flag || "🌐";
+  uiColorTheme.value = String((configStore.appConfig as Any)?.ui_color_theme || "green");
+  globalSearch.value = String(searchStore.globalSearch || "");
+  globalSearchMode.value = String(searchStore.globalSearchMode || "traditional");
 
   corpusBuildsAriaLabel.value = i18n.t("pdf_corpus.home_title");
   if (isResearcher.value) {
     corpusBuilds.value = [];
     corpusBuildsActive.value = 0;
   } else {
-    const builds = ((state.jobs || []) as Any[])
-      .filter((job) => job.type === "pdf_corpus")
-      .slice(0, 4);
+    const builds = (jobsStore.jobs as Any[]).filter((job) => job.type === "pdf_corpus").slice(0, 4);
     corpusBuilds.value = builds;
     corpusBuildsActive.value = builds.filter((job) =>
       ["queued", "running", "cancelling"].includes(String(job.status)),
@@ -231,12 +250,12 @@ function applyDashboardCore(state: Record<string, Any>) {
 
 async function refreshActivity() {
   const request = ++activityRequestSerial;
-  const state = sharedState as unknown as Record<string, Any>;
   activityLoading.value = true;
   activityError.value = "";
   try {
     await annotationsWorkspace.refreshServerAnnotations(
-      isResearcher.value && state.serverAnnotationsStore !== String(state.activeStore || ""),
+      isResearcher.value &&
+        annotationsStore.serverAnnotationsStore !== String(vectorStore.activeStore || ""),
     );
   } catch (error) {
     if (request !== activityRequestSerial) return;
@@ -249,14 +268,14 @@ async function refreshActivity() {
     ? hasCapability("activity.read")
       ? [
           ...(hasCapability("annotations.read")
-            ? ((state.serverAnnotations || []) as Any[]).map((annotation: Any) => ({
+            ? ((annotationsStore.serverAnnotations || []) as Any[]).map((annotation: Any) => ({
                 kind: "annotation",
                 timestamp: annotation.created_at || "",
                 annotation,
               }))
             : []),
           ...(hasCapability("rag.jobs.own")
-            ? ((state.jobs || []) as Any[])
+            ? (jobsStore.jobs as Any[])
                 .filter((job: Any) => job.type === "rag")
                 .map((job: Any) => ({
                   kind: "rag",
@@ -302,7 +321,6 @@ async function refreshPreview() {
 
 async function refresh() {
   const request = ++coreRequestSerial;
-  const state = sharedState as unknown as Record<string, Any>;
   isResearcher.value = sessionIsResearcher();
   coreLoading.value = true;
   coreError.value = "";
@@ -312,8 +330,8 @@ async function refresh() {
     try {
       await refreshStores();
       if (request !== coreRequestSerial) return;
-      if (!state.activeStore) state.activeStore = recordStores()[0]?.name || "";
-      if (state.activeStore) await refreshStoreWorks(true);
+      if (!vectorStore.activeStore) vectorStore.activeStore = recordStores()[0]?.name || "";
+      if (vectorStore.activeStore) await refreshStoreWorks(true);
     } catch (error) {
       if (request !== coreRequestSerial) return;
       researcherReadFailed = true;
@@ -326,9 +344,9 @@ async function refresh() {
   const hasKnownResearcherData =
     !isResearcher.value ||
     recordStores().length > 0 ||
-    ((state.storeWorkStats || []) as unknown[]).length > 0;
+    ((vectorStore.storeWorkStats || []) as unknown[]).length > 0;
   if (!researcherReadFailed || coreReady.value || hasKnownResearcherData) {
-    applyDashboardCore(state);
+    applyDashboardCore();
     coreReady.value = true;
   }
   coreLoading.value = false;
@@ -351,31 +369,37 @@ function corpusBuildPercent(job: Any) {
   return Math.max(0, Math.min(100, Math.round(Number(job.progress || 0) * 100)));
 }
 
-async function persistAndRefresh() {
-  persistPrefs();
+async function persistSearchAndRefresh() {
+  persistSearchPreferences();
+  syncUrl({ replace: true });
+  await refresh();
+}
+
+async function persistRecordViewAndRefresh() {
+  persistRecordViewPreferences();
   syncUrl({ replace: true });
   await refresh();
 }
 
 async function goSearch() {
-  const state = sharedState as unknown as Any;
-  state.globalSearch = searchQueryInputEl.value?.value?.trim() || "";
+  searchStore.globalSearch = searchQueryInputEl.value?.value?.trim() || "";
   const work = searchWorkSelectEl.value?.value || "";
-  const semantic = state.globalSearchMode === "database";
-  state.globalPage = 1;
-  state.storeSearchResults = [];
+  const semantic = searchStore.globalSearchMode === "database";
+  searchStore.globalPage = 1;
+  vectorStore.storeSearchResults = [];
   if (semantic) {
-    if (!state.activeStore) {
+    if (!vectorStore.activeStore) {
       try {
         await refreshStores();
       } catch {
         // Best effort: keep going with what we have.
       }
-      state.activeStore = recordStores()[0]?.name || "";
+      vectorStore.activeStore = recordStores()[0]?.name || "";
     }
-    state.globalSearchMode = "database";
-    if (!state.activeStore) {
-      persistPrefs();
+    searchStore.globalSearchMode = "database";
+    if (!vectorStore.activeStore) {
+      persistSearchPreferences();
+      persistVectorPreferences();
       if (canAccessPage("vector")) {
         toast(i18n.t("search.redirect_database"), { tone: "info" });
         openDatabaseCreationFromResearch();
@@ -387,47 +411,51 @@ async function goSearch() {
       }
       return;
     }
-    state.dbSearchWhere = work ? { work } : {};
-    state.storeQuery = state.globalSearch;
-    if (state.globalSearch && state.dbSearchMethod === "filter")
-      state.dbSearchMethod = "similarity";
-    if (!state.globalSearch && work) state.dbSearchMethod = "filter";
-    state.globalSearchAutoRun = false;
-    state.storeSearchLoading = true;
-    persistPrefs();
+    searchStore.dbSearchWhere = work ? { work } : {};
+    vectorStore.storeQuery = searchStore.globalSearch;
+    if (searchStore.globalSearch && searchStore.dbSearchMethod === "filter")
+      searchStore.dbSearchMethod = "similarity";
+    if (!searchStore.globalSearch && work) searchStore.dbSearchMethod = "filter";
+    searchStore.globalSearchAutoRun = false;
+    vectorStore.storeSearchLoading = true;
+    persistSearchPreferences();
+    persistVectorPreferences();
     navigateTo("global");
     try {
-      const mode = state.dbSearchMethod || "similarity";
-      const data: Any = await api(`/api/stores/${encodeURIComponent(state.activeStore)}/search`, {
-        method: "POST",
-        body: JSON.stringify({
-          query: state.globalSearch,
-          mode,
-          n_results: 100,
-          where: Object.keys(dbSearchWhere()).length ? dbSearchWhere() : null,
-          fetch_k: Number(state.dbSearchFetchK || 100),
-          lambda_mult: Number(state.dbSearchLambda ?? 0.7),
-        }),
-      });
-      state.storeSearchResults = data.results || [];
+      const mode = searchStore.dbSearchMethod || "similarity";
+      const data: Any = await api(
+        `/api/stores/${encodeURIComponent(vectorStore.activeStore)}/search`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: searchStore.globalSearch,
+            mode,
+            n_results: 100,
+            where: Object.keys(dbSearchWhere()).length ? dbSearchWhere() : null,
+            fetch_k: Number(searchStore.dbSearchFetchK || 100),
+            lambda_mult: Number(searchStore.dbSearchLambda ?? 0.7),
+          }),
+        },
+      );
+      vectorStore.storeSearchResults = data.results || [];
     } catch (error) {
       toast(
         `${i18n.t("research.search_failed")}: ${error instanceof Error ? error.message : String(error)}`,
         { tone: "danger" },
       );
     } finally {
-      state.storeSearchLoading = false;
-      persistPrefs();
+      vectorStore.storeSearchLoading = false;
+      persistVectorPreferences();
     }
   } else {
-    state.globalSearchMode = "traditional";
-    state.globalSearchAutoRun = false;
-    if (isResearcher.value) state.dbSearchWhere = work ? { work } : {};
+    searchStore.globalSearchMode = "traditional";
+    searchStore.globalSearchAutoRun = false;
+    if (isResearcher.value) searchStore.dbSearchWhere = work ? { work } : {};
     else
-      state.globalFilters = work
+      searchStore.globalFilters = work
         ? [{ id: crypto.randomUUID(), field: "work", op: "eq", value: work }]
         : [];
-    persistPrefs();
+    persistSearchPreferences();
     navigateTo("global");
   }
 }
@@ -439,8 +467,8 @@ function onSearchQueryKeydown(event: KeyboardEvent) {
 }
 
 async function setSearchMode(mode: string) {
-  sharedState.globalSearchMode = mode;
-  await persistAndRefresh();
+  searchStore.globalSearchMode = mode;
+  await persistSearchAndRefresh();
 }
 
 function goNav(view: string) {
@@ -448,8 +476,8 @@ function goNav(view: string) {
 }
 
 async function openWork(work: string) {
-  sharedState.workOverview = work;
-  persistPrefs();
+  worksStore.workOverview = work;
+  persistWorksPreferences();
   navigateTo("works");
 }
 
@@ -484,7 +512,7 @@ function openRecentRecord(fileId: string, index: number) {
 
 async function setUiTheme(value: string) {
   applyUiTheme(value);
-  persistPrefs();
+  persistSettingsPreferences();
   toast(i18n.t("dashboard.appearance_saved"), {
     tone: "success",
   });
@@ -513,37 +541,39 @@ function openRecordPreview() {
   if (target.kind === "workspace") {
     navigateTo("record", { fileId: target.fileId, index: target.index });
   } else {
-    sharedState.activeStore = target.store;
-    sharedState.researcherRecordId = target.id;
-    persistPrefs();
+    vectorStore.activeStore = target.store;
+    recordViewStore.researcherRecordId = target.id;
+    persistVectorPreferences();
+    persistRecordViewPreferences();
     navigateTo("record");
   }
 }
 
 async function stepMetric(delta: number) {
-  const state = sharedState as unknown as Any;
-  state.dashboardMetricIndex =
-    (Number(state.dashboardMetricIndex) + delta + metricSets.value.length) %
+  recordViewStore.dashboardMetricIndex =
+    (Number(recordViewStore.dashboardMetricIndex) + delta + metricSets.value.length) %
     metricSets.value.length;
-  await persistAndRefresh();
+  await persistRecordViewAndRefresh();
 }
 
 async function selectMetric(index: number) {
-  sharedState.dashboardMetricIndex = index;
-  await persistAndRefresh();
+  recordViewStore.dashboardMetricIndex = index;
+  await persistRecordViewAndRefresh();
 }
 
 async function onMetricDotKeydown(event: KeyboardEvent) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   event.preventDefault();
-  const state = sharedState as unknown as Any;
   const count = metricSets.value.length;
-  if (event.key === "Home") state.dashboardMetricIndex = 0;
-  else if (event.key === "End") state.dashboardMetricIndex = count - 1;
+  if (event.key === "Home") recordViewStore.dashboardMetricIndex = 0;
+  else if (event.key === "End") recordViewStore.dashboardMetricIndex = count - 1;
   else
-    state.dashboardMetricIndex =
-      (Number(state.dashboardMetricIndex) + (event.key === "ArrowRight" ? 1 : -1) + count) % count;
-  await persistAndRefresh();
+    recordViewStore.dashboardMetricIndex =
+      (Number(recordViewStore.dashboardMetricIndex) +
+        (event.key === "ArrowRight" ? 1 : -1) +
+        count) %
+      count;
+  await persistRecordViewAndRefresh();
   queueMicrotask(() => metricDotEls.value[activeMetricIndex.value]?.focus());
 }
 

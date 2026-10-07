@@ -42,8 +42,16 @@ const compareLibrary = vi.hoisted(() => ({
   ensureCompareLibrary: vi.fn<() => Promise<void>>(async () => undefined),
 }));
 const clipboard = vi.hoisted(() => ({ copyJsonToClipboard: vi.fn(), copyCitation: vi.fn() }));
+const compareDraft = vi.hoisted(() => ({
+  load: vi.fn(async () => null),
+  save: vi.fn<(draft: Record<string, unknown>) => Promise<void>>(async () => undefined),
+}));
 vi.mock("../../src/domain/clipboardCopy", () => ({ ...clipboard }));
 vi.mock("../../src/domain/sharedCompareLibrary", () => ({ ...compareLibrary }));
+vi.mock("../../src/features/compare/compareDraft", () => ({
+  loadCompareDraft: compareDraft.load,
+  saveCompareDraft: compareDraft.save,
+}));
 
 import CompareView from "../../src/views/CompareView.vue";
 import { compareState, createCompareState, touchCorpus } from "../../src/state/workspaceState";
@@ -73,6 +81,8 @@ describe("CompareView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     compareLibrary.ensureCompareLibrary.mockResolvedValue(undefined);
+    compareDraft.load.mockResolvedValue(null);
+    compareDraft.save.mockResolvedValue(undefined);
     compareLibrary.getCompareLibrary.mockReturnValue([
       { value: "f::0", label: "tab.jsonl · r-a · Glas", search: "derrida" },
       { value: "f::1", label: "tab.jsonl · r-b · Glas", search: "derrida" },
@@ -124,6 +134,28 @@ describe("CompareView", () => {
       '"record_id": "r-a"',
     );
     expect(wrapper.text()).toContain("Editable copy");
+  });
+
+  it("debounces Compare editor persistence through the Compare-owned repository", async () => {
+    vi.useFakeTimers();
+    try {
+      const wrapper = await mountView();
+      const tabs = wrapper.findAll('[role="tab"]');
+      await tabs[1]?.trigger("click");
+      await wrapper.get("#compare-editor-A").setValue(JSON.stringify(records.a));
+
+      expect(compareDraft.save).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(300);
+
+      expect(compareDraft.save).toHaveBeenCalledTimes(1);
+      expect(compareDraft.save.mock.calls[0]?.[0]).toMatchObject({
+        sourceA: "scratch",
+        pasteA: JSON.stringify(records.a),
+      });
+      wrapper.unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows a live text difference after pasting two valid records", async () => {

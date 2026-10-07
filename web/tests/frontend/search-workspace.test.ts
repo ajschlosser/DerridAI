@@ -32,7 +32,8 @@ function setup() {
       get: (target, name: string) => {
         if (name in target) return (target as Record<string, unknown>)[name];
         return vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl" || name === "shell") calls.push(name);
+          if (name.startsWith("persist") || name === "syncUrl" || name === "refreshShell")
+            calls.push(name);
         });
       },
     },
@@ -55,7 +56,16 @@ describe("search workspace commands", () => {
     expect(ctx.workspace.updateSearchQuery("  hospitality")).toBe("  hospitality");
     expect(ctx.state.globalSearch).toBe("  hospitality");
     expect(ctx.state.globalPage).toBe(1);
-    expect(ctx.calls).toEqual(["persistPrefs", "syncUrl"]);
+    expect(ctx.calls).toEqual(["persistSearchPreferences", "syncUrl"]);
+  });
+
+  it("persists page size in list and search domains without a workspace snapshot", () => {
+    ctx.workspace.setSearchPageSize(250);
+
+    expect(ctx.state.pageSize).toBe(250);
+    expect(ctx.state.globalPage).toBe(1);
+    expect(ctx.calls).toEqual(["persistListPreferences", "persistSearchPreferences", "syncUrl"]);
+    expect(ctx.calls).not.toContain("persistPrefs");
   });
 
   it("never sets a page below one", () => {

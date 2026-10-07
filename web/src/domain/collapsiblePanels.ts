@@ -17,7 +17,7 @@
  */
 
 import { state } from "./sharedUrlState";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistLayoutPreferences } from "./sharedWorkspaceStorage";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -93,7 +93,7 @@ export function enhanceCollapsibles(root: ParentNode | null = document.querySele
       button.textContent = next ? "＋" : "−";
       button.title = next ? "Expand" : "Collapse";
       state.collapsedPanels[key] = next;
-      persistPrefs();
+      persistLayoutPreferences();
     };
     host.appendChild(button);
   });

@@ -18,31 +18,31 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { getShellSnapshot, systemCardHtml } from "../../src/domain/shellSnapshot";
-import { jobsState } from "../../src/state/jobsState";
 import { state } from "../../src/domain/sharedUrlState";
 
 describe("shell snapshot", () => {
   afterEach(() => {
     state.health = null;
-    jobsState.jobs = [];
+    state.files = [];
+    state.activeFileId = null;
     state.view = "home";
   });
 
-  it("counts only queued, running and cancelling jobs as active", () => {
-    jobsState.jobs = [
-      { id: "running", status: "running" },
-      { id: "queued", status: "queued" },
-      { id: "cancelling", status: "cancelling" },
-      { id: "succeeded", status: "succeeded" },
+  it("counts loaded records from file summaries without a flattened corpus scan", () => {
+    state.files = [
+      { id: "a", name: "a.jsonl", records: [{}, {}], dirty: new Set() },
+      { id: "b", name: "b.jsonl", records: [{}], dirty: new Set() },
     ];
-    expect(getShellSnapshot().activeJobs).toBe(3);
+
+    expect(getShellSnapshot().totalLoaded).toBe(3);
   });
 
   it("reports the view and context for the current page", () => {
     state.view = "works";
     const snapshot = getShellSnapshot();
+    const context = snapshot.context as { title: string };
     expect(snapshot.view).toBe("works");
-    expect(snapshot.context.title).toBe("Works");
+    expect(context.title).toBe("Works");
   });
 
   it("shows Checking before health is known, then Online and Offline states", () => {

@@ -25,9 +25,10 @@ import { hasCapability } from "./sharedSession";
 import { dbSearchWhere, display, label, pages, recordFields } from "./sharedRecordHelpers";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs, refreshShell } from "./sharedWorkspaceStorage";
+import { persistReviewPreferences, refreshShell } from "./sharedWorkspaceStorage";
 import { localRecordKey } from "./recordTableHelpers";
 import { storeReceipt } from "./storeAvailability";
+import { invalidateShellStatusProjection } from "./shellStatusProjection";
 
 // Search facets and evidence selection over the shared state, usable without the legacy runtime. The runtime uses
 // these same instances.
@@ -46,9 +47,10 @@ export const searchFacets = createSearchFacets({
 
 export const evidenceSelection = createEvidenceSelection({
   state,
+  invalidateShellStatus: invalidateShellStatusProjection,
   hasCapability,
   localRecordKey,
-  persistPrefs,
+  persistPrefs: persistReviewPreferences,
   ragEvidenceRecordPayload,
   recordDbStatus,
   shellRefreshHook: refreshShell,

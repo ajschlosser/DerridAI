@@ -41,7 +41,7 @@ type Helper =
   | "shellRefreshHook"
   | "storeReceipt"
   | "tr";
-type Deps = { state: Loose } & Record<Helper, Fn>;
+type Deps = { state: Loose; invalidateShellStatus?: Fn } & Record<Helper, Fn>;
 
 /** Key of one workspace record in the review selection (`reviewSelection`). */
 export function reviewKey(file: Any, index: Any) {
@@ -64,6 +64,7 @@ export function createEvidenceSelection(deps: Deps) {
     storeReceipt,
     tr,
   } = deps;
+  const invalidateShellStatus = deps.invalidateShellStatus ?? (() => undefined);
   const reviewItemFromKey = (key: Any) => sharedReviewItemFromKey(state, key);
   const selectedReviewItems = () => sharedSelectedReviewItems(state);
   function workspaceEvidenceKey(file: Any, index: Any) {
@@ -83,6 +84,7 @@ export function createEvidenceSelection(deps: Deps) {
       state.selectedEvidence = {};
     if (selected) state.selectedEvidence[key] = item;
     else delete state.selectedEvidence[key];
+    invalidateShellStatus();
     persistPrefs();
     shellRefreshHook();
   }
@@ -197,6 +199,7 @@ export function createEvidenceSelection(deps: Deps) {
       return;
     }
     state.selectedEvidence = {};
+    invalidateShellStatus();
     persistPrefs();
     shellRefreshHook();
   }

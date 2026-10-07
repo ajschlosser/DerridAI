@@ -37,6 +37,7 @@ type Helper =
   | "clearReviewSelection"
   | "copyCitation"
   | "copyJsonToClipboard"
+  | "corpusVersion"
   | "dbUnavailableReason"
   | "evidenceIsSelected"
   | "getTableColumns"
@@ -49,7 +50,8 @@ type Helper =
   | "openOcrCleanupDialog"
   | "openTouchup"
   | "pageInfo"
-  | "persistPrefs"
+  | "persistListPreferences"
+  | "persistReviewPreferences"
   | "recordDbStatus"
   | "recordStores"
   | "recordsListCell"
@@ -61,7 +63,7 @@ type Helper =
   | "setActiveStore"
   | "setListFilterValue"
   | "setReviewSelected"
-  | "shell"
+  | "refreshShell"
   | "syncUrl"
   | "tableAvailableFields"
   | "toggleSort"
@@ -80,6 +82,7 @@ export function createRecordsWorkspace(deps: Deps) {
     clearReviewSelection,
     copyCitation,
     copyJsonToClipboard,
+    corpusVersion,
     dbUnavailableReason,
     evidenceIsSelected,
     getTableColumns,
@@ -92,7 +95,8 @@ export function createRecordsWorkspace(deps: Deps) {
     openOcrCleanupDialog,
     openTouchup,
     pageInfo,
-    persistPrefs,
+    persistListPreferences,
+    persistReviewPreferences,
     recordDbStatus,
     recordStores,
     recordsListCell,
@@ -104,7 +108,7 @@ export function createRecordsWorkspace(deps: Deps) {
     setActiveStore,
     setListFilterValue,
     setReviewSelected,
-    shell,
+    refreshShell,
     syncUrl,
     tableAvailableFields,
     toggleSort,
@@ -114,12 +118,65 @@ export function createRecordsWorkspace(deps: Deps) {
     urlFromState,
     workspaceEvidenceSelectionKey,
   } = deps;
+  type BaseRowsCache = {
+    file: Any;
+    version: number;
+    rows: Any[];
+    flagged: number;
+    available: string[];
+  };
+  let baseRowsCache: BaseRowsCache | null = null;
+  let queryRowsCache: {
+    file: Any;
+    version: number;
+    query: string;
+    filtersKey: string;
+    rows: Any[];
+  } | null = null;
+  let normalizedTextCache = new WeakMap<object, string>();
+
+  function baseRowsForFile(file: Any): BaseRowsCache {
+    const version = Number(corpusVersion()) || 0;
+    const cached = baseRowsCache;
+    if (cached && cached.file === file && cached.version === version) return cached;
+
+    const rows = file.records.map((record: Any, index: number) => ({ file, record, index }));
+    const next: BaseRowsCache = {
+      file,
+      version,
+      rows,
+      flagged: needsReviewItems(rows).length,
+      available: tableAvailableFields(rows, [
+        "__db_status",
+        "work",
+        "page_start",
+        "needs_review",
+        "text",
+      ]),
+    };
+    baseRowsCache = next;
+    queryRowsCache = null;
+    normalizedTextCache = new WeakMap();
+    return next;
+  }
+
+  function normalizedRecordText(record: Any) {
+    if (record && typeof record === "object") {
+      const cached = normalizedTextCache.get(record);
+      if (cached !== undefined) return cached;
+      const value = String(record.text || "").toLocaleLowerCase();
+      normalizedTextCache.set(record, value);
+      return value;
+    }
+    return String(record?.text || "").toLocaleLowerCase();
+  }
+
   function clearRecordsListFilters() {
     const f = activeFile();
     if (!f) return;
     state.listFilters[f.id] = {};
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function clearRecordsListSelection() {
@@ -182,37 +239,47 @@ export function createRecordsWorkspace(deps: Deps) {
         capabilities,
       };
     }
-    const query = state.searches[f.id] || "";
-    const sort = state.sorts[f.id] || (state.sorts[f.id] = { key: "page_start", dir: 1 });
+    const query = String(state.searches[f.id] || "");
+    const normalizedQuery = query.toLocaleLowerCase();
+    const sort = state.sorts[f.id] || { key: "page_start", dir: 1 };
     const filters = state.listFilters[f.id] || {};
-    let rows = f.records
-      .map((record: Any, index: Any) => ({ file: f, record, index }))
-      .filter(
-        (x: Any) =>
-          !query ||
-          String(x.record.text || "")
-            .toLocaleLowerCase()
-            .includes(query.toLocaleLowerCase()),
-      )
-      .filter((x: Any) => rowMatchesListFilters(x, filters));
-    rows = sortRows(rows, sort);
-    const pg = pageInfo(rows.length, state.pages[f.id] || 1);
-    state.pages[f.id] = pg.page;
-    const slice = rows.slice(pg.start, pg.end);
-    try {
-      refreshPresenceForRows(slice);
-    } catch {
-      /* presence is best-effort */
+    const base = baseRowsForFile(f);
+    const filtersKey = JSON.stringify(filters);
+    const canNarrowPreviousQuery =
+      Boolean(queryRowsCache) &&
+      queryRowsCache!.file === f &&
+      queryRowsCache!.version === base.version &&
+      queryRowsCache!.filtersKey === filtersKey &&
+      normalizedQuery.startsWith(queryRowsCache!.query);
+
+    let matchedRows: Any[];
+    if (canNarrowPreviousQuery) {
+      matchedRows = normalizedQuery
+        ? queryRowsCache!.rows.filter((row: Any) =>
+            normalizedRecordText(row.record).includes(normalizedQuery),
+          )
+        : [...base.rows];
+    } else {
+      matchedRows = base.rows.filter(
+        (row: Any) =>
+          (!normalizedQuery || normalizedRecordText(row.record).includes(normalizedQuery)) &&
+          rowMatchesListFilters(row, filters),
+      );
     }
-    const flagged = needsReviewItems(
-      f.records.map((record: Any, index: Any) => ({ file: f, record, index })),
-    ).length;
+    queryRowsCache = {
+      file: f,
+      version: base.version,
+      query: normalizedQuery,
+      filtersKey,
+      rows: matchedRows,
+    };
+    const rows = sortRows([...matchedRows], sort);
+    const pg = pageInfo(rows.length, state.pages[f.id] || 1);
+    const slice = rows.slice(pg.start, pg.end);
+    const flagged = base.flagged;
     const pageSelected =
       slice.length > 0 && slice.every((x: Any) => state.reviewSelection.has(reviewKey(f, x.index)));
-    const available = tableAvailableFields(
-      f.records.map((record: Any, index: Any) => ({ file: f, record, index })),
-      ["__db_status", "work", "page_start", "needs_review", "text"],
-    );
+    const available = base.available;
     const columnKeys = getTableColumns("list", available);
     return {
       available: true,
@@ -255,6 +322,15 @@ export function createRecordsWorkspace(deps: Deps) {
       db_unavailable_reason: dbUnavailableReason(),
       capabilities,
     };
+  }
+  async function refreshRecordsListPresence(indices: Any) {
+    const f = activeFile();
+    if (!f || !Array.isArray(indices) || !indices.length) return;
+    const rows = indices
+      .map((value: Any) => Number(value))
+      .filter((index: number) => Number.isInteger(index) && index >= 0 && index < f.records.length)
+      .map((index: number) => ({ file: f, record: f.records[index], index }));
+    if (rows.length) await refreshPresenceForRows(rows);
   }
   function openRecordsListRecord(index: Any) {
     const f = activeFile();
@@ -311,7 +387,7 @@ export function createRecordsWorkspace(deps: Deps) {
   }
   function resetRecordsListColumns() {
     state.tableColumns.list = [...TABLE_DEFAULTS.list];
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function selectRecordsListMatches() {
@@ -330,13 +406,13 @@ export function createRecordsWorkspace(deps: Deps) {
       )
       .filter((x: Any) => rowMatchesListFilters(x, filters));
     for (const x of rows) state.reviewSelection.add(reviewKey(f, x.index));
-    persistPrefs();
+    persistReviewPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListColumns(keys: Any) {
     const list = Array.isArray(keys) ? keys.filter(Boolean) : [];
     if (list.length) state.tableColumns.list = list;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListFilter(key: Any, value: Any) {
@@ -350,7 +426,7 @@ export function createRecordsWorkspace(deps: Deps) {
     const f = activeFile();
     if (!f) return;
     state.pages[f.id] = Math.max(1, Number(page) || 1);
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListPageSelected(selected: Any) {
@@ -365,7 +441,7 @@ export function createRecordsWorkspace(deps: Deps) {
     if (!f) return;
     state.pageSize = Number(size) || state.pageSize;
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListQuery(value: Any) {
@@ -373,7 +449,7 @@ export function createRecordsWorkspace(deps: Deps) {
     if (!f) return;
     state.searches[f.id] = String(value || "");
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListRowSelected(index: Any, selected: Any) {
@@ -388,18 +464,19 @@ export function createRecordsWorkspace(deps: Deps) {
     const sort = state.sorts[f.id] || (state.sorts[f.id] = { key: "page_start", dir: 1 });
     toggleSort(sort, key);
     state.pages[f.id] = 1;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setRecordsListStore(name: Any) {
     setActiveStore(name);
-    shell();
+    refreshShell();
   }
   function toggleRecordsListEvidence(index: Any) {
     const f = activeFile();
     if (!f) return;
+    // The evidence-selection command owns review persistence and shell-status
+    // publication; do not schedule a second global shell/persistence cycle.
     toggleWorkspaceEvidence(f, index);
-    shell();
   }
   return {
     clearRecordsListFilters,
@@ -408,6 +485,7 @@ export function createRecordsWorkspace(deps: Deps) {
     copyRecordsListJson,
     getRecordsListShareHref,
     getRecordsListSnapshot,
+    refreshRecordsListPresence,
     openRecordsListRecord,
     recordsListCommand,
     resetRecordsListColumns,

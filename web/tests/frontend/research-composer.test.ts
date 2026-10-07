@@ -18,7 +18,13 @@
 
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const timing = vi.hoisted(() => ({ measure: vi.fn() }));
+vi.mock("../../src/domain/interactionTiming", () => ({
+  measureInteractionToNextFrame: timing.measure,
+}));
+
 import ResearchComposer from "../../src/components/research/ResearchComposer.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 
@@ -45,6 +51,7 @@ const baseProps = {
 
 describe("ResearchComposer prompt metadata setup", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     setActivePinia(createPinia());
     useI18nStore().dictionary = {
       "research.prompt_metadata": "Prompt metadata",
@@ -81,6 +88,7 @@ describe("ResearchComposer prompt metadata setup", () => {
     });
     await wrapper.get("#researchQuestion").setValue("Early research draft");
     expect(wrapper.emitted("update:prompt")).toEqual([["Early research draft"]]);
+    expect(timing.measure).toHaveBeenCalledWith("derridai.research.prompt.input_to_frame");
     expect(wrapper.get(".research-run-button").attributes("disabled")).toBeDefined();
     wrapper.unmount();
   });

@@ -71,6 +71,31 @@ describe("jobs workspace", () => {
     jobsState.jobs = [];
   });
 
+  it("publishes job changes without rewriting application chrome DOM", async () => {
+    document.body.innerHTML = '<button id="operationsBtn">Shell owns this</button>';
+    const api = vi.fn(async () => ({ jobs: [{ id: "a", status: "running" }] }));
+    const { spies, workspace } = setup({ api });
+
+    await workspace.refreshJobs();
+
+    expect(document.querySelector("#operationsBtn")?.textContent).toBe("Shell owns this");
+    expect(spies.notifyOperationsChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists pruned job bookkeeping without serializing the whole workspace", async () => {
+    const api = vi.fn(async () => ({ jobs: [] }));
+    const { state, spies, workspace } = setup({ api });
+    state.jobApplied = { stale: true };
+    state.upsertJobApplied = { stale: 3 };
+
+    await workspace.refreshJobs();
+
+    expect(state.jobApplied).toEqual({});
+    expect(state.upsertJobApplied).toEqual({});
+    expect(spies.persistJobPreferences).toHaveBeenCalledTimes(1);
+    expect(spies.persistPrefs).not.toHaveBeenCalled();
+  });
+
   it("never starts an idle polling loop", () => {
     const { state, workspace } = setup();
     state.jobs = [{ id: "a", status: "completed" }];

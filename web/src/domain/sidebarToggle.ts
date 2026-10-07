@@ -17,11 +17,11 @@
  */
 
 import { state } from "./sharedUrlState";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import { persistLayoutPreferences, refreshShell } from "./sharedWorkspaceStorage";
 
 // Flips the persisted sidebar flag (the shared `layout` slice) and refreshes the shell.
 export function toggleSidebar() {
   state.sidebarCollapsed = !state.sidebarCollapsed;
-  persistPrefs();
-  shell();
+  persistLayoutPreferences();
+  refreshShell();
 }
