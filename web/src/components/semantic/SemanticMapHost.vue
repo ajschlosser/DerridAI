@@ -59,6 +59,8 @@ watch(
     corpusState.version,
     corpusState.activeFileId,
     vectorState.version,
+    vectorState.storeRecords,
+    vectorState.storeSearchResults,
   ],
   async () => {
     if (map.enabled) load();
