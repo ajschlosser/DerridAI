@@ -48,7 +48,11 @@ export function renderView() {
 /** Persist and repaint after the shared URL state has been applied (by the runtime or by the router). */
 export function repaintAfterLocationChange() {
   persistPrefs();
-  shell();
+  // Native Vue rendering already refreshes the shell inside renderView(). Legacy
+  // surfaces still need one explicit refresh before their compatibility render.
+  // Keeping those paths separate prevents route settlement from rebuilding the
+  // full shell snapshot twice before the browser can paint.
+  if (document.querySelector("#main")) refreshShell();
   renderView();
 }
 
