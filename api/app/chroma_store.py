@@ -3524,24 +3524,25 @@ class ChromaStore:
                     if term_index is not None:
                         frequencies[term_index] += 1
 
-                for term_index, frequency in enumerate(frequencies):
-                    if frequency:
-                        document_frequencies[term_index] += 1
                 length = len(tokens)
-                total_length += length
-                compact_candidates.append(
-                    (
-                        str(chroma_id),
-                        length,
-                        tuple(frequencies),
-                        bool(folded_phrase and folded_phrase in folded),
-                        ordinal,
+                if length:
+                    for term_index, frequency in enumerate(frequencies):
+                        if frequency:
+                            document_frequencies[term_index] += 1
+                    total_length += length
+                    document_count += 1
+                    compact_candidates.append(
+                        (
+                            str(chroma_id),
+                            length,
+                            tuple(frequencies),
+                            bool(folded_phrase and folded_phrase in folded),
+                            ordinal,
+                        )
                     )
-                )
                 ordinal += 1
 
             returned = len(ids)
-            document_count += returned
             offset += returned
             if returned < requested:
                 break
