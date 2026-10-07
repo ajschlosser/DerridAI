@@ -1504,6 +1504,10 @@ class ReviewActionsMixin:
             return []
         projection = SourceEmbeddingProjection(self._progressive_metadata_index.store)
         source_document_id = self._evidence_document_id(build_id, record)
+        build = self.repo.get_build(build_id)
+        pipeline_request = (
+            build.get("request") if isinstance(build.get("request"), dict) else None
+        )
         warnings: list[str] = []
         for name in pending:
             assertion = current_assertion_by_name(record, name)
@@ -1514,6 +1518,7 @@ class ReviewActionsMixin:
                     source_document_id=source_document_id, projection=projection,
                     llm_choice=None,
                     llm_skip_reason="Accepting a value never spends a model call on evidence recovery.",
+                    request=pipeline_request,
                 )
             except Exception as exc:  # noqa: BLE001 - advisory evidence must not fail a saved decision
                 warnings.append(f"Evidence recovery did not run for {name}: {exc}")
