@@ -99,7 +99,8 @@ import "./recordOptionLabel";
 import "./sharedStoreRecords";
 import "./researchWorkspace";
 import "./sharedAnnotations";
-import "../state/jobsState";
+import { jobsState, touchJobs } from "../state/jobsState";
+import { resetWorkspaceGroupsForSessionChange } from "../state/workspaceState";
 import "./corpusCache";
 import "./sharedUrlState";
 import "./jobsUiComposition";
@@ -141,6 +142,12 @@ export function setUserContext(
     // flush pending writes first; this synchronous guard prevents cross-account
     // writes even when identity changes through another path.
     resetWorkspaceSessionPersistence();
+    resetWorkspaceGroupsForSessionChange();
+    jobsState.jobs = [];
+    jobsState.jobsLastFetched = 0;
+    jobsState.jobApplied = {};
+    jobsState.upsertJobApplied = {};
+    touchJobs();
   }
 
   state.userContext = user || null;
