@@ -314,6 +314,146 @@ class _ExplicitScopeStore:
         return [derrida][:limit]
 
 
+class _ProustScopeStore:
+    """Corpus fixture where broad retrieval would leak an unrelated author."""
+
+    def list_stores(self):
+        return [
+            {
+                "name": "corpus",
+                "count": 3,
+                "collection_role": "general",
+                "language_codes": ["en"],
+            }
+        ]
+
+    def work_stats(self, name):
+        assert name == "corpus"
+        return [
+            {
+                "work": "Du côté de chez Swann",
+                "document_author": "Marcel Proust",
+                "count": 1,
+            },
+            {
+                "work": "À l'ombre des jeunes filles en fleurs",
+                "document_author": "Marcel Proust",
+                "count": 1,
+            },
+            {
+                "work": "Of Grammatology",
+                "document_author": "Jacques Derrida",
+                "count": 1,
+            },
+        ]
+
+    def lexical_search(self, name, query, limit, where=None, where_document=None):
+        assert name == "corpus"
+        assert where_document is None
+
+        def matches(record, predicate):
+            if not predicate:
+                return True
+            key, value = next(iter(predicate.items()))
+            if key == "$and":
+                return all(matches(record, child) for child in value)
+            if key == "$or":
+                return any(matches(record, child) for child in value)
+            actual = record.get(key)
+            if not isinstance(value, dict):
+                return actual == value
+            operator, expected = next(iter(value.items()))
+            if operator == "$eq":
+                return actual == expected
+            if operator == "$ne":
+                return actual != expected
+            if operator == "$in":
+                return actual in expected
+            if operator == "$nin":
+                return actual not in expected
+            raise AssertionError(f"unsupported fake filter operator: {operator}")
+
+        swann = {
+            "id": "proust-swann",
+            "record": {
+                "record_id": "p1",
+                "work": "Du côté de chez Swann",
+                "document_author": "Marcel Proust",
+                "page_start": 155,
+                "text": "A Proust passage from the first named work.",
+            },
+            "distance": None,
+            "relevance": 0.72,
+        }
+        jeunes_filles = {
+            "id": "proust-jeunes-filles",
+            "record": {
+                "record_id": "p2",
+                "work": "À l'ombre des jeunes filles en fleurs",
+                "document_author": "Marcel Proust",
+                "year": 1930,
+                "page_start": 230,
+                "text": "A Proust passage from the second named work.",
+            },
+            "distance": None,
+            "relevance": 0.71,
+        }
+        derrida = {
+            "id": "derrida-unrelated",
+            "record": {
+                "record_id": "d1",
+                "work": "Of Grammatology",
+                "document_author": "Jacques Derrida",
+                "year": 1976,
+                "page_start": 65,
+                "text": "An unrelated Derrida passage that broad retrieval ranks first.",
+            },
+            "distance": None,
+            "relevance": 0.99,
+        }
+        rows = [derrida, swann, jeunes_filles]
+        if where:
+            return [row for row in rows if matches(row["record"], where)][:limit]
+        return [derrida][:limit]
+
+
+def test_two_named_proust_works_close_scope_despite_missing_diacritics_and_possessive_typo() -> None:
+    request = RAGRunRequest(
+        prompt=(
+            "Talk about the major themes and stakes of Prousts' two novels, "
+            "Du cote de chez Swann and A l'ombre des jeunes filles en fleurs."
+        ),
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=3,
+        fetch_k=3,
+        rerank_top_n=3,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ProustScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {"p1", "p2"}
+    assert "d1" not in {item["record"]["record_id"] for item in result["evidence"]}
+    assert set(result["retrieval"]["filter_plan"]["explicitly_named_works"]) == {
+        "Du côté de chez Swann",
+        "À l'ombre des jeunes filles en fleurs",
+    }
+    assert set(result["retrieval"]["inferred_exclusive_scope_works"]) == {
+        "Du côté de chez Swann",
+        "À l'ombre des jeunes filles en fleurs",
+    }
+
+
 def test_single_named_author_closes_retrieval_scope() -> None:
     request = RAGRunRequest(
         prompt="Describe the major themes and stakes of Levinas's philosophy.",
@@ -602,6 +742,58 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
     assert any("structured JSON" in warning for warning in result["warnings"])
     generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
     assert generation_stage["detail"]["attempts"] == 2
+    assert generation_stage["detail"]["prose_contract_retry"] is True
+
+
+
+def test_query_decomposition_cannot_invent_json_output_instructions(monkeypatch) -> None:
+    generation_prompts: list[str] = []
+    drafts = [
+        '```json\n{"title":"Structured answer","themes":[]}\n```',
+        "The trace is not a presence [[E0]].",
+    ]
+
+    def decompose(**_kwargs):
+        return {
+            "prompt_query": "What is the trace?",
+            "prompt_query_fr": "Qu'est-ce que la trace ?",
+            "prompt_instructions": "Return the answer as JSON.",
+            "response_language": "en",
+        }
+
+    def generate(**kwargs):
+        generation_prompts.append(kwargs["prompt"])
+        return drafts[len(generation_prompts) - 1]
+
+    monkeypatch.setattr("app.rag.structured_chat_complete", decompose)
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=True,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert result["query_metadata"]["prompt_instructions"] == ""
+    assert len(generation_prompts) == 2
+    assert "Return the answer as JSON." not in generation_prompts[0]
+    assert "OUTPUT_CONTRACT_CORRECTION" in generation_prompts[1]
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+    assert any("proposed instructions" in warning for warning in result["warnings"])
+    generation_stage = next(
+        stage for stage in result["stages"] if stage["name"] == "generation"
+    )
     assert generation_stage["detail"]["prose_contract_retry"] is True
 
 
