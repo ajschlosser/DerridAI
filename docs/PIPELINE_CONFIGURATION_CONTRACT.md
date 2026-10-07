@@ -133,6 +133,7 @@ Target shape:
 ```yaml
 format: derridai-corpus-run
 version: 2
+pipeline_contract_version: 1
 
 source:
   ocr_mode: auto
@@ -192,6 +193,11 @@ Corpus Builder already executes several independently versioned feature pipeline
 run envelope is a feature-to-definition bundle rather than one synthetic "corpus builder" pipeline.
 The exact feature set may evolve as more Corpus Builder work moves onto the generic pipeline
 executor.
+
+The envelope also records the pipeline-contract version used to interpret those definitions. A
+runtime accepts contract versions from its declared minimum-readable version through its current
+contract version and rejects anything older or newer. Existing v2 envelopes created before this
+field was added are interpreted as contract version 1.
 
 Each portable binding carries the canonical definition, its canonical hash, and the strategy
 implementation versions required to execute it. Optional run overrides remain bound to that exact
