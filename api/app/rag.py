@@ -1014,13 +1014,41 @@ def _explicitly_named_works(
     query = _normalized_scope_text(question)
     if not query:
         return []
-    return sorted({
-        work
-        for summary in work_summaries
-        if (work := str(summary.get("scope_label") or "").strip())
-        and (normalized_work := _normalized_scope_text(work))
-        and normalized_work in query
-    })
+
+    display_question = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", str(question or "").replace("’", "'"))
+        if not unicodedata.combining(character)
+    )
+    named: set[str] = set()
+    for summary in work_summaries:
+        work = str(summary.get("scope_label") or "").strip()
+        normalized_work = _normalized_scope_text(work)
+        if not work or not normalized_work:
+            continue
+        phrase_pattern = re.escape(normalized_work).replace(r"\ ", r"\s+")
+        if not re.search(rf"(?<!\w){phrase_pattern}(?!\w)", query):
+            continue
+        tokens = normalized_work.split()
+        if len(tokens) == 1:
+            display_work = "".join(
+                character
+                for character in unicodedata.normalize("NFKD", work)
+                if not unicodedata.combining(character)
+            )
+            exact_display = re.search(
+                rf"(?<!\w){re.escape(display_work)}(?!\w)",
+                display_question,
+            )
+            cue = re.search(
+                rf"\b(?:in|from|book|work|text|novel)\s+{re.escape(tokens[0])}\b",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if not exact_display and not cue:
+                continue
+        named.add(work)
+    return sorted(named)
 
 
 def _mentioned_work_groups(
