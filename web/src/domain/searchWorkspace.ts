@@ -49,6 +49,7 @@ type Helper =
   | "canUse"
   | "clearReviewSelection"
   | "copyCitation"
+  | "corpusGeneration"
   | "dbEvidenceKey"
   | "dbSearchFilterDescriptors"
   | "dbSearchWhere"
@@ -105,6 +106,7 @@ export function createSearchWorkspace(deps: Deps) {
     canUse,
     clearReviewSelection,
     copyCitation,
+    corpusGeneration,
     dbEvidenceKey,
     dbSearchFilterDescriptors,
     dbSearchWhere,
@@ -149,20 +151,106 @@ export function createSearchWorkspace(deps: Deps) {
     urlFromState,
     workspaceEvidenceSelectionKey,
   } = deps;
+  let localCorpusCache: {
+    generation: string;
+    rows: Any[];
+    available: string[] | null;
+    filterFields: string[] | null;
+    suggestions: Loose | null;
+  } = {
+    generation: "",
+    rows: [],
+    available: null,
+    filterFields: null,
+    suggestions: null,
+  };
+  let localQueryCache: {
+    generation: string;
+    query: string;
+    filtersKey: string;
+    rows: Any[];
+  } | null = null;
+  let normalizedTextCache = new WeakMap<object, string>();
+
+  function localCorpusRows() {
+    const generation = String(corpusGeneration() ?? "");
+    if (localCorpusCache.generation === generation) return localCorpusCache.rows;
+    localCorpusCache = {
+      generation,
+      rows: allRows(),
+      available: null,
+      filterFields: null,
+      suggestions: null,
+    };
+    localQueryCache = null;
+    normalizedTextCache = new WeakMap();
+    return localCorpusCache.rows;
+  }
+
+  function normalizedRecordText(record: Any) {
+    if (record && typeof record === "object") {
+      const cached = normalizedTextCache.get(record);
+      if (cached !== undefined) return cached;
+      const normalized = String(record.text || "").toLocaleLowerCase();
+      normalizedTextCache.set(record, normalized);
+      return normalized;
+    }
+    return String(record?.text || "").toLocaleLowerCase();
+  }
+
   function localSearchBaseRows() {
-    const q = String(state.globalSearch || "")
+    const rows = localCorpusRows();
+    const generation = localCorpusCache.generation;
+    const query = String(state.globalSearch || "")
       .trim()
       .toLocaleLowerCase();
-    return allRows().filter(
+    const filters = Array.isArray(state.globalFilters) ? state.globalFilters : [];
+    const filtersKey = JSON.stringify(filters);
+
+    if (
+      localQueryCache &&
+      localQueryCache.generation === generation &&
+      localQueryCache.query === query &&
+      localQueryCache.filtersKey === filtersKey
+    )
+      return localQueryCache.rows;
+
+    const canNarrowPreviousQuery =
+      Boolean(localQueryCache) &&
+      localQueryCache!.generation === generation &&
+      localQueryCache!.filtersKey === filtersKey &&
+      query.startsWith(localQueryCache!.query);
+    const candidates = canNarrowPreviousQuery ? localQueryCache!.rows : rows;
+    const matched = candidates.filter(
       (row: Any) =>
-        (!q ||
-          String(row.record.text || "")
-            .toLocaleLowerCase()
-            .includes(q)) &&
-        state.globalFilters.every((filter: Any) =>
+        (!query || normalizedRecordText(row.record).includes(query)) &&
+        filters.every((filter: Any) =>
           valueMatches(row.record[filter.field], filter.op, filter.value),
         ),
     );
+    localQueryCache = { generation, query, filtersKey, rows: matched };
+    return matched;
+  }
+
+  function localSearchStaticMetadata() {
+    const rows = localCorpusRows();
+    if (!localCorpusCache.available) {
+      localCorpusCache.available = tableAvailableFields(rows, [
+        "__file",
+        ...SEARCH_LOADED_COLUMNS,
+      ]);
+      localCorpusCache.filterFields = localCorpusCache.available.filter((field: string) =>
+        isSearchFilterFieldName(field),
+      );
+      localCorpusCache.suggestions = searchSuggestions(rows, {
+        fields: localCorpusCache.filterFields,
+      });
+    }
+    return {
+      available: [...localCorpusCache.available],
+      filterFields: [...(localCorpusCache.filterFields || [])],
+      suggestions: localCorpusCache.suggestions || {},
+    };
   }
   function searchScope() {
     return state.globalSearchMode === "database" || isResearcher() ? "database" : "loaded";
@@ -295,6 +383,7 @@ export function createSearchWorkspace(deps: Deps) {
     }
     const scope = searchScope();
     const layout = searchLayout(scope);
+    const loadedRows = localCorpusRows();
     const pageSize = Math.max(10, Number(state.pageSize) || 100);
     let results = [],
       total = 0,
@@ -314,13 +403,14 @@ export function createSearchWorkspace(deps: Deps) {
       const slice = rows.slice(start, start + pageSize);
       await refreshPresenceForRows(slice).catch(() => undefined);
       results = slice.map(buildWorkspaceSearchResult);
-      available = tableAvailableFields(allRows(), ["__file", ...SEARCH_LOADED_COLUMNS]);
-      filterFieldNames = available.filter((field: string) => isSearchFilterFieldName(field));
+      const staticMetadata = localSearchStaticMetadata();
+      available = staticMetadata.available;
+      filterFieldNames = staticMetadata.filterFields;
       // Loaded records have no index capability contract. Let the facet helper
       // derive eligibility from the record field inventory, retaining only its
       // compatibility ordering for schema-less/legacy data.
       facets = buildSearchFacets(base);
-      suggestions = searchSuggestions(allRows(), { fields: filterFieldNames });
+      suggestions = staticMetadata.suggestions;
       filters = state.globalFilters.map(searchFilterDescriptor);
     } else {
       let dbItems = (state.storeSearchResults || [])
@@ -370,8 +460,8 @@ export function createSearchWorkspace(deps: Deps) {
       })),
       active_store: state.activeStore || "",
       has_database: stores.length > 0,
-      has_loaded_records: allRows().length > 0,
-      total_loaded_records: allRows().length,
+      has_loaded_records: loadedRows.length > 0,
+      total_loaded_records: loadedRows.length,
       results,
       total,
       page: state.globalPage,
@@ -495,7 +585,7 @@ export function createSearchWorkspace(deps: Deps) {
     const scope = searchScope();
     const available =
       scope === "loaded"
-        ? tableAvailableFields(allRows(), ["__file", ...SEARCH_LOADED_COLUMNS])
+        ? localSearchStaticMetadata().available
         : tableAvailableFields(
             (state.storeSearchResults || []).map((item: Any) => ({ record: item.record || {} })),
             ["__db_status"],
