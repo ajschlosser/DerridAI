@@ -113,7 +113,11 @@ export function createJobsWorkspace(deps: Deps) {
       );
       researchPreferencesChanged = true;
       for (const id of disappearedRagIds) {
-        const pruned = pruneClientJobState(id, { removeHistory: false, persist: false });
+        const pruned = pruneClientJobState(id, {
+          removeHistory: false,
+          persist: false,
+          publish: false,
+        });
         jobBookkeepingChanged ||= pruned.jobPreferencesChanged;
       }
     }
@@ -237,7 +241,7 @@ export function createJobsWorkspace(deps: Deps) {
   registerJobsPause(pauseRuntime);
   function pruneClientJobState(
     jobId: Any,
-    { removeHistory = true, persist = true } = {},
+    { removeHistory = true, persist = true, publish = true } = {},
   ) {
     const hadJobApplied = Object.prototype.hasOwnProperty.call(state.jobApplied || {}, jobId);
     const hadUpsertApplied = Object.prototype.hasOwnProperty.call(
@@ -272,8 +276,10 @@ export function createJobsWorkspace(deps: Deps) {
 
     // Operation chrome derives from job state. Publish that state transition;
     // do not reach into a rendered card from the job-data layer.
-    notifyOperationsChanged();
-    updateOperationStackCount();
+    if (publish) {
+      notifyOperationsChanged();
+      updateOperationStackCount();
+    }
     return { jobPreferencesChanged, researchPreferencesChanged };
   }
   async function removeFinishedJob(jobId: Any, { refresh = true } = {}) {
