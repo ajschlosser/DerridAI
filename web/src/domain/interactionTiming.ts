@@ -59,3 +59,18 @@ export function measureInteractionToNextFrame(name: string): void {
     globalThis.requestAnimationFrame(finish);
   else globalThis.setTimeout(finish, 0);
 }
+
+
+/**
+ * Runs non-visual follow-up work only after the browser has had an opportunity
+ * to paint the state produced by the current interaction.
+ */
+export function runAfterNextPaint(task: () => void): void {
+  if (typeof globalThis.requestAnimationFrame !== "function") {
+    globalThis.setTimeout(task, 0);
+    return;
+  }
+  globalThis.requestAnimationFrame(() => {
+    globalThis.requestAnimationFrame(task);
+  });
+}
