@@ -271,7 +271,11 @@ function statusFor(side: "A" | "B") {
 watch([sourceA, sourceB, keyA, keyB, pasteA, pasteB, filter], persist);
 // The picker searches the library read here. Records loaded or edited while Compare is open used to be missing from it
 // until you left the view and came back, so read it again whenever the loaded corpus changes.
-watch(() => [corpusState.version, corpusState.activeFileId], refreshLibrary, { flush: "post" });
+watch(
+  () => [corpusState.contentVersion, corpusState.structureVersion, corpusState.activeFileId],
+  refreshLibrary,
+  { flush: "post" },
+);
 const newer = useNewerData();
 // ensureCompareLibrary only loads when the store page is empty, so clear it to read the new data.
 async function loadNewer() {
