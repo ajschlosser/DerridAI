@@ -484,8 +484,9 @@ def _json_like_answer(text: str) -> bool:
     except (TypeError, ValueError, json.JSONDecodeError):
         closing = "}" if candidate.startswith("{") else "]"
         return candidate.endswith(closing) and bool(
-            re.search(r"[A-Za-z_][A-Za-z0-9_ -]{0,79}\\s*:", candidate[:4000])
+            re.search(r'"[^"]{1,80}"\s*:', candidate[:4000])
         )
+
 
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
     citation_map = {
