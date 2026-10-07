@@ -102,6 +102,7 @@ class Jobs(PersistentJobStateMixin):
 
     def __init__(self):
         self._lock = threading.RLock()
+        self._persistence_io_lock = threading.Lock()
         self._jobs = {}
 
     def _persistence_loop(self):
