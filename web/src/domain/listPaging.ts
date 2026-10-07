@@ -18,7 +18,7 @@
 
 import { state } from "./sharedUrlState";
 import { syncUrl } from "./sharedNavigation";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistListPreferences, persistVectorPreferences } from "./sharedWorkspaceStorage";
 import { invalidateShellStatusProjection } from "./shellStatusProjection";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +39,7 @@ export function setListFilterValue(fileId: string, key: string, value: unknown) 
   if (!(state.listFilters as Any)[fileId]) (state.listFilters as Any)[fileId] = {};
   if (value === "" || value == null) delete (state.listFilters as Any)[fileId][key];
   else (state.listFilters as Any)[fileId][key] = value;
-  persistPrefs();
+  persistListPreferences();
 }
 
 export function setActiveStore(name?: string) {
@@ -59,6 +59,6 @@ export function setActiveStore(name?: string) {
   }
   state.activeStore = next;
   invalidateShellStatusProjection();
-  persistPrefs();
+  persistVectorPreferences();
   syncUrl({ replace: true });
 }
