@@ -150,26 +150,35 @@ def job_realtime_summary(job: JobPayload) -> JobPayload:
 
 
 class PersistentJobStateMixin:
-    """Mirror live worker state into the durable SQLite operation ledger.
+    """Keep active job state resident while SQLite owns historical operation data.
 
-    Workers retain an in-process working copy for low-latency progress updates,
-    while SQLite remains the durable source across restarts. A lightweight
-    checkpoint loop captures nested progress/event mutations without forcing a
-    database transaction for every token or record-field update.
+    Active jobs stay in memory for low-latency worker coordination. Finished
+    history is durable and loaded on demand instead of being permanently
+    deserialized into every manager. The checkpoint loop persists active jobs
+    only, so an idle DerridAI process performs no recurring historical-job I/O.
     """
 
     JOB_TYPE = "operation"
+    ACTIVE_STATUSES = frozenset({"queued", "running", "cancelling"})
+    # Keep a small amount of recently finished state resident for immediate UI
+    # continuity/realtime delivery, but never allow large result payloads to
+    # become a process-lifetime cache.
+    RESIDENT_FINISHED_MAX_JOBS = 4
+    RESIDENT_FINISHED_MAX_BYTES = 8 * 1024 * 1024
+    RECENT_TERMINAL_SUMMARY_LIMIT = 32
+
     _lock: threading.RLock
     _jobs: dict[str, JobPayload]
 
     def _start_persistent_state(self) -> None:
-        persisted = job_repository.load(self.JOB_TYPE)
+        persisted = job_repository.load_active(self.JOB_TYPE)
         with self._lock:
             self._jobs = {
                 str(job["id"]): copy.deepcopy(job)
                 for job in persisted
                 if job.get("id")
             }
+            self._recent_terminal_summaries: dict[str, JobPayload] = {}
 
         thread = Thread(
             target=self._persistence_loop,
@@ -179,69 +188,205 @@ class PersistentJobStateMixin:
         self._persistence_thread = thread
         thread.start()
 
+    def _active_snapshots(self) -> JobPayloadList:
+        """Copy only live jobs for one durable checkpoint."""
+        with self._lock:
+            return [
+                copy.deepcopy(job)
+                for job in self._jobs.values()
+                if str(job.get("status") or "") in self.ACTIVE_STATUSES
+            ]
+
+    def _checkpoint_active_jobs(self) -> None:
+        jobs = self._active_snapshots()
+        if jobs:
+            job_repository.upsert_many(jobs)
+
     def _persistence_loop(self) -> None:
         while True:
             time.sleep(1.0)
             try:
-                with self._lock:
-                    jobs = [copy.deepcopy(job) for job in self._jobs.values()]
-                if jobs:
-                    job_repository.upsert_many(jobs)
+                self._checkpoint_active_jobs()
             except Exception as exc:
                 # Persistence is allowed to degrade temporarily, but the failure
                 # must remain visible on active jobs and retry on the next tick.
                 detail = f"Durable job checkpoint failed and will be retried: {exc}"
                 with self._lock:
                     for job in self._jobs.values():
-                        if job.get("status") in {"queued", "running", "cancelling"}:
+                        if str(job.get("status") or "") in self.ACTIVE_STATUSES:
                             warnings = job.setdefault("warnings", [])
                             if detail not in warnings[-3:]:
                                 warnings.append(detail)
 
+    def _remember_terminal_summary(self, job: JobPayload) -> None:
+        summary = job_realtime_summary(job)
+        job_id = str(summary.get("id") or "")
+        if not job_id:
+            return
+        self._recent_terminal_summaries.pop(job_id, None)
+        self._recent_terminal_summaries[job_id] = summary
+        while len(self._recent_terminal_summaries) > self.RECENT_TERMINAL_SUMMARY_LIMIT:
+            oldest = next(iter(self._recent_terminal_summaries))
+            self._recent_terminal_summaries.pop(oldest, None)
+
+    @staticmethod
+    def _payload_size(job: JobPayload) -> int:
+        return len(
+            json.dumps(
+                job,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                default=str,
+            ).encode()
+        )
+
+    def _prune_resident_finished(self) -> None:
+        """Bound finished in-memory payloads after their durable write succeeds."""
+        with self._lock:
+            finished = [
+                (job_id, job)
+                for job_id, job in self._jobs.items()
+                if str(job.get("status") or "") not in self.ACTIVE_STATUSES
+            ]
+            finished.sort(
+                key=lambda item: str(item[1].get("created_at") or ""),
+                reverse=True,
+            )
+            keep: set[str] = set()
+            kept_bytes = 0
+            for job_id, job in finished:
+                size = self._payload_size(job)
+                if (
+                    len(keep) < self.RESIDENT_FINISHED_MAX_JOBS
+                    and kept_bytes + size <= self.RESIDENT_FINISHED_MAX_BYTES
+                ):
+                    keep.add(job_id)
+                    kept_bytes += size
+                    continue
+                self._remember_terminal_summary(job)
+                self._jobs.pop(job_id, None)
+
     def _persist_job(self, job_id: str) -> None:
         with self._lock:
             job = copy.deepcopy(self._jobs.get(job_id))
-        if job is not None:
-            job_repository.upsert(job)
+        if job is None:
+            return
+        job_repository.upsert(job)
+        if str(job.get("status") or "") not in self.ACTIVE_STATUSES:
+            self._prune_resident_finished()
 
     def _persist_all_jobs(self) -> None:
         with self._lock:
             jobs = [copy.deepcopy(job) for job in self._jobs.values()]
-        job_repository.upsert_many(jobs)
+        if jobs:
+            job_repository.upsert_many(jobs)
+        self._prune_resident_finished()
+
+    def _all_job_records(self) -> JobPayloadList:
+        """Merge durable history with newer resident live state."""
+        persisted = {
+            str(job["id"]): job
+            for job in job_repository.load(self.JOB_TYPE)
+            if job.get("id")
+        }
+        with self._lock:
+            for job_id, job in self._jobs.items():
+                persisted[str(job_id)] = copy.deepcopy(job)
+        return list(persisted.values())
+
+    def _get_job_record(self, job_id: str) -> JobPayload:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                return copy.deepcopy(job)
+        persisted = job_repository.get(job_id, job_type=self.JOB_TYPE)
+        if persisted is None:
+            raise KeyError(job_id)
+        return persisted
+
+    def _load_job_for_mutation(self, job_id: str) -> JobPayload:
+        """Rehydrate a historical job only for the duration of a mutation."""
+        with self._lock:
+            existing = self._jobs.get(job_id)
+            if existing is not None:
+                return existing
+        persisted = job_repository.get(job_id, job_type=self.JOB_TYPE)
+        if persisted is None:
+            raise KeyError(job_id)
+        with self._lock:
+            return self._jobs.setdefault(job_id, persisted)
+
+    def _delete_finished_record(self, job_id: str, *, active_error: str) -> None:
+        job = self._get_job_record(job_id)
+        if str(job.get("status") or "") in self.ACTIVE_STATUSES:
+            raise ValueError(active_error)
+        with self._lock:
+            self._jobs.pop(job_id, None)
+            self._recent_terminal_summaries.pop(job_id, None)
+        if not job_repository.delete(job_id):
+            raise KeyError(job_id)
+
+    def _clear_finished_records(self) -> int:
+        with self._lock:
+            finished_ids = [
+                job_id
+                for job_id, job in self._jobs.items()
+                if str(job.get("status") or "") not in self.ACTIVE_STATUSES
+            ]
+            for job_id in finished_ids:
+                self._jobs.pop(job_id, None)
+                self._recent_terminal_summaries.pop(job_id, None)
+        return job_repository.clear_finished(self.JOB_TYPE)
+
+    def _snapshot_finished_records(self) -> JobPayloadList:
+        return [
+            copy.deepcopy(job)
+            for job in self._all_job_records()
+            if str(job.get("status") or "") not in self.ACTIVE_STATUSES
+        ]
 
     def realtime_job_summaries(self) -> JobPayloadList:
-        """Live-state summaries for the realtime observer (read-only, no deep copy).
-
-        Event emission is derived from this one shared view rather than from
-        per-manager socket calls, so status/terminal semantics stay identical to
-        the REST snapshot and a publishing failure can never affect a worker.
-        """
+        """Small live/terminal summaries; full history stays in SQLite."""
         with self._lock:
-            return [job_realtime_summary(job) for job in self._jobs.values()]
+            summaries = {
+                str(job_id): job_realtime_summary(job)
+                for job_id, job in self._jobs.items()
+            }
+            for job_id, summary in self._recent_terminal_summaries.items():
+                summaries.setdefault(job_id, copy.deepcopy(summary))
+            return list(summaries.values())
 
     def realtime_job_summary(self, job_id: str) -> JobPayload | None:
         with self._lock:
             job = self._jobs.get(job_id)
-            return job_realtime_summary(job) if job is not None else None
+            if job is not None:
+                return job_realtime_summary(job)
+            summary = self._recent_terminal_summaries.get(job_id)
+            return copy.deepcopy(summary) if summary is not None else None
 
     def job_footprints(self) -> list[tuple[str, str, int, bool]]:
-        """(id, created_at, stored bytes, active) for every job, for data retention."""
+        """Retention metadata without hydrating every historical payload."""
+        footprints = {
+            job_id: (job_id, created_at, size, active)
+            for job_id, created_at, size, active in job_repository.footprints(self.JOB_TYPE)
+        }
         with self._lock:
-            return [
-                (
+            for job_id, job in self._jobs.items():
+                footprints[str(job_id)] = (
                     str(job_id),
                     str(job.get("created_at") or ""),
-                    len(json.dumps(job, ensure_ascii=False, separators=(",", ":"), default=str).encode()),
-                    str(job.get("status") or "") in {"queued", "running", "cancelling"},
+                    self._payload_size(job),
+                    str(job.get("status") or "") in self.ACTIVE_STATUSES,
                 )
-                for job_id, job in self._jobs.items()
-            ]
+        return list(footprints.values())
 
     def clear_all(self) -> int:
         """Drop in-memory and durable history for this manager."""
+        durable_count = job_repository.clear_type(self.JOB_TYPE)
         with self._lock:
-            count = len(self._jobs)
+            resident_count = len(self._jobs)
             self._jobs.clear()
+            self._recent_terminal_summaries.clear()
 
             provider_active = getattr(self, "_provider_active", None)
             if isinstance(provider_active, dict):
@@ -251,5 +396,4 @@ class PersistentJobStateMixin:
             if isinstance(active, dict):
                 active.clear()
 
-        job_repository.clear_type(self.JOB_TYPE)
-        return count
+        return max(durable_count, resident_count)
