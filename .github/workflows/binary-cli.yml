@@ -203,3 +203,36 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 7
+
+
+  distribution-decision:
+    name: Binary distribution decision
+    needs: standalone
+    if: ${{ always() && needs.standalone.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download onefile candidates
+        uses: actions/download-artifact@v4
+        with:
+          pattern: derridai-*-onefile
+          path: dist/cli/onefile-candidates
+          merge-multiple: true
+
+      - name: Evaluate repository binary budget
+        run: >-
+          python scripts/report_cli_distribution.py
+          --root dist/cli/onefile-candidates
+          --output dist/cli/binary-distribution-decision.json
+
+      - name: Show distribution decision
+        run: cat dist/cli/binary-distribution-decision.json
+
+      - name: Upload distribution decision
+        uses: actions/upload-artifact@v4
+        with:
+          name: derridai-binary-distribution-decision
+          path: dist/cli/binary-distribution-decision.json
+          if-no-files-found: error
+          retention-days: 30
