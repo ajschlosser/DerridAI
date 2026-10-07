@@ -62,7 +62,10 @@ type Helper =
   | "pendingChangesForRow"
   | "pendingUpsertRows"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistCorpusPreferences"
+  | "persistJobPreferences"
+  | "persistListPreferences"
+  | "persistReviewPreferences"
   | "recordDbStatus"
   | "recordFields"
   | "recordHistoryVersions"
@@ -112,7 +115,10 @@ export function createRecordDialogs(deps: Deps) {
     pendingChangesForRow,
     pendingUpsertRows,
     persistFileNow,
-    persistPrefs,
+    persistCorpusPreferences,
+    persistJobPreferences,
+    persistListPreferences,
+    persistReviewPreferences,
     recordDbStatus,
     recordFields,
     recordHistoryVersions,
@@ -202,7 +208,10 @@ export function createRecordDialogs(deps: Deps) {
         await persistFileNow(merged);
         state.activeFileId = merged.id;
         if (wantsDownload) download(merged.name, fileJsonl(merged));
-        persistPrefs();
+        persistCorpusPreferences();
+        persistListPreferences();
+        persistReviewPreferences();
+        persistJobPreferences();
         navigateTo("list", { fileId: merged.id });
         toast(copy.merged(files.length, records.length.toLocaleString()), { tone: "success" });
         return true;
