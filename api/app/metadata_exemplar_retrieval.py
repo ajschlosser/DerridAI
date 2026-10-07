@@ -59,6 +59,13 @@ DEFAULT_PACKET_CHAR_BUDGET = DEFAULT_PROMPT_TOKEN_BUDGET * PROMPT_CHARS_PER_TOKE
 MAX_QUERY_CHARS = 12000
 MAX_FALLBACK_CANDIDATES = 256
 _projection_writer_lock = threading.RLock()
+# Bound field-search concurrency process-wide. A per-retrieval executor creates
+# and destroys native-library worker threads repeatedly during Corpus Builder
+# enrichment; those short-lived threads can leave large malloc arenas resident.
+_EXEMPLAR_QUERY_EXECUTOR = ThreadPoolExecutor(
+    max_workers=4,
+    thread_name_prefix="metadata-exemplar-search",
+)
 
 
 def _serialized_projection[**P, T](operation: Callable[P, T]) -> Callable[P, T]:
@@ -1144,22 +1151,18 @@ class ChromaMetadataExemplarIndex:
                 return field, candidates, len(candidates)
 
             if ordered_fields and count:
-                # One query embedding is shared by a small bounded worker pool.
-                # Independent field filters can therefore overlap local/HTTP
-                # Chroma latency without multiplying embedding/model calls.
-                with ThreadPoolExecutor(
-                    max_workers=min(4, len(ordered_fields)),
-                    thread_name_prefix="metadata-exemplar-search",
-                ) as executor:
-                    futures = [
-                        executor.submit(search_field, field)
-                        for field in ordered_fields
-                    ]
-                    for future in futures:
-                        field, field_candidates, field_considered = future.result()
-                        considered += field_considered
-                        if field_candidates:
-                            raw[field] = field_candidates
+                # One query embedding is shared by a process-wide bounded pool.
+                # Independent field filters can overlap Chroma latency without
+                # multiplying embedding/model calls or native worker threads.
+                futures = [
+                    _EXEMPLAR_QUERY_EXECUTOR.submit(search_field, field)
+                    for field in ordered_fields
+                ]
+                for future in futures:
+                    field, field_candidates, field_considered = future.result()
+                    considered += field_considered
+                    if field_candidates:
+                        raw[field] = field_candidates
             search_ms = _elapsed_ms(search_started)
 
             rerank_started = time.monotonic()
