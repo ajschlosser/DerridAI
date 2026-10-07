@@ -31,6 +31,10 @@ import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawe
 import ResearchRunsDrawer from "../components/research/ResearchRunsDrawer.vue";
 import ResearchPipelineBar from "../components/research/ResearchPipelineBar.vue";
 import { useResearchDraft } from "../features/research/useResearchDraft";
+import {
+  loadResearchComposerDraft,
+  saveResearchComposerDraft,
+} from "../features/research/researchComposerDraft";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import type {
@@ -182,6 +186,9 @@ const researchDraft = useResearchDraft();
 // One realtime follower per live Research job; its events (or the socket-down fallback) refresh state.
 const jobFollowers = new Map<string, () => void>();
 let draftTimer: number | undefined;
+let composerDraftLoaded = false;
+let composerDraftLoad: Promise<void> | null = null;
+let composerDraftEpoch = 0;
 
 const selectedEvidence = computed(() => workspace.value?.selected_evidence || []);
 const profiles = computed(() => workspace.value?.profiles || []);
@@ -385,6 +392,7 @@ async function loadWorkspace(refresh = true) {
       preserveDraft: Boolean(workspace.value) || Boolean(prompt.value || instructions.value),
       preserveActive: true,
     });
+    restoreComposerDraft(prompt.value, instructions.value);
     if (canManageRuns.value) void refreshRuns();
     void loadPipelines();
     const requestedJobId = String(route.query.job || "").trim();
@@ -424,17 +432,35 @@ async function loadAnswer(job: ResearchJob) {
     if (!disposed && request === answerRequest) answerLoading.value = false;
   }
 }
+function restoreComposerDraft(expectedPrompt: string, expectedInstructions: string) {
+  if (composerDraftLoaded || composerDraftLoad) return;
+  const epoch = composerDraftEpoch;
+  composerDraftLoad = (async () => {
+    const saved = await loadResearchComposerDraft();
+    if (disposed || epoch !== composerDraftEpoch || !isNativeResearch.value) return;
+    composerDraftLoaded = true;
+    if (
+      saved &&
+      prompt.value === expectedPrompt &&
+      instructions.value === expectedInstructions
+    ) {
+      prompt.value = saved.prompt;
+      instructions.value = saved.instructions;
+    }
+  })().finally(() => {
+    if (epoch === composerDraftEpoch) composerDraftLoad = null;
+  });
+}
+
 function persistDraft() {
   if (!config.value) return;
   window.clearTimeout(draftTimer);
-  draftTimer = window.setTimeout(
-    () =>
-      researchActions.updateResearchConfig({
-        prompt: prompt.value,
-        instructions: instructions.value,
-      }),
-    250,
-  );
+  draftTimer = window.setTimeout(() => {
+    void saveResearchComposerDraft({
+      prompt: prompt.value,
+      instructions: instructions.value,
+    });
+  }, 250);
 }
 function updateConfig(patch: Partial<ResearchConfig>) {
   if (!config.value) return;
@@ -912,6 +938,9 @@ watch(
     sessionJobIds.value = new Set();
     workspace.value = null;
     config.value = null;
+    composerDraftEpoch += 1;
+    composerDraftLoaded = false;
+    composerDraftLoad = null;
     prompt.value = "";
     instructions.value = "";
     answerError.value = "";
