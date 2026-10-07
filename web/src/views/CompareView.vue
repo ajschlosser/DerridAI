@@ -24,13 +24,17 @@ import {
   getCompareLibrary,
   getCompareRecord,
 } from "../domain/sharedCompareLibrary";
-import { persistPrefs } from "../domain/sharedWorkspaceStorage";
 import { useAuthStore } from "../stores/auth";
 import { useCompareStore, useRecordViewStore } from "../stores/workspace";
 import { state as sharedState } from "../domain/sharedUrlState";
 import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
+import {
+  loadCompareDraft,
+  saveCompareDraft,
+  type CompareDraft,
+} from "../features/compare/compareDraft";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiLoadingState from "../components/ui/UiLoadingState.vue";
@@ -89,6 +93,20 @@ const pasteA = ref(workspace.comparePasteA || "");
 const pasteB = ref(workspace.comparePasteB || "");
 const filter = ref<CompareFilter>(workspace.compareFilter === "all" ? "all" : "changed");
 const liveMessage = ref("");
+let draftTimer = 0;
+
+function compareDraft(): CompareDraft {
+  return {
+    sourceA: sourceA.value,
+    sourceB: sourceB.value,
+    keyA: keyA.value,
+    keyB: keyB.value,
+    pasteA: pasteA.value,
+    pasteB: pasteB.value,
+    filter: filter.value,
+  };
+}
+const initialDraft = compareDraft();
 
 const parsedA = computed(() =>
   sourceA.value === "scratch"
@@ -110,16 +128,17 @@ const parsedB = computed(() =>
 );
 const recordA = computed(() => parsedA.value.record);
 const recordB = computed(() => parsedB.value.record);
+const allRows = computed(() => buildCompareRows(recordA.value, recordB.value, "all"));
 const rows = computed(() =>
-  buildCompareRows(recordA.value, recordB.value, filter.value).map((row) => ({
-    ...row,
-    label: i18n.t(`field.${row.key}`, humanizeField(row.key)),
-  })),
+  (filter.value === "changed" ? allRows.value.filter((row) => row.changed) : allRows.value).map(
+    (row) => ({
+      ...row,
+      label: i18n.t(`field.${row.key}`, humanizeField(row.key)),
+    }),
+  ),
 );
-const changedCount = computed(
-  () => buildCompareRows(recordA.value, recordB.value, "all").filter((row) => row.changed).length,
-);
-const totalCount = computed(() => buildCompareRows(recordA.value, recordB.value, "all").length);
+const changedCount = computed(() => allRows.value.filter((row) => row.changed).length);
+const totalCount = computed(() => allRows.value.length);
 const ready = computed(() => Boolean(recordA.value && recordB.value));
 const comparisonPending = computed(
   () =>
@@ -146,7 +165,9 @@ function persist() {
   workspace.compareFilter = filter.value;
   workspace.compareMode =
     sourceA.value === "scratch" && sourceB.value === "scratch" ? "paste" : "workspace";
-  persistPrefs();
+  window.clearTimeout(draftTimer);
+  const draft = compareDraft();
+  draftTimer = window.setTimeout(() => void saveCompareDraft(draft), 300);
 }
 function refreshLibrary() {
   library.value = getCompareLibrary();
@@ -257,9 +278,23 @@ async function loadNewer() {
 }
 onMounted(() => {
   void loadLibrary();
+  void loadCompareDraft().then((saved) => {
+    if (!saved) return;
+    // Do not let a delayed IndexedDB read overwrite editing that began while
+    // the page was becoming interactive.
+    if (JSON.stringify(compareDraft()) !== JSON.stringify(initialDraft)) return;
+    sourceA.value = saved.sourceA;
+    sourceB.value = saved.sourceB;
+    keyA.value = saved.keyA;
+    keyB.value = saved.keyB;
+    pasteA.value = saved.pasteA;
+    pasteB.value = saved.pasteB;
+    filter.value = saved.filter;
+  });
 });
 onBeforeUnmount(() => {
   ++libraryRequest;
+  window.clearTimeout(draftTimer);
 });
 </script>
 <template>
