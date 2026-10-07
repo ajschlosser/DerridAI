@@ -73,7 +73,7 @@ jobs:
   standalone:
     name: Standalone ${{ matrix.target }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 45
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -133,4 +133,35 @@ jobs:
           path: dist/cli/${{ matrix.target }}/standalone
           if-no-files-found: error
           compression-level: 6
+          retention-days: 7
+
+      - name: Compile onefile binary
+        run: >-
+          python scripts/build_cli_binary.py
+          --onefile
+          --target ${{ matrix.target }}
+          --output-dir dist/cli/${{ matrix.target }}/onefile
+
+      - name: Smoke test onefile binary
+        run: >-
+          python scripts/smoke_cli_binary.py
+          --manifest
+          dist/cli/${{ matrix.target }}/onefile/binary-manifest-${{ matrix.target }}-onefile.json
+
+      - name: Show onefile manifest and size
+        run: >-
+          python -c "import json;
+          from pathlib import Path;
+          p=Path(r'dist/cli/${{ matrix.target }}/onefile/binary-manifest-${{ matrix.target }}-onefile.json');
+          d=json.loads(p.read_text());
+          print(p.read_text());
+          print(f'onefile_size_bytes={d[\"size_bytes\"]}')"
+
+      - name: Upload onefile release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: derridai-${{ matrix.target }}-onefile
+          path: dist/cli/${{ matrix.target }}/onefile
+          if-no-files-found: error
+          compression-level: 0
           retention-days: 7
