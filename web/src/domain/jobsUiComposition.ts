@@ -154,7 +154,7 @@ createJobsWorkspace({
   navigateTo: late(() => navigateTo),
   notifyOperationsChanged: late(() => notifyOperationsChanged),
   persistJobPreferences: late(() => persistJobPreferences),
-  persistPrefs: late(() => persistPrefs),
+  persistResearchPreferences: late(() => persistResearchPreferences),
   recordFingerprint: late(() => recordFingerprint),
   refreshCorpusBuildsHomeCardOnly: late(() => refreshCorpusBuildsHomeCardOnly),
   refreshOperationsPanelOnly: late(() => refreshOperationsPanelOnly),
