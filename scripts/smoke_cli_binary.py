@@ -62,6 +62,15 @@ def main() -> int:
             "catalog recorded in its build manifest."
         )
 
+    doctor = json.loads(_run([str(binary), "doctor", "--json"]).stdout)
+    if doctor.get("pipeline_contract") != expected_contract:
+        raise RuntimeError(
+            "Compiled binary doctor reports a pipeline catalog that differs from "
+            "the source-tree catalog recorded in its build manifest."
+        )
+    if doctor.get("provider_reachability", {}).get("checked") is not False:
+        raise RuntimeError("Default doctor unexpectedly performed a provider probe.")
+
     with tempfile.TemporaryDirectory(prefix="derridai-cli-smoke-") as tmp:
         config = Path(tmp) / "corpus-processing.yaml"
         config.write_text("version: 1\n", encoding="utf-8")

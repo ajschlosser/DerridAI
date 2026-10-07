@@ -22,6 +22,7 @@ on:
     paths:
       - "api/app/corpus_cli.py"
       - "api/app/corpus_cli_config.py"
+      - "api/app/corpus_capabilities.py"
       - "api/app/corpus_run_config.py"
       - "api/app/pipelines/capabilities.py"
       - "api/app/corpus_binary_manifest.py"
@@ -46,6 +47,7 @@ on:
     paths:
       - "api/app/corpus_cli.py"
       - "api/app/corpus_cli_config.py"
+      - "api/app/corpus_capabilities.py"
       - "api/app/corpus_run_config.py"
       - "api/app/pipelines/capabilities.py"
       - "api/app/corpus_binary_manifest.py"

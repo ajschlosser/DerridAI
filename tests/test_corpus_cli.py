@@ -236,3 +236,31 @@ def test_cli_pipeline_export_rejects_unknown_or_custom_identity(capsys):
 
     assert code == ExitCode.USAGE_OR_CONFIG
     assert "Export saved custom definitions from Pipeline Studio" in captured.err
+
+
+
+def test_cli_doctor_json_is_local_and_machine_readable(tmp_path, capsys):
+    workspace = tmp_path / "workspace"
+    output = tmp_path / "output"
+
+    code = main(
+        [
+            "doctor",
+            "--json",
+            "--workspace",
+            str(workspace),
+            "--output-dir",
+            str(output),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    payload = json.loads(captured.out)
+    assert payload["application"]["version"]
+    assert payload["filesystem"]["workspace"]["writable"] is True
+    assert payload["filesystem"]["output"]["writable"] is True
+    assert payload["provider_reachability"]["checked"] is False
+    assert payload["pipeline_contract"]["pipeline_contract_version"] >= 1
+    assert "pdf" in payload["source_kinds"]
+    assert captured.err == ""

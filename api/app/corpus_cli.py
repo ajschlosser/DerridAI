@@ -118,6 +118,26 @@ def _parser() -> argparse.ArgumentParser:
         help="Write the normalized portable pipeline document.",
     )
 
+    doctor = commands.add_parser(
+        "doctor",
+        help="Report native CLI runtime capabilities without probing network providers.",
+    )
+    doctor.add_argument(
+        "--json",
+        action="store_true",
+        help="Write the complete machine-readable diagnostic snapshot.",
+    )
+    doctor.add_argument(
+        "--workspace",
+        type=Path,
+        help="Check this workspace directory instead of the platform default.",
+    )
+    doctor.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Check this output directory instead of the current working directory.",
+    )
+
     corpus = commands.add_parser(
         "corpus",
         help="Build scholarly corpus artifacts.",
@@ -342,6 +362,54 @@ def _pipeline_validate(path: Path, *, as_json: bool) -> int:
     return int(ExitCode.OK)
 
 
+def _doctor(
+    *,
+    as_json: bool,
+    workspace: Path | None,
+    output_directory: Path | None,
+) -> int:
+    """Report local runtime capability facts without downloading or probing providers."""
+
+    from .corpus_capabilities import runtime_capabilities
+
+    payload = runtime_capabilities(
+        workspace=workspace,
+        output_directory=output_directory,
+    )
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        return int(ExitCode.OK)
+
+    app = payload["application"]
+    platform_info = payload["platform"]
+    print(
+        f"DerridAI {app['version']} · "
+        f"{platform_info['system']} {platform_info['machine']}"
+    )
+    print(f"Source commit: {app['source_commit'] or 'unknown'}")
+    for label, item in payload["filesystem"].items():
+        state = "writable" if item["writable"] else "not writable"
+        print(f"{label.capitalize()}: {state} · {item['path']}")
+    for name, item in payload["helpers"].items():
+        state = item["version"] or ("available" if item["available"] else "unavailable")
+        print(f"{name}: {state}")
+    available = sorted(
+        kind
+        for kind, item in payload["source_kinds"].items()
+        if item["available"]
+    )
+    unavailable = sorted(set(payload["source_kinds"]) - set(available))
+    print("Source kinds available: " + (", ".join(available) if available else "none"))
+    if unavailable:
+        print("Source kinds unavailable: " + ", ".join(unavailable))
+    print(
+        "Pipeline contract: "
+        f"{payload['pipeline_contract']['pipeline_contract_version']}"
+    )
+    print("Provider reachability: not checked")
+    return int(ExitCode.OK)
+
+
 def _progress_printer(build: dict[str, Any]) -> None:
     progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
     stage = str(build.get("stage") or build.get("status") or "working")
@@ -421,6 +489,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.command == "pipeline" and args.pipeline_command == "validate":
         return _pipeline_validate(args.config, as_json=args.json)
+    if args.command == "doctor":
+        return _doctor(
+            as_json=args.json,
+            workspace=args.workspace,
+            output_directory=args.output_dir,
+        )
     if args.command == "corpus" and args.corpus_command == "build":
         return _build_corpus(args)
 
