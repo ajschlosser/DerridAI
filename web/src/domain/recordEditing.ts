@@ -128,6 +128,7 @@ export function createRecordEditing(deps: Deps) {
       return false;
     file.records[index] = { ...record, updates: [] };
     file.dirty.add(index);
+    invalidateCorpusCache(file.id);
     persistFile(file);
     return true;
   }
@@ -153,7 +154,10 @@ export function createRecordEditing(deps: Deps) {
       row.file.dirty.add(row.index);
       files.add(row.file);
     }
-    for (const file of files) persistFile(file);
+    for (const file of files) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
     shell();
     renderView();
     toast(trf("dynamic.cleared_history_records", { count: rows.length.toLocaleString() }), {
