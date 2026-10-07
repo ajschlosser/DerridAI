@@ -23,6 +23,7 @@ import AppIcon from "../AppIcon.vue";
 import SidebarNavButton from "./SidebarNavButton.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import type { SidebarNavEntry, SidebarNavGroup } from "./sidebarNav";
+import { runAfterNextPaint } from "../../domain/interactionTiming";
 
 const props = defineProps<{
   groups: SidebarNavGroup[];
@@ -118,7 +119,8 @@ function navigate(id: string) {
   // if browser storage is slow.
   emit("navigate", id);
   recents.value = [id, ...recents.value.filter((item) => item !== id)].slice(0, 8);
-  saveIds(RECENTS_KEY, recents.value);
+  const nextRecents = [...recents.value];
+  runAfterNextPaint(() => saveIds(RECENTS_KEY, nextRecents));
 }
 
 function toggleFavorite(id: string) {
