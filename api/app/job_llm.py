@@ -386,12 +386,12 @@ class LLMJobManager(PersistentJobStateMixin):
     ) -> dict[str, Any]:
         if action not in {"accept", "reject"}:
             raise ValueError("action must be accept or reject")
+        requested = {str(item.get("key")): item for item in items if item.get("key")}
+        if not requested:
+            return self.get(job_id)
         self._load_job_for_mutation(job_id)
         with self._lock:
             job = self._jobs[job_id]
-            requested = {str(item.get("key")): item for item in items if item.get("key")}
-            if not requested:
-                return self._copy(job, include_results=True)
 
             kept: JobPayloadList = []
             resolved_records = 0
