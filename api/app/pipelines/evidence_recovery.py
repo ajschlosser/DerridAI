@@ -717,6 +717,7 @@ def execute_evidence_recovery(
     llm_skip_reason: str = "Closed-choice evidence selection is disabled for this request.",
     provider: str | None = None,
     model: str | None = None,
+    request: dict[str, Any] | None = None,
 ) -> EvidenceRecovery:
     """Recover advisory evidence through the assigned ``evidence_recovery`` pipeline.
 
@@ -724,7 +725,7 @@ def execute_evidence_recovery(
     Resolution or compilation failures raise; callers decide how to surface them.
     """
 
-    from .manager import pipeline_manager
+    from .execution_resolution import resolve_execution_pipeline
     from .store import pipeline_store
 
     if not blocks or not _flatten(value):
@@ -743,7 +744,7 @@ def execute_evidence_recovery(
                 ),
             },
         )
-    resolved = pipeline_manager.resolve(RECOVERY_FEATURE)
+    resolved = resolve_execution_pipeline(RECOVERY_FEATURE, request)
     pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
     plan = compile_recovery_pipeline(pipeline)
     resolved_hash = str(resolved.get("pipeline_hash") or pipeline_hash(pipeline))
