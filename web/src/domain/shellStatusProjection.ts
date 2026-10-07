@@ -16,7 +16,7 @@
  * selections. Owning domains invalidate it when those summaries can change.
  */
 import { state } from "./sharedUrlState";
-import { hasCorpusDb, recordStores } from "./storeAvailability";
+import { recordStores } from "./storeAvailability";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -30,17 +30,22 @@ export interface ShellStatusProjection {
   selectedEvidenceCount: number;
 }
 
-let cached: ShellStatusProjection | null = null;
+type AggregateStatus = Pick<
+  ShellStatusProjection,
+  "totalLoaded" | "corpusStoreCount" | "dbRecords"
+>;
+
+let cachedAggregates: AggregateStatus | null = null;
 
 export function invalidateShellStatusProjection(): void {
-  cached = null;
+  cachedAggregates = null;
 }
 
-export function getShellStatusProjection(): ShellStatusProjection {
-  if (cached) return cached;
+function aggregateStatus(): AggregateStatus {
+  if (cachedAggregates) return cachedAggregates;
 
   const corpusStores = recordStores();
-  cached = {
+  cachedAggregates = {
     totalLoaded: state.files.reduce(
       (sum: number, file: Any) => sum + (Array.isArray(file.records) ? file.records.length : 0),
       0,
@@ -50,9 +55,21 @@ export function getShellStatusProjection(): ShellStatusProjection {
       (sum: number, store: Any) => sum + (Number(store.count) || 0),
       0,
     ),
-    hasCorpusDb: hasCorpusDb(),
+  };
+  return cachedAggregates;
+}
+
+export function getShellStatusProjection(): ShellStatusProjection {
+  const aggregates = aggregateStatus();
+  // These values are cheap primitives/small selections and are deliberately read
+  // live. Compatibility code still has a few direct active-store/health writes;
+  // keeping them outside the cached aggregate prevents stale chrome without
+  // requiring every legacy assignment to know about this projection.
+  return {
+    ...aggregates,
+    hasCorpusDb:
+      state.health?.chroma?.available === true && aggregates.corpusStoreCount > 0,
     activeStore: String(state.activeStore || ""),
     selectedEvidenceCount: Object.values(state.selectedEvidence || {}).filter(Boolean).length,
   };
-  return cached;
 }
