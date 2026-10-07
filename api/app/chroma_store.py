@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import copy
 import functools
+import heapq
 import gc
 import hashlib
 import json
@@ -3414,13 +3415,19 @@ class ChromaStore:
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Bounded BM25-style lexical ranking over stored record text/metadata.
+        """Bounded BM25-style lexical ranking without materializing the corpus.
 
-        Chroma does not expose a sparse/BM25 index in the local collection API,
-        so DerridAI supplies a deterministic lexical leg for hybrid retrieval.
-        The scorer is intentionally query-local: it computes document frequency
-        only for terms in the current query and adds a modest exact-phrase boost.
+        Chroma does not expose a sparse/BM25 index in the local collection API.
+        The previous implementation fetched and decoded as many as 20,000 full
+        Records at once, then retained every document string and token list until
+        ranking completed. Repeated Research runs therefore drove the API process
+        to a new allocator high-water mark even after Python released the objects.
+
+        This implementation pages through the same bounded candidate window and
+        retains only compact term-frequency statistics plus Chroma ids. Full
+        Record payloads are decoded only for the final top-N results.
         """
+
         query = str(query or "").strip()
         if not query:
             return self.keyword_search(
@@ -3430,22 +3437,6 @@ class ChromaStore:
                 where,
                 where_document,
             )
-        col = self._collection(store)
-        scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
-        if where:
-            scan_args["where"] = where
-        if where_document:
-            scan_args["where_document"] = where_document
-        try:
-            scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
-            candidates = self._decode_result(col.get(**scan_args))
-        except Exception as exc:
-            if not self._is_query_capability_error(exc):
-                raise
-            scan_args.pop("limit", None)
-            candidates = self._decode_result(col.get(**scan_args))
-        if not candidates:
-            return []
 
         query_tokens = self._lexical_tokens(query)
         if not query_tokens:
@@ -3456,70 +3447,177 @@ class ChromaStore:
                 where,
                 where_document,
             )
-        query_terms = list(dict.fromkeys(query_tokens))
-        docs: list[tuple[dict[str, Any], list[str], str]] = []
-        document_frequencies = {term: 0 for term in query_terms}
-        total_length = 0
-        for row in candidates:
-            searchable = " ".join(
-                str(row.get(field) or "")
-                for field in (
-                    "text",
-                    "work",
-                    "record_id",
-                    "document_author",
-                    "speaker",
-                    "quoted_speaker",
-                    "position_holder",
-                    "target",
-                )
-            )
-            folded = searchable.casefold()
-            tokens = self._lexical_tokens(searchable)
-            docs.append((row, tokens, folded))
-            total_length += len(tokens)
-            token_set = set(tokens)
-            for term in query_terms:
-                if term in token_set:
-                    document_frequencies[term] += 1
 
-        count = len(docs)
-        avg_length = max(1.0, total_length / max(1, count))
+        col = self._collection(store)
+        query_terms = list(dict.fromkeys(query_tokens))
+        term_indexes = {term: index for index, term in enumerate(query_terms)}
+        document_frequencies = [0] * len(query_terms)
+        total_length = 0
+        document_count = 0
+        folded_phrase = query.casefold()
+
+        scan_limit = min(max(max(1, n_results) * 100, 2000), 20000)
+        page_size = min(
+            scan_limit,
+            max(1, min(int(settings.api_batch_size), 512)),
+        )
+        scan_args: dict[str, Any] = {}
+        if where:
+            scan_args["where"] = where
+        if where_document:
+            scan_args["where_document"] = where_document
+
+        ranking_fields = (
+            "work",
+            "record_id",
+            "_record_id",
+            "document_author",
+            "speaker",
+            "quoted_speaker",
+            "position_holder",
+            "target",
+        )
+
+        def metadata_text(metadata: dict[str, Any] | None) -> str:
+            raw = metadata or {}
+            values: list[str] = []
+            for field in ranking_fields:
+                value = raw.get(field)
+                if value is None:
+                    continue
+                if isinstance(value, str) and value.startswith(_JSON_PREFIX):
+                    try:
+                        value = json.loads(value[len(_JSON_PREFIX):])
+                    except json.JSONDecodeError:
+                        pass
+                values.append(str(value or ""))
+            return " ".join(values)
+
+        # (chroma id, document length, per-query-term frequencies,
+        #  exact-phrase match, original scan ordinal)
+        compact_candidates: list[
+            tuple[str, int, tuple[int, ...], bool, int]
+        ] = []
+        offset = 0
+        ordinal = 0
+        while offset < scan_limit:
+            requested = min(page_size, scan_limit - offset)
+            page = col.get(
+                **scan_args,
+                include=["documents", "metadatas"],
+                limit=requested,
+                offset=offset,
+            )
+            ids = list(page.get("ids") or [])
+            if not ids:
+                break
+            documents = list(page.get("documents") or [])
+            metadatas = list(page.get("metadatas") or [])
+
+            for index, chroma_id in enumerate(ids):
+                document = documents[index] if index < len(documents) else ""
+                metadata = (
+                    metadatas[index]
+                    if index < len(metadatas) and isinstance(metadatas[index], dict)
+                    else {}
+                )
+                searchable = f"{document} {metadata_text(metadata)}"
+                folded = searchable.casefold()
+                tokens = self._lexical_tokens(searchable)
+                frequencies = [0] * len(query_terms)
+                for token in tokens:
+                    term_index = term_indexes.get(token)
+                    if term_index is not None:
+                        frequencies[term_index] += 1
+
+                for term_index, frequency in enumerate(frequencies):
+                    if frequency:
+                        document_frequencies[term_index] += 1
+                length = len(tokens)
+                total_length += length
+                compact_candidates.append(
+                    (
+                        str(chroma_id),
+                        length,
+                        tuple(frequencies),
+                        bool(folded_phrase and folded_phrase in folded),
+                        ordinal,
+                    )
+                )
+                ordinal += 1
+
+            returned = len(ids)
+            document_count += returned
+            offset += returned
+            if returned < requested:
+                break
+
+        if not compact_candidates:
+            return []
+
+        avg_length = max(1.0, total_length / max(1, document_count))
         k1 = 1.2
         b = 0.75
-        folded_phrase = query.casefold()
-        scored: list[tuple[float, dict[str, Any]]] = []
-        for row, tokens, folded in docs:
-            if not tokens:
+        top_limit = max(1, int(n_results))
+        # Heap entries are ordered from worst to best. For equal scores, later
+        # source order is worse so stable ranking matches the previous sort.
+        heap: list[tuple[float, int, str]] = []
+        for chroma_id, length, frequencies, phrase_match, source_ordinal in compact_candidates:
+            if length <= 0:
                 continue
-            frequencies: dict[str, int] = {}
-            for token in tokens:
-                if token in document_frequencies:
-                    frequencies[token] = frequencies.get(token, 0) + 1
             score = 0.0
-            length = len(tokens)
-            for term in query_terms:
-                tf = frequencies.get(term, 0)
+            for term_index, tf in enumerate(frequencies):
                 if not tf:
                     continue
-                df = document_frequencies.get(term, 0)
-                # Robertson/Sparck Jones BM25 IDF with a positive floor.
-                idf = max(0.0, math.log(1.0 + (count - df + 0.5) / (df + 0.5)))
-                denominator = tf + k1 * (1.0 - b + b * length / avg_length)
+                df = document_frequencies[term_index]
+                idf = max(
+                    0.0,
+                    math.log(
+                        1.0
+                        + (document_count - df + 0.5)
+                        / (df + 0.5)
+                    ),
+                )
+                denominator = tf + k1 * (
+                    1.0 - b + b * length / avg_length
+                )
                 score += idf * (tf * (k1 + 1.0)) / max(denominator, 1e-9)
-            if folded_phrase and folded_phrase in folded:
+            if phrase_match:
                 score += 2.5
-            if score > 0:
-                scored.append((score, row))
-        scored.sort(key=lambda item: item[0], reverse=True)
+            if score <= 0:
+                continue
+
+            entry = (score, -source_ordinal, chroma_id)
+            if len(heap) < top_limit:
+                heapq.heappush(heap, entry)
+            elif entry > heap[0]:
+                heapq.heapreplace(heap, entry)
+
+        if not heap:
+            return []
+
+        ranked = sorted(
+            heap,
+            key=lambda item: (-item[0], -item[1]),
+        )
+        top_ids = [item[2] for item in ranked]
+        payload = col.get(
+            ids=top_ids,
+            include=["documents", "metadatas"],
+        )
+        records_by_id = {
+            str(row.get("_chroma_id") or row.get("record_id")): row
+            for row in self._decode_result(payload)
+        }
         return [
             {
-                "id": row.get("_chroma_id") or row.get("record_id"),
+                "id": chroma_id,
                 "distance": None,
                 "lexical_score": score,
-                "record": row,
+                "record": records_by_id[chroma_id],
             }
-            for score, row in scored[:n_results]
+            for score, _negative_ordinal, chroma_id in ranked
+            if chroma_id in records_by_id
         ]
 
     def _decode_result(
