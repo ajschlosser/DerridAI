@@ -574,6 +574,9 @@ async function runResearch(turn?: ResearchTurn) {
       model: model.value,
       generation: generation.value,
       skip_retrieval: preset.value === "evidence" || config.value.skip_retrieval,
+      // Pinned evidence participates only in the two presets that say it does.
+      // Ordinary retrieval presets must not inherit stale workspace selections.
+      include_selected_evidence: preset.value === "hybrid" || preset.value === "evidence",
       config: { ...config.value, prompt: prompt.value, instructions: instructions.value },
       settings_pipeline_overrides: settingsPipelineOverrides.value,
       run_pipeline_overrides: runPipelineOverrides.value,
