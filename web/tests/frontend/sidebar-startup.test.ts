@@ -513,6 +513,36 @@ describe("router and runtime stay in agreement", () => {
     wrapper.unmount();
   });
 
+  it("shows navigation intent while a sidebar route is still pending", async () => {
+    const { wrapper, router } = await signIn();
+    sharedState.view = "home";
+    let release: ((value: boolean) => void) | undefined;
+    router.beforeEach((to) =>
+      to.path === "/search"
+        ? new Promise<boolean>((resolve) => {
+            release = resolve;
+          })
+        : true,
+    );
+
+    const search = pageButtons(wrapper).find((button) => button.text() === "Search");
+    expect(search).toBeTruthy();
+    await search!.trigger("click");
+
+    expect(search!.classes()).toContain("pending");
+    expect(search!.attributes("aria-busy")).toBe("true");
+    expect(router.currentRoute.value.path).toBe("/");
+
+    release?.(true);
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/search");
+    expect(search!.classes()).not.toContain("pending");
+    expect(search!.attributes("aria-busy")).toBeUndefined();
+    expect(search!.attributes("aria-current")).toBe("page");
+    wrapper.unmount();
+  });
+
   it("routes canonical sidebar destinations through Vue Router before compatibility sync", async () => {
     const { wrapper, router } = await signIn();
     sharedState.view = "home";
