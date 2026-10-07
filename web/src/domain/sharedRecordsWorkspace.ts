@@ -34,7 +34,7 @@ import { navigateTo, syncUrl, urlFromState } from "./sharedNavigation";
 import {
   persistListPreferences,
   persistReviewPreferences,
-  shell,
+  refreshShell,
 } from "./sharedWorkspaceStorage";
 import {
   recordDbStatus,
@@ -80,7 +80,7 @@ export const recordsWorkspace = createRecordsWorkspace({
   setActiveStore,
   setListFilterValue,
   setReviewSelected: evidenceSelection.setReviewSelected,
-  shell,
+  refreshShell,
   syncUrl,
   tableAvailableFields,
   toggleSort,
