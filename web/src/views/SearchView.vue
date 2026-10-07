@@ -747,8 +747,9 @@ watch(
     if (
       structureVersion === priorStructureVersion &&
       contentVersion === priorContentVersion
-    )
+    ) {
       return;
+    }
     // Corpus imports/removals and Record edits can happen while Search remains
     // mounted without changing its route. Refresh the Search-owned projection
     // from the scoped corpus generations rather than coupling it back to every
