@@ -45,7 +45,7 @@ import { useTouchupWorkspaceRequest } from "../../features/touchup/touchupWorksp
  * mounted so the dialog can observe its request closing and restore focus before
  * the native <dialog> leaves the DOM.
  */
-function activatedBy(current: Ref<unknown>): Ref<boolean> {
+function activatedBy(current: Readonly<Ref<unknown>>): Ref<boolean> {
   const activated = ref(Boolean(current.value));
   watch(
     current,
