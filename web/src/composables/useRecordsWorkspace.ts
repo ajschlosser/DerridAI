@@ -29,9 +29,8 @@ import {
 } from "../domain/sharedRecordFileCommands";
 import { recordsWorkspace } from "../domain/sharedRecordsWorkspace";
 import { closeFile as closeWorkspaceFile } from "../domain/sharedFileLifecycle";
-import { state } from "../domain/sharedUrlState";
 import { activateFile, searchByMetadata } from "../domain/workspaceActions";
-import { corpusState } from "../state/workspaceState";
+import { corpusState, navigationState } from "../state/workspaceState";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
 import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordSubsets";
 
@@ -81,7 +80,7 @@ export function useRecordsWorkspace() {
 
   function activate(): Promise<void> {
     if (activation) return activation;
-    state.view = "list";
+    navigationState.view = "list";
     loading.value = true;
     error.value = "";
     load();
