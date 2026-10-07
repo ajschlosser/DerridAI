@@ -916,22 +916,39 @@ def _exclusive_scope_works(
 ) -> list[str]:
     """Return an inferred closed work scope only when the request is unambiguous.
 
-    A single named in-corpus author/work group can close documentary scope when
-    the named source is the subject of the question. Mere source directives such
-    as "cite X" remain coverage requests unless the same wording also contains a
-    strong single-source subject signal. Comparisons and multiple source groups
-    always remain open.
+    A named in-corpus author can close documentary scope when that author is the
+    subject of the question. Multiple explicit work titles also form a closed
+    set: "these two novels, Work A and Work B" must not reopen the entire corpus.
+    Mere source directives such as "cite X" remain coverage requests unless the
+    same wording also contains a strong source-subject signal.
     """
 
     text = str(question or "")
-    if len(groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
+    normalized_groups = [
+        sorted({str(work).strip() for work in group if str(work).strip()})
+        for group in groups
+    ]
+    normalized_groups = [group for group in normalized_groups if group]
+    if not normalized_groups:
         return []
     if (
         _NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN.search(text)
         and not _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN.search(text)
     ):
         return []
-    return sorted({str(work).strip() for work in groups[0] if str(work).strip()})
+
+    if len(normalized_groups) == 1:
+        return normalized_groups[0]
+
+    # Explicitly named works are emitted as singleton groups. When every
+    # distinct target is a singleton, the researcher has enumerated the
+    # documentary scope. This also covers comparisons between named works.
+    if all(len(group) == 1 for group in normalized_groups):
+        return sorted({work for group in normalized_groups for work in group})
+
+    if _COMPARATIVE_SCOPE_PATTERN.search(text):
+        return []
+    return []
 
 
 def _explicit_scope_work_groups(
@@ -1122,11 +1139,10 @@ def run_rag_pipeline(
             parsed_query.get("prompt_query_fr")
             or request.prompt
         ).strip(),
-        "prompt_instructions": str(
-            (None if thread_context else parsed_query.get("prompt_instructions"))
-            or request.instructions
-            or ""
-        ).strip(),
+        # User instructions are authoritative request data. Query decomposition
+        # may transform retrieval wording, but it must never invent, remove, or
+        # reinterpret generation instructions.
+        "prompt_instructions": str(request.instructions or "").strip(),
         # Retrieval/reranking limits are deterministic controls, not LLM
         # decisions. Pipeline Studio supplies the baseline; Settings and run
         # override layers have already been resolved into the effective pipeline.
@@ -1154,6 +1170,12 @@ def run_rag_pipeline(
                 "derived_query_fr": query_metadata["prompt_query_fr"],
             },
         })
+    decomposed_instructions = str(parsed_query.get("prompt_instructions") or "").strip()
+    if decomposed_instructions and decomposed_instructions != query_metadata["prompt_instructions"]:
+        warnings.append(
+            "Query decomposition proposed instructions that differ from the user's request; "
+            "the proposal was ignored."
+        )
     stages.append({
         "name": "query_metadata",
         "seconds": time.perf_counter() - stage_start,
@@ -2167,7 +2189,7 @@ def run_rag_pipeline(
     generation_attempts = 1
     prose_contract_retry = False
     if (
-        not _requests_json_output(request.prompt, query_metadata["prompt_instructions"])
+        not _requests_json_output(request.prompt, request.instructions or "")
         and _json_like_answer(raw_answer)
     ):
         prose_contract_retry = True
