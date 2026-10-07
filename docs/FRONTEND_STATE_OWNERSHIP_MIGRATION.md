@@ -127,7 +127,7 @@ Work order:
 - [x] A4. Remove `pendingUpsertRows()` and every corpus-size-dependent selector from shell render paths.
 - [ ] A5. Replace shell polling/recomputation of corpus/job counts with domain-maintained read-only summary projections.
 - [ ] A6. Remove direct DOM updates for the global operations button; render the badge from the jobs/operations projection.
-- [ ] A7. Make semantic-map source refresh depend on semantic-map inputs rather than every `route.fullPath` change, and avoid
+- [x] A7. Make semantic-map source refresh depend on semantic-map inputs rather than every `route.fullPath` change, and avoid
       corpus-wide `flatMap` allocation when enforcing bounded source limits.
 - [ ] A8. Reduce root `App.vue` feature ownership by moving feature-only dialog/workflow hosts under their owning routes or
       lazy feature hosts.
@@ -159,7 +159,7 @@ Work order:
       persistence delayed/meaningful.
 - [ ] B5. Make Records projections incremental/cached where feasible and side-effect free. Move presence refresh to an
       explicit async effect keyed to visible rows.
-- [ ] B6. Stop Compare editor keystrokes from serializing unrelated workspace state; avoid duplicate compare derivations per
+- [x] B6. Stop Compare editor keystrokes from serializing unrelated workspace state; avoid duplicate compare derivations per
       render.
 - [ ] B7. Replace broad corpus `version` consumers with narrower structure/content/review/evidence invalidation or normalized
       reactive state.
@@ -189,7 +189,7 @@ Acceptance:
 - Instrumentation records input-to-paint and click-to-first-paint around Research/sidebar paths.
 - Regression tests pin the absence of global invalidation.
 
-Implementation status on `task/frontend-state-ownership-performance`: A1, A2, A4, B1, B2, and B4 are implemented with focused
+Implementation status on `task/frontend-state-ownership-performance`: A1, A2, A4, A7, B1, B2, B4, and B6 are implemented with focused
 regression coverage. Bounded User Timing measures now record Research prompt/instruction input-to-next-frame latency and
 sidebar navigation intent-to-next-frame latency. Repository validation has not yet been run in this environment.
 
