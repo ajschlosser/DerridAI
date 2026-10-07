@@ -28,7 +28,7 @@ import { upsertAuditDelta } from "./recordHistory";
 import { formatTimestamp, localRecordKey } from "./recordTableHelpers";
 import { selectedReviewItems } from "./reviewItems";
 import { tr, trf } from "./sharedTranslate";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistJobPreferences } from "./sharedWorkspaceStorage";
 import {
   candidateChromaIds,
   corpusStoreExists,
@@ -65,7 +65,7 @@ export const {
   hasCorpusDb,
   localRecordKey,
   notifyVectorStoresChanged,
-  persistPrefs,
+  persistPrefs: persistJobPreferences,
   recordFingerprint,
   refreshOperationsPanelOnly,
   selectedReviewItems: () => selectedReviewItems(state),
