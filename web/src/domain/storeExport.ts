@@ -101,7 +101,7 @@ export async function exportStoreJsonl({
         file.id = state.files[previous].id;
         state.files.splice(previous, 1, file);
       } else state.files.push(file);
-      invalidateCorpusCache();
+      invalidateCorpusCache(file.id, true);
       await persistFileNow(file);
       state.activeFileId = file.id;
       persistPrefs();
