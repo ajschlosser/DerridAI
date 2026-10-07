@@ -488,8 +488,12 @@ def _requests_json_output(prompt: str, instructions: str) -> bool:
     """
 
     combined = f"{prompt}\n{instructions}"
-    positive_space = _JSON_OUTPUT_NEGATION_PATTERN.sub(" ", combined)
-    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(positive_space))
+    # A negative JSON directive makes the requested form ambiguous at best.
+    # Fail toward prose rather than allowing a positive phrase elsewhere in the
+    # request to disable the prose safeguard.
+    if _JSON_OUTPUT_NEGATION_PATTERN.search(combined):
+        return False
+    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(combined))
 
 
 def _json_payload_like(candidate: str) -> bool:
