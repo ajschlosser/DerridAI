@@ -120,7 +120,7 @@ class PipelineDocument(BaseModel):
         return dict(sorted(normalized.items()))
 
     @model_validator(mode="after")
-    def validate_identity(self) -> "PipelineDocument":
+    def validate_identity(self) -> PipelineDocument:
         if self.pipeline_contract_version != PIPELINE_CONTRACT_VERSION:
             raise ValueError(
                 "Pipeline contract version "
