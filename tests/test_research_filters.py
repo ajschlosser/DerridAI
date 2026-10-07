@@ -201,7 +201,7 @@ def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
 
 
 class _PagedLexicalCollection:
-    def __init__(self, count: int = 350) -> None:
+    def __init__(self, count: int = 2050) -> None:
         self.metadata = {"hnsw:space": "cosine"}
         self.calls: list[dict] = []
         self.rows = [
@@ -268,7 +268,12 @@ def test_lexical_search_pages_candidates_and_decodes_only_final_results(
 
     monkeypatch.setattr(chroma_store_module, "decode_metadata", tracked_decode)
 
-    result = store.lexical_search("corpus", "trace différance", 4)
+    result = store.lexical_search(
+        "corpus",
+        "trace différance",
+        4,
+        candidate_pool_size=500,
+    )
 
     assert result[0]["id"] == f"r{len(collection.rows) - 1}"
     scan_calls = [call for call in collection.calls if call["ids"] is None]
@@ -276,6 +281,10 @@ def test_lexical_search_pages_candidates_and_decodes_only_final_results(
     assert all(call["limit"] is not None for call in scan_calls)
     assert all(call["limit"] <= 512 for call in scan_calls)
     assert all(call["include"] == ["documents"] for call in scan_calls)
+    # n_results=4 alone would stop at the 2,000-row lexical floor. A deeper
+    # candidate pool still scans the full 2,050-row fixture while only four
+    # complete Records are hydrated.
+    assert scan_calls[-1]["offset"] >= 2000
 
     final_calls = [call for call in collection.calls if call["ids"] is not None]
     assert len(final_calls) == 1
