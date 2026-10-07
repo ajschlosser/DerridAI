@@ -1544,12 +1544,41 @@ def run_rag_pipeline(
         explicit_scope_text,
         explicitly_named_works=explicitly_named_works,
     )
-    retrieval_metadata_filter = (
-        combine_metadata_filters(metadata_filter, {"work": {"$in": exclusive_scope_works}})
-        if exclusive_scope_works
-        else metadata_filter
+    mentioned_scope_authors = _mentioned_scope_authors(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    source_subject_authors = _source_subject_authors(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    if len(source_subject_authors) == 1:
+        if not exclusive_scope_works:
+            exclusive_scope_works = _author_scope_works(
+                scope_work_summaries,
+                source_subject_authors[0],
+            )
+        exclusive_scope_authors = source_subject_authors
+    elif exclusive_scope_works and len(mentioned_scope_authors) == 1:
+        exclusive_scope_authors = mentioned_scope_authors
+    else:
+        exclusive_scope_authors = []
+
+    inferred_scope_filter = None
+    if exclusive_scope_works:
+        inferred_scope_filter = {"work": {"$in": exclusive_scope_works}}
+    if exclusive_scope_authors:
+        inferred_scope_filter = combine_metadata_filters(
+            inferred_scope_filter,
+            {"document_author": {"$in": exclusive_scope_authors}},
+        )
+    retrieval_metadata_filter = combine_metadata_filters(
+        metadata_filter,
+        inferred_scope_filter,
     )
     filter_detail["explicitly_named_works"] = explicitly_named_works
+    filter_detail["mentioned_source_authors"] = mentioned_scope_authors
+    filter_detail["inferred_source_authors"] = exclusive_scope_authors
     filter_detail["inferred_exclusive_works"] = exclusive_scope_works
     if pipeline_plan.scope_stage_id and exclusive_scope_works:
         scope_stage = next(
@@ -2205,6 +2234,7 @@ def run_rag_pipeline(
     context_candidates, excluded_scope_records = partition_scope_compatible_records(
         context_candidates,
         exclusive_scope_works,
+        exclusive_scope_authors,
     )
     if excluded_scope_records:
         warnings.append(
@@ -2308,6 +2338,7 @@ def run_rag_pipeline(
         "explicit_scope_groups": explicit_scope_seed_detail,
         "explicit_scope_seed_count": len(explicit_scope_seed_ids),
         "inferred_exclusive_scope_works": exclusive_scope_works,
+        "inferred_source_authors": exclusive_scope_authors,
         "response_language": request.response_language,
         "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
         "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
