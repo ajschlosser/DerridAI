@@ -376,8 +376,7 @@ export function createResearchWorkspace(deps: Deps) {
     // evidence-only or hybrid/pinned-evidence semantics. Merely having evidence
     // selected in the workspace must not silently contaminate an ordinary
     // Balanced/Precision/Recall/Custom retrieval run.
-    const includeSelectedEvidence =
-      skipRetrieval || Boolean(input.include_selected_evidence);
+    const includeSelectedEvidence = skipRetrieval || Boolean(input.include_selected_evidence);
     if (skipRetrieval && !selected.length)
       throw new Error("Select at least one evidence record before using evidence-only mode.");
     if (!skipRetrieval && !cfg.source_collection) throw new Error("Select a corpus database.");
