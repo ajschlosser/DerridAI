@@ -30,6 +30,7 @@ from app.corpus_cli_config import CorpusProcessingConfig, load_processing_config
 from app.corpus_run_config import (
     HEADLESS_CORPUS_PIPELINE_FEATURES,
     CorpusRunConfigV2,
+    dump_run_config,
     load_run_config,
     migrate_v1_config,
 )
@@ -161,7 +162,6 @@ def test_cli_validate_returns_stable_config_error_code(tmp_path, capsys):
     assert "Configuration error:" in captured.err
 
 
-
 def test_v1_config_migrates_to_pipeline_bound_v2_envelope(tmp_path):
     config = CorpusProcessingConfig.model_validate(
         {
@@ -188,12 +188,7 @@ def test_v1_config_migrates_to_pipeline_bound_v2_envelope(tmp_path):
         }
 
     path = tmp_path / "corpus-run.yaml"
-    path.write_text(
-        __import__("app.corpus_run_config", fromlist=["dump_run_config"]).dump_run_config(
-            migrated
-        ),
-        encoding="utf-8",
-    )
+    path.write_text(dump_run_config(migrated), encoding="utf-8")
     loaded = load_run_config(path)
     assert isinstance(loaded, CorpusRunConfigV2)
     assert loaded.public_snapshot() == migrated.public_snapshot()
@@ -246,3 +241,35 @@ def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
     assert set(payload["headless_corpus_pipelines"]) == set(
         HEADLESS_CORPUS_PIPELINE_FEATURES
     )
+
+
+
+def test_v2_config_requires_every_headless_pipeline_binding():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    payload["pipelines"]["assignments"].pop("corpus_segmentation")
+
+    with pytest.raises(ValidationError, match="missing required Corpus Builder pipeline"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_v2_config_rejects_unknown_embedded_pipeline_fields():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    feature = HEADLESS_CORPUS_PIPELINE_FEATURES[0]
+    payload["pipelines"]["assignments"][feature]["definition"]["surprise"] = True
+
+    with pytest.raises(ValidationError, match="unknown field"):
+        CorpusRunConfigV2.model_validate(payload)
+
+
+def test_v2_config_rejects_strategy_version_drift():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    feature = "corpus_metadata_enrichment"
+    requirements = payload["pipelines"]["assignments"][feature]["required_strategies"]
+    strategy_id = next(iter(requirements))
+    requirements[strategy_id] += 1
+
+    with pytest.raises(ValidationError, match="provides v"):
+        CorpusRunConfigV2.model_validate(payload)
