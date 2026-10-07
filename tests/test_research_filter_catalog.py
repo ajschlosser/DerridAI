@@ -189,6 +189,34 @@ def test_research_scope_inventory_is_metadata_only_cached_and_invalidated(monkey
     assert len(collection.calls) > calls
 
 
+def test_response_cache_write_preserves_corpus_derived_caches() -> None:
+    from app.chroma_store import ChromaStore, _notes_collection_change
+
+    store = object.__new__(ChromaStore)
+    store._research_filter_cache = {("filters",): (0.0, {"fields": []})}
+    store._research_scope_cache = {("scope",): [{"scope_label": "A"}]}
+    store._record_size_cache = {("corpus", 1, 1): {"median_record_chars": 100}}
+    store._research_filter_epoch = 7
+
+    @_notes_collection_change()
+    def mutate(self, name):
+        return name
+
+    mutate(store, "_response_cache")
+
+    assert store._research_filter_cache
+    assert store._research_scope_cache
+    assert store._record_size_cache
+    assert store._research_filter_epoch == 7
+
+    mutate(store, "corpus")
+
+    assert store._research_filter_cache == {}
+    assert store._research_scope_cache == {}
+    assert store._record_size_cache == {}
+    assert store._research_filter_epoch == 8
+
+
 def test_inventory_cache_is_invalidated_after_success_and_partial_failure():
     from app.chroma_store import ChromaStore, _notes_collection_change
     collection = MetadataCollection([{"work": "A", "custom": "old"}])
