@@ -53,6 +53,7 @@ def _filtered_extra_options(
         if key not in reserved
     }
 
+
 def _response_error_metadata(
     response: httpx.Response,
 ) -> tuple[str, str | None, str | None]:
