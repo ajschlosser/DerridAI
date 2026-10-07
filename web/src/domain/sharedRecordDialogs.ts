@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { allRows } from "./corpusCache";
+import { allRows, invalidateCorpusCache } from "./corpusCache";
 import { api } from "./legacyApi";
 import { createRecordDialogs } from "./recordDialogs";
 import { recordHistoryVersions } from "./recordHistory";
@@ -75,6 +75,7 @@ export const recordDialogs = createRecordDialogs({
   hasCorpusDb,
   historyVersionChanges,
   idbDelete: workspaceDb.remove,
+  invalidateCorpusCache,
   jsonPretty,
   label,
   localRecordKey,
