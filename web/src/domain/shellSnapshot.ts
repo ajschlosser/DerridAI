@@ -17,16 +17,13 @@
  */
 
 import { esc } from "./html";
-import { jobsState } from "../state/jobsState";
 import { getNavItems } from "./navItems";
 import { describeRecordsFile } from "./recordsFiles";
-import { canUse } from "./sharedSession";
 import { evidenceSelection } from "./sharedSearchSupport";
 import { activeFile, selectedRecord } from "./sharedRecordScopes";
-import { responseCacheStore } from "./sharedStores";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { dbUnavailableReason, hasCorpusDb, recordStores } from "./storeAvailability";
+import { hasCorpusDb, recordStores } from "./storeAvailability";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -150,25 +147,16 @@ export function getShellSnapshot() {
     (sum: number, store: Any) => sum + (Number(store.count) || 0),
     0,
   );
-  const cacheCount = Number(responseCacheStore()?.count || 0);
-  const activeJobs = jobsState.jobs.filter((job: Any) =>
-    ["queued", "running", "cancelling"].includes(job.status),
-  ).length;
   return {
     view: state.view,
     files: state.files.map((file: Any) => describeRecordsFile(file, state.activeFileId)),
     context: ctx,
     totalLoaded,
-    activeJobs,
     corpusStoreCount: corpusStores.length,
     dbRecords,
-    cacheCount,
     hasCorpusDb: hasCorpusDb(),
-    dbUnavailableReason: dbUnavailableReason(),
     activeStore: state.activeStore,
-    canEdit: canUse("editLocalRecords") && state.view === "record" && Boolean(selectedRecord()),
     selectedEvidenceCount: selectedEvidenceEntries().length,
-    systemHtml: systemCardHtml(),
     nav: getNavItems(),
   };
 }
