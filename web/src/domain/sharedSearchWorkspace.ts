@@ -37,7 +37,13 @@ import {
   syncUrl,
   urlFromState,
 } from "./sharedNavigation";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import {
+  persistListPreferences,
+  persistPrefs,
+  persistSearchPreferences,
+  persistVectorPreferences,
+  refreshShell,
+} from "./sharedWorkspaceStorage";
 import { recordDbStatus, refreshPresenceForRows } from "./sharedDbPresence";
 import { recordStores } from "./storeAvailability";
 import { getTableColumns, tableAvailableFields } from "./tableColumns";
@@ -68,7 +74,10 @@ export const searchWorkspace = createSearchWorkspace({
   openDatabaseCreationFromResearch,
   openStoreRecordEditor: recordDialogs.openStoreRecordEditor,
   openTouchup,
+  persistListPreferences,
   persistPrefs,
+  persistSearchPreferences,
+  persistVectorPreferences,
   recordDbStatus,
   recordStores,
   refreshPresenceForRows,
@@ -85,7 +94,7 @@ export const searchWorkspace = createSearchWorkspace({
   selectedEvidenceEntries: evidenceSelection.selectedEvidenceEntries,
   selectedReviewItems: () => selectedReviewItems(state),
   setReviewSelected: evidenceSelection.setReviewSelected,
-  shell,
+  refreshShell,
   syncUrl,
   tableAvailableFields,
   toggleDbEvidence: evidenceSelection.toggleDbEvidence,
