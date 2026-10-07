@@ -23,10 +23,10 @@ import {
   ensureCompareLibrary,
   getCompareLibrary,
   getCompareRecord,
+  invalidateCompareLibrary,
 } from "../domain/sharedCompareLibrary";
 import { useAuthStore } from "../stores/auth";
 import { useCompareStore, useRecordViewStore } from "../stores/workspace";
-import { state as sharedState } from "../domain/sharedUrlState";
 import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
 import { useNewerData } from "../composables/useNewerData";
@@ -276,7 +276,7 @@ const newer = useNewerData();
 // ensureCompareLibrary only loads when the store page is empty, so clear it to read the new data.
 async function loadNewer() {
   newer.acknowledge();
-  sharedState.storeRecords = [];
+  invalidateCompareLibrary();
   await loadLibrary();
 }
 onMounted(() => {
