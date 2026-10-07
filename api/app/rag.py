@@ -542,15 +542,16 @@ def _generation_contract_issues(
         if str(item.get("evidence_id") or "").strip()
     }
     used_ids = extract_evidence_ids(answer)
-    unknown_ids = sorted({evidence_id for evidence_id in used_ids if evidence_id not in valid_ids})
-    if unknown_ids:
-        issues.append("unknown_evidence_markers:" + ",".join(unknown_ids))
-    if (
-        require_evidence_markers
-        and not used_ids
-        and not _insufficient_evidence_answer(answer)
-    ):
-        issues.append("missing_evidence_markers")
+    if require_evidence_markers:
+        unknown_ids = sorted({
+            evidence_id
+            for evidence_id in used_ids
+            if evidence_id not in valid_ids
+        })
+        if unknown_ids:
+            issues.append("unknown_evidence_markers:" + ",".join(unknown_ids))
+        if not used_ids and not _insufficient_evidence_answer(answer):
+            issues.append("missing_evidence_markers")
     return issues
 
 
@@ -2325,7 +2326,7 @@ def run_rag_pipeline(
         raw_answer,
         evidence,
         prose_required=prose_required,
-        require_evidence_markers=request.bind_citations,
+        require_evidence_markers=request.bind_citations and prose_required,
     )
     initial_contract_issues = list(contract_issues)
     output_contract_retry = bool(contract_issues)
@@ -2347,9 +2348,9 @@ def run_rag_pipeline(
         correction_prompt = generation_prompt + """
 
 <OUTPUT_CONTRACT_CORRECTION>
-The previous draft violated the requested answer form by returning JSON or a JSON code fence.
-Return only cohesive scholarly prose with evidence markers. Do not return JSON, a schema,
-field names such as title/introduction/themes, or a fenced code block.
+The previous draft failed the Research output or evidence contract.
+Return only cohesive scholarly prose with current evidence markers. Avoid JSON, schemas,
+field-name wrappers such as title/introduction/themes, and fenced code blocks.
 </OUTPUT_CONTRACT_CORRECTION>
 """
         raw_answer = generate_answer(correction_prompt, None)
