@@ -24,7 +24,11 @@ import SidebarNavButton from "./SidebarNavButton.vue";
 import UiTooltip from "../ui/UiTooltip.vue";
 import type { SidebarNavEntry, SidebarNavGroup } from "./sidebarNav";
 
-const props = defineProps<{ groups: SidebarNavGroup[]; collapsed: boolean }>();
+const props = defineProps<{
+  groups: SidebarNavGroup[];
+  collapsed: boolean;
+  pendingId?: string;
+}>();
 const emit = defineEmits<{ navigate: [string] }>();
 const i18n = useI18nStore();
 
@@ -109,9 +113,12 @@ const filteredGroups = computed(() => {
 const hasMatches = computed(() => filteredGroups.value.some((group) => group.items.length));
 
 function navigate(id: string) {
+  // Publish the user's primary navigation intent before optional personalization
+  // storage. The application shell can render pending feedback immediately even
+  // if browser storage is slow.
+  emit("navigate", id);
   recents.value = [id, ...recents.value.filter((item) => item !== id)].slice(0, 8);
   saveIds(RECENTS_KEY, recents.value);
-  emit("navigate", id);
 }
 
 function toggleFavorite(id: string) {
@@ -168,6 +175,7 @@ function isFavorite(id: string) {
             :icon="item.icon"
             :collapsed="collapsed"
             :active="item.active"
+            :pending="item.id === pendingId"
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
           />
@@ -185,6 +193,7 @@ function isFavorite(id: string) {
             :icon="item.icon"
             :collapsed="collapsed"
             :active="item.active"
+            :pending="item.id === pendingId"
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
           />
@@ -217,6 +226,7 @@ function isFavorite(id: string) {
             :icon="item.icon"
             :collapsed="collapsed"
             :active="item.active"
+            :pending="item.id === pendingId"
             :disabled-reason="item.disabledReason"
             @navigate="navigate"
           />
