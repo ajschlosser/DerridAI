@@ -153,7 +153,7 @@ Work order:
 - [x] B1. Remove Research configuration/draft mutations from shell invalidation.
 - [x] B2. Keep Research prompt/instructions component/page-owned on the input path; stop global workspace serialization while
       typing. Preserve draft restoration through a Research-specific repository if draft persistence remains desired.
-- [ ] B3. Split global preference persistence into domain repositories/timers, starting with Research, layout, Search,
+- [x] B3. Split global preference persistence into domain repositories/timers, starting with Research, layout, Search,
       Records, and Compare. Retain migration reads from the existing `prefs` object until all domains move.
 - [x] B4. Stop Search keystrokes from synchronously compressing/replacing URL state. Make query rendering immediate and URL
       persistence delayed/meaningful.
@@ -195,9 +195,10 @@ behind domain invalidation and cheap collection-identity checks, while active-st
 live. Job reconciliation no longer rewrites shell DOM. Feature dialogs and the touch-up workflow are now activated through
 small feature-owned request refs and lazy hosts instead of being statically owned by `App.vue`. B1, B2, B4, B5, and B6 are complete. Records snapshot reads are side-effect free, visible-row presence refresh is an
 explicit async effect, and corpus-derived row metadata is cached by corpus generation with prefix-query narrowing for
-ordinary typing. Research configuration now has its own domain preference record in addition to its composer-draft
-record; the wider B3 migration remains open until the remaining native preference call sites stop defaulting to the
-monolithic workspace record. Bounded User Timing
+ordinary typing. Research configuration now has its own domain preference record in addition to its composer-draft record. Search,
+Records/list, layout, review/evidence, vector, jobs, Settings, Works, and record-view preferences use independent records
+and timers; Compare keeps its bounded feature draft record. Legacy `workspace` reads remain as a migration fallback,
+but these native feature paths no longer default to whole-workspace serialization. Bounded User Timing
 measures record Research prompt/instruction input-to-next-frame latency and sidebar navigation intent-to-next-frame latency.
 Repository validation has not yet been run in this environment.
 
