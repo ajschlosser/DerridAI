@@ -19,7 +19,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
-import { state as sharedState } from "../domain/sharedUrlState";
 import { clearAllUpdates } from "../domain/sharedRecordEditing";
 import { toggleSidebar } from "../domain/sidebarToggle";
 import {
@@ -34,7 +33,12 @@ import {
   getDefaultProviderProfileId,
 } from "../domain/sharedProviderProfiles";
 import { navigateTo } from "../domain/sharedNavigation";
-import { flushWorkspacePrefs, persistPrefs } from "../domain/sharedWorkspaceStorage";
+import {
+  flushDomainPreferences,
+  persistJobPreferences,
+  persistLayoutPreferences,
+  persistListPreferences,
+} from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
 import { pipelinesApi } from "../api/pipelines";
 import {
@@ -47,6 +51,15 @@ import {
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
+import { useJobsStore } from "../stores/jobs";
+import {
+  useConfigStore,
+  useLayoutStore,
+  useListsStore,
+  useStatusStore,
+  useUpsertProgressStore,
+} from "../stores/workspace";
+import { corpusState } from "../state/workspaceState";
 import LanguageFlag from "../components/LanguageFlag.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
@@ -85,42 +98,34 @@ import {
 import { overridesForPipeline, withOverridesForPipeline } from "../domain/pipelineOverrides";
 import type { ResearchPipelineOptions } from "../types/pipelines";
 
-type RuntimeSettings = {
-  storageReady?: boolean;
-  appConfig: Record<string, unknown>;
-  ragConfig: Record<string, unknown>;
-  health?: { chroma?: { path?: string } } | null;
-  providerStatuses?: Record<string, { available?: boolean; checked_at?: string; error?: string }>;
-  files?: unknown[];
-  sidebarCollapsed?: boolean;
-  tableColumns?: Record<string, unknown>;
-  collapsedPanels?: Record<string, unknown>;
-  upsertIgnored?: Record<string, unknown>;
-  jobs?: Array<{ status?: string }>;
-};
-const workspace = sharedState as unknown as RuntimeSettings;
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
+const jobs = useJobsStore();
+const config = useConfigStore();
+const layout = useLayoutStore();
+const lists = useListsStore();
+const status = useStatusStore();
+const upsertProgress = useUpsertProgressStore();
 const route = useRoute();
 const router = useRouter();
 
 const appearanceSaved = ref(
-  normalizeAppearance(workspace.appConfig as unknown as AppearanceSettingsDraft),
+  normalizeAppearance(config.appConfig as unknown as AppearanceSettingsDraft),
 );
 const appearanceDraft = ref(cloneJson(appearanceSaved.value));
-const reviewSaved = ref(normalizeReview(workspace.appConfig as unknown as ReviewSettingsDraft));
+const reviewSaved = ref(normalizeReview(config.appConfig as unknown as ReviewSettingsDraft));
 const reviewDraft = ref(cloneJson(reviewSaved.value));
 const embeddingSaved = ref(
-  normalizeEmbedding(workspace.appConfig as unknown as EmbeddingSettingsDraft),
+  normalizeEmbedding(config.appConfig as unknown as EmbeddingSettingsDraft),
 );
 const embeddingDraft = ref(cloneJson(embeddingSaved.value));
-const ragSaved = ref(normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft));
+const ragSaved = ref(normalizeRag(config.ragConfig as unknown as RagSettingsDraft));
 const ragDraft = ref(cloneJson(ragSaved.value));
 const researchPipelineOptions = ref<ResearchPipelineOptions | null>(null);
 const researchPipelineError = ref("");
 const settingsOverridePipelineKey = ref("");
-const notificationsOn = ref(Boolean(workspace.appConfig.desktop_notifications));
+const notificationsOn = ref(Boolean(config.appConfig.desktop_notifications));
 const nukePhrase = ref("");
 const query = ref("");
 const advancedOpen = ref(false);
@@ -145,7 +150,7 @@ const busy = ref("");
 
 const isAdmin = computed(() => auth.isAdmin);
 const canAppearance = computed(() => auth.can("appearance.manage") || isAdmin.value);
-const chromaPath = computed(() => String(workspace.health?.chroma?.path || "/data/chroma"));
+const chromaPath = computed(() => String(status.health?.chroma?.path || "/data/chroma"));
 const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderProfile[]);
 const defaultProfileId = computed(() =>
   String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),
@@ -392,10 +397,8 @@ const searchHits = computed<SettingsSearchHit[]>(() => {
     });
 });
 const backupCounts = computed(() => ({
-  files: Number(workspace.files?.length || 0),
-  jobs: (workspace.jobs || []).filter((job) =>
-    ["queued", "running", "cancelling"].includes(String(job.status)),
-  ).length,
+  files: Number(corpusState.files?.length || 0),
+  jobs: jobs.activeJobs.length,
 }));
 
 function persistKind(kind: "browser" | "readonly" | "link" | "backend") {
@@ -418,31 +421,31 @@ function announce(message: string) {
 function mark(group: string, status: SaveStatus) {
   groupStatus.value = { ...groupStatus.value, [group]: status };
 }
-async function persistWorkspace() {
-  await flushWorkspacePrefs();
+async function persistDomain(name: "settings" | "research") {
+  await flushDomainPreferences(name);
   shell.sync();
 }
 async function saveGroup(group: string, apply: () => void | Promise<void>) {
   pageError.value = "";
   mark(group, "saving");
   announce(i18n.t("settings.status.saving"));
-  const previousApp = cloneJson(workspace.appConfig);
-  const previousRag = cloneJson(workspace.ragConfig);
+  const previousApp = cloneJson(config.appConfig);
+  const previousRag = cloneJson(config.ragConfig);
   const previousAppearance = cloneJson(appearanceSaved.value);
   const previousReview = cloneJson(reviewSaved.value);
   const previousEmbedding = cloneJson(embeddingSaved.value);
   const previousRagSaved = cloneJson(ragSaved.value);
   try {
     await apply();
-    await persistWorkspace();
+    await persistDomain(group === "rag" ? "research" : "settings");
     mark(group, "success");
     announce(i18n.t("settings.status.saved_ok"));
     window.setTimeout(() => {
       if (groupStatus.value[group] === "success") mark(group, "saved");
     }, 1600);
   } catch (error) {
-    Object.assign(workspace.appConfig, previousApp);
-    Object.assign(workspace.ragConfig, previousRag);
+    Object.assign(config.appConfig, previousApp);
+    Object.assign(config.ragConfig, previousRag);
     appearanceSaved.value = previousAppearance;
     reviewSaved.value = previousReview;
     embeddingSaved.value = previousEmbedding;
@@ -456,7 +459,7 @@ function saveAppearance() {
   void saveGroup("appearance", () => {
     appearanceDraft.value = normalizeAppearance(appearanceDraft.value);
     applyAppearance(appearanceDraft.value);
-    Object.assign(workspace.appConfig, appearanceDraft.value);
+    Object.assign(config.appConfig, appearanceDraft.value);
     appearanceSaved.value = cloneJson(appearanceDraft.value);
   });
 }
@@ -466,10 +469,10 @@ function saveReview() {
     const profile = profiles.value.find(
       (item) => item.id === reviewDraft.value.default_provider_profile,
     );
-    workspace.appConfig.default_provider_profile = reviewDraft.value.default_provider_profile;
-    if (profile) workspace.appConfig.chat_provider = profile.type;
-    workspace.appConfig.default_review_preset = reviewDraft.value.default_review_preset;
-    workspace.appConfig.default_llm_run_mode = reviewDraft.value.default_llm_run_mode;
+    config.appConfig.default_provider_profile = reviewDraft.value.default_provider_profile;
+    if (profile) config.appConfig.chat_provider = profile.type;
+    config.appConfig.default_review_preset = reviewDraft.value.default_review_preset;
+    config.appConfig.default_llm_run_mode = reviewDraft.value.default_llm_run_mode;
     reviewSaved.value = cloneJson(reviewDraft.value);
   });
 }
@@ -485,7 +488,7 @@ function saveEmbedding() {
       embedding_model: saved.embedding_model || "",
     });
     embeddingDraft.value = normalized;
-    Object.assign(workspace.appConfig, normalized);
+    Object.assign(config.appConfig, normalized);
     embeddingSaved.value = cloneJson(normalized);
     void testEmbedding();
   });
@@ -509,7 +512,7 @@ function saveRag() {
     return;
   }
   void saveGroup("rag", () => {
-    Object.assign(workspace.ragConfig, ragDraft.value);
+    Object.assign(config.ragConfig, ragDraft.value);
     ragSaved.value = cloneJson(ragDraft.value);
   });
 }
@@ -576,12 +579,12 @@ function go(path: string, view?: string) {
   else window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path } }));
 }
 function providerReady(profile: ProviderProfile) {
-  const status = workspace.providerStatuses?.[profile.id];
+  const status = status.providerStatuses?.[profile.id];
   return Boolean(status?.available);
 }
 async function saveNotifications() {
-  workspace.appConfig.desktop_notifications = notificationsOn.value;
-  await persistWorkspace();
+  config.appConfig.desktop_notifications = notificationsOn.value;
+  await persistDomain("settings");
   announce(i18n.t("settings.notifications_saved"));
 }
 async function requestNotifications() {
@@ -603,22 +606,22 @@ async function requestNotifications() {
   }
 }
 function resetColumns() {
-  workspace.tableColumns = {};
-  persistPrefs();
+  lists.tableColumns = {};
+  persistListPreferences();
   announce(i18n.t("settings.columns_reset"));
 }
 function expandPanels() {
-  workspace.collapsedPanels = {};
-  persistPrefs();
+  layout.collapsedPanels = {};
+  persistLayoutPreferences();
   announce(i18n.t("settings.panels_expanded"));
 }
 function expandSidebar() {
-  if (workspace.sidebarCollapsed) toggleSidebar();
+  if (layout.sidebarCollapsed) toggleSidebar();
   announce(i18n.t("settings.sidebar_expanded"));
 }
 function clearUpsertSuppressions() {
-  workspace.upsertIgnored = {};
-  persistPrefs();
+  upsertProgress.upsertIgnored = {};
+  persistJobPreferences();
   announce(i18n.t("settings.upsert_restored"));
 }
 function openBackup() {
@@ -720,14 +723,14 @@ watch([appearanceDirty, reviewDirty, embeddingDirty, ragDirty], () => {
 onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
   appearanceSaved.value = normalizeAppearance(
-    workspace.appConfig as unknown as AppearanceSettingsDraft,
+    config.appConfig as unknown as AppearanceSettingsDraft,
   );
   appearanceDraft.value = cloneJson(appearanceSaved.value);
-  reviewSaved.value = normalizeReview(workspace.appConfig as unknown as ReviewSettingsDraft);
+  reviewSaved.value = normalizeReview(config.appConfig as unknown as ReviewSettingsDraft);
   reviewDraft.value = cloneJson(reviewSaved.value);
 
   const browserEmbedding = normalizeEmbedding(
-    workspace.appConfig as unknown as EmbeddingSettingsDraft,
+    config.appConfig as unknown as EmbeddingSettingsDraft,
   );
   if (isAdmin.value) {
     try {
@@ -738,7 +741,7 @@ onMounted(async () => {
             serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
           embedding_model: serverEmbedding.embedding_model || "",
         });
-        Object.assign(workspace.appConfig, normalized);
+        Object.assign(config.appConfig, normalized);
         embeddingSaved.value = normalized;
       } else {
         const migrateFrom =
@@ -759,7 +762,7 @@ onMounted(async () => {
             migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
           embedding_model: migrated.embedding_model || "",
         });
-        Object.assign(workspace.appConfig, embeddingSaved.value);
+        Object.assign(config.appConfig, embeddingSaved.value);
       }
     } catch {
       // The browser copy remains usable if the backend configuration endpoint is
@@ -772,9 +775,9 @@ onMounted(async () => {
   embeddingDraft.value = cloneJson(embeddingSaved.value);
   void testEmbedding();
 
-  ragSaved.value = normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft);
+  ragSaved.value = normalizeRag(config.ragConfig as unknown as RagSettingsDraft);
   ragDraft.value = cloneJson(ragSaved.value);
-  notificationsOn.value = Boolean(workspace.appConfig.desktop_notifications);
+  notificationsOn.value = Boolean(config.appConfig.desktop_notifications);
   applyAppearance(appearanceDraft.value);
 });
 onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
@@ -1190,7 +1193,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
           v-if="isAdmin && section === 'services'"
           :profiles="profiles"
           :default-profile-id="defaultProfileId"
-          :provider-statuses="workspace.providerStatuses || {}"
+          :provider-statuses="status.providerStatuses || {}"
           :audio="audio"
           :audio-draft="audioDraft"
           :audio-status="audioStatus"
