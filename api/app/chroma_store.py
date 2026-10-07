@@ -380,26 +380,38 @@ def _notes_collection_change(*extra_resources: str):
     def decorate(method):
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
+            target = args[0] if args else kwargs.get("name", kwargs.get("store"))
+            response_cache_target = target in {
+                "_response_cache",
+                "derridai_response_cache",
+            }
             try:
                 result = method(self, *args, **kwargs)
             finally:
-                inventory_cache = getattr(self, "_research_filter_cache", None)
-                if isinstance(inventory_cache, dict):
-                    inventory_cache.clear()
-                scope_cache = getattr(self, "_research_scope_cache", None)
-                if isinstance(scope_cache, dict):
-                    scope_cache.clear()
-                self._research_filter_epoch = getattr(self, "_research_filter_epoch", 0) + 1
-            # Record-size samples are derived operational state. Any collection
-            # mutation can invalidate a median without changing the item count,
-            # so clear the tiny cache rather than risking stale auto-sizing.
-            size_cache = getattr(self, "_record_size_cache", None)
-            if isinstance(size_cache, dict):
-                size_cache.clear()
+                # Response Library writes are operational state, not corpus
+                # mutations. Clearing corpus-derived Research caches here made
+                # every completed RAG run invalidate the Work/author inventory
+                # it had just built, forcing the next run to rescan all corpus
+                # metadata. Keep those caches warm across response-cache writes.
+                if not response_cache_target:
+                    inventory_cache = getattr(self, "_research_filter_cache", None)
+                    if isinstance(inventory_cache, dict):
+                        inventory_cache.clear()
+                    scope_cache = getattr(self, "_research_scope_cache", None)
+                    if isinstance(scope_cache, dict):
+                        scope_cache.clear()
+                    self._research_filter_epoch = (
+                        getattr(self, "_research_filter_epoch", 0) + 1
+                    )
+            # Record-size samples are corpus-derived too. A response cache write
+            # cannot change them and must not force another corpus sample.
+            if not response_cache_target:
+                size_cache = getattr(self, "_record_size_cache", None)
+                if isinstance(size_cache, dict):
+                    size_cache.clear()
             operation_events.note_resource_changed("vector_collections")
             for resource in extra_resources:
                 operation_events.note_resource_changed(resource)
-            target = args[0] if args else kwargs.get("name", kwargs.get("store"))
             if target == "_response_cache":
                 operation_events.note_resource_changed("response_library")
             return result
