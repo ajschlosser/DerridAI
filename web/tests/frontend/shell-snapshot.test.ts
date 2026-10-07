@@ -25,6 +25,8 @@ describe("shell snapshot", () => {
   afterEach(() => {
     state.health = null;
     jobsState.jobs = [];
+    state.files = [];
+    state.activeFileId = null;
     state.view = "home";
   });
 
@@ -36,6 +38,15 @@ describe("shell snapshot", () => {
       { id: "succeeded", status: "succeeded" },
     ];
     expect(getShellSnapshot().activeJobs).toBe(3);
+  });
+
+  it("counts loaded records from file summaries without a flattened corpus scan", () => {
+    state.files = [
+      { id: "a", name: "a.jsonl", records: [{}, {}], dirty: new Set() },
+      { id: "b", name: "b.jsonl", records: [{}], dirty: new Set() },
+    ];
+
+    expect(getShellSnapshot().totalLoaded).toBe(3);
   });
 
   it("reports the view and context for the current page", () => {
