@@ -16,7 +16,9 @@
 
 # Canonical built-in locale. Keep keys synchronized with the paired locale module.
 
-FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au stockage…",
+FR_CA: dict[str, str] = {'loading.loading': "Chargement…",
+ 'loading.unavailable': "Indisponible",
+ 'loading.health': "Vérification de la connexion au stockage…",
  'loading.health_failed': "Les informations sur la connexion au stockage ne sont pas disponibles.",
  'loading.providers': "Chargement des fournisseurs…",
  'loading.providers_failed': "Les fournisseurs ne sont pas disponibles. Réessayez avant de créer une collection ou de modifier son fournisseur.",
@@ -3448,6 +3450,10 @@ FR_CA: dict[str, str] = {'loading.health': "Vérification de la connexion au sto
  'pdf_corpus.hands_free_published': 'Publié.',
  'pdf_corpus.hands_free_left': 'Laissés pour vous',
  'pdf_corpus.hands_free_more': 'et {count} autres dans la file de révision.',
+ 'schemas.loading': 'Chargement des schémas…',
+ 'schemas.loading_schema': 'Chargement du schéma…',
+ 'schemas.retry': 'Réessayer',
+ 'schemas.updating': 'Mise à jour…',
  'schemas.saved': 'Schéma enregistré.',
  'schemas.version': 'Version du schéma',
  'schemas.version_help': 'Le numéro de version augmente de lui-même à chaque modification enregistrée; une construction peut ainsi toujours indiquer quelle version du schéma elle a utilisée.',
