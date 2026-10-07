@@ -63,6 +63,7 @@ type Helper =
   | "formatTimestamp"
   | "fullCitation"
   | "isResearcher"
+  | "invalidateCorpusCache"
   | "jobLabel"
   | "jsonPretty"
   | "label"
@@ -112,6 +113,7 @@ export function createJobDialogs(deps: Deps) {
     formatTimestamp,
     fullCitation,
     isResearcher,
+    invalidateCorpusCache,
     jobLabel,
     jsonPretty,
     label,
@@ -1064,6 +1066,7 @@ export function createJobDialogs(deps: Deps) {
           }
           file.records.push(cloneAuditValue(draft));
           file.dirty.add(file.records.length - 1);
+          invalidateCorpusCache(file.id, true);
           await persistFileNow(file);
         }
         if (storeName) {
