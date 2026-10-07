@@ -180,6 +180,7 @@ class PersistentJobStateMixin:
             }
             self._recent_terminal_summaries: dict[str, JobPayload] = {}
             self._persistence_io_lock = threading.Lock()
+            self._persistent_state_started = True
 
         thread = Thread(
             target=self._persistence_loop,
@@ -188,6 +189,30 @@ class PersistentJobStateMixin:
         )
         self._persistence_thread = thread
         thread.start()
+
+    def _terminal_summaries(self) -> dict[str, JobPayload]:
+        """Return the bounded terminal-summary cache, including lightweight test managers."""
+        summaries = getattr(self, "_recent_terminal_summaries", None)
+        if summaries is not None:
+            return summaries
+        with self._lock:
+            summaries = getattr(self, "_recent_terminal_summaries", None)
+            if summaries is None:
+                summaries = {}
+                self._recent_terminal_summaries = summaries
+            return summaries
+
+    def _persistence_lock(self) -> threading.Lock:
+        """Return the manager's persistence lock, lazily for lightweight test doubles."""
+        lock = getattr(self, "_persistence_io_lock", None)
+        if lock is not None:
+            return lock
+        with self._lock:
+            lock = getattr(self, "_persistence_io_lock", None)
+            if lock is None:
+                lock = threading.Lock()
+                self._persistence_io_lock = lock
+            return lock
 
     def _active_snapshots(self) -> JobPayloadList:
         """Copy only live jobs for one durable checkpoint."""
@@ -199,7 +224,7 @@ class PersistentJobStateMixin:
             ]
 
     def _checkpoint_active_jobs(self) -> None:
-        with self._persistence_io_lock:
+        with self._persistence_lock():
             jobs = self._active_snapshots()
             if jobs:
                 job_repository.upsert_many(jobs)
@@ -225,11 +250,12 @@ class PersistentJobStateMixin:
         job_id = str(summary.get("id") or "")
         if not job_id:
             return
-        self._recent_terminal_summaries.pop(job_id, None)
-        self._recent_terminal_summaries[job_id] = summary
-        while len(self._recent_terminal_summaries) > self.RECENT_TERMINAL_SUMMARY_LIMIT:
-            oldest = next(iter(self._recent_terminal_summaries))
-            self._recent_terminal_summaries.pop(oldest, None)
+        summaries = self._terminal_summaries()
+        summaries.pop(job_id, None)
+        summaries[job_id] = summary
+        while len(summaries) > self.RECENT_TERMINAL_SUMMARY_LIMIT:
+            oldest = next(iter(summaries))
+            summaries.pop(oldest, None)
 
     @staticmethod
     def _payload_size(job: JobPayload) -> int:
@@ -283,7 +309,7 @@ class PersistentJobStateMixin:
             job = copy.deepcopy(self._jobs.get(job_id))
         if job is None:
             return
-        with self._persistence_io_lock:
+        with self._persistence_lock():
             job_repository.upsert(job)
         if str(job.get("status") or "") not in self.ACTIVE_STATUSES:
             self._prune_resident_finished()
@@ -292,7 +318,7 @@ class PersistentJobStateMixin:
         with self._lock:
             jobs = [copy.deepcopy(job) for job in self._jobs.values()]
         if jobs:
-            with self._persistence_io_lock:
+            with self._persistence_lock():
                 job_repository.upsert_many(jobs)
         self._prune_resident_finished()
 
@@ -343,18 +369,18 @@ class PersistentJobStateMixin:
             return self._jobs.setdefault(job_id, persisted)
 
     def _delete_finished_record(self, job_id: str, *, active_error: str) -> None:
-        with self._persistence_io_lock:
+        with self._persistence_lock():
             job = self._get_job_record(job_id)
             if str(job.get("status") or "") in self.ACTIVE_STATUSES:
                 raise ValueError(active_error)
             with self._lock:
                 self._jobs.pop(job_id, None)
-                self._recent_terminal_summaries.pop(job_id, None)
+                self._terminal_summaries().pop(job_id, None)
             if not job_repository.delete(job_id):
                 raise KeyError(job_id)
 
     def _clear_finished_records(self) -> int:
-        with self._persistence_io_lock:
+        with self._persistence_lock():
             with self._lock:
                 finished_ids = [
                     job_id
@@ -363,7 +389,7 @@ class PersistentJobStateMixin:
                 ]
                 for job_id in finished_ids:
                     self._jobs.pop(job_id, None)
-                    self._recent_terminal_summaries.pop(job_id, None)
+                    self._terminal_summaries().pop(job_id, None)
             return job_repository.clear_finished(self.JOB_TYPE)
 
     def _snapshot_finished_records(self) -> JobPayloadList:
@@ -380,7 +406,7 @@ class PersistentJobStateMixin:
                 str(job_id): job_realtime_summary(job)
                 for job_id, job in self._jobs.items()
             }
-            for job_id, summary in self._recent_terminal_summaries.items():
+            for job_id, summary in self._terminal_summaries().items():
                 summaries.setdefault(job_id, copy.deepcopy(summary))
             return list(summaries.values())
 
@@ -389,15 +415,21 @@ class PersistentJobStateMixin:
             job = self._jobs.get(job_id)
             if job is not None:
                 return job_realtime_summary(job)
-            summary = self._recent_terminal_summaries.get(job_id)
+            summary = self._terminal_summaries().get(job_id)
             return copy.deepcopy(summary) if summary is not None else None
 
     def job_footprints(self) -> list[tuple[str, str, int, bool]]:
         """Retention metadata without hydrating every historical payload."""
-        footprints = {
-            job_id: (job_id, created_at, size, active)
-            for job_id, created_at, size, active in job_repository.footprints(self.JOB_TYPE)
-        }
+        footprints: dict[str, tuple[str, str, int, bool]] = {}
+        # Lightweight managers used by tests and maintenance tooling may opt out
+        # of the durable startup path; in that case their resident state is the
+        # complete source of truth and must not be mixed with the global ledger.
+        if getattr(self, "_persistent_state_started", False):
+            footprints.update({
+                job_id: (job_id, created_at, size, active)
+                for job_id, created_at, size, active
+                in job_repository.footprints(self.JOB_TYPE)
+            })
         with self._lock:
             for job_id, job in self._jobs.items():
                 footprints[str(job_id)] = (
@@ -410,11 +442,11 @@ class PersistentJobStateMixin:
 
     def clear_all(self) -> int:
         """Drop in-memory and durable history without checkpoint resurrection."""
-        with self._persistence_io_lock:
+        with self._persistence_lock():
             with self._lock:
                 resident_count = len(self._jobs)
                 self._jobs.clear()
-                self._recent_terminal_summaries.clear()
+                self._terminal_summaries().clear()
 
                 provider_active = getattr(self, "_provider_active", None)
                 if isinstance(provider_active, dict):
