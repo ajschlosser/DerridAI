@@ -244,12 +244,23 @@ class _ExplicitScopeStore:
             }
         ]
 
-    def work_stats(self, name):
-        assert name == "corpus"
+    def research_scope_inventory(self, names):
+        assert names == ["corpus"]
         return [
-            {"work": "Of Grammatology", "document_author": "Jacques Derrida", "count": 2},
-            {"work": "Totality and Infinity", "document_author": "Emmanuel Levinas", "count": 1},
+            {
+                "scope_label": "Of Grammatology",
+                "source_authors": ["Jacques Derrida"],
+            },
+            {
+                "scope_label": "Totality and Infinity",
+                "source_authors": ["Emmanuel Levinas"],
+            },
         ]
+
+    def work_stats(self, name):
+        raise AssertionError(
+            "Research scope inference must not materialize full-document work_stats"
+        )
 
     def lexical_search(self, name, query, limit, where=None, where_document=None):
         assert name == "corpus"
