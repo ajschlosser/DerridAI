@@ -440,7 +440,7 @@ export function createWorksWorkspace(deps: Deps) {
     }
     try {
       const rows = [...workIndex().values()].slice(0, 24).flatMap((item) => item.rows.slice(0, 2));
-      refreshPresenceForRows(rows);
+      await refreshPresenceForRows(rows);
     } catch {
       /* presence is best-effort */
     }
