@@ -42,16 +42,11 @@ export interface ShellSnapshot {
   files: ShellFile[];
   context: { kicker: string; title: string; meta: string };
   totalLoaded: number;
-  activeJobs: number;
   corpusStoreCount: number;
   dbRecords: number;
-  cacheCount: number;
   hasCorpusDb: boolean;
-  dbUnavailableReason: string;
   activeStore: string;
-  canEdit: boolean;
   selectedEvidenceCount: number;
-  systemHtml: string;
   nav: ShellNavItem[];
 }
 
@@ -60,16 +55,11 @@ const emptySnapshot: ShellSnapshot = {
   files: [],
   context: { kicker: "Overview", title: "Dashboard", meta: "" },
   totalLoaded: 0,
-  activeJobs: 0,
   corpusStoreCount: 0,
   dbRecords: 0,
-  cacheCount: 0,
   hasCorpusDb: false,
-  dbUnavailableReason: "",
   activeStore: "",
-  canEdit: false,
   selectedEvidenceCount: 0,
-  systemHtml: "",
   nav: [],
 };
 
