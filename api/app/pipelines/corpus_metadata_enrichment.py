@@ -116,8 +116,11 @@ class EnrichmentSession(StructuredStageSession):
         )
 
     @classmethod
-    def open(cls) -> EnrichmentSession:
-        return cls.open_for(ENRICHMENT)
+    def open(
+        cls,
+        request: Mapping[str, Any] | None = None,
+    ) -> EnrichmentSession:
+        return cls.open_for(ENRICHMENT, request=request)
 
     def _invoke_task(
         self, stage: PipelineStageDefinition, inputs: Mapping[str, Any]
