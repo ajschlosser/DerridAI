@@ -985,6 +985,7 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
         ("What is the trace?", "Réponds en JSON.", True),
         ("What is the trace?", "Do not answer as JSON.", False),
         ("What is the trace?", "Ne réponds pas en JSON.", False),
+        ("Answer as JSON.", "Do not answer as JSON.", False),
     ],
 )
 def test_json_output_request_detection_respects_positive_and_negative_directives(
