@@ -44,6 +44,12 @@ const workspacePersistence = createWorkspacePersistence({
   invalidateCorpusCache,
   restoreCurrentPdfAsset,
   serializableFile: serializableRecordsFile,
+  restorePreferenceOverlays: async () => {
+    const records = await Promise.all(
+      Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
+    );
+    for (const record of records) applyDomainPreferenceRecord(state, record);
+  },
 });
 
 export const {
@@ -55,14 +61,4 @@ export const {
 
 export async function restoreWorkspace() {
   await workspacePersistence.restoreWorkspace();
-  try {
-    const records = await Promise.all(
-      Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
-    );
-    for (const record of records) applyDomainPreferenceRecord(state, record);
-  } catch (error) {
-    // Legacy workspace preferences have already restored successfully. A
-    // domain-record read failure must not make the entire local workspace fail.
-    console.warn("Could not restore domain preference records", error);
-  }
 }
