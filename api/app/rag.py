@@ -452,11 +452,26 @@ def strip_evidence_markers(text: str) -> str:
 
 
 _JSON_OUTPUT_REQUEST_PATTERN = re.compile(
-    r"(?is)(?:\b(?:return|respond|output|format|provide|give)\b.{0,40}\bjson\b|"
-    r"\bjson\s+(?:object|array|format)\b)"
+    r"(?is)(?:"
+    r"\b(?:return|respond|output|format|provide|give|answer)\b.{0,50}\bjson\b|"
+    r"\b(?:as|in)\s+(?:valid\s+)?json\b|"
+    r"\bjson\s+please\b"
+    r")"
 )
 _JSON_CODE_FENCE_PATTERN = re.compile(
-    r"(?is)^\s*```(?:json)?\s*(.*?)\s*```\s*$"
+    r"(?is)\`\`\`(?:json)?\s*(.*?)\s*\`\`\`"
+)
+_INSUFFICIENT_EVIDENCE_PATTERN = re.compile(
+    r"(?is)(?:"
+    r"\b(?:evidence|sources?|passages?|records?)\b.{0,100}"
+    r"\b(?:insufficient|inadequate|not\s+enough|does\s+not\s+support|"
+    r"do\s+not\s+support|cannot\s+support|can't\s+support|unable\s+to\s+support)\b|"
+    r"\b(?:insufficient|inadequate|not\s+enough)\b.{0,100}"
+    r"\b(?:evidence|sources?|passages?|records?)\b|"
+    r"\b(?:preuves?|sources?|passages?)\b.{0,100}"
+    r"\b(?:insuffisant(?:e|es|s)?|ne\s+suffi(?:t|sent)\s+pas|"
+    r"ne\s+permet(?:tent)?\s+pas)\b"
+    r")"
 )
 
 
@@ -466,26 +481,77 @@ def _requests_json_output(prompt: str, instructions: str) -> bool:
     return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(f"{prompt}\n{instructions}"))
 
 
-def _json_like_answer(text: str) -> bool:
-    """Detect JSON-shaped output even when a local model emits malformed JSON."""
+def _json_payload_like(candidate: str) -> bool:
+    """Return whether one candidate string is a JSON-shaped object or array."""
 
-    candidate = str(text or "").strip()
-    fenced = _JSON_CODE_FENCE_PATTERN.fullmatch(candidate)
-    if fenced:
-        candidate = fenced.group(1).strip()
-        # A fenced JSON object/array already violates the prose contract even if
-        # the model produced invalid escapes or otherwise malformed JSON.
-        if candidate.startswith(("{", "[")):
-            return True
-    if not candidate.startswith(("{", "[")):
+    value = str(candidate or "").strip()
+    if not value.startswith(("{", "[")):
         return False
     try:
-        return isinstance(json.loads(candidate), (dict, list))
+        return isinstance(json.loads(value), (dict, list))
     except (TypeError, ValueError, json.JSONDecodeError):
-        closing = "}" if candidate.startswith("{") else "]"
-        return candidate.endswith(closing) and bool(
-            re.search(r'"[^"]{1,80}"\s*:', candidate[:4000])
+        closing = "}" if value.startswith("{") else "]"
+        return value.endswith(closing) and bool(
+            re.search(r'"[^"]{1,80}"\s*:', value[:4000])
         )
+
+
+def _json_like_answer(text: str) -> bool:
+    """Detect a JSON-dominated answer, including malformed fenced payloads."""
+
+    candidate = str(text or "").strip()
+    if _json_payload_like(candidate):
+        return True
+
+    # Local models often prefix a structured answer with a short courtesy line,
+    # e.g. "Here is the answer:" followed by a JSON fence. Treat a fenced
+    # object/array as the answer form when surrounding prose is only a small
+    # preface/suffix or the structured payload dominates the response.
+    for fenced in _JSON_CODE_FENCE_PATTERN.finditer(candidate):
+        payload = fenced.group(1).strip()
+        if not _json_payload_like(payload):
+            continue
+        surrounding = (candidate[: fenced.start()] + candidate[fenced.end() :]).strip()
+        if len(surrounding) <= 200 or len(payload) >= max(200, len(surrounding) * 2):
+            return True
+    return False
+
+
+def _insufficient_evidence_answer(text: str) -> bool:
+    """Recognize a narrow evidence-insufficiency answer that needs no fake citation."""
+
+    return bool(_INSUFFICIENT_EVIDENCE_PATTERN.search(str(text or "")))
+
+
+def _generation_contract_issues(
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    prose_required: bool,
+    require_evidence_markers: bool,
+) -> list[str]:
+    """Validate answer form and run-local evidence-marker integrity."""
+
+    issues: list[str] = []
+    if prose_required and _json_like_answer(answer):
+        issues.append("structured_json")
+
+    valid_ids = {
+        str(item.get("evidence_id") or "").strip()
+        for item in evidence
+        if str(item.get("evidence_id") or "").strip()
+    }
+    used_ids = extract_evidence_ids(answer)
+    unknown_ids = sorted({evidence_id for evidence_id in used_ids if evidence_id not in valid_ids})
+    if unknown_ids:
+        issues.append("unknown_evidence_markers:" + ",".join(unknown_ids))
+    if (
+        require_evidence_markers
+        and not used_ids
+        and not _insufficient_evidence_answer(answer)
+    ):
+        issues.append("missing_evidence_markers")
+    return issues
 
 
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
@@ -512,7 +578,7 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     for pattern in EVIDENCE_MARKER_PATTERNS:
         bound = re.sub(pattern, replace_group, bound)
 
-    if include_works_cited:
+    if include_works_cited and used_ids:
         seen: set[str] = set()
         citations: list[str] = []
         for item in evidence:
