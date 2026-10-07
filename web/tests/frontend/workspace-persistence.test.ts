@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { createWorkspacePersistence } from "../../src/domain/workspacePersistence";
+import { createPrefsPersistence } from "../../src/domain/prefsPersistence";
 import { createRuntimeState } from "../../src/state/runtimeState";
 
 describe("workspace preference persistence", () => {
@@ -27,18 +27,9 @@ describe("workspace preference persistence", () => {
     state.appConfig.provider_profiles = [{ id: "profile", onChange: () => undefined }] as never;
     state.selectedEvidence = { formatter: () => "formatted" };
     const idbPut = vi.fn(async (_store: string, _value: unknown) => undefined);
-    const persistence = createWorkspacePersistence({
+    const persistence = createPrefsPersistence({
       state,
-      fileTimers: new Map(),
-      applyUiTheme: vi.fn(),
-      ensureProviderProfiles: vi.fn(),
-      idbGet: vi.fn(),
-      idbGetAll: vi.fn(),
-      idbPut,
-      invalidateCorpusCache: vi.fn(),
-      restoreCurrentPdfAsset: vi.fn(),
-      serializableFile: vi.fn(),
-      trf: vi.fn((key: string) => key),
+      put: idbPut,
     });
 
     await persistence.flushWorkspacePrefs();
