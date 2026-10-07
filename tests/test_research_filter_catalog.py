@@ -123,7 +123,13 @@ def test_research_scope_inventory_is_metadata_only_cached_and_invalidated(monkey
         },
     ])
     collection.id = "scope-corpus"
-    collection.count = lambda: len(collection.rows)
+
+    def forbidden_count():
+        raise AssertionError(
+            "Research scope inventory cache lookup must not load vector counts"
+        )
+
+    collection.count = forbidden_count
     collection_lookups = []
     store = object.__new__(ChromaStore)
 
