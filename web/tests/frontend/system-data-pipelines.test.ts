@@ -713,9 +713,7 @@ describe("System Data Pipeline Studio", () => {
       format: "derridai-pipeline" as const,
       version: 1 as const,
       pipeline_contract_version: 1,
-      required_strategies: Object.fromEntries(
-        pipeline.stages.map((stage) => [stage.strategy, 1]),
-      ),
+      required_strategies: Object.fromEntries(pipeline.stages.map((stage) => [stage.strategy, 1])),
       pipeline_hash: "a".repeat(64),
       pipeline: structuredClone(pipeline),
     };
@@ -727,9 +725,7 @@ describe("System Data Pipeline Studio", () => {
       createObjectURL: createUrl,
       revokeObjectURL: revokeUrl,
     });
-    const click = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     const { wrapper } = await mountStudio();
     const button = wrapper
