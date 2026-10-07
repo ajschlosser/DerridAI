@@ -282,6 +282,25 @@ class CorpusRunConfigV2(_StrictConfigModel):
             for feature, binding in self.pipelines.assignments.items()
         }
 
+    def pipeline_identity_snapshot(self) -> dict[str, dict[str, Any]]:
+        """Return compact baseline/effective identities for reproducibility manifests."""
+
+        snapshot: dict[str, dict[str, Any]] = {}
+        for feature, binding in self.pipelines.assignments.items():
+            resolution = resolve_pipeline_config(
+                binding.definition,
+                run_overrides=binding.overrides,
+            )
+            snapshot[feature] = {
+                "pipeline_id": binding.definition.pipeline_id,
+                "pipeline_version": binding.definition.version,
+                "baseline_hash": binding.pipeline_hash,
+                "effective_hash": resolution.effective_hash,
+                "required_strategies": dict(binding.required_strategies),
+                "overridden": binding.overrides is not None,
+            }
+        return snapshot
+
     def assert_runtime_pipeline_capabilities(self) -> None:
         """Recheck executable strategy versions before source extraction.
 
