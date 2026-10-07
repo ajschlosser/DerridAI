@@ -35,15 +35,22 @@ describe("shell status projection", () => {
     invalidateShellStatusProjection();
   });
 
-  it("reuses the projection across unrelated shell reads", () => {
+  it("reuses aggregate values while reading cheap live primitives on each shell read", () => {
     state.files = [{ records: [{}, {}] }];
+    state.activeStore = "first";
+    state.selectedEvidence = { a: { key: "a" } };
     invalidateShellStatusProjection();
 
     const first = getShellStatusProjection();
+    state.files[0].records.push({});
+    state.activeStore = "second";
+    state.selectedEvidence.b = { key: "b" };
     const second = getShellStatusProjection();
 
-    expect(first).toBe(second);
     expect(first.totalLoaded).toBe(2);
+    expect(second.totalLoaded).toBe(2);
+    expect(second.activeStore).toBe("second");
+    expect(second.selectedEvidenceCount).toBe(2);
   });
 
   it("is invalidated by corpus changes rather than rescanning on every shell refresh", () => {
