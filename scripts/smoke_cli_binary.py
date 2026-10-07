@@ -49,6 +49,8 @@ def main() -> int:
         raise FileNotFoundError(binary)
 
     _run([str(binary), "--version"])
+    _run([str(binary), "pipeline", "capabilities", "--json"])
+    _run([str(binary), "doctor", "--json"])
 
     with tempfile.TemporaryDirectory(prefix="derridai-cli-smoke-") as tmp:
         config = Path(tmp) / "corpus-processing.yaml"
