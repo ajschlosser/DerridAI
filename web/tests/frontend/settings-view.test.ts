@@ -150,8 +150,10 @@ vi.mock("../../src/domain/sharedProviderProfiles", () => ({
 }));
 vi.mock("../../src/domain/sharedUrlState", () => ({ state: runtime.state }));
 vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
-  persistPrefs: runtime.persistPrefs,
-  flushWorkspacePrefs: runtime.flushWorkspacePrefs,
+  flushDomainPreferences: runtime.flushWorkspacePrefs,
+  persistJobPreferences: runtime.persistPrefs,
+  persistLayoutPreferences: runtime.persistPrefs,
+  persistListPreferences: runtime.persistPrefs,
 }));
 vi.mock("../../src/domain/sharedRecordEditing", () => ({
   clearAllUpdates: runtime.clearAllUpdates,
@@ -174,6 +176,15 @@ vi.mock("../../src/domain/sidebarToggle", () => ({ toggleSidebar: runtime.toggle
 import SettingsView from "../../src/views/SettingsView.vue";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
+import { jobsState } from "../../src/state/jobsState";
+import {
+  configState,
+  corpusState,
+  layoutState,
+  listState,
+  statusState,
+  upsertProgressState,
+} from "../../src/state/workspaceState";
 
 async function mountView(role: "admin" | "researcher", query: Record<string, string> = {}) {
   const pinia = createPinia();
@@ -213,6 +224,19 @@ async function mountView(role: "admin" | "researcher", query: Record<string, str
 
 describe("SettingsView", () => {
   beforeEach(() => {
+    // Settings now consumes narrow domain stores rather than the compatibility
+    // workspace object. Keep the test fixture objects shared so assertions below
+    // still observe the exact mutations performed by the view.
+    configState.appConfig = runtime.state.appConfig;
+    configState.ragConfig = runtime.state.ragConfig;
+    statusState.health = runtime.state.health;
+    statusState.providerStatuses = runtime.state.providerStatuses;
+    corpusState.files = runtime.state.files;
+    layoutState.sidebarCollapsed = runtime.state.sidebarCollapsed;
+    layoutState.collapsedPanels = runtime.state.collapsedPanels;
+    listState.tableColumns = runtime.state.tableColumns;
+    upsertProgressState.upsertIgnored = runtime.state.upsertIgnored;
+    jobsState.jobs = runtime.state.jobs as never;
     runtime.flushWorkspacePrefs.mockClear();
     runtime.flushWorkspacePrefs.mockResolvedValue(undefined);
     systemApi.embeddingDefaults.mockClear();
