@@ -270,8 +270,9 @@ export function createRecordDialogs(deps: Deps) {
           return false;
         const batchId = uid();
         let fieldChanges = 0;
+        const touchedFiles = new Map<string, Any>();
         for (const row of changing) {
-          fieldChanges += applyRecordChanges(
+          const changed = applyRecordChanges(
             row.file,
             row.index,
             { [field]: cloneAuditValue(value) },
@@ -279,8 +280,15 @@ export function createRecordDialogs(deps: Deps) {
               source: "bulk_field_edit",
               batchId,
               reason: `Bulk edit ${field}`,
+              deferCommit: true,
             },
           );
+          fieldChanges += changed;
+          if (changed) touchedFiles.set(String(row.file.id), row.file);
+        }
+        for (const file of touchedFiles.values()) {
+          invalidateCorpusCache(file.id);
+          await persistFileNow(file);
         }
         shell();
         renderView();
