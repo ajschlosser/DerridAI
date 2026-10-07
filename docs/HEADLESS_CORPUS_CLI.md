@@ -278,6 +278,8 @@ derridai --version
 derridai config validate --config FILE
 derridai config migrate --config FILE [--output FILE] [--json]
 derridai pipeline capabilities [--json]
+derridai pipeline export --pipeline-id ID --version N [--output FILE]
+derridai pipeline validate --config FILE [--json]
 derridai corpus build --source FILE --config FILE [--output FILE] [--celf]
 derridai doctor [--json]
 ```
@@ -317,7 +319,7 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | 3. Automatic settlement              | IN PROGRESS | The headless runner uses shared autonomous settlement without granting human authority; broader end-to-end regression coverage remains.                                           |
 | 4. Research projection               | IN PROGRESS | Schema-driven allow-list research `.jsonl.zst` output and atomic replacement are implemented; a research reproducibility/integrity sidecar remains.                               |
 | 5. cELF projection                   | IN PROGRESS | cELF output routes through canonical publication/conformance and copies the canonical integrity sidecar; compiled-binary acceptance remains.                                      |
-| 6. Runtime diagnostics               | IN PROGRESS | `derridai doctor` and `pipeline capabilities` report pipeline compatibility/bindings; source-kind helper/NLP/provider/workspace checks remain.                                    |
+| 6. Runtime diagnostics               | IN PROGRESS | `derridai doctor` reports platform, writable paths, helpers, NLP resources, source-kind readiness and pipeline bindings; provider reachability is intentionally not probed by default. |
 | 7. Native packaging                  | IN PROGRESS | Add Nuitka build configuration and target-OS CI matrix; prove standalone artifacts first, then evaluate onefile.                                                                  |
 | 8. Cross-platform acceptance         | TODO        | Run the same deterministic fixture corpus on Ubuntu, Windows 11-compatible runner, macOS x86_64, and macOS arm64; compare semantic output/integrity expectations.                 |
 | 9. Documentation/release integration | TODO        | Update README, USER_GUIDE, ARCHITECTURE, CONTRIBUTING, release gates, artifact signing/checksums, and installation instructions.                                                  |

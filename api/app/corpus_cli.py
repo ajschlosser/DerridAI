@@ -105,6 +105,29 @@ def _parser() -> argparse.ArgumentParser:
         help="Write machine-readable capability information.",
     )
 
+    pipeline_export = pipeline_commands.add_parser(
+        "export",
+        help="Export a built-in immutable pipeline as portable JSON.",
+    )
+    pipeline_export.add_argument("--pipeline-id", required=True)
+    pipeline_export.add_argument("--version", required=True, type=int)
+    pipeline_export.add_argument(
+        "--output",
+        type=Path,
+        help="Write portable JSON here instead of stdout.",
+    )
+
+    pipeline_validate = pipeline_commands.add_parser(
+        "validate",
+        help="Validate a portable pipeline document.",
+    )
+    pipeline_validate.add_argument("--config", required=True, type=Path)
+    pipeline_validate.add_argument(
+        "--json",
+        action="store_true",
+        help="Write the normalized portable document after validation.",
+    )
+
     doctor = commands.add_parser(
         "doctor",
         help="Check headless pipeline compatibility before starting a corpus build.",
@@ -262,6 +285,96 @@ def _doctor(*, as_json: bool) -> int:
     )
 
 
+def _write_cli_text(
+    rendered: str,
+    *,
+    output: Path | None,
+    label: str,
+) -> int:
+    """Write CLI text atomically when an output path is requested."""
+
+    if output is None:
+        sys.stdout.write(rendered)
+        return int(ExitCode.OK)
+
+    destination = output.expanduser().resolve()
+    temporary = destination.with_name(f".{destination.name}.tmp")
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(rendered, encoding="utf-8")
+        temporary.replace(destination)
+    except OSError as exc:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+        print(f"{label} failed: {exc}", file=sys.stderr)
+        return int(ExitCode.OUTPUT_IO)
+
+    print(destination)
+    return int(ExitCode.OK)
+
+
+def _pipeline_export(
+    pipeline_id: str,
+    version: int,
+    *,
+    output: Path | None,
+) -> int:
+    """Export one code-owned pipeline without loading server persistence."""
+
+    from .pipelines.defaults import built_in_pipeline
+    from .pipelines.portable import export_pipeline_document
+
+    pipeline = built_in_pipeline(pipeline_id, version)
+    if pipeline is None:
+        print(
+            "Pipeline export failed: the standalone CLI can export only "
+            "definitions compiled into this build. Export saved custom "
+            "definitions from Pipeline Studio.",
+            file=sys.stderr,
+        )
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    document = export_pipeline_document(pipeline)
+    rendered = (
+        json.dumps(document.model_dump(mode="json"), ensure_ascii=False, indent=2)
+        + "\n"
+    )
+    return _write_cli_text(rendered, output=output, label="Pipeline export")
+
+
+def _pipeline_validate(path: Path, *, as_json: bool) -> int:
+    """Validate portable JSON with the same strict contract used by the API."""
+
+    from .pipelines.portable import parse_pipeline_document
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        document = parse_pipeline_document(payload)
+    except OSError as exc:
+        print(f"Pipeline configuration error: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+    except (json.JSONDecodeError, ValueError, ValidationError) as exc:
+        print(f"Pipeline configuration error: {exc}", file=sys.stderr)
+        return int(ExitCode.USAGE_OR_CONFIG)
+
+    if as_json:
+        print(
+            json.dumps(
+                document.model_dump(mode="json"),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+    else:
+        print(
+            f"Pipeline {document.pipeline.pipeline_id}@{document.pipeline.version} "
+            f"is valid ({document.pipeline_hash})."
+        )
+    return int(ExitCode.OK)
+
+
 def _progress_printer(build: dict[str, Any]) -> None:
     progress = max(0.0, min(1.0, float(build.get("progress") or 0.0)))
     stage = str(build.get("stage") or build.get("status") or "working")
@@ -351,6 +464,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.command == "pipeline" and args.pipeline_command == "capabilities":
         return _pipeline_capabilities(as_json=args.json)
+    if args.command == "pipeline" and args.pipeline_command == "export":
+        return _pipeline_export(
+            args.pipeline_id,
+            args.version,
+            output=args.output,
+        )
+    if args.command == "pipeline" and args.pipeline_command == "validate":
+        return _pipeline_validate(args.config, as_json=args.json)
     if args.command == "doctor":
         return _doctor(as_json=args.json)
     if args.command == "corpus" and args.corpus_command == "build":

@@ -42,10 +42,12 @@ defineProps<{
   canAssign: boolean;
   assigning: boolean;
   cloning: boolean;
+  exporting?: boolean;
 }>();
 
 const emit = defineEmits<{
   clone: [];
+  export: [];
   assign: [];
   resetAssignment: [];
 }>();
@@ -66,7 +68,9 @@ const t = (key: string, fallback: string) => i18n.t(key, fallback);
       :can-assign="canAssign"
       :assigning="assigning"
       :cloning="cloning"
+      :exporting="exporting"
       @clone="emit('clone')"
+      @export="emit('export')"
       @assign="emit('assign')"
       @reset-assignment="emit('resetAssignment')"
     />

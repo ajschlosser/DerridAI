@@ -707,6 +707,73 @@ describe("System Data Pipeline Studio", () => {
     wrapper.unmount();
   });
 
+  it("exports the selected immutable definition as portable JSON", async () => {
+    const pipeline = catalog.pipelines[0];
+    const portable = {
+      format: "derridai-pipeline" as const,
+      version: 1 as const,
+      pipeline_contract_version: 1,
+      required_strategies: Object.fromEntries(
+        pipeline.stages.map((stage) => [stage.strategy, 1]),
+      ),
+      pipeline_hash: "a".repeat(64),
+      pipeline: structuredClone(pipeline),
+    };
+    const exported = vi.spyOn(pipelinesApi, "exportDefinition").mockResolvedValue(portable);
+    const createUrl = vi.fn(() => "blob:pipeline");
+    const revokeUrl = vi.fn();
+    vi.stubGlobal("URL", { ...URL, createObjectURL: createUrl, revokeObjectURL: revokeUrl });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    const { wrapper } = await mountStudio();
+    const button = wrapper
+      .findAll(".detail-actions button")
+      .find((item) => item.text().includes("Export pipeline"));
+    await button!.trigger("click");
+    await flushPromises();
+
+    expect(exported).toHaveBeenCalledWith("research.current", 1);
+    expect(createUrl).toHaveBeenCalledTimes(1);
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(revokeUrl).toHaveBeenCalledWith("blob:pipeline");
+    vi.unstubAllGlobals();
+  });
+
+  it("imports portable JSON through the strict server endpoint", async () => {
+    const importedPipeline = structuredClone(catalog.pipelines[1]);
+    const imported = vi.spyOn(pipelinesApi, "importDefinition").mockResolvedValue({
+      document: {
+        format: "derridai-pipeline",
+        version: 1,
+        pipeline_contract_version: 1,
+        required_strategies: Object.fromEntries(
+          importedPipeline.stages.map((stage) => [stage.strategy, 1]),
+        ),
+        pipeline_hash: "b".repeat(64),
+        pipeline: importedPipeline,
+      },
+      pipeline: importedPipeline,
+      pipeline_hash: "b".repeat(64),
+      created: true,
+      same_as_existing: false,
+    });
+
+    const { wrapper, router } = await mountStudio();
+    const input = wrapper.get<HTMLInputElement>('input[type="file"]');
+    const file = new File(
+      [JSON.stringify({ format: "derridai-pipeline", version: 1 })],
+      "pipeline.json",
+      { type: "application/json" },
+    );
+    Object.defineProperty(input.element, "files", { value: [file], configurable: true });
+    await input.trigger("change");
+    await flushPromises();
+
+    expect(imported).toHaveBeenCalledWith({ format: "derridai-pipeline", version: 1 });
+    expect(wrapper.text()).toContain("Pipeline imported.");
+    expect(router.currentRoute.value.query.pipeline).toBe(pipelineKey(importedPipeline));
+  });
+
   it("renders Operations navigation while operational health is still loading", async () => {
     let resolveMetrics!: (value: Awaited<ReturnType<typeof pipelinesApi.metrics>>) => void;
     vi.mocked(pipelinesApi.metrics).mockImplementationOnce(

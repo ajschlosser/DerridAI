@@ -343,3 +343,84 @@ def test_frozen_run_binding_applies_typed_overrides():
     assert resolved["config_resolution"]["run_overrides"]["stages"]["primary"] == {
         "attempts": 2
     }
+
+
+
+def test_cli_pipeline_export_validate_round_trip(tmp_path, capsys):
+    path = tmp_path / "pipeline.json"
+
+    code = main(
+        [
+            "pipeline",
+            "export",
+            "--pipeline-id",
+            "corpus.metadata_enrichment.current",
+            "--version",
+            "2",
+            "--output",
+            str(path),
+        ]
+    )
+    exported = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    assert path.is_file()
+    assert str(path.resolve()) in exported.out
+    document = json.loads(path.read_text(encoding="utf-8"))
+    assert document["format"] == "derridai-pipeline"
+    assert document["pipeline"]["pipeline_id"] == "corpus.metadata_enrichment.current"
+
+    code = main(["pipeline", "validate", "--config", str(path), "--json"])
+    validated = capsys.readouterr()
+
+    assert code == ExitCode.OK
+    normalized = json.loads(validated.out)
+    assert normalized["pipeline_hash"] == document["pipeline_hash"]
+    assert normalized["pipeline"] == document["pipeline"]
+    assert validated.err == ""
+
+
+def test_cli_pipeline_validate_rejects_tampering(tmp_path, capsys):
+    path = tmp_path / "pipeline.json"
+    assert (
+        main(
+            [
+                "pipeline",
+                "export",
+                "--pipeline-id",
+                "corpus.metadata_enrichment.current",
+                "--version",
+                "2",
+                "--output",
+                str(path),
+            ]
+        )
+        == ExitCode.OK
+    )
+    capsys.readouterr()
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document["pipeline"]["name"] = "Tampered"
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+    code = main(["pipeline", "validate", "--config", str(path)])
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.USAGE_OR_CONFIG
+    assert "pipeline_hash does not match" in captured.err
+
+
+def test_cli_pipeline_export_rejects_uncompiled_definition(capsys):
+    code = main(
+        [
+            "pipeline",
+            "export",
+            "--pipeline-id",
+            "custom.not.compiled",
+            "--version",
+            "1",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert code == ExitCode.USAGE_OR_CONFIG
+    assert "Pipeline Studio" in captured.err
