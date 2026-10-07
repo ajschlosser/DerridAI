@@ -302,7 +302,7 @@ def _build_corpus(args: argparse.Namespace) -> int:
 
     if isinstance(config, CorpusRunConfigV2):
         try:
-            config.assert_installed_pipeline_bindings()
+            config.assert_runtime_pipeline_capabilities()
         except ValueError as exc:
             print(f"Pipeline capability error: {exc}", file=sys.stderr)
             return int(ExitCode.MISSING_CAPABILITY)
