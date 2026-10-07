@@ -111,6 +111,7 @@ const expandedText = reactive(new Set<string>());
 const columnWidths = reactive<Record<string, number>>(loadColumnWidths());
 let localSearchTimer = 0;
 let recentTimer = 0;
+let browserHistoryNavigation = false;
 let redirectedForDatabase = false;
 /**
  * Derived from the applied snapshot rather than assigned after it, so the workspace is never
@@ -716,10 +717,20 @@ function onDialogCancel(event: Event, dialog: HTMLDialogElement | null) {
   dialog?.close();
 }
 
+function onBrowserHistoryNavigation() {
+  browserHistoryNavigation = true;
+}
+
 watch(
   () => route.fullPath,
   (next, prior) => {
-    if (next === prior) return;
+    if (next === prior || !browserHistoryNavigation) return;
+    browserHistoryNavigation = false;
+    // Search commands already update their owned state before syncing the URL.
+    // Re-reading on those router replace/push operations can race the command
+    // itself and discard a still-pending database result. Same-view browser
+    // history is different: runtimeLocationSync has just restored URL state,
+    // so refresh the page model after that settled pop navigation.
     void load({ refresh: false, autoRun: true });
   },
 );
@@ -741,10 +752,12 @@ async function loadNewer() {
   await load({ refresh: true });
 }
 onMounted(() => {
+  window.addEventListener("popstate", onBrowserHistoryNavigation);
   loadSavedState();
   void load({ refresh: true, autoRun: true });
 });
 onBeforeUnmount(() => {
+  window.removeEventListener("popstate", onBrowserHistoryNavigation);
   window.clearTimeout(localSearchTimer);
   window.clearTimeout(recentTimer);
   // Drop responses that are still in flight; the view they would have updated is gone.
