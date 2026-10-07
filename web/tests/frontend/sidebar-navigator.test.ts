@@ -44,7 +44,6 @@ describe("SidebarNavigator interaction priority", () => {
     const wrapper = mount(SidebarNavigator, {
       props: {
         collapsed: false,
-        userId: "user-1",
         groups: [
           {
             id: "Research",
@@ -55,7 +54,7 @@ describe("SidebarNavigator interaction priority", () => {
       },
     });
 
-    await wrapper.get("button[data-nav-id='rag']").trigger("click");
+    await wrapper.get("button[aria-label='Research']").trigger("click");
 
     expect(wrapper.emitted("navigate")?.[0]).toEqual(["rag"]);
     expect(timing.runAfterNextPaint).toHaveBeenCalledTimes(1);
