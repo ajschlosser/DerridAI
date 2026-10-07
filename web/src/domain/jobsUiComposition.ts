@@ -48,7 +48,6 @@ import { showAppModal } from "./disabledControls";
 import "./sharedRecordScopes";
 import "./recordHistory";
 import "./dashboardCharts";
-import { updateDbStatusElements } from "./sharedDbPresence";
 import { hasCorpusDb, recordStores } from "./storeAvailability";
 import { registerOperationHooks } from "./operationHooks";
 import { registerOperationProgress } from "./operationProgressHooks";
@@ -167,7 +166,6 @@ createJobsWorkspace({
   touchupRecordPayload: late(() => touchupRecordPayload),
   tr: late(() => tr),
   trf: late(() => trf),
-  updateDbStatusElements: late(() => updateDbStatusElements),
   updateOperationStackCount: late(() => updateOperationStackCount),
 });
 const {
