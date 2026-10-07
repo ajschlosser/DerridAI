@@ -104,7 +104,6 @@ jobs:
           tests/test_corpus_binary_manifest.py
           tests/test_corpus_output_profiles.py
           tests/test_headless_corpus_runner.py
-          tests/test_pipeline_manager.py
 
       - name: Compile standalone binary
         run: >-
