@@ -209,3 +209,24 @@ def test_repository_footprints_measure_utf8_bytes_without_deserializing(tmp_path
 
     expected = len(job_state.json.dumps(job, ensure_ascii=False, separators=(",", ":")).encode())
     assert footprints == [("unicode", job["created_at"], expected, False)]
+
+
+def test_repository_list_summaries_drop_heavy_results(tmp_path):
+    repository = SQLiteJobRepository(tmp_path / "jobs.sqlite3")
+    job = {
+        **_job("rag-finished", "completed", job_type="rag"),
+        "result": {"answer": "x" * 100_000},
+        "results": [{"proposal": {"changes": {"speaker": "Derrida"}}}],
+        "request": {"prompt": "What is différance?"},
+    }
+    repository.upsert(job)
+
+    summaries = repository.load_summaries("rag")
+
+    assert summaries == [
+        {
+            key: value
+            for key, value in job.items()
+            if key not in {"result", "results"}
+        }
+    ]
