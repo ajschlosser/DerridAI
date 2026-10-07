@@ -78,3 +78,59 @@ describe("SourceInspector extracted-text preview", () => {
     },
   );
 });
+
+describe("SourceInspector request identity", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+  afterEach(() => vi.restoreAllMocks());
+
+  it("withholds the previous source while a new source detail is pending", async () => {
+    let resolveSecond!: (value: SourceDetail) => void;
+    vi.spyOn(documentReads, "sourceDocumentDetail")
+      .mockResolvedValueOnce({ ...detail, asset_id: "asset-a", filename: "A.docx" })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+    vi.spyOn(documentReads, "sourceDocumentPreview").mockResolvedValue([]);
+
+    const wrapper = mount(SourceInspector, { props: { sourceId: "source-a" } });
+    await flushPromises();
+    expect(wrapper.text()).toContain("A.docx");
+
+    await wrapper.setProps({ sourceId: "source-b" });
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("A.docx");
+    expect(wrapper.find(".ui-loading-state").exists()).toBe(true);
+
+    resolveSecond({ ...detail, asset_id: "asset-b", filename: "B.docx" });
+    await flushPromises();
+    expect(wrapper.text()).toContain("B.docx");
+  });
+
+  it("ignores a late detail response from a superseded source", async () => {
+    let resolveFirst!: (value: SourceDetail) => void;
+    vi.spyOn(documentReads, "sourceDocumentDetail")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFirst = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ ...detail, asset_id: "asset-b", filename: "B.docx" });
+    vi.spyOn(documentReads, "sourceDocumentPreview").mockResolvedValue([]);
+
+    const wrapper = mount(SourceInspector, { props: { sourceId: "source-a" } });
+    await wrapper.setProps({ sourceId: "source-b" });
+    await flushPromises();
+    expect(wrapper.text()).toContain("B.docx");
+
+    resolveFirst({ ...detail, asset_id: "asset-a", filename: "A.docx" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("B.docx");
+    expect(wrapper.text()).not.toContain("A.docx");
+  });
+});

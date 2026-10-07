@@ -95,6 +95,8 @@ const emit = defineEmits<{
   inspect: [id: string];
   delete: [id: string];
   loaded: [response: SourceListResponse];
+  /** Rows currently represented by the active query identity. */
+  displayed: [rows: SourceRow[]];
 }>();
 const i18n = useI18nStore();
 const t = (key: string, fallback?: string) => i18n.t(key, fallback);
@@ -166,6 +168,7 @@ const offset = ref(0);
 const limit = ref(props.pageSize);
 let requestSerial = 0;
 let debounce: ReturnType<typeof setTimeout> | undefined;
+const displayedQueryIdentity = ref("");
 
 const selectedSet = computed(() => new Set(props.selected));
 const total = computed(() => response.value?.total ?? 0);
@@ -251,15 +254,36 @@ function query(): SourceListQuery {
   return params;
 }
 
+function queryIdentity(value: SourceListQuery) {
+  return JSON.stringify(
+    Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
 async function reload() {
   const serial = ++requestSerial;
+  const nextQuery = query();
+  const nextIdentity = queryIdentity(nextQuery);
+  const changesDisplayedIdentity =
+    Boolean(displayedQueryIdentity.value) && displayedQueryIdentity.value !== nextIdentity;
+
   loading.value = true;
   error.value = "";
+  if (changesDisplayedIdentity) {
+    response.value = null;
+    rows.value = [];
+    emit("displayed", []);
+    if (props.selected.length) emit("update:selected", []);
+  }
   try {
-    const next = await corpusSourcesApi.listSources(query());
+    const next = await corpusSourcesApi.listSources(nextQuery);
     if (serial !== requestSerial) return;
     response.value = next;
     rows.value = next.items;
+    displayedQueryIdentity.value = nextIdentity;
+    emit("displayed", next.items);
     emit("loaded", next);
   } catch (cause) {
     if (serial !== requestSerial) return;
@@ -279,6 +303,7 @@ async function refreshRows(ids: string[]) {
     rows.value = rows.value
       .filter((row) => !wanted.includes(row.source_document_id) || byId.has(row.source_document_id))
       .map((row) => byId.get(row.source_document_id) || row);
+    emit("displayed", rows.value);
   } catch {
     /* the next full reload reports errors */
   }

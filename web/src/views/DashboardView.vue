@@ -52,6 +52,7 @@ import { icon } from "../domain/html";
 import { commonWorkValue, workCoverUrl } from "../domain/workMetadata";
 import AppIcon from "../components/AppIcon.vue";
 import UiTooltip from "../components/ui/UiTooltip.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import { useI18nStore } from "../stores/i18n";
 import { corpusState } from "../state/workspaceState";
 import { useJobsStore } from "../stores/jobs";
@@ -84,6 +85,17 @@ const uiColorTheme = ref("green");
 const corpusBuilds = ref<Record<string, unknown>[]>([]);
 const corpusBuildsActive = ref(0);
 const corpusBuildsAriaLabel = ref("");
+const coreReady = ref(false);
+const coreLoading = ref(false);
+const coreError = ref("");
+const activityReady = ref(false);
+const activityLoading = ref(false);
+const activityError = ref("");
+const previewReady = ref(false);
+const previewLoading = ref(false);
+let coreRequestSerial = 0;
+let activityRequestSerial = 0;
+let previewRequestSerial = 0;
 
 const activeMetric = () => metricSets.value[activeMetricIndex.value] as Record<string, Any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -94,26 +106,7 @@ function metricBodyHtml() {
   return metric ? recordPresenters.dashboardMetricBody(metric) : "";
 }
 
-async function refresh() {
-  const state = sharedState as unknown as Record<string, Any>;
-  isResearcher.value = sessionIsResearcher();
-  if (isResearcher.value) {
-    try {
-      await refreshStores();
-      if (!state.activeStore) state.activeStore = recordStores()[0]?.name || "";
-      if (state.activeStore) await refreshStoreWorks(true);
-    } catch (error) {
-      console.warn("Could not refresh researcher dashboard data", error);
-    }
-  }
-  try {
-    await annotationsWorkspace.refreshServerAnnotations(
-      isResearcher.value && state.serverAnnotationsStore !== String(state.activeStore || ""),
-    );
-  } catch (error) {
-    console.warn("Could not refresh annotations for dashboard", error);
-  }
-
+function applyDashboardCore(state: Record<string, Any>) {
   totals.value = dashboardData.dashboardTotals();
   const workMap = isResearcher.value ? null : workIndex();
   const workItems: Any[] = isResearcher.value
@@ -151,6 +144,7 @@ async function refresh() {
           };
         })
         .sort((a: Any, b: Any) => a.work.localeCompare(b.work));
+
   words.value = workItems.reduce((sum, item) => sum + Number(item.totalWords || 0), 0);
   const singleLoadedWork =
     !isResearcher.value &&
@@ -212,6 +206,45 @@ async function refresh() {
   );
   activeMetricIndex.value = state.dashboardMetricIndex as number;
 
+  works.value = workItems.sort((a, b) => a.work.localeCompare(b.work));
+  currentProvider.value = defaultProviderProfile();
+  currentLanguage.value = state.translations?.info?.name || state.translations?.locale || "";
+  currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
+  uiColorTheme.value = state.appConfig?.ui_color_theme || "green";
+  globalSearch.value = state.globalSearch || "";
+  globalSearchMode.value = state.globalSearchMode || "traditional";
+
+  corpusBuildsAriaLabel.value = i18n.t("pdf_corpus.home_title");
+  if (isResearcher.value) {
+    corpusBuilds.value = [];
+    corpusBuildsActive.value = 0;
+  } else {
+    const builds = ((state.jobs || []) as Any[])
+      .filter((job) => job.type === "pdf_corpus")
+      .slice(0, 4);
+    corpusBuilds.value = builds;
+    corpusBuildsActive.value = builds.filter((job) =>
+      ["queued", "running", "cancelling"].includes(String(job.status)),
+    ).length;
+  }
+}
+
+async function refreshActivity() {
+  const request = ++activityRequestSerial;
+  const state = sharedState as unknown as Record<string, Any>;
+  activityLoading.value = true;
+  activityError.value = "";
+  try {
+    await annotationsWorkspace.refreshServerAnnotations(
+      isResearcher.value && state.serverAnnotationsStore !== String(state.activeStore || ""),
+    );
+  } catch (error) {
+    if (request !== activityRequestSerial) return;
+    activityError.value = error instanceof Error ? error.message : String(error);
+    console.warn("Could not refresh annotations for dashboard", error);
+  }
+  if (request !== activityRequestSerial) return;
+
   recent.value = isResearcher.value
     ? hasCapability("activity.read")
       ? [
@@ -247,38 +280,61 @@ async function refresh() {
         index,
         update,
       }));
-
-  works.value = workItems.sort((a, b) => a.work.localeCompare(b.work));
-  currentProvider.value = defaultProviderProfile();
-  currentLanguage.value = state.translations?.info?.name || state.translations?.locale || "";
-  currentLanguageFlag.value = state.translations?.info?.flag || "🌐";
   latestAnnotation.value =
     !isResearcher.value || hasCapability("annotations.read")
       ? annotationsWorkspace.recentAnnotations(1)[0] || null
       : null;
-  uiColorTheme.value = state.appConfig?.ui_color_theme || "green";
-  globalSearch.value = state.globalSearch || "";
-  globalSearchMode.value = state.globalSearchMode || "traditional";
+  activityReady.value = true;
+  activityLoading.value = false;
+}
 
+async function refreshPreview() {
+  const request = ++previewRequestSerial;
+  previewLoading.value = true;
   const preview = await dashboardData.dashboardRecordPreview();
+  if (request !== previewRequestSerial) return;
   previewRecord.value = preview.record;
   previewTarget.value = preview.target;
   previewLastViewed.value = preview.lastViewed;
+  previewReady.value = true;
+  previewLoading.value = false;
+}
 
-  corpusBuildsAriaLabel.value = i18n.t("pdf_corpus.home_title");
+async function refresh() {
+  const request = ++coreRequestSerial;
+  const state = sharedState as unknown as Record<string, Any>;
+  isResearcher.value = sessionIsResearcher();
+  coreLoading.value = true;
+  coreError.value = "";
+
+  let researcherReadFailed = false;
   if (isResearcher.value) {
-    corpusBuilds.value = [];
-    corpusBuildsActive.value = 0;
-  } else {
-    const builds = ((state.jobs || []) as Any[])
-      .filter((job) => job.type === "pdf_corpus")
-      .slice(0, 4);
-    corpusBuilds.value = builds;
-    corpusBuildsActive.value = builds.filter((job) =>
-      ["queued", "running", "cancelling"].includes(String(job.status)),
-    ).length;
+    try {
+      await refreshStores();
+      if (request !== coreRequestSerial) return;
+      if (!state.activeStore) state.activeStore = recordStores()[0]?.name || "";
+      if (state.activeStore) await refreshStoreWorks(true);
+    } catch (error) {
+      if (request !== coreRequestSerial) return;
+      researcherReadFailed = true;
+      coreError.value = error instanceof Error ? error.message : String(error);
+      console.warn("Could not refresh researcher dashboard data", error);
+    }
   }
+  if (request !== coreRequestSerial) return;
 
+  const hasKnownResearcherData =
+    !isResearcher.value ||
+    recordStores().length > 0 ||
+    ((state.storeWorkStats || []) as unknown[]).length > 0;
+  if (!researcherReadFailed || coreReady.value || hasKnownResearcherData) {
+    applyDashboardCore(state);
+    coreReady.value = true;
+  }
+  coreLoading.value = false;
+
+  await Promise.all([refreshActivity(), refreshPreview()]);
+  if (request !== coreRequestSerial) return;
   await nextTick();
   if (mainEl.value) {
     enhanceCollapsibles(mainEl.value);
@@ -606,6 +662,8 @@ onBeforeUnmount(() => {
               id="dashSearchWork"
               ref="searchWorkSelectEl"
               class="control"
+              :disabled="!coreReady"
+              :aria-busy="coreLoading || undefined"
               :aria-label="i18n.t('field.work')"
             >
               <option value="">{{ i18n.t("dashboard.all_works") }}</option>
@@ -639,7 +697,7 @@ onBeforeUnmount(() => {
           <div class="dashboard-overview-grid">
             <button data-dashboard-nav="works" @click="goNav('works')">
               <span class="dashboard-overview-icon"><AppIcon name="books" /></span>
-              <strong>{{ works.length.toLocaleString() }}</strong>
+              <strong>{{ coreReady ? works.length.toLocaleString() : "—" }}</strong>
               <small>{{ i18n.t("dashboard.works") }}</small>
             </button>
             <button
@@ -647,7 +705,7 @@ onBeforeUnmount(() => {
               @click="goNav(isResearcher ? 'vector' : 'list')"
             >
               <span class="dashboard-overview-icon"><AppIcon name="record" /></span>
-              <strong>{{ Number(totals.records || 0).toLocaleString() }}</strong>
+              <strong>{{ coreReady ? Number(totals.records || 0).toLocaleString() : "—" }}</strong>
               <small>{{ i18n.t("dashboard.records") }}</small>
             </button>
             <button
@@ -657,12 +715,12 @@ onBeforeUnmount(() => {
               "
             >
               <span class="dashboard-overview-icon"><AppIcon name="list" /></span>
-              <strong>{{ isResearcher ? "—" : compactNumber(words) }}</strong>
+              <strong>{{ !coreReady || isResearcher ? "—" : compactNumber(words) }}</strong>
               <small>{{ i18n.t("dashboard.total_words") }}</small>
             </button>
             <button data-dashboard-nav="vector" @click="goNav('vector')">
               <span class="dashboard-overview-icon"><AppIcon name="database" /></span>
-              <strong>{{ Number(totals.dbs || 0).toLocaleString() }}</strong>
+              <strong>{{ coreReady ? Number(totals.dbs || 0).toLocaleString() : "—" }}</strong>
               <small>{{ i18n.t("dashboard.databases") }}</small>
             </button>
           </div>
@@ -674,7 +732,7 @@ onBeforeUnmount(() => {
           <div class="dashboard-metric-head">
             <div class="dashboard-card-title">
               <span class="dashboard-title-icon"><AppIcon name="chart" /></span>
-              <b>{{ activeMetric()?.title }}</b>
+              <b>{{ coreReady ? activeMetric()?.title : i18n.t("ui.loading") }}</b>
             </div>
             <div class="dashboard-metric-controls">
               <button
@@ -682,26 +740,41 @@ onBeforeUnmount(() => {
                 id="dashMetricPrev"
                 type="button"
                 :aria-label="i18n.t('dashboard.previous_chart')"
+                :disabled="!coreReady || !metricSets.length"
                 @click="stepMetric(-1)"
                 v-text="'←'"
               ></button>
-              <span>{{ activeMetricIndex + 1 }} / {{ metricSets.length }}</span>
+              <span>
+                {{
+                  coreReady && metricSets.length
+                    ? `${activeMetricIndex + 1} / ${metricSets.length}`
+                    : "—"
+                }}
+              </span>
               <button
                 class="dashboard-metric-arrow"
                 id="dashMetricNext"
                 type="button"
                 :aria-label="i18n.t('dashboard.next_chart')"
+                :disabled="!coreReady || !metricSets.length"
                 @click="stepMetric(1)"
                 v-text="'→'"
               ></button>
             </div>
           </div>
+          <UiLoadingState
+            v-if="coreLoading && !coreReady"
+            variant="status"
+            :label="i18n.t('ui.loading')"
+          />
           <div
+            v-else
             class="dashboard-metric-body"
             v-html="metricBodyHtml()"
             @click="onMetricBodyClick"
           ></div>
           <div
+            v-if="coreReady"
             class="dashboard-metric-dots"
             role="tablist"
             :aria-label="i18n.t('dashboard.work_charts')"
@@ -728,7 +801,23 @@ onBeforeUnmount(() => {
             <b>{{ i18n.t("dashboard.recent_activity") }}</b>
           </div>
           <div class="dashboard-activity-list">
-            <template v-if="recent.length">
+            <UiLoadingState
+              v-if="activityLoading && !activityReady"
+              variant="inline"
+              :label="i18n.t('ui.loading')"
+            />
+            <div v-if="activityError" class="note" role="alert">
+              <span>{{ activityReady ? i18n.t("loading.stale") : activityError }}</span>
+              <button
+                type="button"
+                class="btn small"
+                :disabled="activityLoading"
+                @click="refreshActivity"
+              >
+                {{ i18n.t("ui.retry") }}
+              </button>
+            </div>
+            <template v-if="activityReady && recent.length">
               <button
                 v-for="(item, index) in recent"
                 :key="index"
@@ -804,7 +893,7 @@ onBeforeUnmount(() => {
                 </span>
               </button>
             </template>
-            <div v-else class="dashboard-activity-empty">
+            <div v-else-if="activityReady && !activityError" class="dashboard-activity-empty">
               {{ i18n.t("dashboard.no_recent_activity") }}
             </div>
           </div>
@@ -840,7 +929,18 @@ onBeforeUnmount(() => {
             ></button>
           </UiTooltip>
           <div class="dashboard-work-strip" id="dashWorksCarousel" ref="worksCarouselEl">
-            <template v-if="works.length">
+            <UiLoadingState
+              v-if="coreLoading && !coreReady"
+              variant="inline"
+              :label="i18n.t('ui.loading')"
+            />
+            <div v-if="coreError" class="note" role="alert">
+              <span>{{ coreReady ? i18n.t("loading.stale") : coreError }}</span>
+              <button type="button" class="btn small" :disabled="coreLoading" @click="refresh">
+                {{ i18n.t("ui.retry") }}
+              </button>
+            </div>
+            <template v-if="coreReady && works.length">
               <button
                 v-for="(item, index) in works"
                 :key="String(item.work)"
@@ -868,7 +968,9 @@ onBeforeUnmount(() => {
                 </span>
               </button>
             </template>
-            <div v-else class="note">{{ i18n.t("research.no_works") }}</div>
+            <div v-else-if="coreReady && !coreError" class="note">
+              {{ i18n.t("research.no_works") }}
+            </div>
           </div>
           <UiTooltip
             :text="i18n.t('ui.next')"
@@ -995,7 +1097,12 @@ onBeforeUnmount(() => {
               v-text="`${i18n.t('research.open')} →`"
             ></button>
           </div>
-          <template v-if="previewRecord">
+          <UiLoadingState
+            v-if="previewLoading && !previewReady"
+            variant="inline"
+            :label="i18n.t('ui.loading')"
+          />
+          <template v-if="previewReady && previewRecord">
             <div class="dashboard-record-state">
               {{
                 previewLastViewed
@@ -1021,7 +1128,7 @@ onBeforeUnmount(() => {
               }}{{ String((previewRecord as Any).text || "").length > 220 ? "…" : "" }}
             </div>
           </template>
-          <div v-else class="dashboard-record-empty">
+          <div v-else-if="previewReady" class="dashboard-record-empty">
             {{ i18n.t("dashboard.no_record_selected") }}
           </div>
         </article>
@@ -1115,7 +1222,7 @@ onBeforeUnmount(() => {
         </article>
       </section>
       <section
-        v-if="corpusBuilds.length || !isResearcher"
+        v-if="corpusBuilds.length || (!isResearcher && coreReady)"
         class="card dashboard-corpus-builds"
         :aria-label="corpusBuildsAriaLabel"
       >

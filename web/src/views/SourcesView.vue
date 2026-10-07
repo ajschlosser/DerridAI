@@ -32,6 +32,7 @@ import { useI18nStore } from "../stores/i18n";
 import { captureIsActive, enumLabel, enumTone } from "../domain/sourceLabels";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import UiTooltip from "../components/ui/UiTooltip.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -50,6 +51,8 @@ const route = useRoute();
 const router = useRouter();
 
 const captures = ref<CorpusCaptureListItem[]>([]);
+const capturesLoading = ref(false);
+const capturesReady = ref(false);
 const capturesError = ref("");
 const selected = ref<string[]>([]);
 const visibleRows = ref<SourceRow[]>([]);
@@ -107,11 +110,21 @@ function fail(cause: unknown) {
 }
 
 async function loadCaptures() {
+  capturesLoading.value = true;
   try {
     captures.value = (await corpusCaptureApi.listCaptures()).items;
+    capturesReady.value = true;
     capturesError.value = "";
   } catch (cause) {
     capturesError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    capturesLoading.value = false;
+  }
+}
+function onDisplayed(rows: SourceRow[]) {
+  visibleRows.value = rows;
+  if (inspected.value && !rows.some((row) => row.source_document_id === inspected.value)) {
+    inspected.value = "";
   }
 }
 function onLoaded(response: SourceListResponse) {
@@ -237,13 +250,53 @@ onMounted(() => void loadCaptures());
       <AppIcon name="warning" /><span>{{ actionError }}</span>
     </p>
 
-    <section class="captures" aria-labelledby="captures-title">
+    <section
+      class="captures"
+      aria-labelledby="captures-title"
+      :aria-busy="capturesLoading || undefined"
+    >
       <h2 id="captures-title">{{ i18n.t("sources.captures.title") }}</h2>
-      <p v-if="capturesError" class="sources-error" role="alert">{{ capturesError }}</p>
-      <p v-else-if="!captures.length" class="sources-muted">
+      <UiLoadingState
+        v-if="capturesLoading && !capturesReady"
+        variant="skeleton"
+        :skeleton-count="2"
+        :label="i18n.t('loading.loading', 'Loading…')"
+      />
+      <div v-else-if="capturesError && !capturesReady" class="sources-error" role="alert">
+        <AppIcon name="warning" />
+        <span>{{ capturesError }}</span>
+        <button
+          type="button"
+          class="btn small"
+          data-action="retry-captures"
+          :disabled="capturesLoading"
+          @click="loadCaptures"
+        >
+          {{ i18n.t("common.retry") }}
+        </button>
+      </div>
+      <UiLoadingState
+        v-if="capturesLoading && capturesReady"
+        variant="inline"
+        :label="i18n.t('loading.updating', 'Updating…')"
+      />
+      <div v-if="capturesError && capturesReady" class="sources-error" role="alert">
+        <AppIcon name="warning" />
+        <span>{{ capturesError }}</span>
+        <button
+          type="button"
+          class="btn small"
+          data-action="retry-captures"
+          :disabled="capturesLoading"
+          @click="loadCaptures"
+        >
+          {{ i18n.t("common.retry") }}
+        </button>
+      </div>
+      <p v-if="capturesReady && !captures.length" class="sources-muted" data-captures-empty>
         {{ i18n.t("sources.captures.none") }}
       </p>
-      <ul v-else class="capture-list">
+      <ul v-if="capturesReady && captures.length" class="capture-list">
         <li
           v-for="capture in captures"
           :key="capture.capture_id"
@@ -400,6 +453,7 @@ onMounted(() => void loadCaptures());
           :initial-filters="initialCapture ? { capture_id: initialCapture } : {}"
           :page-size="50"
           @inspect="inspected = $event"
+          @displayed="onDisplayed"
           @loaded="onLoaded"
         />
         <SourceInspector
