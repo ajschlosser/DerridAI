@@ -744,10 +744,7 @@ watch(
 watch(
   () => [corpusState.structureVersion, corpusState.contentVersion] as const,
   ([structureVersion, contentVersion], [priorStructureVersion, priorContentVersion]) => {
-    if (
-      structureVersion === priorStructureVersion &&
-      contentVersion === priorContentVersion
-    ) {
+    if (structureVersion === priorStructureVersion && contentVersion === priorContentVersion) {
       return;
     }
     // Corpus imports/removals and Record edits can happen while Search remains
