@@ -478,14 +478,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
         }
-        fieldsApplied += applyRecordChanges(target.item.file, target.item.index, changes, {
+        const changed = applyRecordChanges(target.item.file, target.item.index, changes, {
           source: "llm_review",
           model: job.model,
           batchId,
           rationale: target.rationale,
           deferCommit: true,
         });
-        touchedFiles.set(String(target.item.file.id), target.item.file);
+        fieldsApplied += changed;
+        if (changed) touchedFiles.set(String(target.item.file.id), target.item.file);
         if (target.resolveRecord) _fullyReviewed++;
 
         resolveItems.push({
@@ -503,14 +504,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.needs_review !== false) changes.needs_review = false;
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
-          fieldsApplied += applyRecordChanges(entry.local.file, entry.local.index, changes, {
+          const changed = applyRecordChanges(entry.local.file, entry.local.index, changes, {
             source: "llm_review",
             model: job.model,
             batchId,
             rationale: {},
             deferCommit: true,
           });
-          touchedFiles.set(String(entry.local.file.id), entry.local.file);
+          fieldsApplied += changed;
+          if (changed) touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
@@ -522,14 +524,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.needs_review !== false) changes.needs_review = false;
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
-          fieldsApplied += applyRecordChanges(entry.local.file, entry.local.index, changes, {
+          const changed = applyRecordChanges(entry.local.file, entry.local.index, changes, {
             source: "llm_review",
             model: job.model,
             batchId,
             rationale: {},
             deferCommit: true,
           });
-          touchedFiles.set(String(entry.local.file.id), entry.local.file);
+          fieldsApplied += changed;
+          if (changed) touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
