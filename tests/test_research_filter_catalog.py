@@ -105,7 +105,7 @@ def test_model_numeric_proposals_are_grounded_in_instruction():
     assert result["expression"] == "certainty >= 0.75"
 
 
-def test_research_scope_inventory_is_metadata_only_cached_and_invalidated():
+def test_research_scope_inventory_is_metadata_only_cached_and_invalidated(monkeypatch):
     from app.chroma_store import ChromaStore, _notes_collection_change
 
     collection = MetadataCollection([
@@ -133,6 +133,17 @@ def test_research_scope_inventory_is_metadata_only_cached_and_invalidated():
 
     store._collection = get_collection
 
+    from app import chroma_store as chroma_store_module
+
+    original_decode_metadata = chroma_store_module.decode_metadata
+    decoded_key_sets = []
+
+    def selective_decode(raw):
+        decoded_key_sets.append(set(raw))
+        return original_decode_metadata(raw)
+
+    monkeypatch.setattr(chroma_store_module, "decode_metadata", selective_decode)
+
     first = store.research_scope_inventory(["corpus", "corpus"])
     assert first == [
         {
@@ -147,6 +158,14 @@ def test_research_scope_inventory_is_metadata_only_cached_and_invalidated():
     assert collection_lookups == ["corpus"]
     assert collection.calls
     assert all(call["include"] == ["metadatas"] for call in collection.calls)
+    allowed_scope_keys = {
+        "work",
+        "document_author",
+        "field_assertions",
+        "current_field_assertions",
+    }
+    assert decoded_key_sets
+    assert all(keys <= allowed_scope_keys for keys in decoded_key_sets)
 
     calls = len(collection.calls)
     assert store.research_scope_inventory(["corpus"]) == first
