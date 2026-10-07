@@ -1497,13 +1497,28 @@ def run_rag_pipeline(
                 lexical_kwargs["where"] = retrieval_metadata_filter
             if document_filter:
                 lexical_kwargs["where_document"] = document_filter
-            lexical_candidates = _scope_rag_candidates(
-                store.lexical_search(
+            collection_count = max(1, int(collection["count"]))
+            lexical_pool_limit = min(collection_lexical_fetch_k, collection_count)
+            if isinstance(store, ChromaStore):
+                # Production Chroma can score the same deep lexical candidate
+                # window while hydrating only the Records that can survive RRF.
+                # Lightweight test/fake stores keep the historical call shape.
+                lexical_rows = store.lexical_search(
                     collection["name"],
                     query,
-                    min(collection_lexical_fetch_k, max(1, collection["count"])),
+                    min(collection_retrieve_k, collection_count),
                     **lexical_kwargs,
-                ),
+                    candidate_pool_size=lexical_pool_limit,
+                )
+            else:
+                lexical_rows = store.lexical_search(
+                    collection["name"],
+                    query,
+                    lexical_pool_limit,
+                    **lexical_kwargs,
+                )
+            lexical_candidates = _scope_rag_candidates(
+                lexical_rows,
                 collection,
                 locale_codes,
             )
