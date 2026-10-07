@@ -34,6 +34,10 @@ from app.corpus_run_config import (
     load_run_config,
     migrate_v1_config,
 )
+from app.pipelines.execution_resolution import (
+    RUN_PIPELINE_BINDINGS_KEY,
+    resolve_execution_pipeline,
+)
 from pydantic import ValidationError
 
 
@@ -273,3 +277,51 @@ def test_v2_config_rejects_strategy_version_drift():
 
     with pytest.raises(ValidationError, match="provides v"):
         CorpusRunConfigV2.model_validate(payload)
+
+
+
+def test_frozen_run_binding_executes_without_consulting_active_assignment(monkeypatch):
+    import app.pipelines.manager as manager_module
+
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    request = {
+        RUN_PIPELINE_BINDINGS_KEY: migrated.execution_pipeline_bindings(),
+    }
+
+    def unexpected_resolve(_feature):
+        raise AssertionError("active assignment must not be consulted")
+
+    monkeypatch.setattr(manager_module.pipeline_manager, "resolve", unexpected_resolve)
+    resolved = resolve_execution_pipeline("corpus_metadata_enrichment", request)
+
+    binding = migrated.pipelines.assignments["corpus_metadata_enrichment"]
+    assert resolved["pipeline"]["pipeline_id"] == binding.definition.pipeline_id
+    assert resolved["pipeline_hash"] == binding.pipeline_hash
+    assert resolved["source"] == "run_envelope"
+
+
+def test_frozen_run_binding_applies_typed_overrides():
+    migrated = migrate_v1_config(CorpusProcessingConfig.model_validate({"version": 1}))
+    payload = migrated.public_snapshot()
+    binding = payload["pipelines"]["assignments"]["corpus_metadata_enrichment"]
+    definition = binding["definition"]
+    binding["overrides"] = {
+        "pipeline_id": definition["pipeline_id"],
+        "pipeline_version": definition["version"],
+        "stages": {"primary": {"attempts": 2}},
+    }
+    config = CorpusRunConfigV2.model_validate(payload)
+
+    resolved = resolve_execution_pipeline(
+        "corpus_metadata_enrichment",
+        {RUN_PIPELINE_BINDINGS_KEY: config.execution_pipeline_bindings()},
+    )
+
+    primary = next(
+        stage for stage in resolved["pipeline"]["stages"] if stage["id"] == "primary"
+    )
+    assert primary["config"]["attempts"] == 2
+    assert resolved["pipeline_hash"] != binding["pipeline_hash"]
+    assert resolved["config_resolution"]["run_overrides"]["stages"]["primary"] == {
+        "attempts": 2
+    }
