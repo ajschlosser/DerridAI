@@ -495,6 +495,8 @@ def test_single_word_work_title_uses_word_boundaries() -> None:
 
     assert _explicitly_named_works(summaries, "Discuss glass and writing.") == []
     assert _explicitly_named_works(summaries, "Discuss the work Glas.") == ["Glas"]
+    assert _explicitly_named_works(summaries, "Discuss the work glas.") == ["Glas"]
+
 
 def test_single_named_author_closes_retrieval_scope() -> None:
     request = RAGRunRequest(
