@@ -82,9 +82,7 @@ describe("research workspace commands", () => {
     });
     expect(api).toHaveBeenCalledOnce();
     expect(api.mock.calls[0][0]).toBe("/api/jobs/rag");
-    const body = JSON.parse(
-      (api.mock.calls[0] as unknown as [string, { body: string }])[1].body,
-    );
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body).toMatchObject({
       prompt: "What is NOT asserted?",
       instructions: "Retain qualification",
@@ -123,9 +121,7 @@ describe("research workspace commands", () => {
       },
     });
 
-    const body = JSON.parse(
-      (api.mock.calls[0] as unknown as [string, { body: string }])[1].body,
-    );
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body.skip_retrieval).toBe(false);
     expect(body.selected_evidence).toEqual([]);
   });
@@ -155,9 +151,7 @@ describe("research workspace commands", () => {
       },
     });
 
-    const body = JSON.parse(
-      (api.mock.calls[0] as unknown as [string, { body: string }])[1].body,
-    );
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body.skip_retrieval).toBe(false);
     expect(body.selected_evidence).toEqual([{ record_id: "r1", collection: "corpus" }]);
   });
@@ -180,9 +174,7 @@ describe("research workspace commands", () => {
     });
     await workspace.startResearchRun({ prompt: "What about Levinas?", thread_id: "thread/a" });
     expect(api.mock.calls[0][0]).toBe("/api/research/threads/thread%2Fa/turns");
-    const body = JSON.parse(
-      (api.mock.calls[0] as unknown as [string, { body: string }])[1].body,
-    );
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body.prompt).toBe("What about Levinas?");
     expect(body).not.toHaveProperty("thread_context");
     expect(body).not.toHaveProperty("prior_answers");
@@ -212,9 +204,7 @@ describe("research workspace commands", () => {
     });
     expect(job).toMatchObject({ id: "new-job", thread_id: "thread/a", turn_id: "turn b" });
     expect(api.mock.calls[0][0]).toBe("/api/research/threads/thread%2Fa/turns/turn%20b/retry");
-    const body = JSON.parse(
-      (api.mock.calls[0] as unknown as [string, { body: string }])[1].body,
-    );
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
     expect(body).toMatchObject({
       prompt: "Original question",
       instructions: "Original instructions",
