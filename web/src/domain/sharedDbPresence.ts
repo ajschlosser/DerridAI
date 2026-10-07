@@ -46,7 +46,6 @@ export const {
   recordDbStatus,
   workDbStatus,
   refreshPresenceForRows,
-  updateDbStatusElements,
   ignoredFingerprint,
   pendingUpsertRows,
   pendingChangesForRow,
