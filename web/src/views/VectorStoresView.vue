@@ -20,19 +20,18 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { toast } from "../composables/notifications";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { state as sharedState } from "../domain/sharedUrlState";
 import { pendingUpsertRows, upsertRows } from "../domain/sharedDbPresence";
 import { searchWorkspace } from "../domain/sharedSearchWorkspace";
 import { openCollectionCreationWizard, triggerUpsertQueue } from "../domain/vectorStoreActions";
 import { exportStoreJsonl } from "../domain/storeExport";
-import { persistPrefs } from "../domain/sharedWorkspaceStorage";
+import { persistVectorPreferences } from "../domain/sharedWorkspaceStorage";
 import { chromaApi } from "../api/chroma";
 import { isAbortError } from "../api/graphql/client";
 import { createLatestRequest } from "../api/graphql/latestRequest";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { vectorBrowseReads, type VectorBrowseRow } from "../features/vector-stores/api/browseReads";
 import { useAuthStore } from "../stores/auth";
-import { useVectorStore } from "../stores/workspace";
+import { useConfigStore, useStatusStore, useVectorStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
 import { useDataQuery } from "../realtime/dataQuery";
 import { useI18nStore } from "../stores/i18n";
@@ -58,24 +57,19 @@ import type {
 
 type VectorTab = "overview" | "data" | "retrieval" | "builds" | "settings";
 type BrowseMode = "works" | "records";
-// Workspace fields this view shares with the runtime live in the vector store; the rest are read from the shared
-// workspace state.
-type RuntimeOnlyState = {
-  files: Array<{ id: string; records: unknown[] }>;
-  activeFileId: string | null;
-  llmStatus: { models?: Array<{ name: string }> } | null;
-  health: Record<string, unknown> | null;
-  appConfig: { embedding_provider?: string; embedding_model?: string };
-};
-const runtimeState = sharedState as unknown as RuntimeOnlyState;
+// Vector-owned state comes from its feature store. Cross-domain read-only
+// dependencies are taken from their narrow stores rather than the writable
+// compatibility workspace object.
 const vector = useVectorStore();
+const config = useConfigStore();
+const status = useStatusStore();
 // The loaded files change while this view is open (a file imported or closed). The runtime edits them in place, so the
 // corpus version and active file tell this view when to count them again; without that the sync buttons stayed disabled
 // until you left the view and came back. (A count, not the array: an unchanged array would not re-render anything.)
 const loadedFileCount = computed(() => {
   void corpusState.version;
   void corpusState.activeFileId;
-  return (runtimeState.files || []).length;
+  return (corpusState.files || []).length;
 });
 // Shape of the shared Vector Stores fields as this view uses them (the store types them loosely).
 const workspace = vector as unknown as {
@@ -206,13 +200,13 @@ function persistWorkspace() {
   workspace.storeWork = storeWork.value;
   workspace.storeQuery = searchQuery.value;
   workspace.storeSearchMode = searchMode.value;
-  persistPrefs();
+  persistVectorPreferences();
   shell.sync();
 }
 
 function syncHealthIntoRuntime(next: ChromaHealth) {
   health.value = next;
-  runtimeState.health = { ...(runtimeState.health || {}), chroma: next, chroma_path: next.path };
+  status.health = { ...(status.health || {}), chroma: next, chroma_path: next.path };
 }
 
 let skipDetails = false;
@@ -481,10 +475,10 @@ async function loadData() {
 
 function openCreate() {
   if (!providersReady.value) return;
-  const models = runtimeState.llmStatus?.models || [];
+  const models = status.llmStatus?.models || [];
   openCollectionCreationWizard({
-    defaultProvider: runtimeState.appConfig?.embedding_provider || "ollama",
-    defaultModel: runtimeState.appConfig?.embedding_model || "bge-m3:latest",
+    defaultProvider: (config.appConfig as { embedding_provider?: string })?.embedding_provider || "ollama",
+    defaultModel: (config.appConfig as { embedding_model?: string })?.embedding_model || "bge-m3:latest",
     installedModels: models,
     providerProfiles: providerProfiles.value,
   } as never);
@@ -695,7 +689,7 @@ async function confirmAction() {
 }
 
 function syncActive() {
-  const file = runtimeState.files?.find((item) => item.id === runtimeState.activeFileId);
+  const file = corpusState.files?.find((item: any) => item.id === corpusState.activeFileId);
   if (!file) return toast(i18n.t("vector.load_jsonl_first"), { tone: "warning" });
   void upsertRows(
     file.records.map((record: unknown, index: number) => ({ file, record, index })),
@@ -703,7 +697,7 @@ function syncActive() {
   ).then(() => load());
 }
 function syncAll() {
-  const rows = (runtimeState.files || []).flatMap((file) =>
+  const rows = (corpusState.files || []).flatMap((file: any) =>
     file.records.map((record, index) => ({ file, record, index })),
   );
   if (!rows.length) return toast(i18n.t("vector.load_jsonl_any_first"), { tone: "warning" });
