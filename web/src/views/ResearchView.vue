@@ -938,6 +938,7 @@ watch(
     sessionJobIds.value = new Set();
     workspace.value = null;
     config.value = null;
+    window.clearTimeout(draftTimer);
     composerDraftEpoch += 1;
     composerDraftLoaded = false;
     composerDraftLoad = null;
