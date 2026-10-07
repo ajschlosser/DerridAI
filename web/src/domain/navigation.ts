@@ -32,6 +32,7 @@ type Helper =
   | "activeFile"
   | "canAccessPage"
   | "dbSearchWhere"
+  | "persistPrefs"
   | "renderView"
   | "selectedIndex"
   | "shell";
