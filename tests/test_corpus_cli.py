@@ -208,9 +208,19 @@ def test_v2_config_rejects_tampered_pipeline_hash():
         CorpusRunConfigV2.model_validate(payload)
 
 
-def test_cli_migrate_emits_v2_yaml(tmp_path, capsys):
+def test_cli_migrate_emits_v2_yaml(tmp_path, capsys, monkeypatch):
     source = tmp_path / "legacy.yaml"
     source.write_text("version: 1\nprovider:\n  model: qwen3:14b\n", encoding="utf-8")
+
+    import app.pipelines.manager as manager_module
+
+    monkeypatch.setattr(
+        manager_module.pipeline_manager,
+        "resolve",
+        lambda _feature: (_ for _ in ()).throw(
+            AssertionError("native migration must not consult server persistence")
+        ),
+    )
 
     code = main(["config", "migrate", "--config", str(source)])
     captured = capsys.readouterr()
@@ -234,7 +244,9 @@ def test_cli_pipeline_capabilities_reports_contract_identity(capsys):
     assert "llm.structured_metadata" in payload["strategies"]
 
 
-def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
+def test_cli_doctor_reports_native_runtime_capabilities(tmp_path, capsys, monkeypatch):
+    monkeypatch.setenv("DERRIDAI_CLI_DATA_ROOT", str(tmp_path / "data"))
+
     code = main(["doctor", "--json"])
     captured = capsys.readouterr()
 
@@ -245,6 +257,12 @@ def test_cli_doctor_reports_required_headless_pipeline_bindings(capsys):
     assert set(payload["headless_corpus_pipelines"]) == set(
         HEADLESS_CORPUS_PIPELINE_FEATURES
     )
+    assert payload["pipeline_contract"]["pipeline_contract_version"] >= 1
+    assert payload["filesystem"]["workspace"]["writable"] is True
+    assert payload["filesystem"]["output"]["writable"] is True
+    assert payload["provider_reachability"]["checked"] is False
+    assert "tesseract" in payload["helpers"]
+    assert "audio" in payload["source_kinds"]
 
 
 
