@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import copy
 import functools
-import heapq
 import gc
 import hashlib
+import heapq
 import json
 import logging
 import math
