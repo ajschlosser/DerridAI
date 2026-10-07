@@ -75,13 +75,31 @@ class FakeCollection:
             payload["embeddings"] = [[row[3] for row in rows]]
         return payload
 
-    def get(self, *, include=(), where=None, limit=None, where_document=None):
+    def get(
+        self,
+        *,
+        ids=None,
+        include=(),
+        where=None,
+        limit=None,
+        offset=0,
+        where_document=None,
+    ):
         rows = self._rows(where)
+        if ids is not None:
+            requested_ids = {str(item) for item in ids}
+            rows = [row for row in rows if row[0] in requested_ids]
         if where_document and "$contains" in where_document:
             rows = [row for row in rows if where_document["$contains"] in row[1]]
         if limit is not None:
-            rows = rows[:limit]
-        return {"ids": [r[0] for r in rows], "documents": [r[1] for r in rows], "metadatas": [r[2] for r in rows]}
+            rows = rows[offset : offset + limit]
+        elif offset:
+            rows = rows[offset:]
+        return {
+            "ids": [row[0] for row in rows],
+            "documents": [row[1] for row in rows],
+            "metadatas": [row[2] for row in rows],
+        }
 
 
 class FakeEmbeddings:

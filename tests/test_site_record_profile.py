@@ -62,6 +62,19 @@ def _record(record_id: str = "r1") -> dict[str, Any]:
 
 
 def _site_records(monkeypatch: pytest.MonkeyPatch, **options: Any) -> tuple[dict, list[dict], int]:
+    # Site publication tests exercise packaging, not the external runtime
+    # downloader. Keep this module deterministic and offline; downloader
+    # verification has dedicated coverage in test_transformers_runtime_cache.
+    monkeypatch.setattr(
+        site_publication,
+        "ensure_runtime",
+        lambda: {
+            "engine": b"export const engine = 1;",
+            "license": b"Apache License fixture",
+            "wasm_factory": b"export default function factory() {}",
+            "wasm": b"\\x00asm" + bytes(range(64)) * 4,
+        },
+    )
     filter_fields = options.pop("filter_fields", ["work"])
     monkeypatch.setattr(
         site_publication.store,

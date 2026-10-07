@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 from app.chroma_store import ChromaStore
 from app.models import RAGRunRequest, ResearchFilterPlan
+from app.rag import _resolve_search_collections
 from app.research_filters import (
     combine_metadata_filters,
     metadata_filter_fields,
@@ -127,6 +128,7 @@ class _CaptureCollection:
     def __init__(self) -> None:
         self.metadata = {"hnsw:space": "cosine"}
         self.last_get = None
+        self.get_calls = []
         self.last_query = None
 
     def count(self) -> int:
@@ -144,6 +146,7 @@ class _CaptureCollection:
 
     def get(self, **kwargs):
         self.last_get = kwargs
+        self.get_calls.append(kwargs)
         return {
             "ids": ["r1"],
             "documents": ["The trace is not a presence."],
@@ -191,8 +194,155 @@ def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
     )
 
     assert [item["record"]["record_id"] for item in lexical] == ["r1"]
-    assert collection.last_get["where"] == where
-    assert collection.last_get["where_document"] == where_document
+    assert any(call.get("where") == where for call in collection.get_calls)
+    assert any(
+        call.get("where_document") == where_document
+        for call in collection.get_calls
+    )
+
+
+class _PagedLexicalCollection:
+    def __init__(self, count: int = 2050) -> None:
+        self.metadata = {"hnsw:space": "cosine"}
+        self.calls: list[dict] = []
+        self.rows = [
+            (
+                f"r{index}",
+                (
+                    "trace trace différance"
+                    if index == count - 1
+                    else f"ordinary passage {index}"
+                ),
+                {
+                    "_record_id": f"r{index}",
+                    "work": "Of Grammatology",
+                    "document_author": "Jacques Derrida",
+                    # Deliberately large irrelevant JSON metadata. The lexical
+                    # scan must not decode it for every candidate.
+                    "updates": "__json__:" + ("[{\"field\":\"x\"}]" * 200),
+                },
+            )
+            for index in range(count)
+        ]
+
+    def count(self) -> int:
+        return len(self.rows)
+
+    def get(self, *, ids=None, include=None, limit=None, offset=0, **kwargs):
+        self.calls.append(
+            {
+                "ids": list(ids) if ids is not None else None,
+                "include": include,
+                "limit": limit,
+                "offset": offset,
+                **kwargs,
+            }
+        )
+        if ids is not None:
+            wanted = set(ids)
+            rows = [row for row in self.rows if row[0] in wanted]
+        else:
+            stop = offset + int(limit or len(self.rows))
+            rows = self.rows[offset:stop]
+        return {
+            "ids": [row[0] for row in rows],
+            "documents": [row[1] for row in rows],
+            "metadatas": [row[2] for row in rows],
+        }
+
+
+def test_lexical_search_pages_candidates_and_decodes_only_final_results(
+    monkeypatch,
+) -> None:
+    from app import chroma_store as chroma_store_module
+
+    collection = _PagedLexicalCollection()
+    store = object.__new__(ChromaStore)
+    store._collection = lambda _name: collection
+
+    original_decode_metadata = chroma_store_module.decode_metadata
+    decoded = []
+
+    def tracked_decode(metadata):
+        decoded.append(metadata)
+        return original_decode_metadata(metadata)
+
+    monkeypatch.setattr(chroma_store_module, "decode_metadata", tracked_decode)
+
+    result = store.lexical_search(
+        "corpus",
+        "trace différance",
+        4,
+        candidate_pool_size=500,
+    )
+
+    assert result[0]["id"] == f"r{len(collection.rows) - 1}"
+    scan_calls = [call for call in collection.calls if call["ids"] is None]
+    assert len(scan_calls) > 1
+    assert all(call["limit"] is not None for call in scan_calls)
+    assert all(call["limit"] <= 512 for call in scan_calls)
+    assert all(call["include"] == ["documents"] for call in scan_calls)
+    # n_results=4 alone would stop at the 2,000-row lexical floor. A deeper
+    # candidate pool still scans the full 2,050-row fixture while only four
+    # complete Records are hydrated.
+    assert scan_calls[-1]["offset"] >= 2000
+
+    final_calls = [call for call in collection.calls if call["ids"] is not None]
+    assert len(final_calls) == 1
+    assert len(final_calls[0]["ids"]) <= 4
+    assert len(decoded) <= 4
+
+
+class _DescriptorRoutingStore:
+    def __init__(self) -> None:
+        self.counted: list[str] = []
+
+    def list_store_descriptors(self):
+        return [
+            {
+                "name": "corpus",
+                "metadata": {},
+                "collection_role": "primary",
+                "language_codes": ["en", "fr"],
+                "source_collection": None,
+            },
+            {
+                "name": "corpus_en",
+                "metadata": {},
+                "collection_role": "language",
+                "language_codes": ["en"],
+                "source_collection": "corpus",
+            },
+            {
+                "name": "unrelated",
+                "metadata": {},
+                "collection_role": "general",
+                "language_codes": ["en"],
+                "source_collection": None,
+            },
+        ]
+
+    def list_stores(self):
+        raise AssertionError("Research routing must not count every collection")
+
+    def collection_count(self, name):
+        self.counted.append(name)
+        return {"corpus": 1000, "corpus_en": 600, "unrelated": 9000}[name]
+
+
+def test_research_routing_counts_only_selected_collections() -> None:
+    store = _DescriptorRoutingStore()
+
+    resolved = _resolve_search_collections(
+        store,  # type: ignore[arg-type]
+        "corpus",
+        ["en", "fr"],
+    )
+
+    assert [row["name"] for row in resolved] == ["corpus_en", "corpus"]
+    assert [row["count"] for row in resolved] == [600, 1000]
+    assert store.counted == ["corpus_en", "corpus"]
+    assert "unrelated" not in store.counted
 
 
 # --- Phase 2: preview endpoint -------------------------------------------------

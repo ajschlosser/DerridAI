@@ -19,7 +19,12 @@ from __future__ import annotations
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
-from app.rag import _cross_encoder_rerank, _lexical_rerank, _scope_work_summaries, run_rag_pipeline
+from app.rag import (
+    _cross_encoder_rerank,
+    _lexical_rerank,
+    _scope_work_summaries,
+    run_rag_pipeline,
+)
 
 
 def _result(pipeline_id: str, ids: list[str], *, elapsed: float = 0.1):
