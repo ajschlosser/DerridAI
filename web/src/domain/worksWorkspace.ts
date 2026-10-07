@@ -403,6 +403,20 @@ export function createWorksWorkspace(deps: Deps) {
       ...extra,
     };
   }
+  function reconcileWorksOverviewSelection() {
+    const selected = String(state.workOverview || "");
+    if (!selected) return false;
+    const exists = isResearcher()
+      ? (state.storeWorkStats || []).some((item: Any) => String(item.work || "") === selected)
+      : workIndex().has(selected);
+    if (exists) return false;
+
+    state.workOverview = "";
+    persistWorksPreferences();
+    syncUrl({ replace: true });
+    return true;
+  }
+
   async function prepareWorksWorkspace() {
     if (isResearcher()) {
       try {
@@ -417,6 +431,7 @@ export function createWorksWorkspace(deps: Deps) {
       } catch {
         /* annotations are best-effort */
       }
+      reconcileWorksOverviewSelection();
       return { error: "" };
     }
     try {
@@ -450,6 +465,7 @@ export function createWorksWorkspace(deps: Deps) {
     } catch {
       /* presence is best-effort */
     }
+    reconcileWorksOverviewSelection();
     return { error: "" };
   }
   function getWorksWorkspaceSnapshot() {
@@ -514,8 +530,7 @@ export function createWorksWorkspace(deps: Deps) {
       });
     }
     const map = workIndex();
-    if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
-    const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
+    const selectedItem = state.workOverview ? map.get(state.workOverview) || null : null;
     const needle = normalizeLibrarySearch(query);
     const annotationCounts = annotationCountsByWork();
     const described = [...map.values()].map((item) =>
@@ -683,6 +698,7 @@ export function createWorksWorkspace(deps: Deps) {
     getWorksViewState,
     worksSnapshotBase,
     prepareWorksWorkspace,
+    reconcileWorksOverviewSelection,
     getWorksWorkspaceSnapshot,
     setWorksSearch,
     setWorksOverview,
