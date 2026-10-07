@@ -42,8 +42,6 @@ export interface ShellSnapshot {
   files: ShellFile[];
   context: { kicker: string; title: string; meta: string };
   totalLoaded: number;
-  flagged: number;
-  pending: number;
   activeJobs: number;
   corpusStoreCount: number;
   dbRecords: number;
@@ -62,8 +60,6 @@ const emptySnapshot: ShellSnapshot = {
   files: [],
   context: { kicker: "Overview", title: "Dashboard", meta: "" },
   totalLoaded: 0,
-  flagged: 0,
-  pending: 0,
   activeJobs: 0,
   corpusStoreCount: 0,
   dbRecords: 0,
