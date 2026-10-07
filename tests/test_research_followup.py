@@ -59,6 +59,15 @@ def test_invalid_bilingual_output_fails_validation(value):
         validate_contextual_query(value)
 
 
+def test_contextual_query_contract_does_not_require_generated_instructions():
+    value = {
+        "prompt_query": "What is responsibility?",
+        "prompt_query_fr": "Qu'est-ce que la responsabilité ?",
+        "response_language": "en",
+    }
+    assert validate_contextual_query(value) == value
+
+
 def test_snapshot_question_and_attempt_fail_closed():
     with pytest.raises(ValueError):
         advisory_context(audit(), "Another question")
