@@ -251,6 +251,35 @@ def source_preflight(
     }
 
 
+def _headless_pipeline_bindings() -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Resolve the code-owned defaults compiled into a standalone CLI build."""
+
+    from .corpus_run_config import HEADLESS_CORPUS_PIPELINE_FEATURES
+    from .pipelines.defaults import built_in_assignment, built_in_pipeline
+    from .pipelines.service import pipeline_hash
+
+    available: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
+    for feature in HEADLESS_CORPUS_PIPELINE_FEATURES:
+        assignment = built_in_assignment(feature)
+        if assignment is None:
+            missing.append(feature)
+            continue
+        definition = built_in_pipeline(
+            assignment.pipeline_id,
+            assignment.pipeline_version,
+        )
+        if definition is None:
+            missing.append(feature)
+            continue
+        available[feature] = {
+            "pipeline_id": definition.pipeline_id,
+            "pipeline_version": definition.version,
+            "pipeline_hash": pipeline_hash(definition),
+        }
+    return available, missing
+
+
 def runtime_capabilities(
     *,
     workspace: str | Path | None = None,
@@ -282,7 +311,19 @@ def runtime_capabilities(
     except ValueError:
         native_target = None
 
+    headless_pipelines, missing_features = _headless_pipeline_bindings()
+    workspace_status = _writable_directory(workspace_path)
+    output_status = _writable_directory(output_path)
+    status = (
+        "ok"
+        if not missing_features
+        and workspace_status["writable"]
+        and output_status["writable"]
+        else "missing_capability"
+    )
+
     return {
+        "status": status,
         "application": {
             "version": APP_VERSION,
             "source_commit": resolve_git_commit() or None,
@@ -295,8 +336,8 @@ def runtime_capabilities(
             "target": native_target,
         },
         "filesystem": {
-            "workspace": _writable_directory(workspace_path),
-            "output": _writable_directory(output_path),
+            "workspace": workspace_status,
+            "output": output_status,
         },
         "helpers": {
             "tesseract": tesseract,
@@ -313,4 +354,6 @@ def runtime_capabilities(
             "reason": "Network providers are not probed by the default doctor command.",
         },
         "pipeline_contract": pipeline_contract_identity(),
+        "headless_corpus_pipelines": headless_pipelines,
+        "missing_features": missing_features,
     }
