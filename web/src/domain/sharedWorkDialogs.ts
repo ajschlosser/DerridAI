@@ -17,7 +17,7 @@
  */
 
 import { createWorkDialogs } from "./workDialogs";
-import { corpusCache } from "./corpusCache";
+import { corpusCache, invalidateCorpusCache } from "./corpusCache";
 import { startJobPolling, syncJobProgressToasts } from "./jobsActions";
 import { providerRequestConfig } from "./providerRequest";
 import { cloneAuditValue } from "./recordValues";
@@ -49,6 +49,7 @@ export const workDialogs = createWorkDialogs({
   corpusCache,
   display,
   jobLabel: operationPresenters.jobLabel,
+  invalidateCorpusCache,
   label,
   navigateTo,
   parseProposedMetadataValue,
