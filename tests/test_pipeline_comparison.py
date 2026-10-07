@@ -1001,6 +1001,43 @@ def test_prose_research_retries_unknown_evidence_marker(monkeypatch) -> None:
     assert any("outside the current evidence packet" in warning for warning in result["warnings"])
 
 
+def test_insufficiency_statement_still_requires_run_local_evidence_binding(monkeypatch) -> None:
+    drafts = [
+        "The supplied evidence is insufficient to answer the question.",
+        "The supplied passage does not establish the requested claim [[E0]].",
+    ]
+    calls = 0
+
+    def generate(**_kwargs):
+        nonlocal calls
+        answer = drafts[calls]
+        calls += 1
+        return answer
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="Does the passage establish presence?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert calls == 2
+    assert "1976" in result["answer"]
+    assert any("omitted required evidence markers" in warning for warning in result["warnings"])
+
+
 def test_research_fails_after_persistent_ungrounded_generation(monkeypatch) -> None:
     monkeypatch.setattr(
         "app.rag.chat_complete",
