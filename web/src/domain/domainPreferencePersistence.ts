@@ -12,6 +12,7 @@ type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-e
 type Any = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export const DOMAIN_PREFERENCE_KEYS = {
+  research: "research-preferences",
   search: "search-preferences",
   list: "list-preferences",
   layout: "layout-preferences",
@@ -21,6 +22,8 @@ export const DOMAIN_PREFERENCE_KEYS = {
 } as const;
 
 export type DomainPreferenceName = keyof typeof DOMAIN_PREFERENCE_KEYS;
+
+const RESEARCH_FIELDS = ["ragConfig"] as const;
 
 const SEARCH_FIELDS = [
   "globalSearch",
@@ -93,6 +96,7 @@ function pick(state: Loose, fields: readonly string[]): Loose {
 
 export function domainPreferenceRecord(state: Loose, name: DomainPreferenceName): Loose {
   const key = DOMAIN_PREFERENCE_KEYS[name];
+  if (name === "research") return { key, ...pick(state, RESEARCH_FIELDS) };
   if (name === "search") return { key, ...pick(state, SEARCH_FIELDS) };
   if (name === "list") return { key, ...pick(state, LIST_FIELDS) };
   if (name === "layout") return { key, ...pick(state, LAYOUT_FIELDS) };
@@ -119,7 +123,8 @@ export function applyDomainPreferenceRecord(state: Loose, value: unknown): void 
   if (!value || typeof value !== "object") return;
   const record = value as Loose;
   const key = String(record.key || "");
-  if (key === DOMAIN_PREFERENCE_KEYS.search) assignFields(state, record, SEARCH_FIELDS);
+  if (key === DOMAIN_PREFERENCE_KEYS.research) assignFields(state, record, RESEARCH_FIELDS);
+  else if (key === DOMAIN_PREFERENCE_KEYS.search) assignFields(state, record, SEARCH_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.layout) assignFields(state, record, LAYOUT_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.vector) assignFields(state, record, VECTOR_FIELDS);
@@ -175,6 +180,7 @@ export function createDomainPreferencePersistence(deps: {
   }
 
   return {
+    persistResearchPreferences: () => persist("research"),
     persistSearchPreferences: () => persist("search"),
     persistListPreferences: () => persist("list"),
     persistLayoutPreferences: () => persist("layout"),
