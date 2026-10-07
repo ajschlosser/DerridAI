@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from app.corpus_cli_config import CorpusProcessingConfig
@@ -155,6 +156,13 @@ def test_headless_runner_uses_shared_build_then_emits_research_projection(tmp_pa
     assert manager.autonomous_request is not None
     assert manager.autonomous_request["autonomous"]["enabled"] is True
 
+    manifest = json.loads(Path(result.manifest or "").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "derridai-headless-run-manifest-v1"
+    assert manifest["source"]["sha256"] == result.source_sha256
+    assert manifest["configuration"]["version"] == 2
+    assert set(manifest["pipelines"]) == set(HEADLESS_CORPUS_PIPELINE_FEATURES)
+    assert manifest["output"]["archive_sha256"] == result.sha256
+
 
 def test_headless_runner_celf_profile_copies_canonical_publication_and_sidecar(tmp_path):
     source = tmp_path / "source.txt"
@@ -172,3 +180,4 @@ def test_headless_runner_celf_profile_copies_canonical_publication_and_sidecar(t
     assert result.sha256 == "celf-archive-sha"
     assert output.read_bytes() == b"celf-fixture"
     assert output.with_name("celf.jsonl.zst.sha512").is_file()
+    assert output.with_name("celf.jsonl.zst.manifest.json").is_file()
