@@ -199,11 +199,6 @@ export function createRecordsWorkspace(deps: Deps) {
     const pg = pageInfo(rows.length, state.pages[f.id] || 1);
     state.pages[f.id] = pg.page;
     const slice = rows.slice(pg.start, pg.end);
-    try {
-      refreshPresenceForRows(slice);
-    } catch {
-      /* presence is best-effort */
-    }
     const flagged = needsReviewItems(
       f.records.map((record: Any, index: Any) => ({ file: f, record, index })),
     ).length;
@@ -255,6 +250,15 @@ export function createRecordsWorkspace(deps: Deps) {
       db_unavailable_reason: dbUnavailableReason(),
       capabilities,
     };
+  }
+  async function refreshRecordsListPresence(indices: Any) {
+    const f = activeFile();
+    if (!f || !Array.isArray(indices) || !indices.length) return;
+    const rows = indices
+      .map((value: Any) => Number(value))
+      .filter((index: number) => Number.isInteger(index) && index >= 0 && index < f.records.length)
+      .map((index: number) => ({ file: f, record: f.records[index], index }));
+    if (rows.length) await refreshPresenceForRows(rows);
   }
   function openRecordsListRecord(index: Any) {
     const f = activeFile();
@@ -408,6 +412,7 @@ export function createRecordsWorkspace(deps: Deps) {
     copyRecordsListJson,
     getRecordsListShareHref,
     getRecordsListSnapshot,
+    refreshRecordsListPresence,
     openRecordsListRecord,
     recordsListCommand,
     resetRecordsListColumns,
