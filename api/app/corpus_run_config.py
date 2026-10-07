@@ -138,6 +138,11 @@ class CorpusPipelineBinding(_StrictConfigModel):
 
     @model_validator(mode="after")
     def validate_binding(self) -> "CorpusPipelineBinding":
+        if self.definition.status != "active":
+            raise ValueError(
+                "Portable corpus-run bindings must contain active pipeline definitions."
+            )
+
         actual_hash = pipeline_hash(self.definition)
         if self.pipeline_hash != actual_hash:
             raise ValueError(
