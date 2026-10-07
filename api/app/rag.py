@@ -929,20 +929,47 @@ def _explicit_scope_work_groups(
     collections: Sequence[Mapping[str, Any]],
     question: str,
 ) -> list[list[str]]:
-    """Collect author/work targets from the searched corpus inventory."""
+    """Collect author/work targets from a compact metadata-only inventory."""
 
+    collection_names = [
+        name
+        for name in dict.fromkeys(
+            str(collection.get("name") or "").strip()
+            for collection in collections
+        )
+        if name
+    ]
+    if not collection_names:
+        return []
+
+    scope_inventory = getattr(store, "research_scope_inventory", None)
+    if callable(scope_inventory):
+        try:
+            return _mentioned_work_groups(
+                scope_inventory(collection_names),
+                question,
+            )
+        except Exception:
+            logger.debug(
+                "Could not inspect compact Work/author inventory for Research scope",
+                exc_info=True,
+            )
+
+    # Compatibility fallback for lightweight test doubles or older store
+    # implementations. Production ChromaStore must not take this path because
+    # work_stats() loads every source document to compute word counts.
     work_summaries: dict[str, dict[str, Any]] = {}
     work_stats = getattr(store, "work_stats", None)
     if not callable(work_stats):
         return []
-    for collection in collections:
-        name = str(collection.get("name") or "")
-        if not name:
-            continue
+    for name in collection_names:
         try:
             rows = work_stats(name)
         except Exception:
-            logger.debug("Could not inspect work inventory for explicit Research scope", exc_info=True)
+            logger.debug(
+                "Could not inspect fallback Work inventory for explicit Research scope",
+                exc_info=True,
+            )
             continue
         for row in rows:
             if not isinstance(row, Mapping):
