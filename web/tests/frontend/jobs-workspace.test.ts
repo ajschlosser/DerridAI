@@ -93,7 +93,7 @@ describe("jobs workspace", () => {
     expect(state.jobApplied).toEqual({});
     expect(state.upsertJobApplied).toEqual({});
     expect(spies.persistJobPreferences).toHaveBeenCalledTimes(1);
-    expect(spies.persistPrefs).toBeUndefined();
+    expect(spies.persistPrefs).not.toHaveBeenCalled();
   });
 
   it("never starts an idle polling loop", () => {
