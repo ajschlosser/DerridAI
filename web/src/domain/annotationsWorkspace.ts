@@ -41,7 +41,10 @@ type Helper =
   | "memoCorpus"
   | "navigateTo"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistAnnotationsPreferences"
+  | "persistRecordViewPreferences"
+  | "persistVectorPreferences"
+  | "persistWorksPreferences"
   | "recordStores"
   | "refreshStores"
   | "reviewItemFromKey"
@@ -64,7 +67,10 @@ export function createAnnotationsWorkspace(deps: Deps) {
     memoCorpus,
     navigateTo,
     persistFileNow,
-    persistPrefs,
+    persistAnnotationsPreferences,
+    persistRecordViewPreferences,
+    persistVectorPreferences,
+    persistWorksPreferences,
     recordStores,
     refreshStores,
     reviewItemFromKey,
@@ -268,6 +274,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
     if (isResearcher() && !state.activeStore) {
       await refreshStores();
       state.activeStore = recordStores()[0]?.name || "";
+      if (state.activeStore) persistVectorPreferences();
     }
     await refreshServerAnnotations(
       force || (isResearcher() && state.serverAnnotationsStore !== String(state.activeStore || "")),
@@ -277,12 +284,12 @@ export function createAnnotationsWorkspace(deps: Deps) {
   }
   function setAnnotationsWorkspaceQuery(value: Any) {
     state.annotationSearch = String(value || "");
-    persistPrefs();
+    persistAnnotationsPreferences();
     syncUrl({ replace: true });
   }
   function setAnnotationsWorkspaceView(value: Any) {
     state.annotationView = value === "recent" ? "recent" : "works";
-    persistPrefs();
+    persistAnnotationsPreferences();
     syncUrl({ replace: true });
   }
   function openAnnotationsWorkspaceRecord(item: Any) {
@@ -293,7 +300,8 @@ export function createAnnotationsWorkspace(deps: Deps) {
     if (item.server) {
       state.activeStore = String(item.source || state.activeStore || "");
       state.researcherRecordId = String(item.record_id || "");
-      persistPrefs();
+      persistVectorPreferences();
+      persistRecordViewPreferences();
       navigateTo("record");
       return;
     }
@@ -301,7 +309,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
   }
   function openAnnotationsWorkspaceWork(work: Any) {
     state.workOverview = String(work || "");
-    persistPrefs();
+    persistWorksPreferences();
     navigateTo("works");
   }
   async function removeAnnotationsWorkspaceItem(item: Any) {
