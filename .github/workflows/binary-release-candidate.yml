@@ -1,0 +1,110 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# Native release-candidate builds are intentionally manual. Broad release
+# publication remains gated on platform signing/notarization credentials.
+
+name: Native binary release candidates
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    name: Candidate ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: linux-x86_64
+          - runner: windows-2025
+            target: windows-x86_64
+          - runner: macos-15
+            target: macos-arm64
+          - runner: macos-15-intel
+            target: macos-x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: api/requirements-cli-build.txt
+
+      - name: Install native CLI build dependencies
+        run: python -m pip install -r api/requirements-cli-build.txt
+
+      - name: Run native CLI contract tests
+        run: >-
+          python -m pytest -q
+          tests/test_corpus_cli.py
+          tests/test_corpus_run_config.py
+          tests/test_pipeline_capabilities.py
+          tests/test_pipeline_portable.py
+          tests/test_corpus_binary_manifest.py
+          tests/test_corpus_output_profiles.py
+          tests/test_headless_corpus_runner.py
+
+      - name: Build onefile release candidate
+        run: >-
+          python scripts/build_cli_binary.py
+          --onefile
+          --target ${{ matrix.target }}
+          --output-dir dist/cli/${{ matrix.target }}/onefile
+
+      - name: Verify release-candidate contract
+        run: >-
+          python scripts/smoke_cli_binary.py
+          --manifest
+          dist/cli/${{ matrix.target }}/onefile/binary-manifest-${{ matrix.target }}-onefile.json
+
+      - name: Verify source-to-corpus behavior
+        run: >-
+          python scripts/smoke_cli_corpus.py
+          --manifest
+          dist/cli/${{ matrix.target }}/onefile/binary-manifest-${{ matrix.target }}-onefile.json
+
+      - name: Upload unsigned release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: derridai-${{ matrix.target }}-release-candidate
+          path: dist/cli/${{ matrix.target }}/onefile
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  distribution:
+    name: Candidate distribution report
+    needs: candidate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download candidate artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: derridai-*-release-candidate
+          path: dist/cli/release-candidates
+          merge-multiple: true
+
+      - name: Measure candidate distribution policy
+        run: >-
+          python scripts/report_cli_distribution.py
+          --root dist/cli/release-candidates
+          --output dist/cli/binary-distribution-decision.json
+
+      - name: Upload distribution report
+        uses: actions/upload-artifact@v4
+        with:
+          name: derridai-native-release-distribution
+          path: dist/cli/binary-distribution-decision.json
+          if-no-files-found: error
+          retention-days: 30
