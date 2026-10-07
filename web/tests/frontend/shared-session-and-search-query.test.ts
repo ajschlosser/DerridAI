@@ -17,11 +17,18 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { createUpdateSearchQuery } from "../../src/domain/searchQuery";
+import { createUpdateSearchQuery, setSearchQueryDraft } from "../../src/domain/searchQuery";
 import { hasCapability, isResearcher } from "../../src/domain/sharedSession";
 import { sessionState } from "../../src/state/workspaceState";
 
 describe("createUpdateSearchQuery", () => {
+  it("updates draft state without requiring persistence or URL work", () => {
+    const state: Record<string, unknown> = { globalSearch: "old", globalPage: 4 };
+
+    expect(setSearchQueryDraft(state, " hospitality")).toBe(" hospitality");
+    expect(state).toEqual({ globalSearch: " hospitality", globalPage: 1 });
+  });
+
   it("sets the query, resets the page, then persists and syncs the URL", () => {
     const state: Record<string, unknown> = { globalSearch: "old", globalPage: 4 };
     const persistPrefs = vi.fn();
