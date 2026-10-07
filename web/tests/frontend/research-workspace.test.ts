@@ -96,6 +96,69 @@ describe("research workspace commands", () => {
     expect(state.ragConfig.k).toBe(64);
   });
 
+
+  it("does not send stale selected evidence with an ordinary retrieval run", async () => {
+    const api = vi.fn(async () => ({ id: "balanced-job", status: "queued" }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "stale", record_id: "other-author" }],
+      selectedEvidencePayload: () => [
+        { record_id: "other-author", collection: "corpus" },
+      ],
+      recordStores: () => [{ name: "corpus", count: 3 }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+
+    await workspace.startResearchRun({
+      prompt: "Discuss the two named Proust novels.",
+      skip_retrieval: false,
+      include_selected_evidence: false,
+      config: {
+        source_collection: "corpus",
+        locales: ["en"],
+        search_types: ["lexical"],
+        skip_retrieval: false,
+      },
+    });
+
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.skip_retrieval).toBe(false);
+    expect(body.selected_evidence).toEqual([]);
+  });
+
+  it("sends selected evidence only when a hybrid retrieval run opts in", async () => {
+    const api = vi.fn(async () => ({ id: "hybrid-job", status: "queued" }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "pinned", record_id: "r1" }],
+      selectedEvidencePayload: () => [{ record_id: "r1", collection: "corpus" }],
+      recordStores: () => [{ name: "corpus", count: 3 }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+
+    await workspace.startResearchRun({
+      prompt: "Synthesize retrieval with my pinned passage.",
+      skip_retrieval: false,
+      include_selected_evidence: true,
+      config: {
+        source_collection: "corpus",
+        locales: ["en"],
+        search_types: ["lexical"],
+        skip_retrieval: false,
+      },
+    });
+
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.skip_retrieval).toBe(false);
+    expect(body.selected_evidence).toEqual([{ record_id: "r1", collection: "corpus" }]);
+  });
+
   it("submits a follow-up to the selected thread without transporting history", async () => {
     const api = vi.fn(async (_path: string, _options: unknown) => ({
       id: "next-job",
