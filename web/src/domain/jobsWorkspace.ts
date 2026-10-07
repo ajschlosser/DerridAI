@@ -55,7 +55,6 @@ type Helper =
   | "touchupRecordPayload"
   | "tr"
   | "trf"
-  | "updateDbStatusElements"
   | "updateOperationStackCount";
 type Deps = { state: Loose; realtime?: RealtimeClient } & Record<Helper, Fn>;
 
@@ -86,7 +85,6 @@ export function createJobsWorkspace(deps: Deps) {
     touchupRecordPayload,
     tr,
     trf,
-    updateDbStatusElements,
     updateOperationStackCount,
   } = deps;
   // Which finished jobs already raised a notification, and the timers that hide their completion toasts.
@@ -322,7 +320,7 @@ export function createJobsWorkspace(deps: Deps) {
     }
     state.upsertJobApplied[job.id] = results.length;
     persistJobPreferences();
-    updateDbStatusElements();
+    state.presenceVersion = Number(state.presenceVersion || 0) + 1;
     if (!["queued", "running", "cancelling"].includes(detail.status)) {
       try {
         await refreshStores();
