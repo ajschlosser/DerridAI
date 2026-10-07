@@ -29,9 +29,11 @@ function setup(activeFile: unknown = { id: "f1", name: "a.jsonl", records: [] })
   Object.assign(listState, createListState());
   const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
+  const refreshPresenceForRows = vi.fn(async () => undefined);
   const overrides: Record<string, unknown> = {
     state,
     activeFile: () => activeFile,
+    refreshPresenceForRows,
     toggleSort: (sort: { key: string; dir: number }, key: string) => {
       if (sort.key === key) sort.dir *= -1;
       else {
@@ -52,13 +54,27 @@ function setup(activeFile: unknown = { id: "f1", name: "a.jsonl", records: [] })
     string,
     (...args: unknown[]) => unknown
   >;
-  return { state, calls, workspace };
+  return { state, calls, workspace, refreshPresenceForRows };
 }
 
 describe("records workspace commands", () => {
   let ctx: ReturnType<typeof setup>;
   beforeEach(() => {
     ctx = setup();
+  });
+
+  it("keeps snapshot reads pure and refreshes visible-row presence only on command", async () => {
+    const record = { record_id: "r1", text: "trace" };
+    const local = setup({ id: "f1", name: "a.jsonl", records: [record] });
+
+    const snapshot = local.workspace.getRecordsListSnapshot() as { rows: Array<{ index: number }> };
+    expect(snapshot.rows.map((row) => row.index)).toEqual([0]);
+    expect(local.refreshPresenceForRows).not.toHaveBeenCalled();
+
+    await local.workspace.refreshRecordsListPresence([0]);
+    expect(local.refreshPresenceForRows).toHaveBeenCalledWith([
+      { file: expect.any(Object), record, index: 0 },
+    ]);
   });
 
   it("sets a file's query, returns it to page one, saves and syncs the URL", () => {
