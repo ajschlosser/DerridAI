@@ -3426,6 +3426,8 @@ class ChromaStore:
         n_results: int,
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
+        *,
+        candidate_pool_size: int | None = None,
     ) -> list[dict[str, Any]]:
         """Bounded BM25-style lexical ranking without materializing the corpus.
 
@@ -3440,7 +3442,9 @@ class ChromaStore:
         FieldAssertions and audit/provenance JSON) are never transferred for the
         lexical candidate scan. Only compact term-frequency statistics plus
         Chroma ids are retained, and complete Records are fetched for final top-N
-        results after ranking.
+        results after ranking. candidate_pool_size preserves a deeper scoring
+        window without forcing every candidate in that window to become a fully
+        hydrated Record.
         """
 
         query = str(query or "").strip()
@@ -3471,7 +3475,11 @@ class ChromaStore:
         document_count = 0
         folded_phrase = query.casefold()
 
-        scan_limit = min(max(max(1, n_results) * 100, 2000), 20000)
+        candidate_depth = max(
+            max(1, int(n_results)),
+            max(1, int(candidate_pool_size or n_results)),
+        )
+        scan_limit = min(max(candidate_depth * 100, 2000), 20000)
         page_size = min(
             scan_limit,
             max(1, min(int(settings.api_batch_size), 512)),
