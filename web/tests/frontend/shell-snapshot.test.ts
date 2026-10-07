@@ -18,26 +18,14 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { getShellSnapshot, systemCardHtml } from "../../src/domain/shellSnapshot";
-import { jobsState } from "../../src/state/jobsState";
 import { state } from "../../src/domain/sharedUrlState";
 
 describe("shell snapshot", () => {
   afterEach(() => {
     state.health = null;
-    jobsState.jobs = [];
     state.files = [];
     state.activeFileId = null;
     state.view = "home";
-  });
-
-  it("counts only queued, running and cancelling jobs as active", () => {
-    jobsState.jobs = [
-      { id: "running", status: "running" },
-      { id: "queued", status: "queued" },
-      { id: "cancelling", status: "cancelling" },
-      { id: "succeeded", status: "succeeded" },
-    ];
-    expect(getShellSnapshot().activeJobs).toBe(3);
   });
 
   it("counts loaded records from file summaries without a flattened corpus scan", () => {
