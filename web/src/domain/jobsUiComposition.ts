@@ -245,6 +245,7 @@ const { openJobDetails, openJobResults, openLlmTaskLauncher, openPdfDraftRecord 
     canAccessPage: late(() => canAccessPage),
     cancelBackgroundJob,
     cloneAuditValue: late(() => cloneAuditValue),
+    commitRecordFiles: late(() => sharedRecordEditing.commitRecordFiles),
     formatTimestamp: late(() => formatTimestamp),
     fullCitation: late(() => fullCitation),
     isResearcher: late(() => isResearcher),
