@@ -40,8 +40,9 @@ describe("shell snapshot", () => {
   it("reports the view and context for the current page", () => {
     state.view = "works";
     const snapshot = getShellSnapshot();
+    const context = snapshot.context as { title: string };
     expect(snapshot.view).toBe("works");
-    expect(snapshot.context.title).toBe("Works");
+    expect(context.title).toBe("Works");
   });
 
   it("shows Checking before health is known, then Online and Offline states", () => {
