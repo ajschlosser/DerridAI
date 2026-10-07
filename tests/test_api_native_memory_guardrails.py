@@ -42,8 +42,7 @@ def test_env_example_documents_native_runtime_limits() -> None:
 
 
 def test_hot_native_paths_reuse_bounded_process_wide_executors() -> None:
-    from app import cross_encoder
-    from app import metadata_exemplar_retrieval
+    from app import cross_encoder, metadata_exemplar_retrieval
 
     assert cross_encoder._INFERENCE_EXECUTOR._max_workers == 1
     assert metadata_exemplar_retrieval._EXEMPLAR_QUERY_EXECUTOR._max_workers == 4
