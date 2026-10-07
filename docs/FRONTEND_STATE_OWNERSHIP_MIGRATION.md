@@ -157,7 +157,7 @@ Work order:
       Records, and Compare. Retain migration reads from the existing `prefs` object until all domains move.
 - [x] B4. Stop Search keystrokes from synchronously compressing/replacing URL state. Make query rendering immediate and URL
       persistence delayed/meaningful.
-- [ ] B5. Make Records projections incremental/cached where feasible and side-effect free. Move presence refresh to an
+- [x] B5. Make Records projections incremental/cached where feasible and side-effect free. Move presence refresh to an
       explicit async effect keyed to visible rows.
 - [x] B6. Stop Compare editor keystrokes from serializing unrelated workspace state; avoid duplicate compare derivations per
       render.
@@ -193,9 +193,11 @@ Implementation status on `task/frontend-state-ownership-performance`: Agent A's 
 route/file context, and application-status projections now invalidate independently; corpus/store aggregates are cached
 behind domain invalidation and cheap collection-identity checks, while active-store, health, and evidence primitives stay
 live. Job reconciliation no longer rewrites shell DOM. Feature dialogs and the touch-up workflow are now activated through
-small feature-owned request refs and lazy hosts instead of being statically owned by `App.vue`. B1, B2, B4, and B6 are
-complete; B5 now has a pure snapshot read and
-explicit visible-row presence effect, while its deeper incremental/cached projection work remains open. Bounded User Timing
+small feature-owned request refs and lazy hosts instead of being statically owned by `App.vue`. B1, B2, B4, B5, and B6 are complete. Records snapshot reads are side-effect free, visible-row presence refresh is an
+explicit async effect, and corpus-derived row metadata is cached by corpus generation with prefix-query narrowing for
+ordinary typing. Research configuration now has its own domain preference record in addition to its composer-draft
+record; the wider B3 migration remains open until the remaining native preference call sites stop defaulting to the
+monolithic workspace record. Bounded User Timing
 measures record Research prompt/instruction input-to-next-frame latency and sidebar navigation intent-to-next-frame latency.
 Repository validation has not yet been run in this environment.
 
