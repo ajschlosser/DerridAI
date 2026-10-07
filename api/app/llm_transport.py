@@ -205,8 +205,11 @@ def chat_complete(
             }
         elif json_mode:
             body["response_format"] = {"type": "json_object"}
+        # Provider-specific extras may tune generation, but they must not override
+        # transport-owned request shape or force structured output onto prose tasks.
+        reserved_extra_options = {"model", "messages", "response_format", "stream"}
         for key_name, value in (tuning.extra_options or {}).items():
-            if key_name not in {"model", "messages"}:
+            if key_name not in reserved_extra_options:
                 body[key_name] = value
 
         timeout = httpx.Timeout(
@@ -359,7 +362,13 @@ def chat_complete(
         return complete(content, finish_reason)
 
     url = (base_url or settings.ollama_base_url).rstrip("/")
-    option_values: dict[str, Any] = dict(tuning.extra_options or {})
+    # Ollama structured-output format is transport-owned; do not allow raw
+    # profile options to smuggle request-shape controls into generation settings.
+    option_values: dict[str, Any] = {
+        key: value
+        for key, value in (tuning.extra_options or {}).items()
+        if key not in {"format", "model", "messages", "stream"}
+    }
     for key_name, value in {
         "num_ctx": tuning.num_ctx,
         "num_predict": max_tokens or tuning.num_predict,
