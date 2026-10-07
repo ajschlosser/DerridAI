@@ -228,6 +228,13 @@ export function createWorkspacePersistence(deps: Deps) {
       // newer domain-owned state during startup.
       if (restorePreferenceOverlays) await restorePreferenceOverlays();
 
+      // The corpus-domain record may come from an older workspace snapshot or
+      // from a file that was deleted independently. Never leave the restored
+      // workspace pointing at a tab that does not exist.
+      state.activeFileId = state.files.some((file: Any) => file.id === state.activeFileId)
+        ? state.activeFileId
+        : state.files[0]?.id || null;
+
       if (
         !state.faqExpanded ||
         typeof state.faqExpanded !== "object" ||
