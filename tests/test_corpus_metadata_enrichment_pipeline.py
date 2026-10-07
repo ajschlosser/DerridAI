@@ -937,8 +937,6 @@ def test_request_bound_pipeline_executes_without_re_resolving_global_assignment(
     manager,
     traces,
 ):
-    from app.pipelines.models import PipelineDefinition
-
     source = built_in_pipeline(*BUILT_IN)
     assert source is not None
     exact = source.model_copy(
