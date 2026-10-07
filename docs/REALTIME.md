@@ -40,7 +40,7 @@ GraphQL is the read façade for scholarly data ([GRAPHQL.md](GRAPHQL.md)); it ha
 | `job_state.py`              | `job_realtime_summary` / `PersistentJobStateMixin.realtime_job_summaries`: the one bounded, text-free view of live job state every manager shares.           |
 | `operation_events.py`       | Transport-neutral notes from domain code (`save_build`, model-call start/end, per-record metadata progress, generation deltas, activity). No socket imports. |
 
-Job managers never call the socket. The observer thread reads `realtime_job_summaries()` from the LLM, RAG, LLM-tool (languages, work metadata, grading) and upsert managers plus corpus-build/model-activity/per-record/generation/activity notes at most `REALTIME_PROGRESS_MAX_HZ` times per second, diffs against what it last published and emits events. A failing manager, a publish error, or a slow browser therefore cannot stall, fail or corrupt a job, and SQLite checkpointing is untouched.
+Job managers never call the socket. The observer thread reads `realtime_job_summaries()` from the LLM, RAG, LLM-tool (languages, work metadata, grading) and upsert managers plus corpus-build/model-activity/per-record/generation/activity notes at most `REALTIME_PROGRESS_MAX_HZ` times per second, diffs against what it last published and emits events. Those summaries contain live state plus only a bounded cache of recent terminal summaries; full completed result payloads remain in SQLite and are read through REST when needed. A failing manager, a publish error, or a slow browser therefore cannot stall, fail or corrupt a job.
 
 ## Connection lifecycle
 
