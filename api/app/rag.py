@@ -993,10 +993,14 @@ def _scope_work_summaries(
                 if isinstance(item, Mapping)
             ]
         except Exception:
-            logger.debug(
-                "Could not inspect compact Work/author inventory for Research scope",
+            # Memory containment is an invariant, not an optimization. A compact
+            # inventory failure must not fall back to work_stats(), which loads
+            # every document in the collection and can ratchet API RSS per run.
+            logger.warning(
+                "Compact Work/author inventory failed; skipping inferred Research scope",
                 exc_info=True,
             )
+            return []
 
     # Compatibility fallback for lightweight test doubles or older store
     # implementations. Production ChromaStore must not take this path because
