@@ -173,10 +173,20 @@ A minimal validation-only configuration is:
 version: 1
 ```
 
-For an actual `corpus build`, supply a real configured provider/model. A local
-Ollama example is documented in [HEADLESS_CORPUS_CLI.md](HEADLESS_CORPUS_CLI.md).
-Keep the first manual corpus small and retain `--workspace` so failures can be
-inspected.
+The current standalone CI artifact is appropriate for exercising the command,
+configuration, pipeline-contract, and diagnostic surfaces. Do **not** treat a
+successful smoke trial as proof that compiled `corpus build` is release-ready:
+B9 exists precisely because the current native workflow does not run a source
+through publication, and the intentionally narrow build dependency set may report
+source kinds unavailable (for example when `fitz`/`httpx` are not in the compiled
+closure).
+
+For an experimental end-to-end build, use a development build that includes the
+full required corpus-engine dependencies, supply a real configured provider/model,
+keep the source small, and retain `--workspace` so failure state can be inspected.
+A local Ollama configuration example is documented in
+[HEADLESS_CORPUS_CLI.md](HEADLESS_CORPUS_CLI.md). The next implementation pass
+should make this path part of B9 rather than relying on a manual environment.
 
 ## Historical completed checkpoint: progressive loading UX
 
