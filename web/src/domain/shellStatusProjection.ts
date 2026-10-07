@@ -36,15 +36,25 @@ type AggregateStatus = Pick<
 >;
 
 let cachedAggregates: AggregateStatus | null = null;
+let cachedFiles: unknown = null;
+let cachedStores: unknown = null;
 
 export function invalidateShellStatusProjection(): void {
   cachedAggregates = null;
+  cachedFiles = null;
+  cachedStores = null;
 }
 
 function aggregateStatus(): AggregateStatus {
-  if (cachedAggregates) return cachedAggregates;
+  // Replacement of a top-level collection is itself a cheap invalidation signal.
+  // In-place corpus edits use invalidateCorpusCache(), which explicitly clears this
+  // projection because the array identity intentionally remains stable.
+  if (cachedAggregates && cachedFiles === state.files && cachedStores === state.stores)
+    return cachedAggregates;
 
   const corpusStores = recordStores();
+  cachedFiles = state.files;
+  cachedStores = state.stores;
   cachedAggregates = {
     totalLoaded: state.files.reduce(
       (sum: number, file: Any) => sum + (Array.isArray(file.records) ? file.records.length : 0),
