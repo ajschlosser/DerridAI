@@ -1513,7 +1513,13 @@ class SQLiteJobRepository(SQLiteRepositoryBase):
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT json_remove(payload_json, '$.result', '$.results') AS payload_json
+                SELECT json_remove(
+                           payload_json,
+                           '$.result',
+                           '$.results',
+                           '$._resume_dictionary',
+                           '$._resume_failed_keys'
+                       ) AS payload_json
                 FROM jobs
                 WHERE job_type=?
                 ORDER BY created_at DESC
