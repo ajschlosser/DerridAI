@@ -27,6 +27,7 @@ stay domain policy in ``memory_prefill``.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
@@ -109,10 +110,12 @@ def compile_prefill_pipeline(pipeline: PipelineDefinition) -> PrefillPlan:
     )
 
 
-def resolve_prefill_plan() -> tuple[PrefillPlan, str]:
-    from .manager import pipeline_manager
+def resolve_prefill_plan(
+    request: Mapping[str, Any] | None = None,
+) -> tuple[PrefillPlan, str]:
+    from .execution_resolution import resolve_execution_pipeline
 
-    resolved = pipeline_manager.resolve(PREFILL_FEATURE)
+    resolved = resolve_execution_pipeline(PREFILL_FEATURE, request)
     pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
     return compile_prefill_pipeline(pipeline), str(resolved.get("pipeline_hash") or pipeline_hash(pipeline))
 
