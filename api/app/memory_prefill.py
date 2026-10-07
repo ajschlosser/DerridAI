@@ -223,7 +223,7 @@ def prefill_records(
         if not int(collection.count()):
             summary["status"] = "empty"
             return summary
-        plan, resolved_hash = resolve_prefill_plan(request)
+        plan, resolved_hash = (\n            resolve_prefill_plan(request)\n            if request and request.get("_pipeline_bindings")\n            else resolve_prefill_plan()\n        )
         trace_started = datetime.now(UTC)
         provider, model = index.store._embedding_spec(collection)
         retrieve_started = time.monotonic()
