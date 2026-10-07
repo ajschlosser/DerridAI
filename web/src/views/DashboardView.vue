@@ -744,7 +744,13 @@ onBeforeUnmount(() => {
                 @click="stepMetric(-1)"
                 v-text="'←'"
               ></button>
-              <span>{{ coreReady && metricSets.length ? `${activeMetricIndex + 1} / ${metricSets.length}` : "—" }}</span>
+              <span>
+                {{
+                  coreReady && metricSets.length
+                    ? `${activeMetricIndex + 1} / ${metricSets.length}`
+                    : "—"
+                }}
+              </span>
               <button
                 class="dashboard-metric-arrow"
                 id="dashMetricNext"
@@ -802,7 +808,12 @@ onBeforeUnmount(() => {
             />
             <div v-if="activityError" class="note" role="alert">
               <span>{{ activityReady ? i18n.t("loading.stale") : activityError }}</span>
-              <button type="button" class="btn small" :disabled="activityLoading" @click="refreshActivity">
+              <button
+                type="button"
+                class="btn small"
+                :disabled="activityLoading"
+                @click="refreshActivity"
+              >
                 {{ i18n.t("ui.retry") }}
               </button>
             </div>
