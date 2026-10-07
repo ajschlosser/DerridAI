@@ -39,6 +39,7 @@ class PreflightPlan:
     contract: bool = False
     format: bool = False
     publication: bool = False
+    container: bool = False
     generated: bool = False
     legacy: bool = False
 
@@ -58,6 +59,20 @@ FORMAT_SUFFIXES = (
     ".scss",
     ".html",
 )
+
+CONTAINER_PATHS = {
+    "docker-compose.yml",
+    "api/Dockerfile",
+    "api/.dockerignore",
+    "api/requirements.txt",
+    "api/requirements-nlp.txt",
+    "web/Dockerfile",
+    "web/Dockerfile.storybook",
+    "web/.dockerignore",
+    "web/nginx.conf",
+    "web/package.json",
+    "web/package-lock.json",
+}
 
 PUBLICATION_PATHS = {
     "api/app/site_publication.py",
@@ -127,6 +142,7 @@ def build_plan(paths: list[str]) -> PreflightPlan:
 
         if path == ".github/workflows/frontend.yml":
             plan.backend = plan.contract = plan.format = plan.publication = True
+            plan.container = True
             _mark_full_frontend(plan)
         elif path.startswith("scripts/"):
             # Repository automation should test the automation it can affect, not every application surface.
@@ -245,6 +261,9 @@ def build_plan(paths: list[str]) -> PreflightPlan:
             plan.a11y = plan.a11y_full = True
             plan.storybook = True
             plan.e2e = True
+
+        if path in CONTAINER_PATHS:
+            plan.container = True
 
         if path in {
             "README.md",
