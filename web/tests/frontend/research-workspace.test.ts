@@ -38,7 +38,8 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (name === "persistPrefs") calls.push(name);
+          if (["persistPrefs", "persistResearchPreferences", "persistJobPreferences"].includes(name))
+            calls.push(name);
         });
         return spies[name];
       },
@@ -172,7 +173,8 @@ describe("research workspace commands", () => {
     });
     expect(state.ragConfig).not.toHaveProperty("unknown_key");
     expect(config).toMatchObject({ k: 8 });
-    expect(calls).toEqual(["persistPrefs"]);
+    expect(calls).toEqual(["persistResearchPreferences"]);
+    expect(spies.persistPrefs).toBeUndefined();
     expect(spies.shellRefreshHook).not.toHaveBeenCalled();
   });
 
