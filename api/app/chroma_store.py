@@ -3562,7 +3562,13 @@ class ChromaStore:
         # Heap entries are ordered from worst to best. For equal scores, later
         # source order is worse so stable ranking matches the previous sort.
         heap: list[tuple[float, int, str]] = []
-        for chroma_id, length, frequencies, phrase_match, source_ordinal in compact_candidates:
+        for (
+            chroma_id,
+            length,
+            frequencies,
+            phrase_match,
+            source_ordinal,
+        ) in compact_candidates:
             if length <= 0:
                 continue
             score = 0.0
@@ -3602,6 +3608,7 @@ class ChromaStore:
         )
         top_ids = [item[2] for item in ranked]
         payload = col.get(
+            **scan_args,
             ids=top_ids,
             include=["documents", "metadatas"],
         )
