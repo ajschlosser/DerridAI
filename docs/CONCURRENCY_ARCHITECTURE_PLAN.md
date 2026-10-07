@@ -610,6 +610,7 @@ This effort is complete when all of the following are true:
   `master@12c6cbfeb5b68c0d5117dd2263f3d624aa188ab5` into this branch; the upstream
   navigation/runtime-retirement changes did not overlap the concurrency files.
 - GitHub Actions quality gates are now running against the merged head.
+
 ### 2026-10-06 / native-runtime memory containment
 
 - Diagnosed an API process whose resident memory rose from roughly 4.4 GiB to more than 10 GiB after
