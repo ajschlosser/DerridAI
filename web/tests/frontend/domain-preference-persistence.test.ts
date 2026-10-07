@@ -31,6 +31,14 @@ describe("domain preference persistence", () => {
     };
 
     const research = domainPreferenceRecord(state, "research");
+    const settings = domainPreferenceRecord(
+      {
+        ...state,
+        appConfig: { ui_color_theme: "blue" },
+        llmConfig: { model: "phi4" },
+      },
+      "settings",
+    );
     const search = domainPreferenceRecord(state, "search");
     const layout = domainPreferenceRecord(state, "layout");
 
@@ -40,6 +48,14 @@ describe("domain preference persistence", () => {
     });
     expect(research).not.toHaveProperty("files");
     expect(research).not.toHaveProperty("globalSearch");
+
+    expect(settings).toEqual({
+      key: "settings-preferences",
+      appConfig: { ui_color_theme: "blue" },
+      llmConfig: { model: "phi4" },
+    });
+    expect(settings).not.toHaveProperty("files");
+    expect(settings).not.toHaveProperty("globalSearch");
 
     expect(search).toMatchObject({
       key: "search-preferences",
@@ -101,9 +117,16 @@ describe("domain preference persistence", () => {
     };
 
     (state as Record<string, unknown>).ragConfig = { k: 64, response_language: "auto" };
+    (state as Record<string, unknown>).appConfig = { ui_color_theme: "green", preserved: true };
+    (state as Record<string, unknown>).llmConfig = { model: "default", num_ctx: 8192 };
     applyDomainPreferenceRecord(state, {
       key: "research-preferences",
       ragConfig: { k: 12 },
+    });
+    applyDomainPreferenceRecord(state, {
+      key: "settings-preferences",
+      appConfig: { ui_color_theme: "blue" },
+      llmConfig: { model: "phi4" },
     });
     applyDomainPreferenceRecord(state, {
       key: "search-preferences",
@@ -121,6 +144,8 @@ describe("domain preference persistence", () => {
     });
 
     expect(state.ragConfig).toEqual({ k: 12, response_language: "auto" });
+    expect(state.appConfig).toEqual({ ui_color_theme: "blue", preserved: true });
+    expect(state.llmConfig).toEqual({ model: "phi4", num_ctx: 8192 });
     expect(state.globalSearch).toBe("domain");
     expect(state.globalPage).toBe(2);
     expect(state.sidebarCollapsed).toBe(true);
