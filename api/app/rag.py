@@ -366,11 +366,17 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
 def partition_scope_compatible_records(
     records: Sequence[Mapping[str, Any]],
     allowed_works: Sequence[str],
+    allowed_authors: Sequence[str] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    """Drop non-pinned Records that escape an inferred exclusive work scope."""
+    """Drop non-pinned Records that escape inferred work/source-author scope."""
 
-    allowed = {str(work).strip() for work in allowed_works if str(work).strip()}
-    if not allowed:
+    works = {str(work).strip() for work in allowed_works if str(work).strip()}
+    authors = {
+        _normalized_scope_text(author)
+        for author in allowed_authors
+        if str(author).strip()
+    }
+    if not works and not authors:
         return [dict(item) for item in records], []
 
     kept: list[dict[str, Any]] = []
@@ -378,12 +384,16 @@ def partition_scope_compatible_records(
     for item in records:
         record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
         work = source_work_label(record)
-        if item.get("selected_evidence") or work in allowed:
+        author = source_author(record)
+        work_matches = not works or work in works
+        author_matches = not authors or _normalized_scope_text(author) in authors
+        if item.get("selected_evidence") or (work_matches and author_matches):
             kept.append(dict(item))
             continue
         excluded.append({
             "record_id": str(record.get("record_id") or item.get("id") or "unknown"),
             "work": work,
+            "document_author": author,
         })
     return kept, excluded
 
