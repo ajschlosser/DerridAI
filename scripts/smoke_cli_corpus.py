@@ -27,7 +27,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import signal
 import subprocess
 import tempfile
 import threading
@@ -190,6 +192,10 @@ def _structured_answer(
     return payload
 
 
+_CANCEL_STARTED = threading.Event()
+_CANCEL_RELEASE = threading.Event()
+
+
 class _ProviderHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
@@ -210,6 +216,10 @@ class _ProviderHandler(BaseHTTPRequestHandler):
             raw_schema = json_schema.get("schema")
             if isinstance(raw_schema, dict):
                 schema = raw_schema
+
+        if str(body.get("model") or "") == "deterministic-cancel":
+            _CANCEL_STARTED.set()
+            _CANCEL_RELEASE.wait(timeout=30)
 
         if schema:
             answer = _structured_answer(
@@ -474,6 +484,81 @@ publication:
                 )
             if unsupported_output.exists():
                 raise RuntimeError("Unsupported source created a partial publication.")
+
+            cancel_config_v1 = root / "cancel-v1.yaml"
+            cancel_config_v1.write_text(
+                config.read_text(encoding="utf-8").replace(
+                    "model: deterministic-fixture",
+                    "model: deterministic-cancel",
+                ),
+                encoding="utf-8",
+            )
+            cancel_config = root / "cancel-v2.yaml"
+            _run(
+                [
+                    str(binary),
+                    "config",
+                    "migrate",
+                    "--config",
+                    str(cancel_config_v1),
+                    "--output",
+                    str(cancel_config),
+                ]
+            )
+            cancel_output = root / "cancelled.jsonl.zst"
+            creationflags = (
+                subprocess.CREATE_NEW_PROCESS_GROUP
+                if os.name == "nt"
+                else 0
+            )
+            cancelled = subprocess.Popen(
+                [
+                    str(binary),
+                    "corpus",
+                    "build",
+                    "--source",
+                    str(source),
+                    "--config",
+                    str(cancel_config),
+                    "--output",
+                    str(cancel_output),
+                    "--workspace",
+                    str(root / "workspace-cancel"),
+                    "--json",
+                    "--quiet",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=creationflags,
+            )
+            if not _CANCEL_STARTED.wait(timeout=30):
+                cancelled.kill()
+                stdout, stderr = cancelled.communicate(timeout=10)
+                raise RuntimeError(
+                    "Cancellation fixture never reached the provider. "
+                    f"stdout={stdout!r} stderr={stderr!r}"
+                )
+            try:
+                if os.name == "nt":
+                    cancelled.terminate()
+                else:
+                    cancelled.send_signal(signal.SIGINT)
+                stdout, stderr = cancelled.communicate(timeout=20)
+            finally:
+                _CANCEL_RELEASE.set()
+            if cancelled.returncode == 0:
+                raise RuntimeError(
+                    f"Cancelled compiled build unexpectedly succeeded: {stdout!r}"
+                )
+            if cancel_output.exists():
+                raise RuntimeError("Cancelled compiled build left a final publication.")
+            temporary_outputs = list(root.glob(f".{cancel_output.name}.*.tmp"))
+            if temporary_outputs:
+                raise RuntimeError(
+                    "Cancelled compiled build left temporary publication files: "
+                    + ", ".join(str(path) for path in temporary_outputs)
+                )
 
             celf_output = root / "fixture-celf.jsonl.zst"
             celf_result = json.loads(
