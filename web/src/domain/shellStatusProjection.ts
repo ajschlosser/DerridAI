@@ -32,29 +32,37 @@ export interface ShellStatusProjection {
 
 type AggregateStatus = Pick<
   ShellStatusProjection,
-  "totalLoaded" | "corpusStoreCount" | "dbRecords"
+  "totalLoaded" | "corpusStoreCount" | "dbRecords" | "selectedEvidenceCount"
 >;
 
 let cachedAggregates: AggregateStatus | null = null;
 let cachedFiles: unknown = null;
 let cachedStores: unknown = null;
+let cachedSelectedEvidence: unknown = null;
 
 export function invalidateShellStatusProjection(): void {
   cachedAggregates = null;
   cachedFiles = null;
   cachedStores = null;
+  cachedSelectedEvidence = null;
 }
 
 function aggregateStatus(): AggregateStatus {
   // Replacement of a top-level collection is itself a cheap invalidation signal.
   // In-place corpus edits use invalidateCorpusCache(), which explicitly clears this
   // projection because the array identity intentionally remains stable.
-  if (cachedAggregates && cachedFiles === state.files && cachedStores === state.stores)
+  if (
+    cachedAggregates &&
+    cachedFiles === state.files &&
+    cachedStores === state.stores &&
+    cachedSelectedEvidence === state.selectedEvidence
+  )
     return cachedAggregates;
 
   const corpusStores = recordStores();
   cachedFiles = state.files;
   cachedStores = state.stores;
+  cachedSelectedEvidence = state.selectedEvidence;
   cachedAggregates = {
     totalLoaded: state.files.reduce(
       (sum: number, file: Any) => sum + (Array.isArray(file.records) ? file.records.length : 0),
@@ -65,20 +73,20 @@ function aggregateStatus(): AggregateStatus {
       (sum: number, store: Any) => sum + (Number(store.count) || 0),
       0,
     ),
+    selectedEvidenceCount: Object.values(state.selectedEvidence || {}).filter(Boolean).length,
   };
   return cachedAggregates;
 }
 
 export function getShellStatusProjection(): ShellStatusProjection {
   const aggregates = aggregateStatus();
-  // These values are cheap primitives/small selections and are deliberately read
-  // live. Compatibility code still has a few direct active-store/health writes;
-  // keeping them outside the cached aggregate prevents stale chrome without
-  // requiring every legacy assignment to know about this projection.
+  // Only true primitives are read live. Evidence selection can scale with the
+  // workspace, so its count is invalidation-driven with the other aggregates.
+  // Compatibility code still has a few direct active-store/health writes; keeping
+  // those primitives live prevents stale chrome without a full projection scan.
   return {
     ...aggregates,
     hasCorpusDb: state.health?.chroma?.available === true && aggregates.corpusStoreCount > 0,
     activeStore: String(state.activeStore || ""),
-    selectedEvidenceCount: Object.values(state.selectedEvidence || {}).filter(Boolean).length,
   };
 }
