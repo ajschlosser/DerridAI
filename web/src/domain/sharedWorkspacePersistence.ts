@@ -45,10 +45,17 @@ const workspacePersistence = createWorkspacePersistence({
   restoreCurrentPdfAsset,
   serializableFile: serializableRecordsFile,
   restorePreferenceOverlays: async () => {
-    const records = await Promise.all(
-      Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
-    );
-    for (const record of records) applyDomainPreferenceRecord(state, record);
+    try {
+      const records = await Promise.all(
+        Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
+      );
+      for (const record of records) applyDomainPreferenceRecord(state, record);
+    } catch (error) {
+      // Legacy workspace preferences are still a valid migration fallback. A
+      // domain-record read failure must not prevent the local workspace from
+      // finishing its restore and becoming usable.
+      console.warn("Could not restore domain preference records", error);
+    }
   },
 });
 
