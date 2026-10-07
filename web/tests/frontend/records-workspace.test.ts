@@ -18,6 +18,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRecordsWorkspace } from "../../src/domain/recordsWorkspace";
+import { pageInfo } from "../../src/domain/listPaging";
 import { TABLE_DEFAULTS } from "../../src/domain/runtimeConstants";
 import { createRuntimeState } from "../../src/state/runtimeState";
 import { createListState, listState } from "../../src/state/workspaceState";
