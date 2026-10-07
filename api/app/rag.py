@@ -971,20 +971,52 @@ def _scope_work_summaries(
     store: ChromaStore,
     collections: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Collect normalized author/work inventory for deterministic scope routing."""
+    """Collect compact author/work inventory for deterministic scope routing."""
 
+    collection_names = [
+        name
+        for name in dict.fromkeys(
+            str(collection.get("name") or "").strip()
+            for collection in collections
+        )
+        if name
+    ]
+    if not collection_names:
+        return []
+
+    scope_inventory = getattr(store, "research_scope_inventory", None)
+    if callable(scope_inventory):
+        try:
+            return [
+                dict(item)
+                for item in scope_inventory(collection_names)
+                if isinstance(item, Mapping)
+            ]
+        except Exception:
+            # Memory containment is an invariant, not an optimization. A compact
+            # inventory failure must not fall back to work_stats(), which loads
+            # every document in the collection and can ratchet API RSS per run.
+            logger.warning(
+                "Compact Work/author inventory failed; skipping inferred Research scope",
+                exc_info=True,
+            )
+            return []
+
+    # Compatibility fallback for lightweight test doubles or older store
+    # implementations. Production ChromaStore must not take this path because
+    # work_stats() materializes every source document to compute word counts.
     work_summaries: dict[str, dict[str, Any]] = {}
     work_stats = getattr(store, "work_stats", None)
     if not callable(work_stats):
         return []
-    for collection in collections:
-        name = str(collection.get("name") or "")
-        if not name:
-            continue
+    for name in collection_names:
         try:
             rows = work_stats(name)
         except Exception:
-            logger.debug("Could not inspect work inventory for explicit Research scope", exc_info=True)
+            logger.debug(
+                "Could not inspect fallback Work inventory for explicit Research scope",
+                exc_info=True,
+            )
             continue
         for row in rows:
             if not isinstance(row, Mapping):

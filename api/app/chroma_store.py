@@ -385,6 +385,9 @@ def _notes_collection_change(*extra_resources: str):
                 inventory_cache = getattr(self, "_research_filter_cache", None)
                 if isinstance(inventory_cache, dict):
                     inventory_cache.clear()
+                scope_cache = getattr(self, "_research_scope_cache", None)
+                if isinstance(scope_cache, dict):
+                    scope_cache.clear()
                 self._research_filter_epoch = getattr(self, "_research_filter_epoch", 0) + 1
             # Record-size samples are derived operational state. Any collection
             # mutation can invalidate a median without changing the item count,
@@ -450,6 +453,12 @@ class ChromaStore:
         self._record_size_cache: dict[tuple[str, int, int], dict[str, int]] = {}
         self._research_filter_cache: dict[
             tuple[tuple[str, int], ...], tuple[float, dict[str, Any]]
+        ] = {}
+        # Research source-scope inference needs only Work/author names. Keep a
+        # separate compact metadata-only cache so every Research run does not
+        # materialize entire corpus documents through work_stats().
+        self._research_scope_cache: dict[
+            tuple[tuple[str, int], ...], list[dict[str, Any]]
         ] = {}
         self._research_filter_epoch = 0
 
@@ -1878,6 +1887,79 @@ class ChromaStore:
             if len(cache) >= 8:
                 cache.clear()
             cache[key] = (time.monotonic(), result)
+        return copy.deepcopy(result)
+
+    def research_scope_inventory(self, names: Sequence[str]) -> list[dict[str, Any]]:
+        """Return compact Work/author scope labels without loading source documents.
+
+        Research scope inference runs on every ordinary Research request. Calling
+        work_stats() there is pathological because that method intentionally loads
+        every document to compute word counts. This inventory reads only Chroma
+        metadata in bounded pages and caches the small result until a collection
+        mutation invalidates it.
+        """
+
+        unique_names = [
+            str(name).strip()
+            for name in dict.fromkeys(names)
+            if str(name).strip()
+        ]
+        if not unique_names:
+            return []
+
+        collections = [self._collection(name) for name in unique_names]
+        key = tuple(
+            (str(getattr(collection, "id", name)), int(collection.count()))
+            for name, collection in zip(unique_names, collections)
+        )
+        cache = getattr(self, "_research_scope_cache", None)
+        if cache is None:
+            cache = self._research_scope_cache = {}
+        cached = cache.get(key)
+        if cached is not None:
+            return copy.deepcopy(cached)
+
+        from .research_semantics import source_author, source_work_label
+
+        works: dict[str, set[str]] = {}
+        page_size = max(1, min(int(settings.api_batch_size), 1000))
+        for collection in collections:
+            offset = 0
+            while True:
+                payload = collection.get(
+                    include=["metadatas"],
+                    limit=page_size,
+                    offset=offset,
+                )
+                metadatas = payload.get("metadatas") or []
+                if not metadatas:
+                    break
+                for metadata in metadatas:
+                    record = decode_metadata(metadata or {})
+                    work = source_work_label(record)
+                    if not work:
+                        continue
+                    authors = works.setdefault(work, set())
+                    author = source_author(record)
+                    if author:
+                        authors.add(author)
+                offset += len(metadatas)
+                if len(metadatas) < page_size:
+                    break
+
+        result = [
+            {
+                "scope_label": work,
+                "source_authors": sorted(authors),
+            }
+            for work, authors in sorted(
+                works.items(),
+                key=lambda item: item[0].casefold(),
+            )
+        ]
+        if len(cache) >= 8:
+            cache.clear()
+        cache[key] = result
         return copy.deepcopy(result)
 
     def work_stats(self, store: str) -> list[dict[str, Any]]:

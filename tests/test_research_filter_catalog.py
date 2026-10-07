@@ -105,6 +105,71 @@ def test_model_numeric_proposals_are_grounded_in_instruction():
     assert result["expression"] == "certainty >= 0.75"
 
 
+def test_research_scope_inventory_is_metadata_only_cached_and_invalidated():
+    from app.chroma_store import ChromaStore, _notes_collection_change
+
+    collection = MetadataCollection([
+        {
+            "record_id": "1",
+            "work": "Of Grammatology",
+            "document_author": "Jacques Derrida",
+            "text": "This document text must never be requested by scope inference.",
+        },
+        {
+            "record_id": "2",
+            "work": "Totality and Infinity",
+            "document_author": "Emmanuel Levinas",
+            "text": "Nor should this document text be materialized.",
+        },
+    ])
+    collection.id = "scope-corpus"
+    collection.count = lambda: len(collection.rows)
+    collection_lookups = []
+    store = object.__new__(ChromaStore)
+
+    def get_collection(name):
+        collection_lookups.append(name)
+        return collection
+
+    store._collection = get_collection
+
+    first = store.research_scope_inventory(["corpus", "corpus"])
+    assert first == [
+        {
+            "scope_label": "Of Grammatology",
+            "source_authors": ["Jacques Derrida"],
+        },
+        {
+            "scope_label": "Totality and Infinity",
+            "source_authors": ["Emmanuel Levinas"],
+        },
+    ]
+    assert collection_lookups == ["corpus"]
+    assert collection.calls
+    assert all(call["include"] == ["metadatas"] for call in collection.calls)
+
+    calls = len(collection.calls)
+    assert store.research_scope_inventory(["corpus"]) == first
+    assert len(collection.calls) == calls
+
+    @_notes_collection_change()
+    def mutate(self):
+        collection.rows[0] = encode_metadata(
+            {
+                "record_id": "1",
+                "work": "Of Grammatology",
+                "document_author": "Updated Author",
+            },
+            document_field="text",
+            embedding_field="embedding",
+        )
+
+    mutate(store)
+    refreshed = store.research_scope_inventory(["corpus"])
+    assert refreshed[0]["source_authors"] == ["Updated Author"]
+    assert len(collection.calls) > calls
+
+
 def test_inventory_cache_is_invalidated_after_success_and_partial_failure():
     from app.chroma_store import ChromaStore, _notes_collection_change
     collection = MetadataCollection([{"work": "A", "custom": "old"}])
