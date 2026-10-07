@@ -22,7 +22,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataResolutionPanel.vue";
 import MetadataSchemaEditor from "../../src/components/MetadataSchemaEditor.vue";
 import MetadataEnrichmentDialog from "../../src/components/MetadataEnrichmentDialog.vue";
-import { metadataSchemasApi, type MetadataSchema } from "../../src/api/metadataSchemas";
+import {
+  metadataSchemasApi,
+  type MetadataSchema,
+  type SchemaSummary,
+} from "../../src/api/metadataSchemas";
 import {
   metadataFieldSpec,
   metadataRegistryFields,
@@ -359,12 +363,11 @@ describe("the schema editor", () => {
   });
 
   it("withholds false empty/editor state while the schema catalog is unresolved", async () => {
-    type SchemaListResult = Awaited<ReturnType<typeof metadataSchemasApi.list>>;
-    let resolveList!: (value: SchemaListResult) => void;
+    let resolveList!: (value: { items: SchemaSummary[] }) => void;
     vi.spyOn(metadataSchemasApi, "list").mockImplementationOnce(
       () =>
-        new Promise<SchemaListResult>((resolve) => {
-          resolveList = resolve;
+        new Promise((resolve) => {
+          resolveList = (value) => resolve(value);
         }),
     );
     const w = mount(MetadataSchemaEditor, { attachTo: document.body });
