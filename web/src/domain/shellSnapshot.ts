@@ -177,10 +177,18 @@ export function getShellStatusSnapshot() {
  * Compatibility snapshot for callers that still need the complete shell model.
  * Native shell code should prefer the independently refreshable projections.
  */
-export function getShellSnapshot() {
-  return {
-    ...getShellContextSnapshot(),
-    ...getShellStatusSnapshot(),
-    nav: getNavItems(),
-  };
+export function getShellSnapshot(
+  options: {
+    projection?: "all" | "context" | "status";
+    includeNavigation?: boolean;
+  } = {},
+) {
+  const projection = options.projection || "all";
+  const snapshot: Record<string, unknown> = {};
+  if (projection === "all" || projection === "context")
+    Object.assign(snapshot, getShellContextSnapshot());
+  if (projection === "all" || projection === "status")
+    Object.assign(snapshot, getShellStatusSnapshot());
+  if (options.includeNavigation !== false) snapshot.nav = getNavItems();
+  return snapshot;
 }
