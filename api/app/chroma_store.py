@@ -3470,7 +3470,6 @@ class ChromaStore:
         ranking_fields = (
             "work",
             "record_id",
-            "_record_id",
             "document_author",
             "speaker",
             "quoted_speaker",
@@ -3483,6 +3482,8 @@ class ChromaStore:
             values: list[str] = []
             for field in ranking_fields:
                 value = raw.get(field)
+                if field == "record_id" and value is None:
+                    value = raw.get("_record_id")
                 if value is None:
                     continue
                 if isinstance(value, str) and value.startswith(_JSON_PREFIX):
