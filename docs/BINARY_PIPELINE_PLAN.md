@@ -707,7 +707,7 @@ Status values are `DONE`, `IN PROGRESS`, `TODO`, and `BLOCKED`.
 | B11. Signing/release                   | TODO        | Checksums, manifests, signing/notarization, immutable release assets, installer release resolution.                                                                                                                         |
 | B12. Repo-binary decision              | TODO        | Use measured onefile sizes to decide whether `bin/` artifacts are committed.                                                                                                                                                |
 | B13. Documentation/release integration | TODO        | README/USER_GUIDE/ARCHITECTURE/CONTRIBUTING and release process updated after behavior is implemented.                                                                                                                      |
-| B14. Shared pipeline contract          | IN PROGRESS | Compatibility identity, frozen v2 execution, v1 migration, portable Studio/API/CLI interchange, round-trip checks, and compiled capability gates are implemented; broader execution-parity coverage remains.               |
+| B14. Shared pipeline contract          | IN PROGRESS | Compatibility identity, frozen v2 execution, v1 migration, portable Studio/API/CLI interchange, round-trip checks, and compiled capability gates are implemented; broader execution-parity coverage remains.                |
 
 ## Definition of done
 
