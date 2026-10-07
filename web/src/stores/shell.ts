@@ -19,10 +19,7 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import { getNavItems } from "../domain/navItems";
-import {
-  getShellContextSnapshot,
-  getShellStatusSnapshot,
-} from "../domain/shellSnapshot";
+import { getShellSnapshot } from "../domain/shellSnapshot";
 
 export interface ShellFile {
   id: string;
@@ -77,14 +74,20 @@ export const useShellStore = defineStore("shell", () => {
   function syncContext() {
     snapshot.value = {
       ...snapshot.value,
-      ...(getShellContextSnapshot() as Pick<ShellSnapshot, "view" | "files" | "context">),
+      ...(getShellSnapshot({
+        projection: "context",
+        includeNavigation: false,
+      }) as Pick<ShellSnapshot, "view" | "files" | "context">),
     };
   }
 
   function syncStatus() {
     snapshot.value = {
       ...snapshot.value,
-      ...(getShellStatusSnapshot() as Pick<
+      ...(getShellSnapshot({
+        projection: "status",
+        includeNavigation: false,
+      }) as Pick<
         ShellSnapshot,
         | "totalLoaded"
         | "corpusStoreCount"
@@ -102,8 +105,14 @@ export const useShellStore = defineStore("shell", () => {
     // initialized (or when an explicit navigation refresh is requested).
     snapshot.value = {
       ...snapshot.value,
-      ...(getShellContextSnapshot() as Pick<ShellSnapshot, "view" | "files" | "context">),
-      ...(getShellStatusSnapshot() as Pick<
+      ...(getShellSnapshot({
+        projection: "context",
+        includeNavigation: false,
+      }) as Pick<ShellSnapshot, "view" | "files" | "context">),
+      ...(getShellSnapshot({
+        projection: "status",
+        includeNavigation: false,
+      }) as Pick<
         ShellSnapshot,
         | "totalLoaded"
         | "corpusStoreCount"
