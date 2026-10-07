@@ -190,8 +190,8 @@ Acceptance:
 - Regression tests pin the absence of global invalidation.
 
 Implementation status on `task/frontend-state-ownership-performance`: A1, A2, B1, and B2 are implemented with focused
-regression coverage. Interaction instrumentation is still open, and repository validation has not yet been run in this
-environment.
+regression coverage. Bounded User Timing measures now record Research prompt/instruction input-to-next-frame latency and
+sidebar navigation intent-to-next-frame latency. Repository validation has not yet been run in this environment.
 
 This tranche should be small enough to review independently and should land before larger store/persistence work.
 
@@ -245,8 +245,10 @@ Acceptance:
 
 Add User Timing marks/measures or an equivalent small instrumentation helper around:
 
-- Research input event -> next paint
-- sidebar pointer/keyboard activation -> pending visual paint
+- Research input event -> next frame boundary (`derridai.research.prompt.input_to_frame` and
+  `derridai.research.instructions.input_to_frame`)
+- sidebar pointer/keyboard activation -> pending visual frame
+  (`derridai.navigation.intent_to_frame`)
 - pending visual paint -> route commit
 - route commit -> destination shell paint
 - `getShellSnapshot()`
