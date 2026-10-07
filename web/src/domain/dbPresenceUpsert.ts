@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { esc } from "./html";
 import { openMessageDialog } from "../composables/messageDialog";
 import { toast } from "../composables/notifications";
 
@@ -43,7 +42,6 @@ type Helper =
   | "persistPrefs"
   | "recordFingerprint"
   | "refreshOperationsPanelOnly"
-  | "reviewItemFromKey"
   | "selectedReviewItems"
   | "startJobPolling"
   | "storeReceipt"
@@ -51,8 +49,7 @@ type Helper =
   | "tr"
   | "trf"
   | "upsertAuditDelta"
-  | "upsertRecordPayload"
-  | "workIndex";
+  | "upsertRecordPayload";
 type Deps = { state: Loose; corpusCache: Loose } & Record<Helper, Fn>;
 
 let pendingUpsertCache: Any = { key: "", at: 0, rows: [] };
@@ -73,7 +70,6 @@ export function createDbPresenceUpsert(deps: Deps) {
     persistPrefs,
     recordFingerprint,
     refreshOperationsPanelOnly,
-    reviewItemFromKey,
     selectedReviewItems,
     startJobPolling,
     storeReceipt,
@@ -82,10 +78,7 @@ export function createDbPresenceUpsert(deps: Deps) {
     trf,
     upsertAuditDelta,
     upsertRecordPayload,
-    workIndex,
   } = deps;
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
   function loadServerSuppressions(store: string) {
     if (!store) return;
     void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`)
@@ -222,27 +215,10 @@ export function createDbPresenceUpsert(deps: Deps) {
         state.storePresenceCheckedAt[store][key] = now;
       }
       pendingUpsertCache.key = "";
-      updateDbStatusElements();
+      state.presenceVersion = Number(state.presenceVersion || 0) + 1;
     } catch (error: Any) {
       console.warn("Could not refresh Chroma presence", error);
     }
-  }
-  function updateDbStatusElements() {
-    document.querySelectorAll("[data-db-status-key]").forEach((el: Any) => {
-      const item = reviewItemFromKey(el.dataset.dbStatusKey);
-      if (!item) return;
-      const info = recordDbStatus(item.file, item.index, item.file.records[item.index]);
-      el.className = `db-status ${info.kind}`;
-      el.title = info.title;
-      el.innerHTML = `<i></i>${esc(info.label)}`;
-    });
-    document.querySelectorAll("[data-work-status]").forEach((el: Any) => {
-      const work = el.dataset.workStatus;
-      const rows = workIndex().get(work)?.rows || [];
-      const info = workDbStatus(rows, work);
-      el.className = `db-status ${info.kind}`;
-      el.innerHTML = `<i></i>${esc(info.label)}`;
-    });
   }
   function ignoredFingerprint(store: Any, file: Any, index: Any) {
     return state.upsertIgnored?.[store]?.[localRecordKey(file, index)] || null;
@@ -472,7 +448,6 @@ export function createDbPresenceUpsert(deps: Deps) {
     recordDbStatus,
     workDbStatus,
     refreshPresenceForRows,
-    updateDbStatusElements,
     ignoredFingerprint,
     pendingUpsertRows,
     pendingChangesForRow,
