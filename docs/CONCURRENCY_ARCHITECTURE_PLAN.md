@@ -462,16 +462,11 @@ Legend: `[ ]` not started, `[~]` in progress, `[x]` implemented on this branch.
 
 ### Phase D — retrieval/model resources
 
-- [~] Route metadata precedent/retrieval fan-out through bounded resource policy. Metadata exemplar
-      field queries now share one process-wide four-worker pool instead of creating a new native
-      thread pool for every retrieval; integration with the named resource coordinator remains.
+- [ ] Route metadata precedent/retrieval fan-out through bounded resource policy.
 - [ ] Make Pipeline Studio `provider_limited` concurrency operational, not only declarative.
-- [~] Add/verify model-inference resource gate for CrossEncoder-like work. CrossEncoder inference
-      now reuses one process-wide worker so timed-out/native inference cannot multiply worker
-      threads; coordinator accounting remains.
+- [ ] Add/verify model-inference resource gate for CrossEncoder-like work.
 - [ ] Prefer batch-first embedding/reranking, with bounded concurrent batches where useful.
-- [~] Audit nested executors and remove multiplicative fan-out. The high-frequency CrossEncoder and
-      metadata-exemplar pools no longer create short-lived native worker threads.
+- [ ] Audit nested executors and remove multiplicative fan-out.
 
 ### Phase E — extraction/ingestion
 
@@ -610,21 +605,3 @@ This effort is complete when all of the following are true:
   `master@12c6cbfeb5b68c0d5117dd2263f3d624aa188ab5` into this branch; the upstream
   navigation/runtime-retirement changes did not overlap the concurrency files.
 - GitHub Actions quality gates are now running against the merged head.
-
-### 2026-10-06 / native-runtime memory containment
-
-- Diagnosed an API process whose resident memory rose from roughly 4.4 GiB to more than 10 GiB after
-  heavy work even with no active durable jobs. `/proc/1/smaps` showed the growth was overwhelmingly
-  anonymous resident memory, including many fully resident 64 MiB and 128 MiB anonymous mappings,
-  while the ordinary process heap remained small. This is consistent with native allocator/thread
-  arena retention rather than durable job payload growth.
-- Container defaults now cap glibc malloc arenas and nested OpenMP/OpenBLAS/MKL/NumExpr/Rayon and
-  tokenizer parallelism. DerridAI's own schedulers remain responsible for application concurrency.
-- CrossEncoder inference now reuses one process-wide worker instead of constructing an executor for
-  every rerank. Metadata exemplar field queries likewise reuse one process-wide bounded pool rather
-  than creating a new pool for every Record/retrieval.
-- Removed the unused process-lifetime semantic graph duplicate cache. Persisted semantic-map
-  projections remain the generation- and audience-scoped cache authority.
-- These limits are containment, not evidence that all worker-process isolation work is complete.
-  Repeated-run RSS benchmarking remains required, and native-heavy Corpus Builder work should still
-  move behind the planned durable worker boundary.
