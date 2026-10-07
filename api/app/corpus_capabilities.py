@@ -210,9 +210,20 @@ def source_preflight(
 
     source = Path(path)
     kind = _SOURCE_SUFFIXES.get(source.suffix.casefold())
-    tesseract = _tool("tesseract", ("--version",))
-    ffprobe = _tool("ffprobe", ("-version",))
-    source_kinds = _source_kinds(tesseract=tesseract, ffprobe=ffprobe)
+
+    # Helper probes are source-kind aware: an ordinary text/PDF run must not
+    # depend on audio tooling, and native-text PDF processing does not require
+    # Tesseract unless OCR is explicitly forced.
+    tesseract = (
+        _tool("tesseract", ("--version",))
+        if kind == "image" or (kind == "pdf" and ocr_mode == "always")
+        else {"available": False, "path": None, "version": None}
+    )
+    ffprobe = (
+        _tool("ffprobe", ("-version",))
+        if kind == "audio"
+        else {"available": False, "path": None, "version": None}
+    )
 
     # Unknown/no-extension files may still be supported plain text. The shared
     # engine dependencies are nevertheless required before any build can start.
