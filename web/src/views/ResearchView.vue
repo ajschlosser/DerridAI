@@ -456,6 +456,7 @@ function persistDraft() {
   if (!config.value) return;
   window.clearTimeout(draftTimer);
   draftTimer = window.setTimeout(() => {
+    draftTimer = undefined;
     void saveResearchComposerDraft({
       prompt: prompt.value,
       instructions: instructions.value,
@@ -939,6 +940,7 @@ watch(
     workspace.value = null;
     config.value = null;
     window.clearTimeout(draftTimer);
+    draftTimer = undefined;
     composerDraftEpoch += 1;
     composerDraftLoaded = false;
     composerDraftLoad = null;
@@ -962,7 +964,14 @@ onBeforeUnmount(() => {
   ++runsRequest;
   ++pipelinesRequest;
   stopJobFollowers();
-  window.clearTimeout(draftTimer);
+  if (draftTimer !== undefined) {
+    window.clearTimeout(draftTimer);
+    void saveResearchComposerDraft({
+      prompt: prompt.value,
+      instructions: instructions.value,
+    });
+    draftTimer = undefined;
+  }
   researchDraft.clear();
 });
 </script>
