@@ -2332,9 +2332,18 @@ def run_rag_pipeline(
     prose_contract_retry = "structured_json" in contract_issues
     if contract_issues:
         generation_attempts += 1
-        warnings.append(
-            "Generation returned structured JSON for a prose Research request; regenerated once."
-        )
+        if "structured_json" in contract_issues:
+            warnings.append(
+                "Generation returned structured JSON for a prose Research request; regenerated once."
+            )
+        if "missing_evidence_markers" in contract_issues:
+            warnings.append(
+                "Generation omitted required evidence markers; regenerated once before citation binding."
+            )
+        if any(issue.startswith("unknown_evidence_markers:") for issue in contract_issues):
+            warnings.append(
+                "Generation cited evidence markers outside the current evidence packet; regenerated once."
+            )
         correction_prompt = generation_prompt + """
 
 <OUTPUT_CONTRACT_CORRECTION>
@@ -2344,9 +2353,16 @@ field names such as title/introduction/themes, or a fenced code block.
 </OUTPUT_CONTRACT_CORRECTION>
 """
         raw_answer = generate_answer(correction_prompt, None)
-        if _json_like_answer(raw_answer):
+        contract_issues = _generation_contract_issues(
+            raw_answer,
+            evidence,
+            prose_required=prose_required,
+            require_evidence_markers=request.bind_citations,
+        )
+        if contract_issues:
             raise ValueError(
-                "Research generation violated the prose output contract after one retry."
+                "Research generation violated the output/evidence contract after one retry: "
+                + ", ".join(contract_issues)
             )
     stages.append({
         "name": "generation",
@@ -2356,7 +2372,10 @@ field names such as title/introduction/themes, or a fenced code block.
             "model": model,
             "characters": len(raw_answer),
             "attempts": generation_attempts,
+            "output_contract_retry": output_contract_retry,
             "prose_contract_retry": prose_contract_retry,
+            "contract_issues_initial": initial_contract_issues,
+            "contract_issues_final": contract_issues,
         },
     })
     update("generation", 1, 1, "Draft generated")
