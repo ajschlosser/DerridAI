@@ -26,8 +26,7 @@ import { startJobPolling, syncJobProgressToasts } from "./jobsActions";
 import { upsertRecordPayload } from "./recordPayloads";
 import { upsertAuditDelta } from "./recordHistory";
 import { formatTimestamp, localRecordKey } from "./recordTableHelpers";
-import { reviewItemFromKey, selectedReviewItems } from "./reviewItems";
-import { workIndex } from "./sharedCorpusAnalytics";
+import { selectedReviewItems } from "./reviewItems";
 import { tr, trf } from "./sharedTranslate";
 import { persistPrefs } from "./sharedWorkspaceStorage";
 import {
@@ -70,7 +69,6 @@ export const {
   persistPrefs,
   recordFingerprint,
   refreshOperationsPanelOnly,
-  reviewItemFromKey: (key: unknown) => reviewItemFromKey(state, key),
   selectedReviewItems: () => selectedReviewItems(state),
   startJobPolling,
   storeReceipt,
@@ -79,5 +77,4 @@ export const {
   trf,
   upsertAuditDelta,
   upsertRecordPayload,
-  workIndex,
 });
