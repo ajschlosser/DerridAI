@@ -131,10 +131,16 @@ export async function migrateLegacyAdminWorkspace({
   }
 
   // Remove the shared copy only after every destination write succeeded. If
-  // deletion is blocked by another tab, the claim remains and the same account
-  // can safely retry without exposing the data to a different administrator.
-  await legacyDb.drop();
-  await currentDb.remove("prefs", MIGRATION_MARKER_KEY);
+  // deletion is blocked by another tab, keep both the source claim and the
+  // destination marker so the same account can retry cleanup on its next
+  // startup without blocking use of the already-complete migrated workspace.
+  try {
+    await legacyDb.drop();
+    await currentDb.remove("prefs", MIGRATION_MARKER_KEY);
+  } catch (error) {
+    legacyDb.close();
+    console.warn("Could not remove the claimed legacy admin workspace", error);
+  }
   return true;
 }
 
