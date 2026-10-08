@@ -63,7 +63,7 @@ describe("SidebarNavigator interaction priority", () => {
     timing.afterPaint?.();
 
     expect(setItem).toHaveBeenCalledTimes(1);
-    expect(setItem.mock.calls[0]?.[0]).toContain("recents");
+    expect(setItem.mock.calls[0]?.[0]).toBe("derridai.ui.navigationRecents");
 
     setItem.mockRestore();
   });
