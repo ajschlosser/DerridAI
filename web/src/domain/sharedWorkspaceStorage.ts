@@ -26,10 +26,20 @@ import { createDomainPreferencePersistence } from "./domainPreferencePersistence
 // legacy runtime. The runtime uses this same connection and save, so there is one IndexedDB handle and one debounce.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/** A researcher's workspace is kept in a database of their own. */
+/**
+ * Every authenticated account gets its own browser-local workspace.
+ *
+ * The old implementation only namespaced researcher databases. Two
+ * administrators using the same browser profile therefore reopened the same
+ * IndexedDB corpus, provider settings, and evidence state after an account
+ * switch. The in-memory session reset cannot provide isolation if restore then
+ * reads the previous administrator's database again.
+ */
 export function workspaceDbName(): string {
   const user = sessionState.userContext;
-  return user && user.role !== "admin" && user.id ? `${DB_NAME}-researcher-${user.id}` : DB_NAME;
+  if (!user?.id) return DB_NAME;
+  const role = String(user.role || "user").replace(/[^a-z0-9_-]+/gi, "-");
+  return `${DB_NAME}-${role}-${String(user.id)}`;
 }
 
 export const workspaceDb = createWorkspaceDb(workspaceDbName);
