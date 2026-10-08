@@ -369,7 +369,7 @@ const manageExpanded = ref(false);
     grid-row: 1;
     justify-self: start;
     position: relative;
-    z-index: 2;
+    z-index: 42;
   }
   .research-thread-sidebar {
     display: none;
@@ -382,6 +382,9 @@ const manageExpanded = ref(false);
   }
   .research-thread-sidebar.is-expanded {
     display: grid;
+    position: relative;
+    z-index: 41;
+    background: var(--surface-card);
   }
   .research-thread-conversation {
     grid-column: 1;
