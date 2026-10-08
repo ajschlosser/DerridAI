@@ -197,3 +197,21 @@ def test_contains_filter_search_stops_after_bounded_page_finds_enough_rows() -> 
     assert len(scan_calls) == 1
     assert scan_calls[0]["limit"] == 512
     assert scan_calls[0]["offset"] == 0
+
+
+
+def test_keyword_fallback_scans_only_bounded_pages() -> None:
+    collection = _RecordBrowseCollection()
+    store = _store(collection)
+
+    rows = store.keyword_search("corpus", "PASSAGE 1199", 1)
+
+    assert [row["id"] for row in rows] == ["r-1199"]
+    scan_calls = [
+        call
+        for call in collection.calls
+        if call["include"] == ["documents", "metadatas"]
+    ]
+    assert [call["limit"] for call in scan_calls] == [512, 488]
+    assert [call["offset"] for call in scan_calls] == [0, 512]
+    assert all(call["limit"] is not None for call in scan_calls)
