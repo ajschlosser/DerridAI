@@ -129,7 +129,10 @@ def test_unreviewed_publication_quarantines_non_boolean_primary_text_without_los
 
 def test_unreviewed_publication_preserves_boolean_false_and_reviewed_fields():
     """False is a valid boolean, not an unresolved or missing classification."""
-    from app.corpus_publication import mark_unreviewed_publication, serialize_public_record
+    from app.corpus_publication import (
+        mark_unreviewed_publication,
+        serialize_public_record,
+    )
     from app.field_assertions import current_assertion_by_name
 
     record = {
