@@ -3649,17 +3649,47 @@ class ChromaStore:
             scan_args["where_document"] = where_document
         # Keep the fallback predictable on very large corpora while making the
         # common researcher search robust across capitalization differences.
-        try:
-            scan_args["limit"] = min(max(n_results * 50, 1000), 10000)
-            candidates = self._decode_result(col.get(**scan_args))
-        except Exception as exc:
-            if not self._is_query_capability_error(exc):
-                raise
-            scan_args.pop("limit", None)
-            candidates = self._decode_result(col.get(**scan_args))
+        # Never remove the limit after a backend capability error: doing so turns
+        # a compatibility fallback into a full-collection materialization.
+        scan_limit = min(max(n_results * 50, 1000), 10000)
+        page_size = min(scan_limit, 512)
         folded = needle.casefold()
-        rows = [row for row in candidates if folded in str(row.get("text") or "").casefold()][:n_results]
-        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
+        rows: list[dict[str, Any]] = []
+        scan_offset = 0
+        while scan_offset < scan_limit and len(rows) < n_results:
+            requested = min(page_size, scan_limit - scan_offset)
+            try:
+                payload = col.get(
+                    **scan_args,
+                    limit=requested,
+                    offset=scan_offset,
+                )
+            except Exception as exc:
+                if self._is_query_capability_error(exc):
+                    raise RuntimeError(
+                        "The vector-store backend cannot perform the bounded "
+                        "keyword-search fallback required for memory safety."
+                    ) from exc
+                raise
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for row in self._decode_result(payload):
+                if folded in str(row.get("text") or "").casefold():
+                    rows.append(row)
+                    if len(rows) >= n_results:
+                        break
+            scan_offset += len(ids)
+            if len(ids) < requested:
+                break
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "record": row,
+            }
+            for row in rows
+        ]
 
     @staticmethod
     def _lexical_tokens(value: Any) -> list[str]:
