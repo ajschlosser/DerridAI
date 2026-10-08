@@ -48,7 +48,6 @@ from .pipelines.store import pipeline_store
 from .pipelines.tracing import build_research_trace
 from .rag import extract_evidence_ids, run_rag_pipeline, strip_evidence_markers
 
-
 # Research retrieval/MMR can allocate large native and Python buffers. Running
 # that work on a fresh per-job thread lets native allocators retain a new
 # thread-local high-water arena after each run. Keep the existing lightweight
