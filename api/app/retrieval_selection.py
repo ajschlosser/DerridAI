@@ -31,22 +31,40 @@ from .research_semantics import source_author, source_work_label
 
 
 def cosine_similarity(left: Any, right: Any) -> float:
-    """Return cosine similarity without relying on NumPy truthiness."""
+    """Return cosine similarity without materializing vector copies.
+
+    MMR calls this once per candidate for every selection round. Converting each
+    vector to a list here used to allocate two dimension-sized Python lists per
+    comparison, creating substantial allocator churn for deep Research candidate
+    pools. NumPy arrays and ordinary sequences both expose len and iteration,
+    so accumulate the dot product and norms in one pass instead.
+    """
 
     if left is None or right is None:
         return 0.0
     try:
-        a = list(left)
-        b = list(right)
-    except TypeError:
+        left_length = len(left)
+        right_length = len(right)
+    except (TypeError, ValueError):
         return 0.0
-    if not a or not b or len(a) != len(b):
+    if left_length == 0 or left_length != right_length:
         return 0.0
-    dot = sum(float(x) * float(y) for x, y in zip(a, b))
-    na = math.sqrt(sum(float(x) * float(x) for x in a))
-    nb = math.sqrt(sum(float(y) * float(y) for y in b))
-    return dot / (na * nb) if na and nb else 0.0
 
+    dot = 0.0
+    left_norm_sq = 0.0
+    right_norm_sq = 0.0
+    try:
+        for left_value, right_value in zip(left, right):
+            left_float = float(left_value)
+            right_float = float(right_value)
+            dot += left_float * right_float
+            left_norm_sq += left_float * left_float
+            right_norm_sq += right_float * right_float
+    except (TypeError, ValueError):
+        return 0.0
+
+    denominator = math.sqrt(left_norm_sq) * math.sqrt(right_norm_sq)
+    return dot / denominator if denominator else 0.0
 
 def distance_to_relevance(distance: Any, metric: str | None = None) -> float:
     """Normalize a collection-native distance into a bounded relevance signal.
