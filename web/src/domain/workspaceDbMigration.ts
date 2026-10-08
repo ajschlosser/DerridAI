@@ -99,10 +99,7 @@ export async function migrateLegacyAdminWorkspace({
   const legacyCounts = await Promise.all(STORES.map((store) => legacyDb.count(store)));
   // The claim itself makes prefs non-empty. If there is no actual legacy
   // workspace data, release the claim and leave the empty database alone.
-  const hasLegacyData =
-    legacyCounts[0] > 0 ||
-    legacyCounts[2] > 0 ||
-    legacyCounts[1] > 1;
+  const hasLegacyData = legacyCounts[0] > 0 || legacyCounts[2] > 0 || legacyCounts[1] > 1;
   if (!hasLegacyData) {
     await legacyDb.remove("prefs", LEGACY_CLAIM_KEY).catch(() => undefined);
     legacyDb.close();
