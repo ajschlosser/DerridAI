@@ -368,7 +368,7 @@ class LLMJobManager(PersistentJobStateMixin):
     def list(self) -> JobPayloadList:
         jobs = [
             self._copy(job, include_results=False)
-            for job in self._all_job_records()
+            for job in self._list_job_records()
             if not job.get("dismissed")
         ]
         return sorted(jobs, key=lambda job: job["created_at"], reverse=True)
@@ -589,33 +589,65 @@ class LLMJobManager(PersistentJobStateMixin):
         return self._clear_finished_records()
 
     @staticmethod
-    def _copy(job: dict[str, Any], *, include_results: bool) -> dict[str, Any]:
-        out = {
-            key: value
-            for key, value in job.items()
-            if key != "results"
-        }
+    def _result_summary(job: dict[str, Any]) -> dict[str, int]:
+        """Return compact review counts without requiring full result transport."""
+
+        if "results" not in job:
+            return {
+                "pending_result_count": int(job.get("pending_result_count") or 0),
+                "pending_change_count": int(job.get("pending_change_count") or 0),
+                "failure_result_count": int(
+                    job.get("failure_result_count")
+                    if job.get("failure_result_count") is not None
+                    else job.get("failed") or 0
+                ),
+                "remaining_record_count": max(
+                    0,
+                    int(job.get("total") or 0) - int(job.get("completed") or 0),
+                ),
+            }
+
         all_results = list(job.get("results") or [])
         pending_results = [
             result
             for result in all_results
             if not result.get("error") and result.get("proposal")
         ]
-        out["pending_result_count"] = len(pending_results)
-        out["pending_change_count"] = sum(
-            len((result.get("proposal") or {}).get("changes") or {})
-            for result in pending_results
-        )
-        out["failure_result_count"] = sum(
-            1 for result in all_results if result.get("error")
-        )
-        out["remaining_record_count"] = max(
-            0,
-            int(job.get("total") or 0) - int(job.get("completed") or 0),
-        )
+        return {
+            "pending_result_count": len(pending_results),
+            "pending_change_count": sum(
+                len((result.get("proposal") or {}).get("changes") or {})
+                for result in pending_results
+            ),
+            "failure_result_count": sum(
+                1 for result in all_results if result.get("error")
+            ),
+            "remaining_record_count": max(
+                0,
+                int(job.get("total") or 0) - int(job.get("completed") or 0),
+            ),
+        }
+
+    def _persist_job(self, job_id: str) -> None:
+        # Persist the lightweight counts used by Operations alongside the full
+        # durable job. SQLite can then remove the heavy results array for list
+        # reads without losing review-state information.
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job.update(self._result_summary(job))
+        super()._persist_job(job_id)
+
+    @classmethod
+    def _copy(cls, job: dict[str, Any], *, include_results: bool) -> dict[str, Any]:
+        out = {
+            key: value
+            for key, value in job.items()
+            if key != "results"
+        }
+        out.update(cls._result_summary(job))
         if include_results:
-            out["results"] = all_results
+            out["results"] = list(job.get("results") or [])
         elif "events" in out:
             out["events"] = list(out.get("events") or [])[-12:]
         return out
-
