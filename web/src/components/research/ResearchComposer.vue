@@ -503,6 +503,16 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
   overflow-y: auto;
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.1);
 }
+.research-composer-followup {
+  pointer-events: none;
+}
+.research-composer-followup button,
+.research-composer-followup textarea,
+.research-composer-followup input,
+.research-composer-followup select,
+.research-composer-followup summary {
+  pointer-events: auto;
+}
 .research-composer-followup .research-composer-heading {
   margin-bottom: var(--space-2, 8px);
 }
