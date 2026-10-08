@@ -322,7 +322,7 @@ def expand_context_neighbors(
     # Same-document context can be large. Retain only a tiny LRU of decoded
     # documents instead of every document touched by the reranked anchors.
     document_cache: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
-    documents_read: set[tuple[str, str]] = set()
+    document_read_count = 0
     load_failures: list[str] = []
 
     def append_neighbor(
@@ -410,7 +410,7 @@ def expand_context_neighbors(
             records = document_cache.pop(cache_key)
             document_cache[cache_key] = records
         else:
-            documents_read.add(cache_key)
+            document_read_count += 1
             try:
                 records = list(load_document_records(collection, source_id))
             except Exception as exc:  # Context expansion must never abort an otherwise valid Research run.
@@ -459,6 +459,6 @@ def expand_context_neighbors(
         "neighbor_character_budget": budget,
         "target_context_chars": int(target_context_chars),
         "max_neighbor_radius": int(max_radius),
-        "document_reads": len(documents_read),
+        "document_reads": document_read_count,
         "load_failures": load_failures[:20],
     }
