@@ -92,6 +92,7 @@ class _RecordBrowseCollection:
                     "work": "Work A" if index < 1100 else "Work B",
                     "document_author": "Jacques Derrida" if index % 2 == 0 else "Other",
                     "year": 1900 + index,
+                    "tags": ["target", str(index)] if index % 100 == 0 else ["other"],
                 },
             )
             for index in range(count)
@@ -170,3 +171,29 @@ def test_plain_work_browse_counts_with_id_only_pages() -> None:
     ]
     assert [call["limit"] for call in count_calls] == [1000, 1000]
     assert [call["offset"] for call in count_calls] == [0, 1000]
+
+
+
+def test_contains_filter_search_stops_after_bounded_page_finds_enough_rows() -> None:
+    collection = _RecordBrowseCollection()
+    store = _store(collection)
+
+    rows = store.filter_search(
+        "corpus",
+        3,
+        where={"tags": {"$contains": "target"}},
+    )
+
+    assert [row["id"] for row in rows] == [
+        "record-0000",
+        "record-0100",
+        "record-0200",
+    ]
+    scan_calls = [
+        call
+        for call in collection.calls
+        if call["include"] == ["documents", "metadatas"]
+    ]
+    assert len(scan_calls) == 1
+    assert scan_calls[0]["limit"] == 512
+    assert scan_calls[0]["offset"] == 0
