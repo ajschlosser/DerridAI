@@ -44,7 +44,6 @@ export function accountScopedBrowserStorageKey(
   return scope ? `${baseKey}.${scope}` : baseKey;
 }
 
-
 /** Account-scoped key using the runtime's currently bound authenticated user. */
 export function currentAccountScopedBrowserStorageKey(baseKey: string): string {
   return accountScopedBrowserStorageKey(baseKey, sessionState.userContext);
