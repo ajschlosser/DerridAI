@@ -306,14 +306,12 @@ describe("Research thread shell", () => {
 
     await client.invalidateQueries({ queryKey: ["data", "research_threads"] });
     await flushPromises();
-    expect(jobs.read).toHaveBeenCalledTimes(20);
+    expect(jobs.read.mock.calls.length).toBeLessThan(20);
 
-    const firstTurn = wrapper.findAll("article[aria-labelledby]")[0];
-    const inspect = firstTurn
-      .findAll("details")
-      .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
-    (inspect.element as HTMLDetailsElement).open = true;
-    await inspect.trigger("toggle");
+    // Explicitly opening a turn hydrates its immutable result without loading all history.
+    await wrapper.setProps({ jobId: "job-0" });
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledWith("/api/jobs/job-0");
     expect(wrapper.findAll(".research-result-presentation")).toHaveLength(1);
   });
 
@@ -476,7 +474,7 @@ describe("Research thread shell", () => {
       },
     });
     mounted.push(wrapper);
-    expect(wrapper.findAll("article h4").map((heading) => heading.text())).toEqual([
+    expect(wrapper.findAll("article h3").map((heading) => heading.text())).toEqual([
       "Question a",
       "Second question",
     ]);
