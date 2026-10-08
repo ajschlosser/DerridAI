@@ -234,20 +234,19 @@ export function createSearchWorkspace(deps: Deps) {
 
   function localSearchStaticMetadata() {
     const rows = localCorpusRows();
-    if (!localCorpusCache.available) {
-      localCorpusCache.available = tableAvailableFields(rows, [
-        "__file",
-        ...SEARCH_LOADED_COLUMNS,
-      ]);
-      localCorpusCache.filterFields = localCorpusCache.available.filter((field: string) =>
+    let available = localCorpusCache.available;
+    if (!available) {
+      available = tableAvailableFields(rows, ["__file", ...SEARCH_LOADED_COLUMNS]);
+      localCorpusCache.available = available;
+      localCorpusCache.filterFields = available.filter((field: string) =>
         isSearchFilterFieldName(field),
       );
       localCorpusCache.suggestions = searchSuggestions(rows, {
-        fields: localCorpusCache.filterFields,
+        fields: localCorpusCache.filterFields || [],
       });
     }
     return {
-      available: [...localCorpusCache.available],
+      available: [...available],
       filterFields: [...(localCorpusCache.filterFields || [])],
       suggestions: localCorpusCache.suggestions || {},
     };
