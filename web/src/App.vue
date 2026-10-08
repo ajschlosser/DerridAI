@@ -657,7 +657,7 @@ watch(
         :groups="groupedNavItems"
         :collapsed="effectiveSidebarCollapsed"
         :pending-id="pendingNavId"
-        :storage-scope="`${auth.user.role}:${auth.user.id}`"
+        :storage-scope="accountViewKey"
         @navigate="navigate"
       />
       <SidebarUtilityNav
