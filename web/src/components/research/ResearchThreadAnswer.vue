@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { useResearchDraft } from "../../features/research/useResearchDraft";
 import { apiRequest, ApiError } from "../../api/http";
@@ -36,6 +36,25 @@ const emit = defineEmits<{
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
 }>();
 const activeEvidenceIndex = ref(0);
+const answerRegion = ref<HTMLElement | null>(null);
+const visible = ref(typeof IntersectionObserver === "undefined");
+let visibilityObserver: IntersectionObserver | null = null;
+// Load the selected run immediately; hydrate historical runs as they approach the viewport.
+onMounted(() => {
+  if (visible.value || !answerRegion.value) return;
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        visible.value = true;
+        visibilityObserver?.disconnect();
+        visibilityObserver = null;
+      }
+    },
+    { rootMargin: "480px 0px" },
+  );
+  visibilityObserver.observe(answerRegion.value);
+});
+onBeforeUnmount(() => visibilityObserver?.disconnect());
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
@@ -97,6 +116,7 @@ const answer = useQuery({
   enabled: computed(
     () =>
       allowed.value &&
+      (visible.value || props.inspectRequested) &&
       props.turn.status === "completed" &&
       Boolean(props.turn.job_id || props.turn.response_record_id),
   ),
@@ -139,6 +159,7 @@ watch(
 </script>
 <template>
   <section
+    ref="answerRegion"
     v-if="
       allowed &&
       (turn.job_id || turn.response_record_id) &&
@@ -152,6 +173,7 @@ watch(
       <p class="thread-answer-text">{{ stream.draft.value?.text }}</p>
     </template>
     <template v-else>
+      <p v-if="!visible && !inspectRequested" role="status">{{ i18n.t("loading.updating") }}</p>
       <p v-if="answer.isFetching.value" role="status">{{ i18n.t("loading.updating") }}</p>
       <div v-if="answer.error.value" role="alert">
         <p>{{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}</p>
