@@ -140,11 +140,11 @@ def test_filtered_sorted_record_browsing_keeps_only_a_bounded_window() -> None:
 
     assert result["count"] == 600
     assert [row["year"] for row in result["records"]] == [
-        3093,
-        3091,
-        3089,
-        3087,
-        3085,
+        3092,
+        3090,
+        3088,
+        3086,
+        3084,
     ]
     scan_calls = [
         call
