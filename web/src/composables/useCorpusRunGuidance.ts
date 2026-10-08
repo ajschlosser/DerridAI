@@ -97,7 +97,8 @@ export function useCorpusRunGuidance(
 
   watch(
     () => [schema.value?.id || "", browserStorageAccountScope(sessionState.userContext)] as const,
-    ([schemaId, owner], [previousSchemaId, previousOwner] = ["", ""]) => {
+    ([schemaId, owner], previous) => {
+      const [previousSchemaId, previousOwner] = previous ?? ["", ""];
       if (schemaId === previousSchemaId && owner === previousOwner) return;
       guidance.value = schemaId ? loadGuidance(schemaId) : {};
     },
