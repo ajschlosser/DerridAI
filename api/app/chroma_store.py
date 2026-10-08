@@ -1868,6 +1868,8 @@ class ChromaStore:
         filters: dict[str, str] | None = None,
         include_updates: bool = False,
     ) -> dict[str, Any]:
+        """Return one Record page without a collection-sized decoded working set."""
+
         col = self._collection(store)
         filters = {
             str(key): str(value)
@@ -1875,9 +1877,27 @@ class ChromaStore:
             if str(value).strip()
         }
 
-        # Plain work-only browsing can stay fully delegated to Chroma. Column
-        # text filters/sorting require decoded flat records, so those are
-        # handled deterministically in Python and paginated afterward.
+        def count_where(where: dict[str, Any]) -> int:
+            total = 0
+            scan_offset = 0
+            page_size = 1000
+            while True:
+                payload = col.get(
+                    where=where,
+                    include=[],
+                    limit=page_size,
+                    offset=scan_offset,
+                )
+                ids = list(payload.get("ids") or [])
+                total += len(ids)
+                if len(ids) < page_size:
+                    break
+                scan_offset += len(ids)
+            return total
+
+        # Plain work-only browsing can stay fully delegated to Chroma. Counting
+        # a filtered Work still pages ids only instead of materializing all of
+        # that Work's metadata.
         if not filters and not sort_field:
             where = {"work": work} if work else None
             kwargs: dict[str, Any] = {
@@ -1888,13 +1908,12 @@ class ChromaStore:
             if where:
                 kwargs["where"] = where
             payload = col.get(**kwargs)
-            if where:
-                count_payload = col.get(where=where, include=["metadatas"])
-                count = len(count_payload.get("ids") or [])
-            else:
-                count = col.count()
+            count = count_where(where) if where else col.count()
             return {
-                "records": self._decode_result(payload, include_updates=include_updates),
+                "records": self._decode_result(
+                    payload,
+                    include_updates=include_updates,
+                ),
                 "count": count,
                 "limit": limit,
                 "offset": offset,
@@ -1903,12 +1922,6 @@ class ChromaStore:
                 "sort_dir": sort_dir,
                 "filters": filters,
             }
-
-        scan_kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
-        if work:
-            scan_kwargs["where"] = {"work": work}
-        payload = col.get(**scan_kwargs)
-        records = self._decode_result(payload, include_updates=include_updates)
 
         def searchable(value: Any) -> str:
             if value is None:
@@ -1922,34 +1935,80 @@ class ChromaStore:
                 )
             return str(value)
 
-        for field, query in filters.items():
-            needle = query.casefold().strip()
-            records = [
-                record
-                for record in records
-                if needle in searchable(record.get(field)).casefold()
-            ]
+        reverse = str(sort_dir).lower() == "desc"
+
+        def sort_value(record: dict[str, Any]) -> tuple[int, int, Any]:
+            value = record.get(sort_field) if sort_field else None
+            if value is None:
+                return (1, 2, "")
+            if isinstance(value, bool):
+                return (0, 0, 1.0 if value else 0.0)
+            if isinstance(value, (int, float)):
+                return (0, 0, float(value))
+            return (0, 1, searchable(value).casefold())
+
+        scan_kwargs: dict[str, Any] = {
+            "include": ["documents", "metadatas"],
+        }
+        if work:
+            scan_kwargs["where"] = {"work": work}
+
+        scan_offset = 0
+        page_size = 512
+        matched_count = 0
+        page_records: list[dict[str, Any]] = []
+        sorted_window: list[dict[str, Any]] = []
+        window_end = max(0, int(offset)) + max(0, int(limit))
+
+        while True:
+            payload = col.get(
+                **scan_kwargs,
+                limit=page_size,
+                offset=scan_offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+
+            records = self._decode_result(
+                payload,
+                include_updates=include_updates,
+            )
+            for field, query in filters.items():
+                needle = query.casefold().strip()
+                records = [
+                    record
+                    for record in records
+                    if needle in searchable(record.get(field)).casefold()
+                ]
+
+            previous_count = matched_count
+            matched_count += len(records)
+            if sort_field:
+                if window_end:
+                    sorted_window.extend(records)
+                    sorted_window.sort(key=sort_value, reverse=reverse)
+                    if len(sorted_window) > window_end:
+                        del sorted_window[window_end:]
+            elif records and window_end > offset:
+                local_start = max(0, int(offset) - previous_count)
+                local_end = min(
+                    len(records),
+                    window_end - previous_count,
+                )
+                if local_start < local_end:
+                    page_records.extend(records[local_start:local_end])
+
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
 
         if sort_field:
-            reverse = str(sort_dir).lower() == "desc"
+            page_records = sorted_window[offset:offset + limit]
 
-            def sort_value(record: dict[str, Any]):
-                value = record.get(sort_field)
-                if value is None:
-                    return (1, 2, "")
-                if isinstance(value, bool):
-                    return (0, 0, 1.0 if value else 0.0)
-                if isinstance(value, (int, float)):
-                    return (0, 0, float(value))
-                return (0, 1, searchable(value).casefold())
-
-            records.sort(key=sort_value, reverse=reverse)
-
-        count = len(records)
-        page = records[offset:offset + limit]
         return {
-            "records": page,
-            "count": count,
+            "records": page_records,
+            "count": matched_count,
             "limit": limit,
             "offset": offset,
             "work": work,
