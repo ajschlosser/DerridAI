@@ -154,6 +154,27 @@ class _CaptureCollection:
         }
 
 
+class _NoToListEmbeddingMatrix:
+    def __init__(self) -> None:
+        self.rows = [[0.2, 0.3]]
+
+    def __len__(self) -> int:
+        return 1
+
+    def __getitem__(self, index: int):
+        return self.rows if index == 0 else self.rows[index]
+
+    def tolist(self):
+        raise AssertionError("semantic retrieval must not expand the embedding matrix")
+
+
+class _CompactEmbeddingCollection(_CaptureCollection):
+    def query(self, **kwargs):
+        payload = super().query(**kwargs)
+        payload["embeddings"] = _NoToListEmbeddingMatrix()
+        return payload
+
+
 class _Embeddings:
     def embed_query(self, _query, *, provider=None, model=None):
         return [0.1, 0.2]
@@ -165,6 +186,16 @@ def _capture_store(collection: _CaptureCollection) -> ChromaStore:
     store._embedding_spec = lambda _collection: ("chroma", None)
     store.embeddings = _Embeddings()
     return store
+
+
+def test_semantic_candidates_keep_backend_embeddings_compact() -> None:
+    collection = _CompactEmbeddingCollection()
+    store = _capture_store(collection)
+
+    semantic = store.semantic_candidates("corpus", "trace", 1)
+
+    assert semantic[0]["embedding"] == [0.2, 0.3]
+    assert "query_embedding" not in semantic[0]
 
 
 def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
