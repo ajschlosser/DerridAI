@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { sessionState } from "../state/workspaceState";
+
 export type BrowserStorageUser =
   | { id?: string | number | null; role?: string | null }
   | null
@@ -40,4 +42,10 @@ export function accountScopedBrowserStorageKey(
 ): string {
   const scope = browserStorageAccountScope(user);
   return scope ? `${baseKey}.${scope}` : baseKey;
+}
+
+
+/** Account-scoped key using the runtime's currently bound authenticated user. */
+export function currentAccountScopedBrowserStorageKey(baseKey: string): string {
+  return accountScopedBrowserStorageKey(baseKey, sessionState.userContext);
 }
