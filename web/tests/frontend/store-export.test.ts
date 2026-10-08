@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   persistFileNow: vi.fn(async () => undefined),
   invalidateCorpusCache: vi.fn(),
   persistPrefs: vi.fn(),
+  persistCorpusPreferences: vi.fn(),
   state: { activeStore: "derrida", files: [] as Record<string, unknown>[], activeFileId: null },
 }));
 
@@ -44,7 +45,9 @@ vi.mock("../../src/domain/sharedUrlState", () => ({ state: mocks.state }));
 vi.mock("../../src/domain/sharedWorkspacePersistence", () => ({
   persistFileNow: mocks.persistFileNow,
 }));
-vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({ persistPrefs: mocks.persistPrefs }));
+vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
+  persistCorpusPreferences: mocks.persistCorpusPreferences,
+}));
 
 import { exportStoreJsonl } from "../../src/domain/storeExport";
 import { registerOperationProgress } from "../../src/domain/operationProgressHooks";
