@@ -50,6 +50,7 @@ const props = withDefaults(
     profiles: ResearchProfile[];
     history: Array<Record<string, unknown>>;
     busy?: boolean;
+    compact?: boolean;
     canRun?: boolean;
     canConfigure?: boolean;
     canDraft?: boolean;
@@ -58,6 +59,7 @@ const props = withDefaults(
   }>(),
   {
     busy: false,
+    compact: false,
     canRun: true,
     canConfigure: true,
     canManageRuns: true,
@@ -151,12 +153,12 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 </script>
 
 <template>
-  <section class="research-composer-v031 card" aria-labelledby="research-compose-title">
+  <section class="research-composer-v031 card" :class="{ 'research-composer-followup': compact }" aria-labelledby="research-compose-title">
     <header class="research-composer-heading">
       <div>
-        <span class="section-label">{{ i18n.t("nav.rag") }}</span>
+        <span v-if="!compact" class="section-label">{{ i18n.t("nav.rag") }}</span>
         <h2 id="research-compose-title">{{ i18n.t("research.ask_title") }}</h2>
-        <p>{{ i18n.t("research.ask_help") }}</p>
+        <p v-if="!compact">{{ i18n.t("research.ask_help") }}</p>
       </div>
       <div class="research-heading-actions">
         <button v-if="canManageRuns" class="btn" type="button" @click="emit('runs')">
@@ -230,7 +232,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
       </div>
     </div>
 
-    <details class="research-instructions-disclosure">
+    <details v-if="!compact" class="research-instructions-disclosure">
       <summary>
         {{ i18n.t("research.instructions")
         }}<span>{{ instructions ? i18n.t("research.added") : i18n.t("research.optional") }}</span>
@@ -258,7 +260,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
       />
     </details>
 
-    <details class="research-instructions-disclosure">
+    <details v-if="!compact" class="research-instructions-disclosure">
       <summary>
         {{ i18n.t("research.filters.title")
         }}<span>{{
@@ -276,7 +278,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
       />
     </details>
 
-    <fieldset class="research-compose-context" :disabled="!canConfigure">
+    <fieldset v-if="!compact" class="research-compose-context" :disabled="!canConfigure">
       <legend class="sr-only">{{ i18n.t("research.context") }}</legend>
       <div class="research-pipeline-action research-pipeline-context">
         <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
@@ -484,5 +486,24 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 .research-history-list small {
   font-size: 0.8125rem;
   color: var(--muted);
+}
+
+.research-composer-followup {
+  position: sticky;
+  bottom: var(--space-3, 12px);
+  z-index: 5;
+  box-shadow: 0 6px 24px rgb(0 0 0 / .10);
+}
+.research-composer-followup .research-composer-heading {
+  margin-bottom: var(--space-2, 8px);
+}
+.research-composer-followup .research-question-input {
+  min-height: 76px;
+}
+@media (max-width: 600px) {
+  .research-composer-followup {
+    bottom: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
 }
 </style>
