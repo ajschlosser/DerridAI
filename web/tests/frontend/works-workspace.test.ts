@@ -136,7 +136,7 @@ describe("works workspace commands", () => {
       work("Aporias", 50, 3, ""),
     ];
     function snapshotSetup(view: Record<string, unknown> = {}) {
-      const { state, workspace } = setup({
+      const { state, calls, workspace } = setup({
         isResearcher: () => false,
         providerProfiles: () => [],
         recordStores: () => [],
@@ -167,7 +167,7 @@ describe("works workspace commands", () => {
         worksView: "cards",
         ...view,
       });
-      return { state, workspace };
+      return { state, calls, workspace };
     }
     const titles = (snapshot: any) => snapshot.works.map((item: { work: string }) => item.work);
 
