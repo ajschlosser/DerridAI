@@ -27,6 +27,8 @@ vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
   workspaceDb: { get: vi.fn(), getAll: vi.fn(), put, remove },
   persistPrefs: vi.fn(),
   persistSettingsPreferences: vi.fn(),
+  persistCorpusPreferences: vi.fn(),
+  persistListPreferences: vi.fn(),
   refreshShell: vi.fn(),
   shell: vi.fn(),
 }));
