@@ -69,7 +69,7 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   });
   await page.goto(`${APP}/rag?thread=a`);
   const navigation = page.locator(".research-thread-navigation");
-  await expect(navigation.getByRole("heading", { name: "Question a" })).toBeVisible();
+  await expect(navigation.getByRole("heading", { name: "Question a", level: 3 })).toBeVisible();
   await expect(navigation.locator(".thread-answer-text")).toHaveText("Answer A");
   await expect(page.locator(".research-run-button")).toBeDisabled();
   await navigation.getByRole("button", { name: "Open answer and evidence" }).click();
@@ -80,12 +80,12 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await next.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/thread=b/);
-  await expect(navigation.getByRole("heading", { name: "Question b" })).toBeVisible();
-  await expect(navigation.getByRole("heading", { name: "Question a" })).toHaveCount(0);
+  await expect(navigation.getByRole("heading", { name: "Question b", level: 3 })).toBeVisible();
+  await expect(navigation.getByRole("heading", { name: "Question a", level: 3 })).toHaveCount(0);
   await page.goBack();
-  await expect(navigation.getByRole("heading", { name: "Question a" })).toBeVisible();
+  await expect(navigation.getByRole("heading", { name: "Question a", level: 3 })).toBeVisible();
   await page.goForward();
-  await expect(navigation.getByRole("heading", { name: "Question b" })).toBeVisible();
+  await expect(navigation.getByRole("heading", { name: "Question b", level: 3 })).toBeVisible();
   await page.goBack();
   await expect(navigation.locator(".thread-answer-text")).toHaveText("Answer A");
   for (const theme of ["light", "dark"]) {
@@ -300,7 +300,7 @@ test("retry preserves a cancelled turn and opens its new attempt with keyboard f
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/thread=b&job=retry-job/);
   await expect(nav.locator("article")).toHaveCount(1);
-  await expect(nav.getByRole("heading", { name: "Question b" })).toBeVisible();
+  await expect(nav.getByRole("heading", { name: "Question b", level: 3 })).toBeVisible();
   await expect(retry).toHaveCount(0);
   await expect(nav.locator(".research-thread-conversation")).toBeFocused();
   await expect(page.locator(".research-run-button")).toBeDisabled();
