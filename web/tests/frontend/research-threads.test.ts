@@ -156,7 +156,9 @@ describe("Research thread shell", () => {
     const first = articles[0],
       second = articles[1];
     for (const article of [first, second]) {
-      expect(article.find(".research-result-presentation").exists()).toBe(false);
+      // Selecting a run opens its own audit; unselected turns stay collapsed.
+      const selected = article.find("button[aria-current='true']").exists();
+      expect(article.find(".research-result-presentation").exists()).toBe(selected);
       const inspect = article
         .findAll("details")
         .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
