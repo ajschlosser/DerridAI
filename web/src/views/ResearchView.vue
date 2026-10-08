@@ -1200,3 +1200,10 @@ onBeforeUnmount(() => {
     </template>
   </main>
 </template>
+
+<style scoped>
+/* Reserve a scrollable landing area for the persistent follow-up composer. */
+.research-native-page:has(.research-composer-followup) {
+  padding-bottom: clamp(210px, 28vh, 360px);
+}
+</style>
