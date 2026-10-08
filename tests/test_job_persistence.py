@@ -45,7 +45,11 @@ class FakeJobRepository:
         ]
 
     def load_summaries(self, job_type):
-        rows = self.load(job_type)
+        rows = [
+            copy.deepcopy(job)
+            for job in self.jobs.values()
+            if job.get("type") == job_type
+        ]
         for job in rows:
             for key in ("result", "results", "_resume_dictionary", "_resume_failed_keys"):
                 job.pop(key, None)
