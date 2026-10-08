@@ -41,7 +41,11 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl" || name === "navigateTo")
+          if (
+            name === "persistAnnotationsPreferences" ||
+            name === "syncUrl" ||
+            name === "navigateTo"
+          )
             calls.push(name);
         });
         return spies[name];
@@ -64,11 +68,11 @@ describe("annotations workspace", () => {
     expect(state.annotationSearch).toBe("remains");
     expect(state.annotationView).toBe("works");
     expect(calls).toEqual([
-      "persistPrefs",
+      "persistAnnotationsPreferences",
       "syncUrl",
-      "persistPrefs",
+      "persistAnnotationsPreferences",
       "syncUrl",
-      "persistPrefs",
+      "persistAnnotationsPreferences",
       "syncUrl",
     ]);
   });
