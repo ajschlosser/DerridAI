@@ -43,10 +43,14 @@ const NAV = [
 ].map(([id, label, section]) => ({ id, label, icon: "record", section }));
 
 const navigation = vi.hoisted(() => ({ navigateTo: vi.fn(), repaintAfterLocationChange: vi.fn() }));
-const interactionTiming = vi.hoisted(() => ({ measure: vi.fn() }));
+const interactionTiming = vi.hoisted(() => ({
+  measure: vi.fn(),
+  runAfterNextPaint: vi.fn((task: () => void) => task()),
+}));
 vi.mock("../../src/domain/sharedNavigation", () => navigation);
 vi.mock("../../src/domain/interactionTiming", () => ({
   measureInteractionToNextFrame: interactionTiming.measure,
+  runAfterNextPaint: interactionTiming.runAfterNextPaint,
 }));
 vi.mock("../../src/domain/jobsPause", () => ({ pauseRuntime: vi.fn() }));
 vi.mock("../../src/domain/semanticMapSources", () => ({
@@ -405,7 +409,7 @@ describe("sidebar at sign-in", () => {
     await corpora!.trigger("click");
     expect(corpora!.attributes("aria-expanded")).toBe("false");
     expect(
-      JSON.parse(localStorage.getItem("derridai.ui.navigationCollapsedGroups") || "[]"),
+      JSON.parse(localStorage.getItem("derridai.ui.navigationCollapsedGroups.admin:1") || "[]"),
     ).toContain("Corpora");
 
     await router.push("/search");
@@ -421,12 +425,12 @@ describe("sidebar at sign-in", () => {
     expect(compareRow).toBeTruthy();
 
     await compareRow!.get(".shell-nav-favorite").trigger("click");
-    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationFavorites") || "[]")).toContain(
+    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationFavorites.admin:1") || "[]")).toContain(
       "compare",
     );
 
     await compareRow!.get(".nav-tooltip-wrap > button").trigger("click");
-    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationRecents") || "[]")[0]).toBe(
+    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]")[0]).toBe(
       "compare",
     );
   });
