@@ -94,7 +94,7 @@ class LLMToolJobManager(PersistentJobStateMixin):
         assert payload is not None
         total = 1
         if body.task == "rag_grade_batch":
-            total = int(self._store.get_response_cache_records(limit=1_000_000).get("total") or 0)
+            total = self._store.response_cache_count()
             if total <= 0:
                 raise ValueError("The response cache does not contain any RAG responses to grade.")
         elif body.task == "work_metadata":
@@ -158,21 +158,28 @@ class LLMToolJobManager(PersistentJobStateMixin):
         return self.get(job_id)
 
     def _run_grade_batch(self, job_id: str, body: LLMToolJobCreate) -> dict[str, Any]:
+        """Grade the Response Library without retaining the whole library in RAM."""
+
         assert body.grade_batch is not None
         config = body.grade_batch
-        cache = self._store.get_response_cache_records(limit=1_000_000)
-        records = list(cache.get("records") or [])
         errors: list[dict[str, str]] = []
         graded = 0
+        failed = 0
+        processed = 0
 
-        for index, record in enumerate(records, start=1):
+        for index, record in enumerate(
+            self._store.iter_response_cache_records(page_size=100),
+            start=1,
+        ):
+            processed = index
             with self._lock:
                 job = self._jobs[job_id]
                 if job["cancel_requested"]:
                     raise InterruptedError()
+                total = int(job.get("total") or 0)
                 question = str(record.get("question") or "Untitled cached RAG question")
                 job["stage"] = "grading"
-                job["stage_detail"] = f"Grading {index} of {len(records)} · {question[:120]}"
+                job["stage_detail"] = f"Grading {index} of {total} · {question[:120]}"
 
             try:
                 grade_body = RAGGradeRequest(
@@ -197,30 +204,35 @@ class LLMToolJobManager(PersistentJobStateMixin):
             except InterruptedError:
                 raise
             except Exception as exc:
-                errors.append({
-                    "record_id": str(record.get("record_id") or ""),
-                    "question": str(record.get("question") or "")[:240],
-                    "error": str(exc),
-                })
+                failed += 1
+                # Error samples are diagnostic, not the canonical failure ledger.
+                # Keep them bounded even if every cached response fails.
+                if len(errors) < 100:
+                    errors.append({
+                        "record_id": str(record.get("record_id") or ""),
+                        "question": str(record.get("question") or "")[:240],
+                        "error": str(exc),
+                    })
             finally:
                 with self._lock:
                     job = self._jobs[job_id]
                     job["completed"] = index
-                    job["failed"] = len(errors)
+                    job["failed"] = failed
+                    total = int(job.get("total") or 0)
                     # Keep event history useful without recording hundreds of
                     # near-identical rows for large response caches.
-                    if index == 1 or index == len(records) or index % 10 == 0:
+                    if index == 1 or index == total or index % 10 == 0:
                         job["events"].append({
                             "timestamp": iso_now(),
                             "stage": "grading",
-                            "detail": f"Processed {index} of {len(records)} cached responses",
+                            "detail": f"Processed {index} of {total} cached responses",
                         })
 
         return {
             "graded": graded,
-            "failed": len(errors),
-            "total": len(records),
-            "errors": errors[:100],
+            "failed": failed,
+            "total": processed,
+            "errors": errors,
         }
 
     @staticmethod
