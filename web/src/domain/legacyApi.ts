@@ -17,6 +17,7 @@
  */
 
 import { fullHttpErrorDetail } from "./httpErrors";
+import { currentAccountScopedBrowserStorageKey } from "./browserStorageScope";
 
 // The legacy runtime's fetch wrapper (always-JSON, records failures for diagnostics, signals an expired session).
 // Moved verbatim so domain modules can use it without importing the runtime; `api/http.ts` differs (timeouts, typed
@@ -25,10 +26,11 @@ import { fullHttpErrorDetail } from "./httpErrors";
 const HTTP_ERROR_STORAGE_KEY = "derridai.httpErrors.v1";
 function storeHttpError(entry: any) {
   try {
-    const current = JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY) || "[]");
+    const storageKey = currentAccountScopedBrowserStorageKey(HTTP_ERROR_STORAGE_KEY);
+    const current = JSON.parse(localStorage.getItem(storageKey) || "[]");
     const rows = Array.isArray(current) ? current : [];
     rows.unshift(entry);
-    localStorage.setItem(HTTP_ERROR_STORAGE_KEY, JSON.stringify(rows.slice(0, 50)));
+    localStorage.setItem(storageKey, JSON.stringify(rows.slice(0, 50)));
     // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
   } catch {}
 }
