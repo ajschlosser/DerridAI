@@ -163,9 +163,7 @@ const answerParts = computed(() => {
       parts.push({ text: text.slice(previousEnd, start), evidenceIndex: null });
     }
     const evidenceId = match[1] || match[2];
-    const index = result.value?.evidence?.findIndex(
-      (item) => item.evidence_id === evidenceId,
-    ) ?? -1;
+    const index = result.value?.evidence?.findIndex((item) => item.evidence_id === evidenceId) ?? -1;
     const evidence = index >= 0 ? result.value?.evidence?.[index] : null;
     parts.push({
       text: evidence?.inline_citation || match[0],
@@ -183,9 +181,12 @@ function inspectCitation(index: number) {
   inspectOpen.value = true;
 }
 const inspectOpen = ref(Boolean(props.inspectRequested));
-watch(() => props.inspectRequested, (value) => {
-  if (value) inspectOpen.value = true;
-});
+watch(
+  () => props.inspectRequested,
+  (value) => {
+    if (value) inspectOpen.value = true;
+  },
+);
 function onInspectToggle(event: Event) {
   inspectOpen.value = (event.currentTarget as HTMLDetailsElement).open;
 }
@@ -335,7 +336,7 @@ watch(
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) {
+    .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) {
     grid-column: 1;
   }
 }
