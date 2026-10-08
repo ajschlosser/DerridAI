@@ -25,7 +25,7 @@ const h = vi.hoisted(() => ({
   cancelFiles: vi.fn(),
   flushFiles: vi.fn(async () => undefined),
   flushWorkspace: vi.fn(async () => undefined),
-  flushDomain: vi.fn(async () => undefined),
+  flushDomain: vi.fn(async (_name: string) => undefined),
   close: vi.fn(),
 }));
 
