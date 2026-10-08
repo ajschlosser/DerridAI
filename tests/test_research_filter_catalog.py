@@ -105,6 +105,154 @@ def test_model_numeric_proposals_are_grounded_in_instruction():
     assert result["expression"] == "certainty >= 0.75"
 
 
+def test_research_scope_inventory_is_metadata_only_cached_and_invalidated(monkeypatch):
+    from app.chroma_store import ChromaStore, _notes_collection_change
+
+    collection = MetadataCollection([
+        {
+            "record_id": "1",
+            "work": "Of Grammatology",
+            "document_author": "Jacques Derrida",
+            "text": "This document text must never be requested by scope inference.",
+        },
+        {
+            "record_id": "2",
+            "work": "Totality and Infinity",
+            "document_author": "Emmanuel Levinas",
+            "text": "Nor should this document text be materialized.",
+        },
+    ])
+    collection.id = "scope-corpus"
+
+    def forbidden_count():
+        raise AssertionError(
+            "Research scope inventory cache lookup must not load vector counts"
+        )
+
+    collection.count = forbidden_count
+    collection_lookups = []
+    store = object.__new__(ChromaStore)
+
+    def get_collection(name):
+        collection_lookups.append(name)
+        return collection
+
+    store._collection = get_collection
+
+    from app import chroma_store as chroma_store_module
+
+    original_decode_metadata = chroma_store_module.decode_metadata
+    decoded_key_sets = []
+
+    def selective_decode(raw):
+        decoded_key_sets.append(set(raw))
+        return original_decode_metadata(raw)
+
+    monkeypatch.setattr(chroma_store_module, "decode_metadata", selective_decode)
+
+    first = store.research_scope_inventory(["corpus", "corpus"])
+    assert first == [
+        {
+            "scope_label": "Of Grammatology",
+            "source_authors": ["Jacques Derrida"],
+        },
+        {
+            "scope_label": "Totality and Infinity",
+            "source_authors": ["Emmanuel Levinas"],
+        },
+    ]
+    assert collection_lookups == ["corpus"]
+    assert collection.calls
+    assert all(call["include"] == ["metadatas"] for call in collection.calls)
+    allowed_scope_keys = {
+        "work",
+        "document_author",
+        "field_assertions",
+        "current_field_assertions",
+    }
+    assert decoded_key_sets
+    assert all(keys <= allowed_scope_keys for keys in decoded_key_sets)
+
+    calls = len(collection.calls)
+    assert store.research_scope_inventory(["corpus"]) == first
+    assert len(collection.calls) == calls
+
+    @_notes_collection_change()
+    def mutate(self):
+        collection.rows[0] = encode_metadata(
+            {
+                "record_id": "1",
+                "work": "Of Grammatology",
+                "document_author": "Updated Author",
+            },
+            document_field="text",
+            embedding_field="embedding",
+        )
+
+    mutate(store)
+    refreshed = store.research_scope_inventory(["corpus"])
+    assert refreshed[0]["source_authors"] == ["Updated Author"]
+    assert len(collection.calls) > calls
+
+
+def test_research_store_descriptors_do_not_count_vector_collections() -> None:
+    from types import SimpleNamespace
+
+    from app.chroma_store import ChromaStore
+
+    collection = SimpleNamespace(
+        name="corpus",
+        metadata={
+            ChromaStore._PROVIDER_KEY: "precomputed",
+            ChromaStore._ROLE_KEY: "general",
+            ChromaStore._STATUS_KEY: "ready",
+            ChromaStore._SOURCE_COUNT_KEY: 12,
+        },
+    )
+
+    def forbidden_count():
+        raise AssertionError("descriptor listing must not load vector counts")
+
+    collection.count = forbidden_count
+    store = object.__new__(ChromaStore)
+    store._client = SimpleNamespace(list_collections=lambda: [collection])
+    store.default_embedding_spec = lambda: ("precomputed", None)
+
+    descriptors = store.list_store_descriptors()
+
+    assert [item["name"] for item in descriptors] == ["corpus"]
+    assert "count" not in descriptors[0]
+    assert descriptors[0]["source_record_count"] == 12
+
+
+def test_response_cache_write_preserves_corpus_derived_caches() -> None:
+    from app.chroma_store import ChromaStore, _notes_collection_change
+
+    store = object.__new__(ChromaStore)
+    store._research_filter_cache = {("filters",): (0.0, {"fields": []})}
+    store._research_scope_cache = {("scope",): [{"scope_label": "A"}]}
+    store._record_size_cache = {("corpus", 1, 1): {"median_record_chars": 100}}
+    store._research_filter_epoch = 7
+
+    @_notes_collection_change()
+    def mutate(self, name):
+        return name
+
+    mutate(store, "_response_cache")
+
+    assert store._research_filter_cache
+    assert store._research_scope_cache
+    assert store._record_size_cache
+    assert store._research_filter_epoch == 7
+
+    mutate(store, "corpus")
+
+    assert store._research_filter_cache == {}
+    assert store._research_scope_cache == {}
+    assert store._record_size_cache == {}
+    assert store._research_filter_epoch == 8
+
+
 def test_inventory_cache_is_invalidated_after_success_and_partial_failure():
     from app.chroma_store import ChromaStore, _notes_collection_change
     collection = MetadataCollection([{"work": "A", "custom": "old"}])

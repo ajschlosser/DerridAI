@@ -20,6 +20,7 @@ import copy
 import functools
 import gc
 import hashlib
+import heapq
 import json
 import logging
 import math
@@ -379,23 +380,38 @@ def _notes_collection_change(*extra_resources: str):
     def decorate(method):
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
+            target = args[0] if args else kwargs.get("name", kwargs.get("store"))
+            response_cache_target = target in {
+                "_response_cache",
+                "derridai_response_cache",
+            }
             try:
                 result = method(self, *args, **kwargs)
             finally:
-                inventory_cache = getattr(self, "_research_filter_cache", None)
-                if isinstance(inventory_cache, dict):
-                    inventory_cache.clear()
-                self._research_filter_epoch = getattr(self, "_research_filter_epoch", 0) + 1
-            # Record-size samples are derived operational state. Any collection
-            # mutation can invalidate a median without changing the item count,
-            # so clear the tiny cache rather than risking stale auto-sizing.
-            size_cache = getattr(self, "_record_size_cache", None)
-            if isinstance(size_cache, dict):
-                size_cache.clear()
+                # Response Library writes are operational state, not corpus
+                # mutations. Clearing corpus-derived Research caches here made
+                # every completed RAG run invalidate the Work/author inventory
+                # it had just built, forcing the next run to rescan all corpus
+                # metadata. Keep those caches warm across response-cache writes.
+                if not response_cache_target:
+                    inventory_cache = getattr(self, "_research_filter_cache", None)
+                    if isinstance(inventory_cache, dict):
+                        inventory_cache.clear()
+                    scope_cache = getattr(self, "_research_scope_cache", None)
+                    if isinstance(scope_cache, dict):
+                        scope_cache.clear()
+                    self._research_filter_epoch = (
+                        getattr(self, "_research_filter_epoch", 0) + 1
+                    )
+            # Record-size samples are corpus-derived too. A response cache write
+            # cannot change them and must not force another corpus sample.
+            if not response_cache_target:
+                size_cache = getattr(self, "_record_size_cache", None)
+                if isinstance(size_cache, dict):
+                    size_cache.clear()
             operation_events.note_resource_changed("vector_collections")
             for resource in extra_resources:
                 operation_events.note_resource_changed(resource)
-            target = args[0] if args else kwargs.get("name", kwargs.get("store"))
             if target == "_response_cache":
                 operation_events.note_resource_changed("response_library")
             return result
@@ -450,6 +466,12 @@ class ChromaStore:
         self._record_size_cache: dict[tuple[str, int, int], dict[str, int]] = {}
         self._research_filter_cache: dict[
             tuple[tuple[str, int], ...], tuple[float, dict[str, Any]]
+        ] = {}
+        # Research source-scope inference needs only Work/author names. Keep a
+        # separate compact metadata-only cache so every Research run does not
+        # materialize entire corpus documents through work_stats().
+        self._research_scope_cache: dict[
+            tuple[int, tuple[str, ...]], list[dict[str, Any]]
         ] = {}
         self._research_filter_epoch = 0
 
@@ -856,15 +878,31 @@ class ChromaStore:
             return default
         return parsed
 
-    def _manifest_spec(self, collection) -> dict[str, Any]:
+    def _manifest_spec(
+        self,
+        collection,
+        *,
+        collection_count: int | None = None,
+        resolve_count: bool = True,
+    ) -> dict[str, Any]:
         metadata = dict(getattr(collection, "metadata", None) or {})
-        count = collection.count()
+        count = collection_count
+        if count is None and resolve_count:
+            count = int(collection.count())
         dimension = metadata.get(self._DIMENSION_KEY)
         try:
             dimension = int(dimension) if dimension not in (None, "") else None
         except (TypeError, ValueError):
             dimension = None
-        status = str(metadata.get(self._STATUS_KEY) or ("ready" if count else "empty"))
+        inferred_nonempty = bool(
+            count
+            if count is not None
+            else metadata.get(self._SOURCE_COUNT_KEY)
+        )
+        status = str(
+            metadata.get(self._STATUS_KEY)
+            or ("ready" if inferred_nonempty else "empty")
+        )
         history = self._decode_json_metadata(metadata.get(self._BUILD_HISTORY_KEY), [])
         if not isinstance(history, list):
             history = []
@@ -1149,7 +1187,12 @@ class ChromaStore:
             return self._RESPONSE_CACHE_PUBLIC
         return collection.name
 
-    def _public_store(self, collection) -> dict[str, Any]:
+    def _public_store(
+        self,
+        collection,
+        *,
+        include_count: bool = True,
+    ) -> dict[str, Any]:
         metadata = dict(getattr(collection, "metadata", None) or {})
         provider, model = self._embedding_spec(collection)
         language_codes, role, source_collection = self._language_spec(collection)
@@ -1186,11 +1229,15 @@ class ChromaStore:
             for key, value in metadata.items()
             if key not in private
         }
-        manifest = self._manifest_spec(collection)
-        return {
+        collection_count = int(collection.count()) if include_count else None
+        manifest = self._manifest_spec(
+            collection,
+            collection_count=collection_count,
+            resolve_count=include_count,
+        )
+        result = {
             "name": self._public_collection_name(collection),
             "storage_name": collection.name,
-            "count": collection.count(),
             "metadata": public_metadata,
             "embedding_provider": provider,
             "embedding_model": model,
@@ -1200,6 +1247,38 @@ class ChromaStore:
             **manifest,
             "last_build_error": metadata.get("__derridai_last_build_error"),
         }
+        if include_count:
+            result["count"] = int(collection_count or 0)
+        return result
+
+    def list_store_descriptors(self) -> list[dict[str, Any]]:
+        """List collection routing metadata without loading vector segments.
+
+        Research source routing only needs collection identity, language role,
+        and manifest metadata. Calling count() for every collection can make
+        embedded Chroma load every unrelated vector segment into the API process.
+        Counts are resolved later only for collections the Research run actually
+        searches.
+        """
+
+        stores: list[dict[str, Any]] = []
+        for collection in self.client.list_collections():
+            name = collection.name if hasattr(collection, "name") else str(collection)
+            col = (
+                collection
+                if hasattr(collection, "metadata")
+                else self.client.get_collection(name)
+            )
+            metadata = dict(getattr(col, "metadata", None) or {})
+            if bool(metadata.get("derridai_hidden_system_collection")):
+                continue
+            stores.append(self._public_store(col, include_count=False))
+        return sorted(stores, key=lambda item: item["name"].casefold())
+
+    def collection_count(self, name: str) -> int:
+        """Count one selected collection after Research routing is resolved."""
+
+        return int(self._collection(name).count())
 
     @_notes_collection_change()
     def set_language_tags(
@@ -1878,6 +1957,97 @@ class ChromaStore:
             if len(cache) >= 8:
                 cache.clear()
             cache[key] = (time.monotonic(), result)
+        return copy.deepcopy(result)
+
+    def research_scope_inventory(self, names: Sequence[str]) -> list[dict[str, Any]]:
+        """Return compact Work/author scope labels without loading source documents.
+
+        Research scope inference runs on every ordinary Research request. Calling
+        work_stats() there is pathological because that method intentionally loads
+        every document to compute word counts. This inventory reads only Chroma
+        metadata in bounded pages and caches the small result until a collection
+        mutation invalidates it.
+        """
+
+        unique_names = [
+            str(name).strip()
+            for name in dict.fromkeys(names)
+            if str(name).strip()
+        ]
+        if not unique_names:
+            return []
+
+        collections = [self._collection(name) for name in unique_names]
+        epoch = int(getattr(self, "_research_filter_epoch", 0))
+        key = (
+            epoch,
+            tuple(
+                str(getattr(collection, "id", name))
+                for name, collection in zip(unique_names, collections)
+            ),
+        )
+        cache = getattr(self, "_research_scope_cache", None)
+        if cache is None:
+            cache = self._research_scope_cache = {}
+        cached = cache.get(key)
+        if cached is not None:
+            return copy.deepcopy(cached)
+
+        from .research_semantics import source_author, source_work_label
+
+        works: dict[str, set[str]] = {}
+        page_size = max(1, min(int(settings.api_batch_size), 1000))
+        for collection in collections:
+            offset = 0
+            while True:
+                payload = collection.get(
+                    include=["metadatas"],
+                    limit=page_size,
+                    offset=offset,
+                )
+                metadatas = payload.get("metadatas") or []
+                if not metadatas:
+                    break
+                for metadata in metadatas:
+                    raw_metadata = metadata or {}
+                    # Chroma returns the whole metadata object even when documents
+                    # are excluded. Decode only the fields needed for scope routing;
+                    # audit histories and unrelated JSON metadata can themselves be
+                    # large enough to create avoidable per-run allocation spikes.
+                    record = decode_metadata({
+                        field: raw_metadata[field]
+                        for field in (
+                            "work",
+                            "document_author",
+                            "field_assertions",
+                            "current_field_assertions",
+                        )
+                        if field in raw_metadata
+                    })
+                    work = source_work_label(record)
+                    if not work:
+                        continue
+                    authors = works.setdefault(work, set())
+                    author = source_author(record)
+                    if author:
+                        authors.add(author)
+                offset += len(metadatas)
+                if len(metadatas) < page_size:
+                    break
+
+        result = [
+            {
+                "scope_label": work,
+                "source_authors": sorted(authors),
+            }
+            for work, authors in sorted(
+                works.items(),
+                key=lambda item: item[0].casefold(),
+            )
+        ]
+        if len(cache) >= 8:
+            cache.clear()
+        cache[key] = result
         return copy.deepcopy(result)
 
     def work_stats(self, store: str) -> list[dict[str, Any]]:
@@ -3317,14 +3487,27 @@ class ChromaStore:
         n_results: int,
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
+        *,
+        candidate_pool_size: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Bounded BM25-style lexical ranking over stored record text/metadata.
+        """Bounded BM25-style lexical ranking without materializing the corpus.
 
-        Chroma does not expose a sparse/BM25 index in the local collection API,
-        so DerridAI supplies a deterministic lexical leg for hybrid retrieval.
-        The scorer is intentionally query-local: it computes document frequency
-        only for terms in the current query and adds a modest exact-phrase boost.
+        Chroma does not expose a sparse/BM25 index in the local collection API.
+        The previous implementation fetched and decoded as many as 20,000 full
+        Records at once, then retained every document string and token list until
+        ranking completed. Repeated Research runs therefore drove the API process
+        to a new allocator high-water mark even after Python released the objects.
+
+        This implementation pages through document text only. Metadata filters
+        are still applied by Chroma, but large cELF metadata payloads (especially
+        FieldAssertions and audit/provenance JSON) are never transferred for the
+        lexical candidate scan. Only compact term-frequency statistics plus
+        Chroma ids are retained, and complete Records are fetched for final top-N
+        results after ranking. candidate_pool_size preserves a deeper scoring
+        window without forcing every candidate in that window to become a fully
+        hydrated Record.
         """
+
         query = str(query or "").strip()
         if not query:
             return self.keyword_search(
@@ -3334,22 +3517,6 @@ class ChromaStore:
                 where,
                 where_document,
             )
-        col = self._collection(store)
-        scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
-        if where:
-            scan_args["where"] = where
-        if where_document:
-            scan_args["where_document"] = where_document
-        try:
-            scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
-            candidates = self._decode_result(col.get(**scan_args))
-        except Exception as exc:
-            if not self._is_query_capability_error(exc):
-                raise
-            scan_args.pop("limit", None)
-            candidates = self._decode_result(col.get(**scan_args))
-        if not candidates:
-            return []
 
         query_tokens = self._lexical_tokens(query)
         if not query_tokens:
@@ -3360,70 +3527,159 @@ class ChromaStore:
                 where,
                 where_document,
             )
-        query_terms = list(dict.fromkeys(query_tokens))
-        docs: list[tuple[dict[str, Any], list[str], str]] = []
-        document_frequencies = {term: 0 for term in query_terms}
-        total_length = 0
-        for row in candidates:
-            searchable = " ".join(
-                str(row.get(field) or "")
-                for field in (
-                    "text",
-                    "work",
-                    "record_id",
-                    "document_author",
-                    "speaker",
-                    "quoted_speaker",
-                    "position_holder",
-                    "target",
-                )
-            )
-            folded = searchable.casefold()
-            tokens = self._lexical_tokens(searchable)
-            docs.append((row, tokens, folded))
-            total_length += len(tokens)
-            token_set = set(tokens)
-            for term in query_terms:
-                if term in token_set:
-                    document_frequencies[term] += 1
 
-        count = len(docs)
-        avg_length = max(1.0, total_length / max(1, count))
+        col = self._collection(store)
+        query_terms = list(dict.fromkeys(query_tokens))
+        term_indexes = {term: index for index, term in enumerate(query_terms)}
+        document_frequencies = [0] * len(query_terms)
+        total_length = 0
+        document_count = 0
+        folded_phrase = query.casefold()
+
+        candidate_depth = max(
+            max(1, int(n_results)),
+            max(1, int(candidate_pool_size or n_results)),
+        )
+        scan_limit = min(max(candidate_depth * 100, 2000), 20000)
+        page_size = min(
+            scan_limit,
+            max(1, min(int(settings.api_batch_size), 512)),
+        )
+        scan_args: dict[str, Any] = {}
+        if where:
+            scan_args["where"] = where
+        if where_document:
+            scan_args["where_document"] = where_document
+
+        # (chroma id, document length, per-query-term frequencies,
+        #  exact-phrase match, original scan ordinal)
+        compact_candidates: list[
+            tuple[str, int, tuple[int, ...], bool, int]
+        ] = []
+        offset = 0
+        ordinal = 0
+        while offset < scan_limit:
+            requested = min(page_size, scan_limit - offset)
+            page = col.get(
+                **scan_args,
+                include=["documents"],
+                limit=requested,
+                offset=offset,
+            )
+            ids = list(page.get("ids") or [])
+            if not ids:
+                break
+            documents = list(page.get("documents") or [])
+
+            for index, chroma_id in enumerate(ids):
+                searchable = (
+                    documents[index]
+                    if index < len(documents)
+                    else ""
+                )
+                folded = searchable.casefold()
+                tokens = self._lexical_tokens(searchable)
+                frequencies = [0] * len(query_terms)
+                for token in tokens:
+                    term_index = term_indexes.get(token)
+                    if term_index is not None:
+                        frequencies[term_index] += 1
+
+                length = len(tokens)
+                if length:
+                    for term_index, frequency in enumerate(frequencies):
+                        if frequency:
+                            document_frequencies[term_index] += 1
+                    total_length += length
+                    document_count += 1
+                    compact_candidates.append(
+                        (
+                            str(chroma_id),
+                            length,
+                            tuple(frequencies),
+                            bool(folded_phrase and folded_phrase in folded),
+                            ordinal,
+                        )
+                    )
+                ordinal += 1
+
+            returned = len(ids)
+            offset += returned
+            if returned < requested:
+                break
+
+        if not compact_candidates:
+            return []
+
+        avg_length = max(1.0, total_length / max(1, document_count))
         k1 = 1.2
         b = 0.75
-        folded_phrase = query.casefold()
-        scored: list[tuple[float, dict[str, Any]]] = []
-        for row, tokens, folded in docs:
-            if not tokens:
+        top_limit = max(1, int(n_results))
+        # Heap entries are ordered from worst to best. For equal scores, later
+        # source order is worse so stable ranking matches the previous sort.
+        heap: list[tuple[float, int, str]] = []
+        for (
+            chroma_id,
+            length,
+            frequencies,
+            phrase_match,
+            source_ordinal,
+        ) in compact_candidates:
+            if length <= 0:
                 continue
-            frequencies: dict[str, int] = {}
-            for token in tokens:
-                if token in document_frequencies:
-                    frequencies[token] = frequencies.get(token, 0) + 1
             score = 0.0
-            length = len(tokens)
-            for term in query_terms:
-                tf = frequencies.get(term, 0)
+            for term_index, tf in enumerate(frequencies):
                 if not tf:
                     continue
-                df = document_frequencies.get(term, 0)
-                # Robertson/Sparck Jones BM25 IDF with a positive floor.
-                idf = max(0.0, math.log(1.0 + (count - df + 0.5) / (df + 0.5)))
-                denominator = tf + k1 * (1.0 - b + b * length / avg_length)
+                df = document_frequencies[term_index]
+                idf = max(
+                    0.0,
+                    math.log(
+                        1.0
+                        + (document_count - df + 0.5)
+                        / (df + 0.5)
+                    ),
+                )
+                denominator = tf + k1 * (
+                    1.0 - b + b * length / avg_length
+                )
                 score += idf * (tf * (k1 + 1.0)) / max(denominator, 1e-9)
-            if folded_phrase and folded_phrase in folded:
+            if phrase_match:
                 score += 2.5
-            if score > 0:
-                scored.append((score, row))
-        scored.sort(key=lambda item: item[0], reverse=True)
+            if score <= 0:
+                continue
+
+            entry = (score, -source_ordinal, chroma_id)
+            if len(heap) < top_limit:
+                heapq.heappush(heap, entry)
+            elif entry > heap[0]:
+                heapq.heapreplace(heap, entry)
+
+        if not heap:
+            return []
+
+        ranked = sorted(
+            heap,
+            key=lambda item: (-item[0], -item[1]),
+        )
+        top_ids = [item[2] for item in ranked]
+        payload = col.get(
+            ids=top_ids,
+            include=["documents", "metadatas"],
+        )
+        records_by_id = {
+            str(row.get("_chroma_id") or row.get("record_id")): row
+            for row in self._decode_result(payload)
+        }
         return [
             {
-                "id": row.get("_chroma_id") or row.get("record_id"),
+                "id": chroma_id,
                 "distance": None,
                 "lexical_score": score,
-                "record": row,
+                "record": records_by_id[chroma_id],
             }
-            for score, row in scored[:n_results]
+            for score, _negative_ordinal, chroma_id in ranked
+            if chroma_id in records_by_id
         ]
 
     def _decode_result(
