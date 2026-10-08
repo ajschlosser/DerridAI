@@ -41,7 +41,15 @@ type Deps = { state: Loose; codec?: ReturnType<typeof createUrlStateCodec> } & R
 export { pathViewMap, viewFromPath, viewPathMap } from "./viewPaths";
 
 export function createNavigation(deps: Deps) {
-  const { state, activeFile, canAccessPage, dbSearchWhere, renderView, selectedIndex, shell } = deps;
+  const {
+    state,
+    activeFile,
+    canAccessPage,
+    dbSearchWhere,
+    renderView,
+    selectedIndex,
+    shell,
+  } = deps;
   const { currentTableUrlState, applyCompressedTableUrlState, urlFromState, applyUrlState } =
     deps.codec || createUrlStateCodec({ state, activeFile, dbSearchWhere, selectedIndex });
   let urlSyncHook: Any = null;
