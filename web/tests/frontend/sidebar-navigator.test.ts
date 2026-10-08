@@ -60,7 +60,7 @@ describe("SidebarNavigator interaction priority", () => {
     expect(timing.runAfterNextPaint).toHaveBeenCalledTimes(1);
     expect(setItem).not.toHaveBeenCalled();
 
-    timing.afterPaint?.();
+    (timing.afterPaint as (() => void) | null)?.();
 
     expect(setItem).toHaveBeenCalledTimes(1);
     expect(setItem.mock.calls[0]?.[0]).toBe("derridai.ui.navigationRecents");
@@ -86,7 +86,7 @@ describe("SidebarNavigator interaction priority", () => {
     });
 
     await wrapper.get("button[aria-label='Research']").trigger("click");
-    timing.afterPaint?.();
+    (timing.afterPaint as (() => void) | null)?.();
     expect(
       JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]"),
     ).toEqual(["rag"]);
@@ -95,7 +95,7 @@ describe("SidebarNavigator interaction priority", () => {
     await wrapper.setProps({ storageScope: "admin:2" });
     timing.afterPaint = null;
     await wrapper.get("button[aria-label='Response Library']").trigger("click");
-    timing.afterPaint?.();
+    (timing.afterPaint as (() => void) | null)?.();
 
     expect(
       JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:2") || "[]"),
