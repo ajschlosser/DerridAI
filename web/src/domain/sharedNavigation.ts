@@ -104,6 +104,7 @@ export const {
   activeFile,
   canAccessPage: (view: string) => canAccessView(sessionState.userContext, view),
   dbSearchWhere,
+  persistPrefs,
   renderView,
   selectedIndex,
   shell,
