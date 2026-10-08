@@ -3245,8 +3245,6 @@ class ChromaStore:
                 if index < len(embeddings)
                 else None
             )
-            if hasattr(embedding, "tolist"):
-                embedding = embedding.tolist()
             output.append({
                 "id": chroma_id,
                 "record": record,
