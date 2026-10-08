@@ -854,7 +854,7 @@ watch(
       :groups="mobileNavGroups"
       :collapsed="false"
       :pending-id="pendingNavId"
-      :storage-scope="`${auth.user.role}:${auth.user.id}`"
+      :storage-scope="accountViewKey"
       @navigate="navigateFromMobile"
     />
   </dialog>
