@@ -271,6 +271,7 @@ function retry() {
         :key="turn.turn_id"
         :turn="turn"
         :stream-live="turn.job_id !== jobId"
+        :inspect-requested="Boolean(jobId) && turn.job_id === jobId"
         @open-record="emit('openRecord', $event)"
         @open-relationships="(item, mode) => emit('openRelationships', item, mode)"
       />
