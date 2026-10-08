@@ -60,7 +60,9 @@ const manageExpanded = ref(false);
 
 <template>
   <section class="research-thread-navigation" aria-labelledby="research-threads-title">
-    <h2 class="research-thread-index-title" id="research-threads-title">{{ i18n.t("research.threads_title") }}</h2>
+    <h2 class="research-thread-index-title" id="research-threads-title">
+      {{ i18n.t("research.threads_title") }}
+    </h2>
     <button
       type="button"
       class="btn research-thread-list-toggle"
@@ -104,7 +106,10 @@ const manageExpanded = ref(false);
             type="button"
             class="btn"
             :aria-current="selectedThreadId === item.thread_id ? 'true' : undefined"
-            @click="emit('select', item.thread_id); listExpanded = false"
+            @click="
+              emit('select', item.thread_id);
+              listExpanded = false;
+            "
           >
             {{ item.title }}
             <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
@@ -140,12 +145,22 @@ const manageExpanded = ref(false);
     <section v-if="thread" class="research-thread-conversation" :aria-label="thread.title">
       <h3>{{ thread.title }}</h3>
       <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
-      <details class="research-thread-management" :open="manageExpanded" @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open">
+      <details
+        class="research-thread-management"
+        :open="manageExpanded"
+        @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open"
+      >
         <summary>{{ i18n.t("research.thread_manage") }}</summary>
         <div class="research-thread-management-actions" role="group" :aria-label="i18n.t('research.thread_manage')">
-          <button class="btn" type="button" :disabled="busy" @click="emit('rename')">{{ i18n.t("research.thread_rename") }}</button>
-          <button class="btn" type="button" :disabled="busy" @click="emit('archive')">{{ i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive") }}</button>
-          <button class="btn" type="button" :disabled="busy" @click="emit('remove')">{{ i18n.t("research.thread_delete") }}</button>
+          <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
+            {{ i18n.t("research.thread_rename") }}
+          </button>
+          <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
+            {{ i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive") }}
+          </button>
+          <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
+            {{ i18n.t("research.thread_delete") }}
+          </button>
         </div>
       </details>
       <ol class="research-thread-turns">
@@ -247,7 +262,7 @@ const manageExpanded = ref(false);
   overflow-wrap: anywhere;
 }
 .research-thread-index button span, .research-thread-index time {
-  font-size: .78rem;
+  font-size: 0.78rem;
   color: var(--text-tertiary);
   font-weight: 400;
 }
@@ -311,7 +326,8 @@ const manageExpanded = ref(false);
   font-size: .78rem;
   color: var(--text-tertiary);
 }
-.research-thread-pages, .research-thread-archive-filter {
+.research-thread-pages,
+.research-thread-archive-filter {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
