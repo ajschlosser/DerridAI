@@ -79,5 +79,107 @@ def test_publication_schema_is_namespaced_unicode_safe_and_enum_valid():
     assert any("region_type" in error for error in cb.validate_publication_record(public))
 
 
+def test_unreviewed_publication_quarantines_non_boolean_primary_text_without_losing_provenance():
+    """A malformed classification must not block as-is publication or become a bool."""
+    from app.corpus_publication import (
+        mark_unreviewed_publication,
+        serialize_public_record,
+        validate_publication_record,
+    )
+    from app.field_assertions import current_assertion_by_name
+
+    for invalid_value in ("false", "true", "not detected", 0, 1, [], {"answer": False}):
+        record = {
+            "record_id": "sodome-et-gomorrhe-00012",
+            "record_revision": 1,
+            "source_document_id": "source-1",
+            "source_spans": [{"source_document_id": "source-1", "block_id": "b1"}],
+            "text": "A passage preserved verbatim.",
+            "region_type": "main_text",
+            "primary_text": invalid_value,
+            "discourse_role": "analysis",
+            "accepted": False,
+            "needs_review": True,
+        }
+        snapshots, unreviewed_count, accepted_fields = mark_unreviewed_publication([record])
+        snapshot = snapshots[0]
+        published = serialize_public_record(snapshot)
+
+        assert unreviewed_count == 1
+        assert accepted_fields == 0
+        assert snapshot["publication_review_status"] == "unreviewed_suggestion"
+        assert published.get("primary_text") is None
+        assert validate_publication_record(published) == []
+        assertion = current_assertion_by_name(snapshot, "primary_text")
+        assert assertion is not None
+        assert assertion.value is None and assertion.value_status == "invalid"
+        assert assertion.authority_status == "unreviewed"
+        assert assertion.legacy_metadata["publication_validation"]["candidate_value"] == invalid_value
+        # The original proposal remains recoverable from assertion history.
+        history = snapshot["field_assertions"][assertion.field_id]
+        if assertion.supersedes_assertion_id:
+            assert any(
+                entry["assertion_id"] == assertion.supersedes_assertion_id
+                and entry["value"] == invalid_value
+                for entry in history
+            )
+        assert record["primary_text"] == invalid_value
+        assert "field_assertions" not in record
 
 
+def test_unreviewed_publication_preserves_boolean_false_and_reviewed_fields():
+    """False is a valid boolean, not an unresolved or missing classification."""
+    from app.corpus_publication import mark_unreviewed_publication, serialize_public_record
+    from app.field_assertions import current_assertion_by_name
+
+    record = {
+        "record_id": "r-false",
+        "record_revision": 1,
+        "source_document_id": "source-1",
+        "source_spans": [{"source_document_id": "source-1", "block_id": "b1"}],
+        "text": "A note.",
+        "region_type": "notes",
+        "primary_text": False,
+        "discourse_role": "commentary",
+        "accepted": True,
+        "needs_review": False,
+        "metadata_field_status": {"primary_text": {"status": "human_confirmed", "method": "human_review"}},
+    }
+    snapshots, unreviewed_count, accepted_fields = mark_unreviewed_publication([record])
+    published = serialize_public_record(snapshots[0])
+    assert published["primary_text"] is False
+    assert unreviewed_count == 0 and accepted_fields == 0
+    assert snapshots[0]["publication_review_status"] == "reviewer_accepted"
+    assert current_assertion_by_name(snapshots[0], "primary_text").authority_status == "human_confirmed"
+
+
+def test_autonomous_publication_never_substitutes_unsupported_controlled_vocabulary():
+    """The same safeguard applies to invalid core enums without inventing values."""
+    from app.corpus_publication import (
+        mark_unreviewed_publication,
+        serialize_public_record,
+        validate_publication_record,
+    )
+    from app.field_assertions import current_assertion_by_name
+
+    record = {
+        "record_id": "r-invalid-enums",
+        "record_revision": 1,
+        "source_document_id": "source-1",
+        "source_spans": [{"source_document_id": "source-1", "block_id": "b1"}],
+        "text": "Source text.",
+        "region_type": "unrecognized-region",
+        "primary_text": True,
+        "discourse_role": "unrecognized-role",
+        "accepted": False,
+        "needs_review": True,
+    }
+    [snapshot], _, _ = mark_unreviewed_publication([record])
+    public = serialize_public_record(snapshot)
+    assert public.get("region_type") is None and public.get("discourse_role") is None
+    assert public["primary_text"] is True
+    assert validate_publication_record(public) == []
+    for field in ("region_type", "discourse_role"):
+        current = current_assertion_by_name(snapshot, field)
+        assert current.value_status == "invalid"
+        assert current.legacy_metadata["publication_validation"]["candidate_value"] == record[field]
