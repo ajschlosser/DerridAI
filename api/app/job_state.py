@@ -160,11 +160,12 @@ class PersistentJobStateMixin:
 
     JOB_TYPE = "operation"
     ACTIVE_STATUSES = frozenset({"queued", "running", "cancelling"})
-    # Keep a small amount of recently finished state resident for immediate UI
-    # continuity/realtime delivery, but never allow large result payloads to
-    # become a process-lifetime cache.
-    RESIDENT_FINISHED_MAX_JOBS = 4
-    RESIDENT_FINISHED_MAX_BYTES = 8 * 1024 * 1024
+    # SQLite is the sole owner of full terminal payloads. Realtime continuity
+    # needs only the bounded summaries below; GET-by-id reads full historical
+    # detail from SQLite on demand. Subclasses may opt into a tiny resident
+    # terminal cache, but the application default keeps none.
+    RESIDENT_FINISHED_MAX_JOBS = 0
+    RESIDENT_FINISHED_MAX_BYTES = 0
     RECENT_TERMINAL_SUMMARY_LIMIT = 32
 
     _lock: threading.RLock
@@ -269,7 +270,26 @@ class PersistentJobStateMixin:
         )
 
     def _prune_resident_finished(self) -> None:
-        """Bound finished resident payloads without serializing them a second time."""
+        """Evict full terminal payloads; SQLite owns historical job detail."""
+
+        # The normal application policy keeps no full finished jobs resident.
+        # Evict directly after the durable write rather than scanning SQLite
+        # footprints on every completion merely to prove that zero rows may stay.
+        if (
+            self.RESIDENT_FINISHED_MAX_JOBS <= 0
+            or self.RESIDENT_FINISHED_MAX_BYTES <= 0
+        ):
+            with self._lock:
+                for job_id, job in list(self._jobs.items()):
+                    if str(job.get("status") or "") in self.ACTIVE_STATUSES:
+                        continue
+                    self._remember_terminal_summary(job)
+                    self._jobs.pop(job_id, None)
+            return
+
+        # Optional subclass policy: keep a strictly bounded amount of recent
+        # terminal detail resident. Durable byte sizes avoid serializing large
+        # results again solely to decide which entries fit.
         durable_sizes = {
             job_id: size
             for job_id, _created_at, size, _active
@@ -288,8 +308,6 @@ class PersistentJobStateMixin:
             keep: set[str] = set()
             kept_bytes = 0
             for job_id, job in finished:
-                # A just-persisted terminal row should always have a durable
-                # size. If storage cannot report one, evict conservatively.
                 size = durable_sizes.get(
                     str(job_id),
                     self.RESIDENT_FINISHED_MAX_BYTES + 1,

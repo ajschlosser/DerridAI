@@ -75,6 +75,23 @@ def nodes_by_type(graph, kind):
 
 # --- reviewed alias sets ---------------------------------------------------------------------
 
+def test_reviewed_alias_cache_is_lru_bounded(monkeypatch):
+    from app import semantic_identity_store as store
+
+    store._cache.clear()
+    monkeypatch.setattr(store, "_ALIAS_CACHE_CAPACITY", 2)
+    store._remember_aliases("a", (1, 1), [{"canonical_label": "A"}])
+    store._remember_aliases("b", (1, 1), [{"canonical_label": "B"}])
+
+    # Reading A makes B the least-recently-used entry.
+    assert store._cached_aliases("a", (1, 1)) == [{"canonical_label": "A"}]
+    store._remember_aliases("c", (1, 1), [{"canonical_label": "C"}])
+
+    assert list(store._cache) == ["a", "c"]
+    assert store._cached_aliases("b", (1, 1)) is None
+    store._cache.clear()
+
+
 def test_alias_sets_are_audited_and_never_share_a_surface(tmp_path):
     repo, build, _ = install(tmp_path, "speaker", "J. Derrida")
     bid = build["build_id"]

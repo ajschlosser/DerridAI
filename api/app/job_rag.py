@@ -21,6 +21,7 @@ import re
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from . import operation_events, research_threads
@@ -46,6 +47,16 @@ from .persistence import job_repository
 from .pipelines.store import pipeline_store
 from .pipelines.tracing import build_research_trace
 from .rag import extract_evidence_ids, run_rag_pipeline, strip_evidence_markers
+
+# Research retrieval/MMR can allocate large native and Python buffers. Running
+# that work on a fresh per-job thread lets native allocators retain a new
+# thread-local high-water arena after each run. Keep the existing lightweight
+# scheduler thread/capacity semantics, but execute the heavy pipeline on reused
+# workers so sequential Research runs reuse the same allocator arenas.
+_RAG_PIPELINE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=64,
+    thread_name_prefix="derridai-rag-pipeline",
+)
 
 
 def _optional_int(value: Any) -> int | None:
@@ -599,7 +610,8 @@ class RAGJobManager(PersistentJobStateMixin):
             with self._lock:
                 thread_audit = copy.deepcopy(self._jobs[job_id].get("research_thread"))
             try:
-                result = run_rag_pipeline(
+                pipeline_future = _RAG_PIPELINE_EXECUTOR.submit(
+                    run_rag_pipeline,
                     body,
                     self._store,
                     progress=progress,
@@ -608,6 +620,7 @@ class RAGJobManager(PersistentJobStateMixin):
                     on_generation_delta=generation_delta,
                     **({"thread_audit": thread_audit} if thread_audit is not None else {}),
                 )
+                result = pipeline_future.result()
                 operation_events.note_generation_finished(job_id, owner=job_owner)
                 # Audit metadata stays outside prompt/evidence and is cached with
                 # the result. It survives later workspace deletion and retries.
