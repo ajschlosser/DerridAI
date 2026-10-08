@@ -78,9 +78,19 @@ class Jobs(PersistentJobStateMixin):
 class Collection:
     def __init__(self, records):
         self.records = dict(records)
+        self.get_calls = []
 
-    def get(self, *, ids=None, include=()):
-        keys = ids or list(self.records)
+    def get(self, *, ids=None, include=(), limit=None, offset=0):
+        self.get_calls.append({
+            "ids": list(ids) if ids is not None else None,
+            "include": list(include),
+            "limit": limit,
+            "offset": offset,
+        })
+        keys = list(ids) if ids is not None else list(self.records)
+        if ids is None:
+            stop = offset + int(limit or len(keys))
+            keys = keys[offset:stop]
         out = {"ids": keys, "documents": [self.records[k][0] for k in keys],
                "metadatas": [{"created_at": self.records[k][1]} for k in keys]}
         if "embeddings" in include:
@@ -236,6 +246,25 @@ def test_response_cache_sizes_include_vectors_and_expire_oldest(world) -> None:
     store.delete(["resp-old"])
     assert list(world.collection.records) == ["resp-new"]
     assert ResponseCacheRetention(lambda: None).items() == []
+
+
+def test_response_cache_retention_pages_large_collections() -> None:
+    collection = Collection({
+        f"resp-{index:04d}": ("answer" * 20, ago(index % 60))
+        for index in range(1200)
+    })
+
+    items = ResponseCacheRetention(lambda: collection).items()
+
+    assert len(items) == 1200
+    scan_calls = [call for call in collection.get_calls if call["ids"] is None]
+    assert len(scan_calls) == 3
+    assert all(call["limit"] == 512 for call in scan_calls)
+    assert [call["offset"] for call in scan_calls] == [0, 512, 1024]
+    assert all(call["include"] == ["documents", "metadatas"] for call in scan_calls)
+    sample_calls = [call for call in collection.get_calls if call["ids"] is not None]
+    assert len(sample_calls) == 1
+    assert sample_calls[0]["include"] == ["embeddings"]
 
 
 # --- Service ----------------------------------------------------------------------------
