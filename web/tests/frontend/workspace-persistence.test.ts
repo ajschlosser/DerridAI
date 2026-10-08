@@ -83,7 +83,7 @@ describe("workspace preference persistence", () => {
         ...state.ragConfig,
         locales: ["de", "en"],
         history: Array.from({ length: 120 }, (_, index) => ({ index })),
-      };
+      } as unknown as typeof state.ragConfig;
       state.pageSize = Number.NaN;
     });
 
