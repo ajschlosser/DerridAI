@@ -294,7 +294,20 @@ def test_run_audit_survives_workspace_deletion_and_is_not_evidence(store, monkey
         assert "thread_context" not in kwargs
         return {"answer": "Current answer", "evidence": [], "prompt": body.prompt}
 
+    class ImmediateFuture:
+        def __init__(self, value):
+            self.value = value
+
+        def result(self):
+            return self.value
+
+    class ImmediateExecutor:
+        def submit(self, function, *args, **kwargs):
+            captured["pipeline_executor"] = True
+            return ImmediateFuture(function(*args, **kwargs))
+
     monkeypatch.setattr(job_rag.threading, "Thread", DeferredThread)
+    monkeypatch.setattr(job_rag, "_RAG_PIPELINE_EXECUTOR", ImmediateExecutor())
     monkeypatch.setattr(job_rag, "run_rag_pipeline", pipeline)
     manager = job_rag.RAGJobManager(Cache())
     monkeypatch.setattr(manager, "_persist_job", lambda _: None)
@@ -310,6 +323,7 @@ def test_run_audit_survives_workspace_deletion_and_is_not_evidence(store, monkey
     assert audit == captured["cached"]
     assert audit["attempt"] == (2 if retry else 1)
     assert audit["original_question"] == captured["prompt"] == "What about him?"
+    assert captured["pipeline_executor"] is True
     assert audit["context_selection"]["items"][0]["text"] == "Prior answer [[E99]]"
     assert not audit["context_consumed"]
     assert finished["result"]["evidence"] == []
