@@ -99,6 +99,27 @@ def decode_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
     return out
 
 
+def _first_embedding_batch(payload: dict[str, Any]) -> Any:
+    """Return Chroma's first embedding batch without expanding NumPy arrays.
+
+    Chroma commonly returns embeddings as a dense NumPy array. Calling tolist()
+    on a deep candidate set converts every float32 element into a Python float,
+    multiplying the transient heap footprint. Retrieval selectors only need a
+    sequence, so preserve the backend's compact representation until selection
+    finishes.
+    """
+
+    values = payload.get("embeddings")
+    if values is None:
+        return ()
+    try:
+        if len(values) == 0:
+            return ()
+        return values[0]
+    except (TypeError, ValueError, IndexError):
+        return ()
+
+
 def compact_record_payload(record: dict[str, Any], *, include_updates: bool = False) -> dict[str, Any]:
     """Return a record suitable for ordinary API/RAG transport.
 
@@ -3171,6 +3192,8 @@ class ChromaStore:
         n_results: int,
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
+        *,
+        include_embeddings: bool = True,
     ) -> list[dict[str, Any]]:
         col = self._collection(store)
         count = col.count()
@@ -3183,10 +3206,13 @@ class ChromaStore:
             provider=provider,
             model=model,
         )
+        include = ["documents", "metadatas", "distances"]
+        if include_embeddings:
+            include.append("embeddings")
         query_args: dict[str, Any] = {
             "query_embeddings": [vector],
             "n_results": min(max(1, n_results), count),
-            "include": ["documents", "metadatas", "distances", "embeddings"],
+            "include": include,
         }
         if where:
             query_args["where"] = where
@@ -3197,10 +3223,7 @@ class ChromaStore:
         documents = (payload.get("documents") or [[]])[0]
         metadatas = (payload.get("metadatas") or [[]])[0]
         distances = (payload.get("distances") or [[]])[0]
-        embedding_payload = payload.get("embeddings")
-        if hasattr(embedding_payload, "tolist"):
-            embedding_payload = embedding_payload.tolist()
-        embeddings = (embedding_payload or [[]])[0]
+        embeddings = _first_embedding_batch(payload)
         output: list[dict[str, Any]] = []
         for index, chroma_id in enumerate(ids):
             meta = decode_metadata(
@@ -3232,12 +3255,7 @@ class ChromaStore:
                     if index < len(distances) and distances[index] is not None
                     else None
                 ),
-                "embedding": (
-                    [float(x) for x in embedding]
-                    if embedding is not None
-                    else None
-                ),
-                "query_embedding": [float(x) for x in vector],
+                "embedding": embedding if include_embeddings else None,
                 "collection": store,
                 "distance_metric": distance_metric,
                 "relevance": distance_to_relevance(
@@ -3344,10 +3362,7 @@ class ChromaStore:
         docs = (payload.get("documents") or [[]])[0]
         metas = (payload.get("metadatas") or [[]])[0]
         distances = (payload.get("distances") or [[]])[0]
-        embedding_payload = payload.get("embeddings")
-        if hasattr(embedding_payload, "tolist"):
-            embedding_payload = embedding_payload.tolist()
-        embeddings = (embedding_payload or [[]])[0]
+        embeddings = _first_embedding_batch(payload)
 
         candidates: list[dict[str, Any]] = []
         for index, chroma_id in enumerate(ids):
