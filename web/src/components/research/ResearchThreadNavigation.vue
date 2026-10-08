@@ -173,7 +173,9 @@ const manageExpanded = ref(false);
             {{ i18n.t("research.thread_rename") }}
           </button>
           <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
-            {{ i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive") }}
+            {{
+              i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive")
+            }}
           </button>
           <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
             {{ i18n.t("research.thread_delete") }}

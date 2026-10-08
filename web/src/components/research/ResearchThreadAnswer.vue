@@ -341,8 +341,7 @@ watch(
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-    .thread-answer-workspace:has(.thread-answer-audit[open])
-      > details:not(.thread-answer-audit) {
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) {
     grid-column: 1;
   }
 }
