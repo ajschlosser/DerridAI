@@ -172,6 +172,10 @@ function breadcrumbDestination(path: string): string | undefined {
   return router.resolve(path).path === route.path ? undefined : path;
 }
 
+const accountViewKey = computed(() =>
+  auth.user ? `${String(auth.user.role || "")}:${String(auth.user.id || "")}` : "anonymous",
+);
+
 const currentNavId = computed(() =>
   navIdForRoute(route.name, String(route.meta.navId || route.meta.view || s.value.view || "")),
 );
@@ -798,7 +802,9 @@ watch(
         }"
       >
         <div id="appContent" class="app-content-region" tabindex="-1">
-          <RouterView />
+          <RouterView v-slot="{ Component }">
+            <component :is="Component" :key="accountViewKey" />
+          </RouterView>
           <Teleport to="body">
             <RouteNavigationFeedback
               v-if="routeLoading.visible.value || routeLoading.failed.value"
