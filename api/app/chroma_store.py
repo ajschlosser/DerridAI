@@ -3537,14 +3537,14 @@ class ChromaStore:
             args["where"] = native_where
         if not contains_filters:
             args["limit"] = n_results
-            rows = self._decode_result(col.get(**args))
+            exact_rows = self._decode_result(col.get(**args))
             return [
                 {
                     "id": row.get("_chroma_id") or row.get("record_id"),
                     "distance": None,
                     "record": row,
                 }
-                for row in rows[:n_results]
+                for row in exact_rows[:n_results]
             ]
 
         def matches(record: dict[str, Any]) -> bool:
