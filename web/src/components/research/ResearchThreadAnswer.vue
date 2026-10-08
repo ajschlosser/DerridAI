@@ -35,8 +35,8 @@ const props = withDefaults(
     deferLoad?: boolean;
   }>(),
   {
-  streamLive: true,
-  inspectRequested: false,
+    streamLive: true,
+    inspectRequested: false,
     deferLoad: false,
   },
 );
