@@ -39,6 +39,7 @@ import json
 import re
 import threading
 import uuid
+from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -72,7 +73,34 @@ def _path(repo: Any, build_id: str) -> Path | None:
     return Path(root) / "builds" / build_id / ALIAS_FILE if root is not None else None
 
 
-_cache: dict[str, tuple[tuple[int, int], list[dict[str, Any]]]] = {}
+_ALIAS_CACHE_CAPACITY = 16
+_cache: OrderedDict[str, tuple[tuple[int, int], list[dict[str, Any]]]] = OrderedDict()
+_cache_lock = threading.Lock()
+
+
+def _cached_aliases(
+    key: str,
+    stamp: tuple[int, int],
+) -> list[dict[str, Any]] | None:
+    with _cache_lock:
+        cached = _cache.get(key)
+        if cached is None or cached[0] != stamp:
+            return None
+        _cache.move_to_end(key)
+        return json.loads(json.dumps(cached[1]))
+
+
+def _remember_aliases(
+    key: str,
+    stamp: tuple[int, int],
+    rows: list[dict[str, Any]],
+) -> None:
+    snapshot = json.loads(json.dumps(rows))
+    with _cache_lock:
+        _cache[key] = (stamp, snapshot)
+        _cache.move_to_end(key)
+        while len(_cache) > _ALIAS_CACHE_CAPACITY:
+            _cache.popitem(last=False)
 
 
 def _read(path: Path | None) -> list[dict[str, Any]]:
@@ -83,9 +111,9 @@ def _read(path: Path | None) -> list[dict[str, Any]]:
     except FileNotFoundError:
         return []
     stamp = (stat.st_mtime_ns, stat.st_size)
-    cached = _cache.get(str(path))
-    if cached and cached[0] == stamp:
-        return json.loads(json.dumps(cached[1]))
+    cached = _cached_aliases(str(path), stamp)
+    if cached is not None:
+        return cached
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -95,7 +123,7 @@ def _read(path: Path | None) -> list[dict[str, Any]]:
         raise RuntimeError(f"The reviewed alias file for this build cannot be read: {exc}") from exc
     items = payload.get("alias_sets") if isinstance(payload, dict) else None
     rows = [item for item in items or [] if isinstance(item, dict)]
-    _cache[str(path)] = (stamp, json.loads(json.dumps(rows)))
+    _remember_aliases(str(path), stamp, rows)
     return rows
 
 
