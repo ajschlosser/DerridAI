@@ -426,14 +426,14 @@ describe("sidebar at sign-in", () => {
     expect(compareRow).toBeTruthy();
 
     await compareRow!.get(".shell-nav-favorite").trigger("click");
-    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationFavorites.admin:1") || "[]")).toContain(
-      "compare",
-    );
+    expect(
+      JSON.parse(localStorage.getItem("derridai.ui.navigationFavorites.admin:1") || "[]"),
+    ).toContain("compare");
 
     await compareRow!.get(".nav-tooltip-wrap > button").trigger("click");
-    expect(JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]")[0]).toBe(
-      "compare",
-    );
+    expect(
+      JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]")[0],
+    ).toBe("compare");
   });
 
   it("marks the route-active item for assistive tech and labels page controls", async () => {
