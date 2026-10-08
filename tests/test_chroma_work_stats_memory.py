@@ -185,9 +185,9 @@ def test_contains_filter_search_stops_after_bounded_page_finds_enough_rows() -> 
     )
 
     assert [row["id"] for row in rows] == [
-        "record-0000",
-        "record-0100",
-        "record-0200",
+        "r-0000",
+        "r-0100",
+        "r-0200",
     ]
     scan_calls = [
         call
