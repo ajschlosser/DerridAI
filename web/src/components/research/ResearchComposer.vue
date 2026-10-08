@@ -161,7 +161,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
         <p v-if="!compact">{{ i18n.t("research.ask_help") }}</p>
       </div>
       <div class="research-heading-actions">
-        <button v-if="canManageRuns" class="btn" type="button" @click="emit('runs')">
+        <button v-if="!compact && canManageRuns" class="btn" type="button" @click="emit('runs')">
           <AppIcon name="history" />{{ i18n.t("research.runs") }}
         </button>
         <button v-if="canConfigure" class="btn" type="button" @click="emit('settings')">
@@ -181,7 +181,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
         @input="updateDraftField('prompt', $event)"
       ></textarea>
       <div class="research-question-tools">
-        <div class="research-history-popover">
+        <div v-if="!compact" class="research-history-popover">
           <button
             class="research-text-action"
             type="button"
@@ -489,10 +489,15 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 }
 
 .research-composer-followup {
-  position: sticky;
-  bottom: var(--space-3, 12px);
-  z-index: 5;
-  box-shadow: 0 6px 24px rgb(0 0 0 / .10);
+  position: fixed;
+  inset-inline-start: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(44vh, 420px);
+  overflow-y: auto;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.1);
 }
 .research-composer-followup .research-composer-heading {
   margin-bottom: var(--space-2, 8px);
@@ -502,7 +507,9 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 }
 @media (max-width: 600px) {
   .research-composer-followup {
+    width: 100%;
     bottom: 0;
+    max-height: 48dvh;
     border-radius: var(--radius-card) var(--radius-card) 0 0;
   }
 }
