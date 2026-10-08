@@ -146,7 +146,7 @@ function openRelationships(index: number, mode: "trace" | "model") {
 const answerParts = computed(() => {
   const text = result.value?.answer || "";
   const parts: Array<{ text: string; evidenceIndex: number | null }> = [];
-  const marker = /\\[\\[(E\\d+)\\]\\]|\\[(E\\d+)\\]/g;
+  const marker = /\[\[(E\d+)\]\]|\[(E\d+)\]/g;
   let previousEnd = 0;
   for (const match of text.matchAll(marker)) {
     const start = match.index ?? 0;
