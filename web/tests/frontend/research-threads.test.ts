@@ -484,7 +484,7 @@ describe("Research thread shell", () => {
     expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
     expect(wrapper.emitted("page")).toEqual([[50]]);
-    await wrapper.get("section > button").trigger("click");
+    await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
   });
 });
