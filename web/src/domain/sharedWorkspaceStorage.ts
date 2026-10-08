@@ -21,6 +21,7 @@ import { bindWorkspaceGroups, sessionState } from "../state/workspaceState";
 import { createWorkspaceDb, DB_NAME } from "../services/workspaceDb";
 import { createPrefsPersistence } from "./prefsPersistence";
 import { createDomainPreferencePersistence } from "./domainPreferencePersistence";
+import { migrateLegacyAdminWorkspace } from "./workspaceDbMigration";
 
 // The browser-local workspace database and the preference save over the shared workspace state, usable without the
 // legacy runtime. The runtime uses this same connection and save, so there is one IndexedDB handle and one debounce.
@@ -43,6 +44,15 @@ export function workspaceDbName(): string {
 }
 
 export const workspaceDb = createWorkspaceDb(workspaceDbName);
+const legacyWorkspaceDb = createWorkspaceDb(() => DB_NAME);
+
+export async function migrateLegacyWorkspaceForCurrentUser(): Promise<boolean> {
+  return migrateLegacyAdminWorkspace({
+    user: sessionState.userContext,
+    currentDb: workspaceDb,
+    legacyDb: legacyWorkspaceDb,
+  });
+}
 
 const prefsState = bindJobsState(bindWorkspaceGroups({})) as Loose;
 
