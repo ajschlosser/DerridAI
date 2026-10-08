@@ -26,6 +26,7 @@ const { put, remove, toast } = vi.hoisted(() => ({
 vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
   workspaceDb: { get: vi.fn(), getAll: vi.fn(), put, remove },
   persistPrefs: vi.fn(),
+  persistSettingsPreferences: vi.fn(),
   refreshShell: vi.fn(),
   shell: vi.fn(),
 }));
