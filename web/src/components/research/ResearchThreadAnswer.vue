@@ -27,11 +27,19 @@ import ResearchResultPresentation from "./ResearchResultPresentation.vue";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
-const props = withDefaults(defineProps<{ turn: ResearchTurn; streamLive?: boolean; inspectRequested?: boolean; deferLoad?: boolean }>(), {
+const props = withDefaults(
+  defineProps<{
+    turn: ResearchTurn;
+    streamLive?: boolean;
+    inspectRequested?: boolean;
+    deferLoad?: boolean;
+  }>(),
+  {
   streamLive: true,
   inspectRequested: false,
-  deferLoad: false,
-});
+    deferLoad: false,
+  },
+);
 const emit = defineEmits<{
   openRecord: [item: ResearchResultEvidence];
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
@@ -258,7 +266,9 @@ watch(
           </template>
         </details>
       </div>
-      <p v-else-if="(visible || inspectRequested) && !answer.isFetching.value && !answer.error.value">
+      <p
+        v-else-if="(visible || inspectRequested) && !answer.isFetching.value && !answer.error.value"
+      >
         {{ i18n.t("research.thread_run_unavailable") }}
       </p>
     </template>
