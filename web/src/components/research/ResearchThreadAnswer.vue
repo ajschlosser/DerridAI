@@ -27,9 +27,10 @@ import ResearchResultPresentation from "./ResearchResultPresentation.vue";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
-const props = withDefaults(defineProps<{ turn: ResearchTurn; streamLive?: boolean; inspectRequested?: boolean }>(), {
+const props = withDefaults(defineProps<{ turn: ResearchTurn; streamLive?: boolean; inspectRequested?: boolean; deferLoad?: boolean }>(), {
   streamLive: true,
   inspectRequested: false,
+  deferLoad: false,
 });
 const emit = defineEmits<{
   openRecord: [item: ResearchResultEvidence];
@@ -37,7 +38,7 @@ const emit = defineEmits<{
 }>();
 const activeEvidenceIndex = ref(0);
 const answerRegion = ref<HTMLElement | null>(null);
-const visible = ref(typeof IntersectionObserver === "undefined");
+const visible = ref(!props.deferLoad || typeof IntersectionObserver === "undefined");
 let visibilityObserver: IntersectionObserver | null = null;
 // Load the selected run immediately; hydrate historical runs as they approach the viewport.
 onMounted(() => {
