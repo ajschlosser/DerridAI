@@ -168,7 +168,7 @@ export function createRecordEditing(deps: Deps) {
       }))
     )
       return;
-    const files = new Set();
+    const files = new Set<Any>();
     for (const row of rows) {
       row.file.records[row.index] = { ...row.record, updates: [] };
       row.file.dirty.add(row.index);
