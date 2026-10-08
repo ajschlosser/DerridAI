@@ -60,7 +60,6 @@ export function measureInteractionToNextFrame(name: string): void {
   else globalThis.setTimeout(finish, 0);
 }
 
-
 /**
  * Runs non-visual follow-up work only after the browser has had an opportunity
  * to paint the state produced by the current interaction.
