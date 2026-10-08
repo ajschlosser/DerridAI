@@ -36,10 +36,7 @@ export function browserStorageAccountScope(user: BrowserStorageUser): string {
  * should use this helper so another account in the same browser profile cannot
  * inherit them.
  */
-export function accountScopedBrowserStorageKey(
-  baseKey: string,
-  user: BrowserStorageUser,
-): string {
+export function accountScopedBrowserStorageKey(baseKey: string, user: BrowserStorageUser): string {
   const scope = browserStorageAccountScope(user);
   return scope ? `${baseKey}.${scope}` : baseKey;
 }
