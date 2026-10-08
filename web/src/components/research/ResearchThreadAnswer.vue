@@ -252,6 +252,7 @@ watch(
         <details class="thread-answer-audit" :open="inspectOpen" @toggle="onInspectToggle">
           <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
           <template v-if="inspectOpen">
+            <h4 class="sr-only">{{ i18n.t("research.thread_inspect_result") }}</h4>
             <ResearchResultPresentation
               :instance-id="`thread-answer-${turn.turn_id}`"
               :instance-label="`${turn.ordinal}: ${turn.user_question}`"
