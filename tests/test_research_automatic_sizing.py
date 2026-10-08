@@ -206,3 +206,36 @@ def test_context_expansion_respects_neighbor_share_of_existing_evidence_budget()
     assert detail["neighbor_character_budget"] == 1250
     assert detail["neighbor_count"] == 2
     assert len(expanded) == 3
+
+
+
+def test_context_expansion_bounds_same_document_cache_with_lru_eviction() -> None:
+    anchors = [
+        _candidate(3, chars=600, source="doc-1"),
+        _candidate(3, chars=600, source="doc-2"),
+        _candidate(3, chars=600, source="doc-3"),
+        _candidate(3, chars=600, source="doc-1"),
+    ]
+    calls: list[str] = []
+
+    def load(_collection: str, source_id: str):
+        calls.append(source_id)
+        return [
+            _record(2, chars=600, source=source_id),
+            _record(3, chars=600, source=source_id),
+            _record(4, chars=600, source=source_id),
+        ]
+
+    _expanded, detail = expand_context_neighbors(
+        anchors,
+        load_document_records=load,
+        total_char_limit=100_000,
+        target_context_chars=1_800,
+        max_radius=1,
+        neighbor_budget_fraction=1.0,
+    )
+
+    # A two-document cache cannot retain doc-1 across accesses to doc-2/doc-3,
+    # so the final doc-1 anchor reloads it instead of retaining every document.
+    assert calls == ["doc-1", "doc-2", "doc-3", "doc-1"]
+    assert detail["document_reads"] == 4
