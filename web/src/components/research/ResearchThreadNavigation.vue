@@ -143,7 +143,7 @@ const manageExpanded = ref(false);
     </div>
     </div>
     <section v-if="thread" class="research-thread-conversation" :aria-label="thread.title">
-      <h3>{{ thread.title }}</h3>
+      <h2>{{ thread.title }}</h2>
       <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
       <details
         class="research-thread-management"
@@ -166,7 +166,7 @@ const manageExpanded = ref(false);
       <ol class="research-thread-turns">
         <li v-for="turn in thread.turns" :key="turn.turn_id">
           <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
-            <h4 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h4>
+            <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
             <p class="research-thread-turn-status">{{ i18n.t(`research.thread_status_${turn.status}`) }}</p>
             <slot name="answer" :turn="turn" />
             <div v-if="['failed', 'cancelled'].includes(turn.status)">
@@ -279,7 +279,7 @@ const manageExpanded = ref(false);
   padding-inline: clamp(10px, 2vw, 28px);
   border-inline-start: 1px solid var(--border);
 }
-.research-thread-conversation h3 {
+.research-thread-conversation > h2 {
   font-size: clamp(1.25rem, 1.8vw, 1.65rem);
   line-height: 1.3;
   margin: 0 0 8px;
@@ -314,7 +314,7 @@ const manageExpanded = ref(false);
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
 }
-.research-thread-turn h4 {
+.research-thread-turn h3 {
   max-width: 75ch;
   margin-block: 0 12px;
   line-height: 1.4;
