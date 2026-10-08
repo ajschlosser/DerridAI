@@ -17,15 +17,9 @@
  */
 
 import { sessionState } from "../state/workspaceState";
-import {
-  DOMAIN_PREFERENCE_KEYS,
-  type DomainPreferenceName,
-} from "./domainPreferencePersistence";
+import { DOMAIN_PREFERENCE_KEYS, type DomainPreferenceName } from "./domainPreferencePersistence";
 import { cancelPendingPrefs } from "./prefsPersistence";
-import {
-  cancelPendingFileWrites,
-  flushPendingFileWrites,
-} from "./sharedWorkspacePersistence";
+import { cancelPendingFileWrites, flushPendingFileWrites } from "./sharedWorkspacePersistence";
 import {
   cancelPendingDomainPreferences,
   flushDomainPreferences,
