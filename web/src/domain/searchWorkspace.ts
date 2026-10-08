@@ -235,7 +235,9 @@ export function createSearchWorkspace(deps: Deps) {
   function localSearchStaticMetadata() {
     const rows = localCorpusRows();
     const availableFields =
-      localCorpusCache.available ?? tableAvailableFields(rows, ["__file", ...SEARCH_LOADED_COLUMNS]);
+      localCorpusCache.available ||
+      tableAvailableFields(rows, ["__file", ...SEARCH_LOADED_COLUMNS]) ||
+      [];
     if (!localCorpusCache.available) {
       localCorpusCache.available = availableFields;
       localCorpusCache.filterFields = availableFields.filter((field: string) =>
