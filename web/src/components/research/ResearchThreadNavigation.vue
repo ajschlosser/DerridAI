@@ -72,7 +72,11 @@ const manageExpanded = ref(false);
     >
       {{ i18n.t("research.threads_title") }}
     </button>
-    <div id="research-thread-sidebar" class="research-thread-sidebar" :class="{ 'is-expanded': listExpanded }">
+    <div
+      id="research-thread-sidebar"
+      class="research-thread-sidebar"
+      :class="{ 'is-expanded': listExpanded }"
+    >
     <button type="button" class="btn" @click="emit('new')">
       {{ i18n.t("research.thread_new") }}
     </button>
@@ -151,7 +155,11 @@ const manageExpanded = ref(false);
         @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open"
       >
         <summary>{{ i18n.t("research.thread_manage") }}</summary>
-        <div class="research-thread-management-actions" role="group" :aria-label="i18n.t('research.thread_manage')">
+        <div
+          class="research-thread-management-actions"
+          role="group"
+          :aria-label="i18n.t('research.thread_manage')"
+        >
           <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
             {{ i18n.t("research.thread_rename") }}
           </button>
@@ -167,7 +175,9 @@ const manageExpanded = ref(false);
         <li v-for="turn in thread.turns" :key="turn.turn_id">
           <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
             <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
-            <p class="research-thread-turn-status">{{ i18n.t(`research.thread_status_${turn.status}`) }}</p>
+            <p class="research-thread-turn-status">
+              {{ i18n.t(`research.thread_status_${turn.status}`) }}
+            </p>
             <slot name="answer" :turn="turn" />
             <div v-if="['failed', 'cancelled'].includes(turn.status)">
               <p>{{ i18n.t("research.thread_retry_help") }}</p>
