@@ -20,6 +20,11 @@ import { computed, ref, type ComputedRef, type Ref, watch } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import type { MetadataSchema } from "../api/metadataSchemas";
 import type { RunGuidanceEntry, RunGuidanceField } from "../components/CorpusRunGuidance.vue";
+import {
+  browserStorageAccountScope,
+  currentAccountScopedBrowserStorageKey,
+} from "../domain/browserStorageScope";
+import { sessionState } from "../state/workspaceState";
 
 type Translate = (key: string, fallback: string) => string;
 
@@ -30,7 +35,9 @@ export const RUN_GUIDANCE_STORAGE_KEY = "derridai.run-guidance.v1";
 
 function readStore(): Record<string, Record<string, RunGuidanceEntry>> {
   try {
-    const parsed = JSON.parse(localStorage.getItem(RUN_GUIDANCE_STORAGE_KEY) || "{}");
+    const parsed = JSON.parse(
+      localStorage.getItem(currentAccountScopedBrowserStorageKey(RUN_GUIDANCE_STORAGE_KEY)) || "{}",
+    );
     return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
@@ -42,7 +49,10 @@ function saveGuidance(schemaId: string, value: Record<string, RunGuidanceEntry>)
     const store = readStore();
     if (Object.keys(value).length) store[schemaId] = value;
     else delete store[schemaId];
-    localStorage.setItem(RUN_GUIDANCE_STORAGE_KEY, JSON.stringify(store));
+    localStorage.setItem(
+      currentAccountScopedBrowserStorageKey(RUN_GUIDANCE_STORAGE_KEY),
+      JSON.stringify(store),
+    );
   } catch {
     /* storage unavailable: guidance still works for this session */
   }
@@ -86,9 +96,10 @@ export function useCorpusRunGuidance(
   });
 
   watch(
-    schema,
-    (next, previous) => {
-      if (next?.id !== previous?.id) guidance.value = next ? loadGuidance(next.id) : {};
+    () => [schema.value?.id || "", browserStorageAccountScope(sessionState.userContext)] as const,
+    ([schemaId, owner], [previousSchemaId, previousOwner] = ["", ""]) => {
+      if (schemaId === previousSchemaId && owner === previousOwner) return;
+      guidance.value = schemaId ? loadGuidance(schemaId) : {};
     },
     { immediate: true },
   );
