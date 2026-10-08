@@ -30,7 +30,12 @@ import { canUse, isResearcher } from "./sharedSession";
 import { refreshStores } from "./sharedStores";
 import { tr } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import {
+  persistAnnotationsPreferences,
+  persistSearchPreferences,
+  persistVectorPreferences,
+  persistWorksPreferences,
+} from "./sharedWorkspaceStorage";
 import { dbUnavailableReason, hasCorpusDb, recordStores } from "./storeAvailability";
 import { refreshStoreWorks } from "./storeWorks";
 import { openTouchup } from "./touchupLauncher";
@@ -56,7 +61,10 @@ export const worksWorkspace = createWorksWorkspace({
   openTouchup,
   openWorkMetadataEditor: workDialogs.openWorkMetadataEditor,
   openWorkMetadataLlmDialog: workDialogs.openWorkMetadataLlmDialog,
-  persistPrefs,
+  persistAnnotationsPreferences,
+  persistSearchPreferences,
+  persistVectorPreferences,
+  persistWorksPreferences,
   providerProfiles: providerProfilesService.providerProfiles,
   recordStores,
   refreshPresenceForRows,

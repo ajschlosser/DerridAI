@@ -62,7 +62,13 @@ export function createRecordEditing(deps: Deps) {
     file: Any,
     index: Any,
     changes: Any,
-    { source = "manual", model = null, batchId = null, rationale = null }: Any = {},
+    {
+      source = "manual",
+      model = null,
+      batchId = null,
+      rationale = null,
+      deferCommit = false,
+    }: Any = {},
   ) {
     const current = file.records[index];
     if (!current) return 0;
@@ -99,12 +105,26 @@ export function createRecordEditing(deps: Deps) {
     next.updates = history;
     file.records[index] = next;
     file.dirty.add(index);
-    invalidateCorpusCache(file.id);
-    persistFile(file);
+    if (!deferCommit) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
     if (state.view === "record" && typeof window !== "undefined")
       window.dispatchEvent(new CustomEvent("derridai:record-updated"));
     return entries.length;
   }
+  function commitRecordFiles(files: Iterable<Any>) {
+    const unique = new Map<string, Any>();
+    for (const file of files || []) {
+      const id = String(file?.id || "");
+      if (id) unique.set(id, file);
+    }
+    for (const file of unique.values()) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
+  }
+
   async function clearRecordUpdates(file: Any, index: Any, { confirmFirst = true } = {}) {
     const record = file?.records?.[index];
     const count = Array.isArray(record?.updates) ? record.updates.length : 0;
@@ -128,6 +148,7 @@ export function createRecordEditing(deps: Deps) {
       return false;
     file.records[index] = { ...record, updates: [] };
     file.dirty.add(index);
+    invalidateCorpusCache(file.id);
     persistFile(file);
     return true;
   }
@@ -147,13 +168,16 @@ export function createRecordEditing(deps: Deps) {
       }))
     )
       return;
-    const files = new Set();
+    const files = new Set<Any>();
     for (const row of rows) {
       row.file.records[row.index] = { ...row.record, updates: [] };
       row.file.dirty.add(row.index);
       files.add(row.file);
     }
-    for (const file of files) persistFile(file);
+    for (const file of files) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
     shell();
     renderView();
     toast(trf("dynamic.cleared_history_records", { count: rows.length.toLocaleString() }), {
@@ -191,6 +215,7 @@ export function createRecordEditing(deps: Deps) {
   }
   return {
     applyRecordChanges,
+    commitRecordFiles,
     clearRecordUpdates,
     clearAllUpdates,
     historyVersionChanges,

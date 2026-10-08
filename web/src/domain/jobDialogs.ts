@@ -60,9 +60,11 @@ type Helper =
   | "canAccessPage"
   | "cancelBackgroundJob"
   | "cloneAuditValue"
+  | "commitRecordFiles"
   | "formatTimestamp"
   | "fullCitation"
   | "isResearcher"
+  | "invalidateCorpusCache"
   | "jobLabel"
   | "jsonPretty"
   | "label"
@@ -71,7 +73,7 @@ type Helper =
   | "openWorkMetadataProposalResult"
   | "pages"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistJobPreferences"
   | "providerDisplayName"
   | "providerProfile"
   | "providerProfiles"
@@ -109,9 +111,11 @@ export function createJobDialogs(deps: Deps) {
     canAccessPage,
     cancelBackgroundJob,
     cloneAuditValue,
+    commitRecordFiles,
     formatTimestamp,
     fullCitation,
     isResearcher,
+    invalidateCorpusCache,
     jobLabel,
     jsonPretty,
     label,
@@ -120,7 +124,7 @@ export function createJobDialogs(deps: Deps) {
     openWorkMetadataProposalResult,
     pages,
     persistFileNow,
-    persistPrefs,
+    persistJobPreferences,
     providerDisplayName,
     providerProfile,
     providerProfiles,
@@ -156,7 +160,6 @@ export function createJobDialogs(deps: Deps) {
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
         return toast(copy.operationRemoved, { tone: "success" });
       }
@@ -293,7 +296,6 @@ export function createJobDialogs(deps: Deps) {
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
         return toast(copy.operationRemoved, { tone: "success" });
       }
@@ -455,6 +457,7 @@ export function createJobDialogs(deps: Deps) {
         }
       }
 
+      const touchedFiles = new Map<string, Any>();
       for (const [key, target] of byKey.entries()) {
         if (mode === "selected" && !target.fields.length) continue;
         const record = target.item.file.records[target.item.index];
@@ -473,12 +476,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
         }
-        fieldsApplied += applyRecordChanges(target.item.file, target.item.index, changes, {
+        const changed = applyRecordChanges(target.item.file, target.item.index, changes, {
           source: "llm_review",
           model: job.model,
           batchId,
           rationale: target.rationale,
+          deferCommit: true,
         });
+        fieldsApplied += changed;
+        if (changed) touchedFiles.set(String(target.item.file.id), target.item.file);
         if (target.resolveRecord) _fullyReviewed++;
 
         resolveItems.push({
@@ -496,12 +502,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.needs_review !== false) changes.needs_review = false;
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
-          fieldsApplied += applyRecordChanges(entry.local.file, entry.local.index, changes, {
+          const changed = applyRecordChanges(entry.local.file, entry.local.index, changes, {
             source: "llm_review",
             model: job.model,
             batchId,
             rationale: {},
+            deferCommit: true,
           });
+          fieldsApplied += changed;
+          if (changed) touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
@@ -513,12 +522,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.needs_review !== false) changes.needs_review = false;
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
-          fieldsApplied += applyRecordChanges(entry.local.file, entry.local.index, changes, {
+          const changed = applyRecordChanges(entry.local.file, entry.local.index, changes, {
             source: "llm_review",
             model: job.model,
             batchId,
             rationale: {},
+            deferCommit: true,
           });
+          fieldsApplied += changed;
+          if (changed) touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
@@ -529,10 +541,12 @@ export function createJobDialogs(deps: Deps) {
         return false;
       }
 
+      commitRecordFiles(touchedFiles.values());
+
       try {
         job = await resolveOnServer("accept", resolveItems);
         state.jobApplied[job.id] = new Date().toISOString();
-        persistPrefs();
+        persistJobPreferences();
         shell();
         renderView();
         await refreshJobs({ rerender: state.view === "home" });
@@ -693,7 +707,6 @@ export function createJobDialogs(deps: Deps) {
     // binding, evidence inspection, accessibility, and i18n stay identical no
     // matter where the result was launched (Operations, job history, etc.).
     state.view = "rag";
-    persistPrefs();
     shellRefreshHook?.();
     const href = `/rag?job=${encodeURIComponent(job.id)}`;
     // The hook is assigned later by the app shell, so it is read when needed.
@@ -1064,6 +1077,7 @@ export function createJobDialogs(deps: Deps) {
           }
           file.records.push(cloneAuditValue(draft));
           file.dirty.add(file.records.length - 1);
+          invalidateCorpusCache(file.id, true);
           await persistFileNow(file);
         }
         if (storeName) {

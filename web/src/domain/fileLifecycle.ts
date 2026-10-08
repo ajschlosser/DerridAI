@@ -36,7 +36,8 @@ type Helper =
   | "isResearcher"
   | "parseJsonl"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistCorpusPreferences"
+  | "persistListPreferences"
   | "renderView"
   | "shell"
   | "stableJsonlFileIdentity"
@@ -56,7 +57,8 @@ export function createFileLifecycle(deps: Deps) {
     isResearcher,
     parseJsonl,
     persistFileNow,
-    persistPrefs,
+    persistCorpusPreferences,
+    persistListPreferences,
     renderView,
     shell,
     stableJsonlFileIdentity,
@@ -129,7 +131,8 @@ export function createFileLifecycle(deps: Deps) {
     } else if (first) state.activeFileId = first;
     // Always drop derived caches: a file that was already open may have been edited or emptied.
     invalidateCorpusCache(null, true);
-    persistPrefs();
+    persistCorpusPreferences();
+    persistListPreferences();
     shell();
     renderView();
     syncUrl({ replace: true });
@@ -171,7 +174,8 @@ export function createFileLifecycle(deps: Deps) {
     );
     if (state.activeFileId === id)
       state.activeFileId = state.files[Math.min(i, state.files.length - 1)]?.id || null;
-    persistPrefs();
+    persistCorpusPreferences();
+    persistListPreferences();
     shell();
     renderView();
   }

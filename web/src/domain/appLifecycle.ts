@@ -32,7 +32,6 @@ type Helper =
   | "defaultProviderProfile"
   | "ensureProviderProfiles"
   | "isResearcher"
-  | "persistPrefs"
   | "warmupProviderProfile"
   | "refreshProviderStatuses"
   | "refreshStoreWorks"
@@ -49,7 +48,6 @@ export function createAppLifecycle(deps: Deps) {
     defaultProviderProfile,
     ensureProviderProfiles,
     isResearcher,
-    persistPrefs,
     warmupProviderProfile,
     refreshProviderStatuses,
     refreshStoreWorks,
@@ -83,7 +81,6 @@ export function createAppLifecycle(deps: Deps) {
       try {
         await refreshStores();
         if (isResearcher() && state.activeStore) await refreshStoreWorks(true);
-        persistPrefs();
         const active = document.activeElement;
         const userIsEditing =
           active &&

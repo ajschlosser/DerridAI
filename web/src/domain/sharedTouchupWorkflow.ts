@@ -38,7 +38,7 @@ import { normalizeTouchupItems } from "./touchupLauncher";
 // The touchup (LLM review) workflow over the shared state, usable without the legacy runtime. The runtime registers
 // these through `registerTouchupActions`.
 const { providerProfiles, providerProfile, defaultProviderProfile } = providerProfilesService;
-const { applyRecordChanges } = sharedRecordEditing;
+const { applyRecordChanges, commitRecordFiles } = sharedRecordEditing;
 const { clearReviewSelection } = evidenceSelection;
 
 const HIGH_RISK_TOUCHUP_FIELDS = new Set([
@@ -190,6 +190,7 @@ export function touchupApplyResults(
   const batchId = crypto.randomUUID();
   let appliedFields = 0,
     reviewedRecords = 0;
+  const touchedFiles = new Map<string, Loose>();
   for (const item of items) {
     const result = results[item.key];
     if (!result?.proposal) continue;
@@ -209,14 +210,18 @@ export function touchupApplyResults(
       record.review_reason !== ""
     )
       changes.review_reason = null;
-    appliedFields += applyRecordChanges(item.file, item.index, changes, {
+    const changed = applyRecordChanges(item.file, item.index, changes, {
       source: "llm_review",
       model: result.proposal.model,
       batchId,
       rationale: result.proposal.rationale,
+      deferCommit: true,
     });
+    appliedFields += changed;
+    if (changed) touchedFiles.set(String(item.file.id), item.file);
     reviewedRecords++;
   }
+  commitRecordFiles(touchedFiles.values());
   clearReviewSelection();
   shell();
   renderView();

@@ -24,7 +24,7 @@ import { cancelPendingPrefs } from "./prefsPersistence";
 import { serializableRecordsFile } from "./recordsFiles";
 import { providerProfilesService } from "./sharedProviderProfiles";
 import { tr, trf } from "./sharedTranslate";
-import { fileTimers, persistFileNow } from "./sharedWorkspacePersistence";
+import { cancelPendingFileWrites, persistFileNow } from "./sharedWorkspacePersistence";
 import {
   cancelPendingDomainPreferences,
   workspaceDb,
@@ -39,8 +39,7 @@ const backupState = bindJobsState(bindWorkspaceGroups({}));
 export async function deleteWorkspaceDatabase() {
   cancelPendingPrefs();
   cancelPendingDomainPreferences();
-  for (const timer of fileTimers.values()) clearTimeout(timer);
-  fileTimers.clear();
+  cancelPendingFileWrites();
   await workspaceDb.drop();
 }
 

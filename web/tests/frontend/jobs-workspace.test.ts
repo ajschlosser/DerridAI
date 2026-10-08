@@ -93,7 +93,8 @@ describe("jobs workspace", () => {
     expect(state.jobApplied).toEqual({});
     expect(state.upsertJobApplied).toEqual({});
     expect(spies.persistJobPreferences).toHaveBeenCalledTimes(1);
-    expect(spies.persistPrefs).not.toHaveBeenCalled();
+    expect(spies.persistResearchPreferences).not.toHaveBeenCalled();
+    expect(spies.persistPrefs).toBeUndefined();
   });
 
   it("never starts an idle polling loop", () => {
@@ -138,9 +139,13 @@ describe("jobs workspace", () => {
     expect(state.jobApplied).toEqual({ b: true });
     expect(state.upsertJobApplied).toEqual({});
     expect(state.ragConfig.run_history).toEqual([{ job_id: "b" }]);
+    expect(spies.persistJobPreferences).toHaveBeenCalledTimes(1);
+    expect(spies.persistResearchPreferences).toHaveBeenCalledTimes(1);
+    expect(spies.notifyOperationsChanged).toHaveBeenCalled();
     expect(spies.updateOperationStackCount).toHaveBeenCalled();
     workspace.pruneClientJobState("b", { removeHistory: false });
     expect(state.ragConfig.run_history).toEqual([{ job_id: "b" }]);
+    expect(spies.persistResearchPreferences).toHaveBeenCalledTimes(1);
   });
 
   it("removes a finished job on the server, then in the client, then refreshes", async () => {
@@ -150,7 +155,8 @@ describe("jobs workspace", () => {
     await workspace.removeFinishedJob("a");
     expect(api).toHaveBeenNthCalledWith(1, "/api/jobs/a", { method: "DELETE" });
     expect(state.jobs).toEqual([]);
-    expect(spies.persistPrefs).toHaveBeenCalled();
+    expect(spies.persistResearchPreferences).toHaveBeenCalled();
+    expect(spies.persistPrefs).toBeUndefined();
     expect(api).toHaveBeenCalledWith("/api/jobs");
   });
 

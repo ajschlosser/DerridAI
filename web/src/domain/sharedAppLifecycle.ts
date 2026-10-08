@@ -23,7 +23,7 @@ import { providerProfilesService, warmupProviderProfile } from "./sharedProvider
 import { isResearcher } from "./sharedSession";
 import { refreshStores } from "./sharedStores";
 import { state } from "./sharedUrlState";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import { shell } from "./sharedWorkspaceStorage";
 import { systemCardHtml } from "./shellSnapshot";
 import { invalidateShellStatusProjection } from "./shellStatusProjection";
 import { refreshStoreWorks } from "./storeWorks";
@@ -44,7 +44,6 @@ export const { warmupConfiguredLlm, checkHealth } = createAppLifecycle({
   ensureProviderProfiles: (...args: unknown[]) =>
     (providerProfilesService.ensureProviderProfiles as (...a: unknown[]) => unknown)(...args),
   isResearcher,
-  persistPrefs,
   warmupProviderProfile,
   refreshProviderStatuses: (...args: unknown[]) =>
     (providerProfilesService.refreshProviderStatuses as (...a: unknown[]) => unknown)(...args),

@@ -137,6 +137,12 @@ export const useShellStore = defineStore("shell", () => {
     navReady.value = false;
   }
 
+  function reset() {
+    snapshot.value = { ...emptySnapshot };
+    ready.value = false;
+    navReady.value = false;
+  }
+
   const groupedNav = computed(() => {
     const groups: Array<{ section: string; items: ShellNavItem[] }> = [];
     for (const item of snapshot.value.nav) {
@@ -160,5 +166,6 @@ export const useShellStore = defineStore("shell", () => {
     syncStatus,
     syncNav,
     resetNav,
+    reset,
   };
 });

@@ -17,6 +17,7 @@
  */
 
 import type { SubsetRule } from "./recordQuery";
+import { currentAccountScopedBrowserStorageKey } from "./browserStorageScope";
 import { SUBSET_OPERATORS, type SubsetExpressionItem, type SubsetJoin } from "./subsetExpression";
 
 /** Saved "Create JSONL subset" filter profiles: the file format used to move them between browsers. */
@@ -37,7 +38,9 @@ export interface SubsetProfile {
 /** Saved profiles in this browser. Unreadable storage reads as none rather than failing the dialog. */
 export function loadSubsetProfiles(): SubsetProfile[] {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const value = JSON.parse(
+      localStorage.getItem(currentAccountScopedBrowserStorageKey(STORAGE_KEY)) || "[]",
+    );
     return Array.isArray(value) ? value : [];
   } catch {
     return [];
@@ -45,7 +48,10 @@ export function loadSubsetProfiles(): SubsetProfile[] {
 }
 
 export function saveSubsetProfiles(profiles: SubsetProfile[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles.slice(0, SUBSET_PROFILES_LIMIT)));
+  localStorage.setItem(
+    currentAccountScopedBrowserStorageKey(STORAGE_KEY),
+    JSON.stringify(profiles.slice(0, SUBSET_PROFILES_LIMIT)),
+  );
 }
 
 /** Why an import was refused; the dialog maps each code to a localized message. */

@@ -48,7 +48,6 @@ import { showAppModal } from "./disabledControls";
 import "./sharedRecordScopes";
 import "./recordHistory";
 import "./dashboardCharts";
-import { updateDbStatusElements } from "./sharedDbPresence";
 import { hasCorpusDb, recordStores } from "./storeAvailability";
 import { registerOperationHooks } from "./operationHooks";
 import { registerOperationProgress } from "./operationProgressHooks";
@@ -110,7 +109,6 @@ import "./navigation";
 import {
   persistJobPreferences,
   persistLayoutPreferences,
-  persistPrefs,
   persistResearchPreferences,
   persistSettingsPreferences,
   refreshShell,
@@ -128,7 +126,7 @@ import "./sharedStoreRecords";
 import { createResearchWorkspace } from "./researchWorkspace";
 import "./sharedAnnotations";
 import "../state/jobsState";
-import { recordFingerprint } from "./corpusCache";
+import { invalidateCorpusCache, recordFingerprint } from "./corpusCache";
 import { refreshStores } from "./sharedStores";
 import { canAccessPage, hasCapability, isResearcher } from "./sharedSession";
 import "./databaseCreationRequest";
@@ -155,7 +153,7 @@ createJobsWorkspace({
   navigateTo: late(() => navigateTo),
   notifyOperationsChanged: late(() => notifyOperationsChanged),
   persistJobPreferences: late(() => persistJobPreferences),
-  persistPrefs: late(() => persistPrefs),
+  persistResearchPreferences: late(() => persistResearchPreferences),
   recordFingerprint: late(() => recordFingerprint),
   refreshCorpusBuildsHomeCardOnly: late(() => refreshCorpusBuildsHomeCardOnly),
   refreshOperationsPanelOnly: late(() => refreshOperationsPanelOnly),
@@ -167,7 +165,6 @@ createJobsWorkspace({
   touchupRecordPayload: late(() => touchupRecordPayload),
   tr: late(() => tr),
   trf: late(() => trf),
-  updateDbStatusElements: late(() => updateDbStatusElements),
   updateOperationStackCount: late(() => updateOperationStackCount),
 });
 const {
@@ -191,7 +188,6 @@ const {
   openLlmTaskLauncher: late(() => openLlmTaskLauncher),
   showAppModal: late(() => showAppModal),
   operationViewModel: late(() => operationViewModel),
-  persistPrefs: late(() => persistPrefs),
   pruneClientJobState,
   ragGradeEvidencePayload: late(() => ragGradeEvidencePayload),
   ragGradeHtml: late(() => ragGradeHtml),
@@ -247,9 +243,11 @@ const { openJobDetails, openJobResults, openLlmTaskLauncher, openPdfDraftRecord 
     canAccessPage: late(() => canAccessPage),
     cancelBackgroundJob,
     cloneAuditValue: late(() => cloneAuditValue),
+    commitRecordFiles: late(() => sharedRecordEditing.commitRecordFiles),
     formatTimestamp: late(() => formatTimestamp),
     fullCitation: late(() => fullCitation),
     isResearcher: late(() => isResearcher),
+    invalidateCorpusCache: late(() => invalidateCorpusCache),
     jobLabel: late(() => jobLabel),
     jsonPretty: late(() => jsonPretty),
     label: late(() => label),
@@ -258,7 +256,7 @@ const { openJobDetails, openJobResults, openLlmTaskLauncher, openPdfDraftRecord 
     openWorkMetadataProposalResult: late(() => openWorkMetadataProposalResult),
     pages: late(() => pages),
     persistFileNow: late(() => persistFileNow),
-    persistPrefs: late(() => persistPrefs),
+    persistJobPreferences: late(() => persistJobPreferences),
     providerDisplayName: late(() => providerDisplayName),
     providerProfile: late(() => providerProfile),
     providerProfiles: late(() => providerProfiles),

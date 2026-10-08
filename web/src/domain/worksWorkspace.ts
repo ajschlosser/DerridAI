@@ -60,7 +60,10 @@ type Helper =
   | "openTouchup"
   | "openWorkMetadataEditor"
   | "openWorkMetadataLlmDialog"
-  | "persistPrefs"
+  | "persistAnnotationsPreferences"
+  | "persistSearchPreferences"
+  | "persistVectorPreferences"
+  | "persistWorksPreferences"
   | "providerProfiles"
   | "recordStores"
   | "refreshPresenceForRows"
@@ -97,7 +100,10 @@ export function createWorksWorkspace(deps: Deps) {
     openTouchup,
     openWorkMetadataEditor,
     openWorkMetadataLlmDialog,
-    persistPrefs,
+    persistAnnotationsPreferences,
+    persistSearchPreferences,
+    persistVectorPreferences,
+    persistWorksPreferences,
     providerProfiles,
     recordStores,
     refreshPresenceForRows,
@@ -397,6 +403,20 @@ export function createWorksWorkspace(deps: Deps) {
       ...extra,
     };
   }
+  function reconcileWorksOverviewSelection() {
+    const selected = String(state.workOverview || "");
+    if (!selected) return false;
+    const exists = isResearcher()
+      ? (state.storeWorkStats || []).some((item: Any) => String(item.work || "") === selected)
+      : workIndex().has(selected);
+    if (exists) return false;
+
+    state.workOverview = "";
+    persistWorksPreferences();
+    syncUrl({ replace: true });
+    return true;
+  }
+
   async function prepareWorksWorkspace() {
     if (isResearcher()) {
       try {
@@ -411,6 +431,7 @@ export function createWorksWorkspace(deps: Deps) {
       } catch {
         /* annotations are best-effort */
       }
+      reconcileWorksOverviewSelection();
       return { error: "" };
     }
     try {
@@ -440,10 +461,11 @@ export function createWorksWorkspace(deps: Deps) {
     }
     try {
       const rows = [...workIndex().values()].slice(0, 24).flatMap((item) => item.rows.slice(0, 2));
-      refreshPresenceForRows(rows);
+      await refreshPresenceForRows(rows);
     } catch {
       /* presence is best-effort */
     }
+    reconcileWorksOverviewSelection();
     return { error: "" };
   }
   function getWorksWorkspaceSnapshot() {
@@ -508,8 +530,7 @@ export function createWorksWorkspace(deps: Deps) {
       });
     }
     const map = workIndex();
-    if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
-    const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
+    const selectedItem = state.workOverview ? map.get(state.workOverview) || null : null;
     const needle = normalizeLibrarySearch(query);
     const annotationCounts = annotationCountsByWork();
     const described = [...map.values()].map((item) =>
@@ -565,12 +586,12 @@ export function createWorksWorkspace(deps: Deps) {
   }
   function setWorksSearch(value: Any) {
     state.worksSearch = String(value || "");
-    persistPrefs();
+    persistWorksPreferences();
     syncUrl({ replace: true });
   }
   function setWorksOverview(work: Any) {
     state.workOverview = String(work || "");
-    persistPrefs();
+    persistWorksPreferences();
     syncUrl({ replace: true });
   }
   /** Sort, filter and density are safe workspace state: they persist and ride in the Works URL. */
@@ -588,7 +609,7 @@ export function createWorksWorkspace(deps: Deps) {
     if (patch.author !== undefined) state.worksAuthor = String(patch.author || "");
     if (patch.viewMode !== undefined)
       state.worksView = ["list", "compact"].includes(String(patch.viewMode)) ? "list" : "cards";
-    persistPrefs();
+    persistWorksPreferences();
     syncUrl({ replace: true });
   }
   async function setWorksStore(name: Any) {
@@ -619,14 +640,14 @@ export function createWorksWorkspace(deps: Deps) {
       ...(needsReview ? [{ id: uid(), field: "needs_review", op: "eq", value: "true" }] : []),
     ];
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     navigateTo("global");
   }
   function searchWorkOverview(work: Any) {
     state.globalSearch = "";
     state.globalFilters = [{ id: uid(), field: "work", op: "eq", value: String(work || "") }];
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     navigateTo("global");
   }
   function openWorkMetadataEditorForVue(work: Any) {
@@ -640,7 +661,7 @@ export function createWorksWorkspace(deps: Deps) {
   function openWorkAnnotations(work: Any) {
     state.annotationSearch = String(work || "");
     state.annotationView = "works";
-    persistPrefs();
+    persistAnnotationsPreferences();
     navigateTo("annotations");
   }
   function populateAllWorksMetadata() {
@@ -669,7 +690,7 @@ export function createWorksWorkspace(deps: Deps) {
     state.storeWork = String(work || state.workOverview || "");
     state.storeBrowseMode = "records";
     state.storePage = 1;
-    persistPrefs();
+    persistVectorPreferences();
     navigateTo("vector");
   }
   return {
@@ -677,6 +698,7 @@ export function createWorksWorkspace(deps: Deps) {
     getWorksViewState,
     worksSnapshotBase,
     prepareWorksWorkspace,
+    reconcileWorksOverviewSelection,
     getWorksWorkspaceSnapshot,
     setWorksSearch,
     setWorksOverview,

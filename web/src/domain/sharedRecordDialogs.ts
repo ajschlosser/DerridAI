@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { allRows } from "./corpusCache";
+import { allRows, invalidateCorpusCache } from "./corpusCache";
 import { api } from "./legacyApi";
 import { createRecordDialogs } from "./recordDialogs";
 import { recordHistoryVersions } from "./recordHistory";
@@ -52,7 +52,14 @@ import {
 import { tr, trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { fileTimers, persistFileNow } from "./sharedWorkspacePersistence";
-import { persistPrefs, shell, workspaceDb } from "./sharedWorkspaceStorage";
+import {
+  persistCorpusPreferences,
+  persistJobPreferences,
+  persistListPreferences,
+  persistReviewPreferences,
+  shell,
+  workspaceDb,
+} from "./sharedWorkspaceStorage";
 import { dbUnavailableReason, hasCorpusDb } from "./storeAvailability";
 
 // The record dialogs (merge, bulk field edit, OCR cleanup, record editor, history, upsert queue) over the shared
@@ -75,6 +82,7 @@ export const recordDialogs = createRecordDialogs({
   hasCorpusDb,
   historyVersionChanges,
   idbDelete: workspaceDb.remove,
+  invalidateCorpusCache,
   jsonPretty,
   label,
   localRecordKey,
@@ -84,7 +92,10 @@ export const recordDialogs = createRecordDialogs({
   pendingChangesForRow,
   pendingUpsertRows,
   persistFileNow,
-  persistPrefs,
+  persistCorpusPreferences,
+  persistJobPreferences,
+  persistListPreferences,
+  persistReviewPreferences,
   recordDbStatus,
   recordFields,
   recordHistoryVersions,

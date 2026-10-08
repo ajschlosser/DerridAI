@@ -52,6 +52,7 @@ type Helper =
   | "hasCorpusDb"
   | "historyVersionChanges"
   | "idbDelete"
+  | "invalidateCorpusCache"
   | "jsonPretty"
   | "label"
   | "localRecordKey"
@@ -61,7 +62,10 @@ type Helper =
   | "pendingChangesForRow"
   | "pendingUpsertRows"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistCorpusPreferences"
+  | "persistJobPreferences"
+  | "persistListPreferences"
+  | "persistReviewPreferences"
   | "recordDbStatus"
   | "recordFields"
   | "recordHistoryVersions"
@@ -101,6 +105,7 @@ export function createRecordDialogs(deps: Deps) {
     hasCorpusDb,
     historyVersionChanges,
     idbDelete,
+    invalidateCorpusCache,
     jsonPretty,
     label,
     localRecordKey,
@@ -110,7 +115,10 @@ export function createRecordDialogs(deps: Deps) {
     pendingChangesForRow,
     pendingUpsertRows,
     persistFileNow,
-    persistPrefs,
+    persistCorpusPreferences,
+    persistJobPreferences,
+    persistListPreferences,
+    persistReviewPreferences,
     recordDbStatus,
     recordFields,
     recordHistoryVersions,
@@ -196,10 +204,14 @@ export function createRecordDialogs(deps: Deps) {
           }
         }
 
+        invalidateCorpusCache(merged.id, true);
         await persistFileNow(merged);
         state.activeFileId = merged.id;
         if (wantsDownload) download(merged.name, fileJsonl(merged));
-        persistPrefs();
+        persistCorpusPreferences();
+        persistListPreferences();
+        persistReviewPreferences();
+        persistJobPreferences();
         navigateTo("list", { fileId: merged.id });
         toast(copy.merged(files.length, records.length.toLocaleString()), { tone: "success" });
         return true;
@@ -267,8 +279,9 @@ export function createRecordDialogs(deps: Deps) {
           return false;
         const batchId = uid();
         let fieldChanges = 0;
+        const touchedFiles = new Map<string, Any>();
         for (const row of changing) {
-          fieldChanges += applyRecordChanges(
+          const changed = applyRecordChanges(
             row.file,
             row.index,
             { [field]: cloneAuditValue(value) },
@@ -276,8 +289,15 @@ export function createRecordDialogs(deps: Deps) {
               source: "bulk_field_edit",
               batchId,
               reason: `Bulk edit ${field}`,
+              deferCommit: true,
             },
           );
+          fieldChanges += changed;
+          if (changed) touchedFiles.set(String(row.file.id), row.file);
+        }
+        for (const file of touchedFiles.values()) {
+          invalidateCorpusCache(file.id);
+          await persistFileNow(file);
         }
         shell();
         renderView();

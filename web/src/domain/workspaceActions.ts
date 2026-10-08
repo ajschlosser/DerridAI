@@ -19,7 +19,11 @@
 import { state } from "./sharedUrlState";
 import { isResearcher } from "./sharedSession";
 import { navigateTo, renderView, syncUrl } from "./sharedNavigation";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import {
+  persistCorpusPreferences,
+  persistSearchPreferences,
+  refreshShell,
+} from "./sharedWorkspaceStorage";
 
 // The corpus-workspace actions Vue views call: open a file in Records, and jump to Search from a metadata value.
 
@@ -45,16 +49,16 @@ export function searchByMetadata(
       { id: crypto.randomUUID(), field, op: contains ? "has" : "eq", value: raw },
     ];
   }
-  persistPrefs();
+  persistSearchPreferences();
   navigateTo("global");
 }
 
 export function activateFile(fileId: string) {
   if (["list", "record"].includes(state.view)) {
     state.activeFileId = fileId;
-    persistPrefs();
+    persistCorpusPreferences();
     syncUrl({ replace: true });
-    shell();
+    refreshShell();
     renderView();
   } else navigateTo("list", { fileId });
 }

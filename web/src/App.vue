@@ -22,12 +22,12 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import RouteNavigationFeedback from "./components/shell/RouteNavigationFeedback.vue";
 import LazyFeatureDialogHosts from "./components/shell/LazyFeatureDialogHosts.vue";
 import { createRouteLoading } from "./router/routeLoading";
-import { sharedUrlStateCodec, state as sharedState } from "./domain/sharedUrlState";
+import { sharedUrlStateCodec } from "./domain/sharedUrlState";
 import { createRuntimeLocationSync } from "./router/runtimeLocationSync";
 import { createRuntimeUrlSyncHook } from "./router/runtimeUrlSync";
 import { createNavigationHistory, type HistoryEntryTitle } from "./router/navigationHistory";
 import { useShellStore, type ShellNavItem } from "./stores/shell";
-import { useLayoutStore } from "./stores/workspace";
+import { useLayoutStore, useSearchStore, useVectorStore } from "./stores/workspace";
 import { useAuthStore } from "./stores/auth";
 import { useI18nStore } from "./stores/i18n";
 import AuthScreen from "./components/AuthScreen.vue";
@@ -64,6 +64,12 @@ import { pauseRuntime } from "./domain/jobsPause";
 import { toggleSidebar } from "./domain/sidebarToggle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 import { measureInteractionToNextFrame } from "./domain/interactionTiming";
+import { navigationState } from "./state/workspaceState";
+import {
+  persistSearchPreferences,
+  persistVectorPreferences,
+} from "./domain/sharedWorkspaceStorage";
+import { flushWorkspaceSessionWrites } from "./domain/workspaceSessionPersistence";
 
 const router = useRouter();
 const route = useRoute();
@@ -71,6 +77,8 @@ const navigationHistory = createNavigationHistory(router);
 const routeLoading = createRouteLoading(router);
 const shell = useShellStore();
 const layout = useLayoutStore();
+const search = useSearchStore();
+const vector = useVectorStore();
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const semanticMap = useSemanticMapStore();
@@ -163,6 +171,10 @@ function sectionLabel(section: string) {
 function breadcrumbDestination(path: string): string | undefined {
   return router.resolve(path).path === route.path ? undefined : path;
 }
+
+const accountViewKey = computed(() =>
+  auth.user ? `${String(auth.user.role || "")}:${String(auth.user.id || "")}` : "anonymous",
+);
 
 const currentNavId = computed(() =>
   navIdForRoute(route.name, String(route.meta.navId || route.meta.view || s.value.view || "")),
@@ -416,7 +428,7 @@ function navigateNative(path: string, intentId = "") {
     // Re-derive that state from the settled URL instead of initiating a second
     // forward-navigation path through sharedNavigation.navigateTo().
     const expectedView = viewFromPath(router.currentRoute.value.path);
-    if (expectedView && sharedState.view !== expectedView) syncSharedStateFromRoute();
+    if (expectedView && navigationState.view !== expectedView) syncSharedStateFromRoute();
     return;
   }
   if (intentId) {
@@ -469,11 +481,13 @@ function searchCorpus(query: string) {
   const value = query.trim();
   if (!value) return;
   topSearch.value = value;
-  sharedState.globalSearch = value;
-  sharedState.storeQuery = value;
-  sharedState.globalPage = 1;
-  sharedState.storeSearchResults = [];
-  sharedState.globalSearchMode = "traditional";
+  search.globalSearch = value;
+  vector.storeQuery = value;
+  search.globalPage = 1;
+  vector.storeSearchResults = [];
+  search.globalSearchMode = "traditional";
+  persistSearchPreferences();
+  persistVectorPreferences();
   // Encode the Search workspace URL directly from its state without first
   // changing the compatibility view. Vue Router remains the navigation authority;
   // the settled /search route then applies the same URL state back to the workspace.
@@ -507,6 +521,8 @@ async function startRuntime() {
 
 async function logout() {
   pauseRuntime();
+  await flushWorkspaceSessionWrites();
+  runtime.setUserContext(null);
   runtimeStarted.value = false;
   await auth.logout();
   await router.replace("/");
@@ -517,6 +533,8 @@ async function handleAuthExpired() {
   handlingAuthExpiry.value = true;
   try {
     pauseRuntime();
+    await flushWorkspaceSessionWrites();
+    runtime.setUserContext(null);
     runtimeStarted.value = false;
     auth.expireSession(i18n.t("auth.session_expired"));
     if (router.currentRoute.value.path !== "/") await router.replace("/");
@@ -527,24 +545,32 @@ async function handleAuthExpired() {
   }
 }
 
+function onAuthExpiredEvent() {
+  void handleAuthExpired();
+}
+
+function onPermissionsChanged() {
+  void auth.loadStatus();
+}
+
+function onNativeNavigationEvent(event: Event) {
+  const detail = (event as CustomEvent<{ path?: string }>).detail || {};
+  if (detail.path) navigateNative(detail.path);
+}
+
+function onGlobalKeydown(event: KeyboardEvent) {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    commandPalette.value?.open();
+  }
+}
+
 onMounted(async () => {
   window.addEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
-  window.addEventListener("derridai-auth-expired", () => {
-    void handleAuthExpired();
-  });
-  window.addEventListener("derridai:permissions-changed", () => {
-    void auth.loadStatus();
-  });
-  window.addEventListener("derridai:navigate-native", ((event: Event) => {
-    const detail = (event as CustomEvent<{ path?: string }>).detail || {};
-    if (detail.path) navigateNative(detail.path);
-  }) as EventListener);
-  window.addEventListener("keydown", (event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      commandPalette.value?.open();
-    }
-  });
+  window.addEventListener("derridai-auth-expired", onAuthExpiredEvent);
+  window.addEventListener("derridai:permissions-changed", onPermissionsChanged);
+  window.addEventListener("derridai:navigate-native", onNativeNavigationEvent);
+  window.addEventListener("keydown", onGlobalKeydown);
   if (!auth.initialized) await auth.loadStatus();
   if (!i18n.languages.length) await i18n.initialize();
   await startRuntime();
@@ -555,6 +581,10 @@ onBeforeUnmount(() => {
   navigationHistory.dispose();
   routeLoading.dispose();
   window.removeEventListener(CHOOSE_CORPUS_FILES_EVENT, openCorpusFilePicker);
+  window.removeEventListener("derridai-auth-expired", onAuthExpiredEvent);
+  window.removeEventListener("derridai:permissions-changed", onPermissionsChanged);
+  window.removeEventListener("derridai:navigate-native", onNativeNavigationEvent);
+  window.removeEventListener("keydown", onGlobalKeydown);
 });
 
 // The router is the authority on where the user is. When navigation settles on a
@@ -564,7 +594,7 @@ onBeforeUnmount(() => {
 const runtimeLocationSync = createRuntimeLocationSync(router, {
   isStarted: () => runtimeStarted.value,
   viewForPath: (path) => viewFromPath(path),
-  currentView: () => sharedState.view,
+  currentView: () => navigationState.view,
   sync: syncSharedStateFromRoute,
 });
 
@@ -576,14 +606,30 @@ watch(
 );
 
 watch(
-  () => auth.user?.id,
-  (id) => {
-    if (!id) {
+  () => (auth.user ? `${String(auth.user.role || "")}:${String(auth.user.id || "")}` : ""),
+  (identity, previousIdentity) => {
+    if (!identity) {
       pauseRuntime();
+      runtime.setUserContext(null);
       runtimeStarted.value = false;
-      shell.resetNav();
+      shell.reset();
       return;
     }
+
+    if (previousIdentity && previousIdentity !== identity) {
+      // Authentication can replace one signed-in identity without a full page
+      // reload. Flush the old user's local changes while its DB is still bound,
+      // then let the next runtime bootstrap restore the new user's workspace.
+      void (async () => {
+        pauseRuntime();
+        await flushWorkspaceSessionWrites();
+        runtime.setUserContext(null);
+        runtimeStarted.value = false;
+        await startRuntime();
+      })();
+      return;
+    }
+
     void startRuntime();
   },
 );
@@ -608,6 +654,7 @@ watch(
         :groups="groupedNavItems"
         :collapsed="effectiveSidebarCollapsed"
         :pending-id="pendingNavId"
+        :storage-scope="accountViewKey"
         @navigate="navigate"
       />
       <SidebarUtilityNav
@@ -681,9 +728,9 @@ watch(
             :is-admin="auth.isAdmin"
             :can-faq="auth.can('page.faq')"
             :can-settings="auth.can('page.settings')"
-            :username="auth.user.username"
-            :role="auth.user.role"
-            :role-name="auth.user.role_name"
+            :username="auth.user?.username || ''"
+            :role="auth.user?.role || ''"
+            :role-name="auth.user?.role_name || ''"
             :languages="i18n.languages"
             :locale="i18n.locale"
             :locale-loading="i18n.loading"
@@ -752,7 +799,9 @@ watch(
         }"
       >
         <div id="appContent" class="app-content-region" tabindex="-1">
-          <RouterView />
+          <RouterView v-slot="{ Component }">
+            <component :is="Component" :key="accountViewKey" />
+          </RouterView>
           <Teleport to="body">
             <RouteNavigationFeedback
               v-if="routeLoading.visible.value || routeLoading.failed.value"
@@ -802,6 +851,7 @@ watch(
       :groups="mobileNavGroups"
       :collapsed="false"
       :pending-id="pendingNavId"
+      :storage-scope="accountViewKey"
       @navigate="navigateFromMobile"
     />
   </dialog>

@@ -21,18 +21,38 @@ import { bindWorkspaceGroups, sessionState } from "../state/workspaceState";
 import { createWorkspaceDb, DB_NAME } from "../services/workspaceDb";
 import { createPrefsPersistence } from "./prefsPersistence";
 import { createDomainPreferencePersistence } from "./domainPreferencePersistence";
+import { migrateLegacyAdminWorkspace } from "./workspaceDbMigration";
 
 // The browser-local workspace database and the preference save over the shared workspace state, usable without the
 // legacy runtime. The runtime uses this same connection and save, so there is one IndexedDB handle and one debounce.
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-/** A researcher's workspace is kept in a database of their own. */
+/**
+ * Every authenticated account gets its own browser-local workspace.
+ *
+ * The old implementation only namespaced researcher databases. Two
+ * administrators using the same browser profile therefore reopened the same
+ * IndexedDB corpus, provider settings, and evidence state after an account
+ * switch. The in-memory session reset cannot provide isolation if restore then
+ * reads the previous administrator's database again.
+ */
 export function workspaceDbName(): string {
   const user = sessionState.userContext;
-  return user && user.role !== "admin" && user.id ? `${DB_NAME}-researcher-${user.id}` : DB_NAME;
+  if (!user?.id) return DB_NAME;
+  const role = String(user.role || "user").replace(/[^a-z0-9_-]+/gi, "-");
+  return `${DB_NAME}-${role}-${String(user.id)}`;
 }
 
 export const workspaceDb = createWorkspaceDb(workspaceDbName);
+const legacyWorkspaceDb = createWorkspaceDb(() => DB_NAME);
+
+export async function migrateLegacyWorkspaceForCurrentUser(): Promise<boolean> {
+  return migrateLegacyAdminWorkspace({
+    user: sessionState.userContext,
+    currentDb: workspaceDb,
+    legacyDb: legacyWorkspaceDb,
+  });
+}
 
 const prefsState = bindJobsState(bindWorkspaceGroups({})) as Loose;
 
@@ -45,6 +65,8 @@ export const {
   persistResearchPreferences,
   persistSearchPreferences,
   persistSettingsPreferences,
+  persistAnnotationsPreferences,
+  persistCorpusPreferences,
   persistWorksPreferences,
   persistRecordViewPreferences,
   persistListPreferences,
@@ -68,8 +90,14 @@ export function setShellRefreshHook(hook: unknown) {
 export function refreshShell() {
   shellRefreshHook();
 }
-/** Saves the preferences and refreshes the shell snapshot. */
+/**
+ * Refreshes the shell snapshot.
+ *
+ * Durable state is persisted by the feature/domain that owns the mutation.
+ * Keeping shell rendering side-effect free is critical: otherwise every record
+ * edit, navigation, health refresh, and background-job update serializes the
+ * entire compatibility workspace merely because chrome needs repainting.
+ */
 export function shell() {
-  persistPrefs();
   refreshShell();
 }

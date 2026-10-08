@@ -43,7 +43,6 @@ type Helper =
   | "openJobResults"
   | "openLlmTaskLauncher"
   | "operationViewModel"
-  | "persistPrefs"
   | "pruneClientJobState"
   | "ragGradeEvidencePayload"
   | "ragGradeHtml"
@@ -78,7 +77,6 @@ export function createOperationsPanelBridge(deps: Deps) {
     openJobResults,
     openLlmTaskLauncher,
     operationViewModel,
-    persistPrefs,
     pruneClientJobState,
     ragGradeEvidencePayload,
     ragGradeHtml,
@@ -111,7 +109,6 @@ export function createOperationsPanelBridge(deps: Deps) {
       remove: async (id: Any) => {
         await api(`/api/jobs/${encodeURIComponent(id)}`, { method: "DELETE" });
         pruneClientJobState(id);
-        persistPrefs();
         await refreshJobs({ rerender: true });
       },
       clearFinished: async () => {
@@ -208,14 +205,12 @@ export function createOperationsPanelBridge(deps: Deps) {
     try {
       await api(`/api/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
       pruneClientJobState(jobId);
-      persistPrefs();
       refreshRagProgressPanel();
       if (state.view === "home") refreshOperationsPanelOnly();
       toast(tr("rag.pipeline_removed"), { tone: "success" });
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         refreshRagProgressPanel();
         return toast(tr("rag.already_removed"), { tone: "warning" });
       }

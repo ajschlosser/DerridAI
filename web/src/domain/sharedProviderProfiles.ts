@@ -22,7 +22,7 @@ import { createProviderProfiles } from "./providerProfilesService";
 import { createProviderWarmup } from "./providerWarmup";
 import { providerRequestConfig } from "./providerRequest";
 import { state } from "./sharedUrlState";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistSettingsPreferences } from "./sharedWorkspaceStorage";
 
 // Provider profiles and warm-up over the shared workspace state, usable without the legacy runtime. The runtime uses
 // these same instances. The two services need each other (profiles start warm-ups, warm-ups read profiles), so the
@@ -32,7 +32,7 @@ export const providerProfilesService = createProviderProfiles({
   api,
   isResearcher: () =>
     Boolean(sessionState.userContext && sessionState.userContext.role !== "admin"),
-  persistPrefs,
+  persistPrefs: persistSettingsPreferences,
   uid: () => crypto.randomUUID(),
   warmupProviderProfile: (...args: Parameters<typeof warmupProviderProfile>) =>
     warmupProviderProfile(...args),

@@ -24,6 +24,7 @@ import {
   compareState,
   corpusState,
   layoutState,
+  resetWorkspaceGroupsForSessionChange,
   searchState,
   touchCorpus,
   vectorState,
@@ -73,6 +74,7 @@ const ORIGINAL_INITIAL_VALUES = {
   storePresence: {},
   storePresenceIds: {},
   storePresenceCheckedAt: {},
+  presenceVersion: 0,
   compareA: "",
   compareB: "",
   compareMode: "workspace",
@@ -185,6 +187,27 @@ describe("per-view workspace state", () => {
     state.activeFileId = null;
     state.worksSearch = "";
     state.workOverview = "";
+  });
+});
+
+describe("session workspace reset", () => {
+  it("clears user-owned records, credentials and search state before another identity restores", () => {
+    const state = createRuntimeState();
+    state.files = [{ id: "secret", records: [{ text: "private" }] }] as never;
+    state.activeFileId = "secret";
+    state.storeSearchResults = [{ id: "result", record: { text: "private" } }] as never;
+    state.globalSearch = "private query";
+    state.selectedEvidence = { evidence: { text: "private" } };
+    state.appConfig = { ...state.appConfig, openai_api_key: "secret-key" };
+
+    resetWorkspaceGroupsForSessionChange();
+
+    expect(state.files).toEqual([]);
+    expect(state.activeFileId).toBeNull();
+    expect(state.storeSearchResults).toEqual([]);
+    expect(state.globalSearch).toBe("");
+    expect(state.selectedEvidence).toEqual({});
+    expect(state.appConfig.openai_api_key).toBe("");
   });
 });
 

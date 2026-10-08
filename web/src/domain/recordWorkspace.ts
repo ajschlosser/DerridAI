@@ -59,7 +59,8 @@ type Helper =
   | "openRecordHistoryBrowser"
   | "openTouchup"
   | "pdfDisplayTitle"
-  | "persistPrefs"
+  | "persistListPreferences"
+  | "persistRecordViewPreferences"
   | "refreshServerAnnotations"
   | "refreshStores"
   | "researcherDbRecords"
@@ -105,7 +106,8 @@ export function createRecordWorkspace(deps: Deps) {
     openRecordHistoryBrowser,
     openTouchup,
     pdfDisplayTitle,
-    persistPrefs,
+    persistListPreferences,
+    persistRecordViewPreferences,
     refreshServerAnnotations,
     refreshStores,
     researcherDbRecords,
@@ -254,11 +256,6 @@ export function createRecordWorkspace(deps: Deps) {
         mode: "workspace",
         reason: tr("record.no_record_selected"),
       };
-    const pointer = { kind: "workspace", fileId: file.id, index };
-    if (JSON.stringify(state.lastViewedRecord) !== JSON.stringify(pointer)) {
-      state.lastViewedRecord = pointer;
-      persistPrefs();
-    }
     const text = String(record.text || "");
     const q = String(state.recordFind || "");
     const links = pdfLinks(record);
@@ -316,6 +313,39 @@ export function createRecordWorkspace(deps: Deps) {
       },
     };
   }
+  function rememberRecordWorkspaceSnapshot(snapshot: Any) {
+    if (!snapshot?.available) return;
+    const pointer =
+      snapshot.mode === "database"
+        ? {
+            kind: "database",
+            store: String(snapshot.collection || ""),
+            id: String(snapshot.record_id || ""),
+          }
+        : {
+            kind: "workspace",
+            fileId: String(snapshot.file_id || ""),
+            index: Number(snapshot.current_index),
+          };
+    if (
+      (pointer.kind === "database" && (!pointer.store || !pointer.id)) ||
+      (pointer.kind === "workspace" &&
+        (!pointer.fileId || !Number.isInteger(pointer.index) || pointer.index < 0))
+    )
+      return;
+
+    const current = state.lastViewedRecord || {};
+    const unchanged =
+      current.kind === pointer.kind &&
+      (pointer.kind === "database"
+        ? current.store === pointer.store && String(current.id || "") === pointer.id
+        : current.fileId === pointer.fileId && Number(current.index) === pointer.index);
+    if (unchanged) return;
+
+    state.lastViewedRecord = pointer;
+    persistRecordViewPreferences();
+  }
+
   async function getRecordObjectGraph(recordOverride: Any = null) {
     const source =
       recordOverride && typeof recordOverride === "object"
@@ -345,7 +375,7 @@ export function createRecordWorkspace(deps: Deps) {
       const next = list[index + step];
       if (next) {
         state.researcherRecordId = String(next._chroma_id || next.record_id || "");
-        persistPrefs();
+        persistRecordViewPreferences();
         syncUrl({ replace: true });
         shell();
       }
@@ -356,14 +386,14 @@ export function createRecordWorkspace(deps: Deps) {
     const index = selectedIndex(file),
       next = Math.max(0, Math.min(file.records.length - 1, index + step));
     state.selected[file.id] = next;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
     shell();
     return getRecordWorkspaceSnapshot();
   }
   function setRecordWorkspaceFind(value: Any) {
     state.recordFind = String(value || "");
-    persistPrefs();
+    persistRecordViewPreferences();
     syncUrl({ replace: true });
     return state.recordFind;
   }
@@ -662,6 +692,7 @@ export function createRecordWorkspace(deps: Deps) {
     recordWorkspaceRecord,
     researcherCurrentRecord,
     getRecordWorkspaceSnapshot,
+    rememberRecordWorkspaceSnapshot,
     getRecordObjectGraph,
     getDerridaiNormativeModel,
     recordWorkspaceNavigate,

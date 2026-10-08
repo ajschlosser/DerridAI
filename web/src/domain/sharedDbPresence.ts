@@ -26,10 +26,9 @@ import { startJobPolling, syncJobProgressToasts } from "./jobsActions";
 import { upsertRecordPayload } from "./recordPayloads";
 import { upsertAuditDelta } from "./recordHistory";
 import { formatTimestamp, localRecordKey } from "./recordTableHelpers";
-import { reviewItemFromKey, selectedReviewItems } from "./reviewItems";
-import { workIndex } from "./sharedCorpusAnalytics";
+import { selectedReviewItems } from "./reviewItems";
 import { tr, trf } from "./sharedTranslate";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistJobPreferences } from "./sharedWorkspaceStorage";
 import {
   candidateChromaIds,
   corpusStoreExists,
@@ -47,7 +46,6 @@ export const {
   recordDbStatus,
   workDbStatus,
   refreshPresenceForRows,
-  updateDbStatusElements,
   ignoredFingerprint,
   pendingUpsertRows,
   pendingChangesForRow,
@@ -67,10 +65,9 @@ export const {
   hasCorpusDb,
   localRecordKey,
   notifyVectorStoresChanged,
-  persistPrefs,
+  persistPrefs: persistJobPreferences,
   recordFingerprint,
   refreshOperationsPanelOnly,
-  reviewItemFromKey: (key: unknown) => reviewItemFromKey(state, key),
   selectedReviewItems: () => selectedReviewItems(state),
   startJobPolling,
   storeReceipt,
@@ -79,5 +76,4 @@ export const {
   trf,
   upsertAuditDelta,
   upsertRecordPayload,
-  workIndex,
 });

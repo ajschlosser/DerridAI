@@ -99,7 +99,8 @@ import "./recordOptionLabel";
 import "./sharedStoreRecords";
 import "./researchWorkspace";
 import "./sharedAnnotations";
-import "../state/jobsState";
+import { jobsState, touchJobs } from "../state/jobsState";
+import { resetWorkspaceGroupsForSessionChange } from "../state/workspaceState";
 import "./corpusCache";
 import "./sharedUrlState";
 import "./jobsUiComposition";
@@ -110,6 +111,7 @@ import "./sharedAppearance";
 import "./relativeTimeLabel";
 import "./pdfWorkerSetup";
 import { refreshResearcherContentPolicy } from "./researcherInputFilter";
+import { invalidateCorpusCache } from "./corpusCache";
 import { wireTabScrollPreservation } from "./tabScrollPreservation";
 import { wireMetadataSearchDelegation } from "./legacyDomListeners";
 import { api } from "./legacyApi";
@@ -121,14 +123,37 @@ import { state } from "./sharedUrlState";
 import { restoreWorkspace } from "./sharedWorkspacePersistence";
 import { checkHealth, warmupConfiguredLlm } from "./sharedAppLifecycle";
 import { shell } from "./sharedWorkspaceStorage";
+import { resetWorkspaceSessionPersistence } from "./workspaceSessionPersistence";
 
 export { setUrlSyncHook } from "./sharedNavigation";
 export { setShellRefreshHook } from "./sharedWorkspaceStorage";
 
-export function setUserContext(user: { id?: string | number } | null) {
-  const priorId = state.userContext?.id;
+export function setUserContext(user: { id?: string | number; role?: string } | null) {
+  const priorContext = state.userContext;
+  const priorKey = priorContext
+    ? `${String(priorContext.role || "")}:${String(priorContext.id || "")}`
+    : "";
+  const nextKey = user ? `${String(user.role || "")}:${String(user.id || "")}` : "";
+
+  if (priorKey !== nextKey) {
+    // Cancel timers and close the old IndexedDB connection before changing the
+    // identity used by workspaceDbName(). Callers that can await session exit
+    // flush pending writes first; this synchronous guard prevents cross-account
+    // writes even when identity changes through another path.
+    resetWorkspaceSessionPersistence();
+    resetWorkspaceGroupsForSessionChange();
+    // The flattened/memoized corpus cache is module-scoped and would otherwise
+    // still expose the previous user's rows after the shared corpus slice is reset.
+    invalidateCorpusCache(null, true);
+    jobsState.jobs = [];
+    jobsState.jobsLastFetched = 0;
+    jobsState.jobApplied = {};
+    jobsState.upsertJobApplied = {};
+    touchJobs();
+  }
+
   state.userContext = user || null;
-  if (priorId !== state.userContext?.id) {
+  if (priorKey !== nextKey) {
     state.serverAnnotations = [];
     state.serverAnnotationsStore = "";
     state.annotationsFetchedAt = 0;

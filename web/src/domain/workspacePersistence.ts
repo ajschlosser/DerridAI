@@ -17,7 +17,6 @@
  */
 
 import { toast } from "../composables/notifications";
-import { createPrefsPersistence } from "./prefsPersistence";
 
 // Workspace persistence: saving files and preferences to IndexedDB, debounced, and restoring them at start-up. Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -41,6 +40,7 @@ type Helper =
 type Deps = {
   state: Loose;
   fileTimers: Map<string, ReturnType<typeof setTimeout>>;
+  restorePreferenceOverlays?: () => Promise<void>;
 } & Record<Helper, Fn>;
 
 export function createWorkspacePersistence(deps: Deps) {
@@ -56,14 +56,11 @@ export function createWorkspacePersistence(deps: Deps) {
     restoreCurrentPdfAsset,
     serializableFile,
     trf,
+    restorePreferenceOverlays,
   } = deps;
-  const { workspacePrefs, persistPrefs, flushWorkspacePrefs } = createPrefsPersistence({
-    state,
-    put: (key, value) => idbPut(key, value),
-  });
-  // The legacy code queries the page freely; untyped, as it was written.
-  async function persistFileNow(file: Any) {
-    invalidateCorpusCache(String(file?.id || "") || null);
+  const pendingFiles = new Map<string, Any>();
+
+  async function writeFileNow(file: Any) {
     try {
       await idbPut("files", serializableFile(file));
     } catch (error: Any) {
@@ -71,14 +68,54 @@ export function createWorkspacePersistence(deps: Deps) {
       toast(trf("runtime.toast.persistence_failed", { detail: error.message }), { tone: "danger" });
     }
   }
+
+  /**
+   * Persists an already-mutated file without invalidating corpus projections.
+   *
+   * Mutation owners invalidate exactly once when they change Records. Keeping
+   * storage I/O pure prevents a debounced save from causing a second/third
+   * corpus refresh after the user's edit already rendered.
+   */
+  async function persistFileNow(file: Any) {
+    const id = String(file?.id || "");
+    if (id) {
+      const timer = fileTimers.get(id);
+      if (timer) clearTimeout(timer);
+      fileTimers.delete(id);
+      pendingFiles.delete(id);
+    }
+    await writeFileNow(file);
+  }
+
   function persistFile(file: Any) {
-    invalidateCorpusCache(String(file?.id || "") || null);
-    clearTimeout(fileTimers.get(file.id));
+    const id = String(file?.id || "");
+    if (!id) return;
+    pendingFiles.set(id, file);
+    clearTimeout(fileTimers.get(id));
     const timer = setTimeout(() => {
-      fileTimers.delete(file.id);
-      persistFileNow(file);
+      fileTimers.delete(id);
+      const pending = pendingFiles.get(id);
+      pendingFiles.delete(id);
+      if (pending) void writeFileNow(pending);
     }, 250);
-    fileTimers.set(file.id, timer);
+    fileTimers.set(id, timer);
+  }
+
+  async function flushPendingFileWrites() {
+    const pending = [...pendingFiles.entries()];
+    for (const [id] of pending) {
+      const timer = fileTimers.get(id);
+      if (timer) clearTimeout(timer);
+      fileTimers.delete(id);
+    }
+    pendingFiles.clear();
+    for (const [, file] of pending) await writeFileNow(file);
+  }
+
+  function cancelPendingFileWrites() {
+    for (const timer of fileTimers.values()) clearTimeout(timer);
+    fileTimers.clear();
+    pendingFiles.clear();
   }
   async function restoreWorkspace() {
     try {
@@ -167,29 +204,8 @@ export function createWorkspacePersistence(deps: Deps) {
           if (prefs[key] !== undefined) state[key] = prefs[key];
         }
         state.appConfig = { ...preservedAppDefaults, ...(prefs.appConfig || {}) };
-        applyUiTheme(state.appConfig.ui_color_theme);
         state.llmConfig = { ...preservedLlmDefaults, ...(prefs.llmConfig || {}) };
         state.ragConfig = { ...state.ragConfig, ...(prefs.ragConfig || {}) };
-        if (
-          !state.faqExpanded ||
-          typeof state.faqExpanded !== "object" ||
-          Array.isArray(state.faqExpanded)
-        )
-          state.faqExpanded = {};
-        state.ragConfig.locales = Array.isArray(state.ragConfig.locales)
-          ? state.ragConfig.locales.filter((value: Any) => value === "en" || value === "fr")
-          : ["en", "fr"];
-        if (!state.ragConfig.locales.length) state.ragConfig.locales = ["en", "fr"];
-        state.ragConfig.prompt = String(state.ragConfig.prompt || "");
-        state.ragConfig.instructions = String(state.ragConfig.instructions || "");
-        if (!Array.isArray(state.ragConfig.history)) state.ragConfig.history = [];
-        state.ragConfig.history = state.ragConfig.history.slice(0, 100);
-        if (!Array.isArray(state.ragConfig.run_history)) state.ragConfig.run_history = [];
-        state.ragConfig.run_history = state.ragConfig.run_history.slice(0, 250);
-        if (!state.appConfig.default_review_preset) state.appConfig.default_review_preset = "text";
-        if (!state.appConfig.default_llm_run_mode)
-          state.appConfig.default_llm_run_mode = "foreground";
-        ensureProviderProfiles();
         if (Number.isFinite(+prefs.pageSize)) state.pageSize = +prefs.pageSize;
         if (typeof prefs.view === "string") state.view = prefs.view;
         state.reviewSelection = new Set(prefs.reviewSelection || []);
@@ -198,15 +214,50 @@ export function createWorkspacePersistence(deps: Deps) {
           : state.files[0]?.id || null;
       } else {
         state.activeFileId = state.files[0]?.id || null;
-        ensureProviderProfiles();
         try {
           state.appConfig.ui_color_theme =
             localStorage.getItem("derridai.ui.theme") || state.appConfig.ui_color_theme || "green";
         } catch {
           // Best effort: keep going with what we have.
         }
-        applyUiTheme(state.appConfig.ui_color_theme);
       }
+
+      // Domain records are the authoritative post-migration preferences. Apply
+      // them before final validation/theme/provider setup and before storage is
+      // marked ready, so no watcher can persist legacy fallback values over
+      // newer domain-owned state during startup.
+      if (restorePreferenceOverlays) await restorePreferenceOverlays();
+
+      // The corpus-domain record may come from an older workspace snapshot or
+      // from a file that was deleted independently. Never leave the restored
+      // workspace pointing at a tab that does not exist.
+      state.activeFileId = state.files.some((file: Any) => file.id === state.activeFileId)
+        ? state.activeFileId
+        : state.files[0]?.id || null;
+
+      if (
+        !state.faqExpanded ||
+        typeof state.faqExpanded !== "object" ||
+        Array.isArray(state.faqExpanded)
+      )
+        state.faqExpanded = {};
+      state.ragConfig.locales = Array.isArray(state.ragConfig.locales)
+        ? state.ragConfig.locales.filter((value: Any) => value === "en" || value === "fr")
+        : ["en", "fr"];
+      if (!state.ragConfig.locales.length) state.ragConfig.locales = ["en", "fr"];
+      state.ragConfig.prompt = String(state.ragConfig.prompt || "");
+      state.ragConfig.instructions = String(state.ragConfig.instructions || "");
+      if (!Array.isArray(state.ragConfig.history)) state.ragConfig.history = [];
+      state.ragConfig.history = state.ragConfig.history.slice(0, 100);
+      if (!Array.isArray(state.ragConfig.run_history)) state.ragConfig.run_history = [];
+      state.ragConfig.run_history = state.ragConfig.run_history.slice(0, 250);
+      if (!state.appConfig.default_review_preset) state.appConfig.default_review_preset = "text";
+      if (!state.appConfig.default_llm_run_mode)
+        state.appConfig.default_llm_run_mode = "foreground";
+      if (!Number.isFinite(+state.pageSize)) state.pageSize = 100;
+      ensureProviderProfiles();
+      applyUiTheme(state.appConfig.ui_color_theme);
+
       const validPrefixes = new Set(state.files.map((f: Any) => f.id));
       state.reviewSelection = new Set(
         [...state.reviewSelection].filter((key) => validPrefixes.has(String(key).split("::")[0])),
@@ -224,9 +275,8 @@ export function createWorkspacePersistence(deps: Deps) {
   return {
     persistFileNow,
     persistFile,
-    workspacePrefs,
-    persistPrefs,
-    flushWorkspacePrefs,
+    flushPendingFileWrites,
+    cancelPendingFileWrites,
     restoreWorkspace,
   };
 }

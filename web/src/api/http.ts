@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { currentAccountScopedBrowserStorageKey } from "../domain/browserStorageScope";
+
 export interface StoredHttpError {
   timestamp: string;
   method: string;
@@ -56,10 +58,11 @@ export class ApiError extends Error {
 
 function storeHttpError(entry: StoredHttpError) {
   try {
-    const parsed = JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY) || "[]");
+    const storageKey = currentAccountScopedBrowserStorageKey(HTTP_ERROR_STORAGE_KEY);
+    const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
     const rows = Array.isArray(parsed) ? parsed : [];
     rows.unshift(entry);
-    localStorage.setItem(HTTP_ERROR_STORAGE_KEY, JSON.stringify(rows.slice(0, 50)));
+    localStorage.setItem(storageKey, JSON.stringify(rows.slice(0, 50)));
   } catch {
     /* diagnostics must never break the request path */
   }
@@ -67,7 +70,8 @@ function storeHttpError(entry: StoredHttpError) {
 
 export function recentHttpErrors(): StoredHttpError[] {
   try {
-    const parsed = JSON.parse(localStorage.getItem(HTTP_ERROR_STORAGE_KEY) || "[]");
+    const storageKey = currentAccountScopedBrowserStorageKey(HTTP_ERROR_STORAGE_KEY);
+    const parsed = JSON.parse(localStorage.getItem(storageKey) || "[]");
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];

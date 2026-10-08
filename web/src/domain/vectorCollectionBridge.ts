@@ -37,7 +37,7 @@ export interface VectorCollectionBridgeDeps {
   icon: (name: string) => string;
   api: (path: string, options?: RequestInit) => Promise<any>;
   refreshStores: () => Promise<unknown>;
-  persistPrefs: () => void;
+  persistVectorPreferences: () => void;
   upsertRows: (
     rows: any,
     label?: string,
@@ -68,7 +68,7 @@ export function createVectorCollectionBridge({
   icon,
   api,
   refreshStores,
-  persistPrefs,
+  persistVectorPreferences,
   upsertRows,
   decorateDisabledControls,
   showAppModal,
@@ -342,7 +342,7 @@ export function createVectorCollectionBridge({
           state.storeWork = "";
           state.storeWorksStore = "";
           state.storeBrowseMode = "works";
-          persistPrefs();
+          persistVectorPreferences();
           const rows = selectedRows();
           close();
           const syncStarted = rows.length

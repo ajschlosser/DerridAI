@@ -23,7 +23,7 @@ import { serializableRecordsFile } from "./recordsFiles";
 import { providerProfilesService } from "./sharedProviderProfiles";
 import { trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { workspaceDb } from "./sharedWorkspaceStorage";
+import { migrateLegacyWorkspaceForCurrentUser, workspaceDb } from "./sharedWorkspaceStorage";
 import { createWorkspacePersistence } from "./workspacePersistence";
 import { applyDomainPreferenceRecord, DOMAIN_PREFERENCE_KEYS } from "./domainPreferencePersistence";
 
@@ -44,20 +44,25 @@ const workspacePersistence = createWorkspacePersistence({
   invalidateCorpusCache,
   restoreCurrentPdfAsset,
   serializableFile: serializableRecordsFile,
+  restorePreferenceOverlays: async () => {
+    try {
+      const records = await Promise.all(
+        Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
+      );
+      for (const record of records) applyDomainPreferenceRecord(state, record);
+    } catch (error) {
+      // Legacy workspace preferences are still a valid migration fallback. A
+      // domain-record read failure must not prevent the local workspace from
+      // finishing its restore and becoming usable.
+      console.warn("Could not restore domain preference records", error);
+    }
+  },
 });
 
-export const { persistFileNow, persistFile } = workspacePersistence;
+export const { persistFileNow, persistFile, flushPendingFileWrites, cancelPendingFileWrites } =
+  workspacePersistence;
 
 export async function restoreWorkspace() {
+  await migrateLegacyWorkspaceForCurrentUser();
   await workspacePersistence.restoreWorkspace();
-  try {
-    const records = await Promise.all(
-      Object.values(DOMAIN_PREFERENCE_KEYS).map((key) => workspaceDb.get("prefs", key)),
-    );
-    for (const record of records) applyDomainPreferenceRecord(state, record);
-  } catch (error) {
-    // Legacy workspace preferences have already restored successfully. A
-    // domain-record read failure must not make the entire local workspace fail.
-    console.warn("Could not restore domain preference records", error);
-  }
 }

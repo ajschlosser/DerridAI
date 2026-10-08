@@ -77,6 +77,7 @@ import { useCorpusProviderConfiguration } from "../features/corpus-builder/compo
 import { useCorpusBuildLifecycleController } from "../features/corpus-builder/composables/useCorpusBuildLifecycleController";
 import { useCorpusReviewNavigation } from "../features/corpus-builder/composables/useCorpusReviewNavigation";
 import { useAuthStore } from "../stores/auth";
+import { accountScopedBrowserStorageKey } from "../domain/browserStorageScope";
 import {
   useCorpusReviewRecords,
   type ReviewTarget,
@@ -146,6 +147,7 @@ import {
 } from "../domain/pdfWorkspaceNavigation";
 
 const i18n = useI18nStore();
+const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 const builderRouteActive = computed(() => route.meta.pdfMode !== "explorer");
@@ -253,7 +255,7 @@ const metadataFacetsActive = ref(false);
 const recordSaveQueue = new RecordMutationQueue();
 const reviewRecords = useCorpusReviewRecords({
   selectedBuildId,
-  reviewerKey: computed(() => String(useAuthStore().user?.id ?? "")),
+  reviewerKey: computed(() => String(auth.user?.id ?? "")),
   facetsActive: metadataFacetsActive,
   currentBuild,
   recordOffset,
@@ -1189,9 +1191,10 @@ const metadataFamilyOptions = computed(
     ],
 );
 const DRAFT_KEY = "derridai.pdf-corpus-builder.draft.v2";
+const builderDraftStorageKey = () => accountScopedBrowserStorageKey(DRAFT_KEY, auth.user);
 function restoreBuilderDraft() {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY);
+    const raw = localStorage.getItem(builderDraftStorageKey());
     if (!raw) return;
     const draft = JSON.parse(raw) as Record<string, unknown>;
     if (typeof draft.selectedAssetId === "string") selectedAssetId.value = draft.selectedAssetId;
@@ -1250,7 +1253,7 @@ function restoreBuilderDraft() {
 function persistBuilderDraft() {
   try {
     localStorage.setItem(
-      DRAFT_KEY,
+      builderDraftStorageKey(),
       JSON.stringify({
         selectedAssetId: selectedAssetId.value,
         manualProvider: manualProvider.value,
@@ -1278,10 +1281,16 @@ function persistBuilderDraft() {
   }
 }
 function metadataDraftKey(buildId: string, recordId: string) {
-  return `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`;
+  return accountScopedBrowserStorageKey(
+    `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`,
+    auth.user,
+  );
 }
 function textDraftKey(buildId: string, recordId: string) {
-  return `derridai.pdf-corpus.text-draft.${buildId}.${recordId}`;
+  return accountScopedBrowserStorageKey(
+    `derridai.pdf-corpus.text-draft.${buildId}.${recordId}`,
+    auth.user,
+  );
 }
 const {
   open: ingestWarningOpen,
@@ -2085,7 +2094,7 @@ onBeforeUnmount(() => {
 });
 const sourceBlockContext = computed(() =>
   JSON.stringify([
-    useAuthStore().user?.id,
+    auth.user?.id,
     selectedBuildId.value,
     selectedAssetId.value,
     selectedRecord.value?.record_id,

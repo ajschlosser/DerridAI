@@ -28,7 +28,7 @@ import { canUse } from "./sharedSession";
 import { refreshStores } from "./sharedStores";
 import { tr, trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistVectorPreferences } from "./sharedWorkspaceStorage";
 import { recordStores } from "./storeAvailability";
 
 // The vector collection wizard, store-change notification and upsert-queue trigger over the shared state, usable
@@ -45,7 +45,7 @@ const vectorCollectionBridge = createVectorCollectionBridge({
   icon,
   api,
   refreshStores,
-  persistPrefs,
+  persistVectorPreferences,
   upsertRows,
   decorateDisabledControls,
   showAppModal,

@@ -24,11 +24,13 @@ const mocks = vi.hoisted(() => ({
   snapshot: vi.fn(),
   graph: vi.fn(),
   model: vi.fn(),
+  remember: vi.fn(),
   semantic: vi.fn(),
 }));
 vi.mock("../../src/domain/sharedRecordWorkspace", () => ({
   sharedRecordWorkspace: {
     getRecordWorkspaceSnapshot: mocks.snapshot,
+    rememberRecordWorkspaceSnapshot: mocks.remember,
     getRecordObjectGraph: mocks.graph,
     getDerridaiNormativeModel: mocks.model,
   },
@@ -89,6 +91,24 @@ describe("Record progressive loading", () => {
     mocks.model.mockResolvedValue(null);
     mocks.semantic.mockResolvedValue({ build_id: null });
   });
+  it("records last-viewed state only after the current snapshot wins the load race", async () => {
+    const oldRead = deferred<ReturnType<typeof record>>();
+    mocks.snapshot.mockReturnValueOnce(oldRead.promise);
+    const wrapper = mountView();
+    route.query = { record: "1" };
+    mocks.snapshot.mockResolvedValueOnce(record("B"));
+    await flushPromises();
+
+    expect(mocks.remember).toHaveBeenCalledWith(expect.objectContaining({ record_id: "B" }));
+    const calls = mocks.remember.mock.calls.length;
+
+    oldRead.resolve(record("A"));
+    await flushPromises();
+
+    expect(mocks.remember).toHaveBeenCalledTimes(calls);
+    wrapper.unmount();
+  });
+
   it("shows a frame before the first read and keeps primary content usable while the graph waits", async () => {
     const read = deferred<ReturnType<typeof record>>();
     const graph = deferred<null>();

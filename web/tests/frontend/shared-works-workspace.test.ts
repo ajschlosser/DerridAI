@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/domain/sharedWorkspaceStorage", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  persistPrefs: vi.fn(),
+  persistWorksPreferences: vi.fn(),
 }));
 vi.mock("../../src/domain/sharedNavigation", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -31,7 +31,7 @@ import "../../src/domain/appBootstrap";
 import { state } from "../../src/domain/sharedUrlState";
 import { jobsState } from "../../src/state/jobsState";
 import { syncUrl } from "../../src/domain/sharedNavigation";
-import { persistPrefs } from "../../src/domain/sharedWorkspaceStorage";
+import { persistWorksPreferences } from "../../src/domain/sharedWorkspaceStorage";
 import { workDialogs } from "../../src/domain/sharedWorkDialogs";
 import { worksWorkspace } from "../../src/domain/sharedWorksWorkspace";
 import { refreshStoreWorks } from "../../src/domain/storeWorks";
@@ -58,7 +58,7 @@ describe("shared Works workspace", () => {
   it("persists and syncs the URL when the Works query changes", () => {
     worksService.setQuery("glas");
     expect(state.worksSearch).toBe("glas");
-    expect(persistPrefs).toHaveBeenCalled();
+    expect(persistWorksPreferences).toHaveBeenCalled();
     expect(syncUrl).toHaveBeenCalledWith({ replace: true });
   });
 

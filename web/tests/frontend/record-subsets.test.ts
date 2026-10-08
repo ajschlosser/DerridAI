@@ -39,6 +39,7 @@ function setup() {
     cloneAuditValue: <T>(value: T) => structuredClone(value),
     downloadBlob: vi.fn(),
     label: (field: string) => `Label ${field}`,
+    invalidateCorpusCache: vi.fn(),
     navigateTo: vi.fn(),
     persistFileNow: vi.fn(async () => undefined),
     uid: () => "new-file",

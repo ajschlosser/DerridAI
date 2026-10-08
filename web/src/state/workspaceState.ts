@@ -57,6 +57,8 @@ export function createVectorState() {
     storePresence: {} as Loose,
     storePresenceIds: {} as Loose,
     storePresenceCheckedAt: {} as Loose,
+    /** Bumped when presence/receipt data changes so native views can update declaratively. */
+    presenceVersion: 0,
     /** Bumped by the runtime when it re-renders this workspace, so Vue code can watch for in-place changes. */
     version: 0,
   };
@@ -432,6 +434,36 @@ export function createTranslationState() {
   };
 }
 export const translationState = shallowReactive(createTranslationState());
+
+/**
+ * Clears every browser-workspace value that belongs to an authenticated
+ * identity while preserving the router location, session object, and active
+ * translation. The next bootstrap restores the new identity's durable state.
+ */
+export function resetWorkspaceGroupsForSessionChange(): void {
+  try {
+    const url = String(pdfState.pdf.url || "");
+    if (url) URL.revokeObjectURL(url);
+  } catch {
+    // Object URLs are best-effort cleanup in non-browser test environments.
+  }
+
+  Object.assign(vectorState, createVectorState());
+  Object.assign(compareState, createCompareState());
+  Object.assign(searchState, createSearchState());
+  Object.assign(worksState, createWorksState());
+  Object.assign(corpusState, createCorpusState());
+  Object.assign(layoutState, createLayoutState());
+  Object.assign(annotationsState, createAnnotationsState());
+  Object.assign(faqState, createFaqState());
+  Object.assign(listState, createListState());
+  Object.assign(configState, createConfigState());
+  Object.assign(pdfState, createPdfState());
+  Object.assign(reviewState, createReviewState());
+  Object.assign(statusState, createStatusState());
+  Object.assign(recordViewState, createRecordViewState());
+  Object.assign(upsertProgressState, createUpsertProgressState());
+}
 
 /** Every shared group except background jobs, in the order they are bound onto a state object. */
 const sharedGroups = [

@@ -17,7 +17,7 @@
  */
 
 import { createWorkDialogs } from "./workDialogs";
-import { corpusCache } from "./corpusCache";
+import { corpusCache, invalidateCorpusCache } from "./corpusCache";
 import { startJobPolling, syncJobProgressToasts } from "./jobsActions";
 import { providerRequestConfig } from "./providerRequest";
 import { cloneAuditValue } from "./recordValues";
@@ -34,7 +34,7 @@ import { providerProfilesService } from "./sharedProviderProfiles";
 import { refreshStores } from "./sharedStores";
 import { tr, trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import { persistCorpusPreferences, persistJobPreferences, shell } from "./sharedWorkspaceStorage";
 import { recordStores } from "./storeAvailability";
 import { parseProposedMetadataValue, representativeWorkMetadata } from "./workMetadata";
 
@@ -49,12 +49,14 @@ export const workDialogs = createWorkDialogs({
   corpusCache,
   display,
   jobLabel: operationPresenters.jobLabel,
+  invalidateCorpusCache,
   label,
   navigateTo,
   parseProposedMetadataValue,
   parseWorkMetadataValue,
   persistFileNow,
-  persistPrefs,
+  persistCorpusPreferences,
+  persistJobPreferences,
   providerProfile: providerProfilesService.providerProfile,
   providerProfiles: providerProfilesService.providerProfiles,
   providerRequestConfig,

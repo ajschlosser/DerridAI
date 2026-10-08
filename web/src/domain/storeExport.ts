@@ -30,7 +30,7 @@ import { navigateTo } from "./sharedNavigation";
 import { tr, trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
 import { persistFileNow } from "./sharedWorkspacePersistence";
-import { persistPrefs } from "./sharedWorkspaceStorage";
+import { persistCorpusPreferences } from "./sharedWorkspaceStorage";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Loose = Record<string, any>;
@@ -104,7 +104,7 @@ export async function exportStoreJsonl({
       invalidateCorpusCache(file.id, true);
       await persistFileNow(file);
       state.activeFileId = file.id;
-      persistPrefs();
+      persistCorpusPreferences();
       if (navigate) navigateTo("list", { fileId: file.id });
     }
     if (op) {

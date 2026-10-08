@@ -44,7 +44,7 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl" || name === "navigateTo")
+          if (name.startsWith("persist") || name === "syncUrl" || name === "navigateTo")
             calls.push(name);
         });
         return spies[name];
@@ -65,7 +65,12 @@ describe("works workspace commands", () => {
     workspace.setWorksOverview("Of Grammatology");
     expect(state.worksSearch).toBe("Glas");
     expect(state.workOverview).toBe("Of Grammatology");
-    expect(calls).toEqual(["persistPrefs", "syncUrl", "persistPrefs", "syncUrl"]);
+    expect(calls).toEqual([
+      "persistWorksPreferences",
+      "syncUrl",
+      "persistWorksPreferences",
+      "syncUrl",
+    ]);
     workspace.setWorksSearch(null);
     expect(state.worksSearch).toBe("");
   });
@@ -75,7 +80,7 @@ describe("works workspace commands", () => {
     workspace.searchWorkRecords("Glas");
     expect(state.globalSearchMode).toBe("traditional");
     expect(state.globalFilters).toEqual([{ id: "id1", field: "work", op: "eq", value: "Glas" }]);
-    expect(calls).toEqual(["persistPrefs", "navigateTo"]);
+    expect(calls).toEqual(["persistSearchPreferences", "navigateTo"]);
     workspace.searchWorkRecords("Glas", { needsReview: true });
     expect(state.globalFilters.map((filter: { field: string }) => filter.field)).toEqual([
       "work",
@@ -131,7 +136,7 @@ describe("works workspace commands", () => {
       work("Aporias", 50, 3, ""),
     ];
     function snapshotSetup(view: Record<string, unknown> = {}) {
-      const { state, workspace } = setup({
+      const { state, calls, workspace } = setup({
         isResearcher: () => false,
         providerProfiles: () => [],
         recordStores: () => [],
@@ -162,9 +167,24 @@ describe("works workspace commands", () => {
         worksView: "cards",
         ...view,
       });
-      return { state, workspace };
+      return { state, calls, workspace };
     }
     const titles = (snapshot: any) => snapshot.works.map((item: { work: string }) => item.work);
+
+    it("keeps snapshots pure and reconciles stale overview only through the explicit effect", () => {
+      const { state, calls, workspace } = snapshotSetup({ workOverview: "Missing work" });
+
+      const snapshot = workspace.getWorksWorkspaceSnapshot() as any;
+
+      expect(snapshot.selected).toBeNull();
+      expect(state.workOverview).toBe("Missing work");
+      expect(calls).toEqual([]);
+
+      workspace.reconcileWorksOverviewSelection();
+
+      expect(state.workOverview).toBe("");
+      expect(calls).toEqual(["persistWorksPreferences", "syncUrl"]);
+    });
 
     it("keeps page-wide totals stable while the query narrows the visible works", () => {
       const { workspace } = snapshotSetup({ worksSearch: "gla" });
@@ -238,7 +258,7 @@ describe("works workspace commands", () => {
         true,
         "list",
       ]);
-      expect(calls).toEqual(["persistPrefs", "syncUrl"]);
+      expect(calls).toEqual(["persistWorksPreferences", "syncUrl"]);
       workspace.setWorksView({ sort: "nonsense", viewMode: "grid", dbStatus: "", author: "X" });
       expect([state.worksSort, state.worksView, state.worksAuthor]).toEqual([
         "title-asc",

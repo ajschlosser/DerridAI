@@ -21,6 +21,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const h = vi.hoisted(() => ({
   api: vi.fn(),
   applyRecordChanges: vi.fn((..._a: unknown[]) => 2),
+  commitRecordFiles: vi.fn(),
   clearReviewSelection: vi.fn(),
   shell: vi.fn(),
   renderView: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock("../../src/domain/sharedNavigation", () => ({ renderView: () => h.render
 vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({ shell: () => h.shell() }));
 vi.mock("../../src/domain/sharedRecordEditing", () => ({
   applyRecordChanges: (...a: unknown[]) => h.applyRecordChanges(...a),
+  commitRecordFiles: (...a: unknown[]) => h.commitRecordFiles(...a),
 }));
 vi.mock("../../src/domain/sharedSearchSupport", () => ({
   evidenceSelection: { clearReviewSelection: () => h.clearReviewSelection() },

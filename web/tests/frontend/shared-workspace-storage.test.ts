@@ -69,15 +69,17 @@ describe("prefs persistence over shared state", () => {
 });
 
 describe("shared workspace storage", () => {
-  it("names a researcher's database after the user and an admin's the default", () => {
-    const admin = workspaceDbName();
+  it("names every authenticated account's database by role and stable user id", () => {
+    const anonymous = workspaceDbName();
     sessionState.userContext = { id: "u1", role: "researcher" };
-    expect(workspaceDbName()).toBe(`${admin}-researcher-u1`);
+    expect(workspaceDbName()).toBe(`${anonymous}-researcher-u1`);
     sessionState.userContext = { id: "a1", role: "admin" };
-    expect(workspaceDbName()).toBe(admin);
+    expect(workspaceDbName()).toBe(`${anonymous}-admin-a1`);
+    sessionState.userContext = { id: "a2", role: "admin" };
+    expect(workspaceDbName()).toBe(`${anonymous}-admin-a2`);
   });
 
-  it("shell refreshes the installed hook and ignores a non-function", () => {
+  it("shell refreshes the installed hook and ignores a non-function without owning persistence", () => {
     const hook = vi.fn();
     setShellRefreshHook(hook);
     shell();

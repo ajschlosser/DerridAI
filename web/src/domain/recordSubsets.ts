@@ -43,6 +43,7 @@ interface Deps {
   downloadBlob: (blob: Blob, name: string) => void;
   /** The localized label of a Record field. */
   label: (field: string) => string;
+  invalidateCorpusCache: (fileId: string | null, structure?: boolean) => void;
   navigateTo: (view: string, options: { fileId: string }) => void;
   persistFileNow: (file: WorkspaceFile) => Promise<unknown>;
   uid: () => string;
@@ -157,6 +158,7 @@ export function createRecordSubsets(deps: Deps) {
     };
     state.files.push(file);
     state.activeFileId = file.id;
+    deps.invalidateCorpusCache(file.id, true);
     await deps.persistFileNow(file);
     if (request.download) {
       const lines = file.records.map((record) => JSON.stringify(record)).join("\n");

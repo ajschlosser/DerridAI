@@ -35,7 +35,11 @@ import { refreshStores } from "./sharedStores";
 import { loadStorePage, researcherDbRecords } from "./sharedStoreRecords";
 import { tr } from "./sharedTranslate";
 import { selectedIndex, state } from "./sharedUrlState";
-import { persistPrefs, shell } from "./sharedWorkspaceStorage";
+import {
+  persistListPreferences,
+  persistRecordViewPreferences,
+  shell,
+} from "./sharedWorkspaceStorage";
 import { hasCorpusDb } from "./storeAvailability";
 import { openTouchup } from "./touchupLauncher";
 import { searchByMetadata } from "./workspaceActions";
@@ -66,7 +70,8 @@ export const sharedRecordWorkspace = createRecordWorkspace({
   openRecordHistoryBrowser: recordDialogs.openRecordHistoryBrowser,
   openTouchup,
   pdfDisplayTitle: sharedPdfLinking.pdfDisplayTitle,
-  persistPrefs,
+  persistListPreferences,
+  persistRecordViewPreferences,
   refreshServerAnnotations: annotationsWorkspace.refreshServerAnnotations,
   refreshStores,
   researcherDbRecords,

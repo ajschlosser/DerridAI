@@ -47,12 +47,14 @@ type Helper =
   | "cloneAuditValue"
   | "display"
   | "jobLabel"
+  | "invalidateCorpusCache"
   | "label"
   | "navigateTo"
   | "parseProposedMetadataValue"
   | "parseWorkMetadataValue"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistCorpusPreferences"
+  | "persistJobPreferences"
   | "providerProfile"
   | "providerProfiles"
   | "providerRequestConfig"
@@ -113,12 +115,14 @@ export function createWorkDialogs(deps: Deps) {
     corpusCache,
     display,
     jobLabel,
+    invalidateCorpusCache,
     label,
     navigateTo,
     parseProposedMetadataValue,
     parseWorkMetadataValue,
     persistFileNow,
-    persistPrefs,
+    persistCorpusPreferences,
+    persistJobPreferences,
     providerProfile,
     providerProfiles,
     providerRequestConfig,
@@ -194,12 +198,13 @@ export function createWorkDialogs(deps: Deps) {
         const batchId = uid();
         let changedRecords = 0,
           fieldChanges = 0;
-        const touchedFiles = new Set();
+        const touchedFiles = new Set<Any>();
         for (const row of rows) {
           const count = applyRecordChanges(row.file, row.index, changes, {
             source: "work_metadata",
             batchId,
             reason: `Bulk work metadata update for ${work}`,
+            deferCommit: true,
           });
           if (count) {
             changedRecords++;
@@ -207,7 +212,10 @@ export function createWorkDialogs(deps: Deps) {
             touchedFiles.add(row.file);
           }
         }
-        for (const file of touchedFiles) await persistFileNow(file);
+        for (const file of touchedFiles) {
+          invalidateCorpusCache(file.id);
+          await persistFileNow(file);
+        }
         shell();
         renderView();
         toast(
@@ -386,7 +394,7 @@ export function createWorkDialogs(deps: Deps) {
         const batchId = uid();
         let changedRecords = 0,
           fieldChanges = 0;
-        const touchedFiles = new Set();
+        const touchedFiles = new Set<Any>();
         for (const group of grouped.values())
           for (const row of group.item.rows) {
             const count = applyRecordChanges(row.file, row.index, group.changes, {
@@ -395,6 +403,7 @@ export function createWorkDialogs(deps: Deps) {
               batchId,
               reason: `LLM-assisted bibliographic metadata update for ${group.item.work}`,
               rationale: group.rationale,
+              deferCommit: true,
             });
             if (count) {
               changedRecords++;
@@ -402,9 +411,12 @@ export function createWorkDialogs(deps: Deps) {
               touchedFiles.add(row.file);
             }
           }
-        for (const file of touchedFiles) await persistFileNow(file);
+        for (const file of touchedFiles) {
+          invalidateCorpusCache(file.id);
+          await persistFileNow(file);
+        }
         state.jobApplied[job.id] = new Date().toISOString();
-        persistPrefs();
+        persistJobPreferences();
         shell();
         renderView();
         toast(
@@ -433,6 +445,7 @@ export function createWorkDialogs(deps: Deps) {
         let localDeleted = 0,
           dbDeleted = 0,
           mirrored = 0;
+        const changedFiles: Any[] = [];
         for (const fileId of fileIds) {
           const file = state.files.find((item: Any) => item.id === fileId);
           if (!file) continue;
@@ -445,8 +458,12 @@ export function createWorkDialogs(deps: Deps) {
             localDeleted += removed;
             clearFileDerivedState(file.id);
             file.dirty = new Set([file.records.length ? 0 : -1]);
-            await persistFileNow(file);
+            changedFiles.push(file);
           }
+        }
+        for (const file of changedFiles) {
+          invalidateCorpusCache(file.id, true);
+          await persistFileNow(file);
         }
         if (removeDb) {
           const result = await api(
@@ -463,7 +480,6 @@ export function createWorkDialogs(deps: Deps) {
           if (state.storePresenceIds[dbStore]) state.storePresenceIds[dbStore] = {};
           await refreshStores();
         }
-        persistPrefs();
         shell();
         renderView();
         toast(
@@ -545,9 +561,9 @@ export function createWorkDialogs(deps: Deps) {
             derived_from: { type: "work_separation", source_file: file.name, work },
           };
           state.files.push(derived);
-          await persistFileNow(derived);
           created.push(derived);
         }
+        let sourceChanged = false;
         if (removeFromSource) {
           file.records = file.records.filter(
             (record: Any) =>
@@ -556,11 +572,14 @@ export function createWorkDialogs(deps: Deps) {
               ),
           );
           file.dirty = new Set(file.records.map((_: Any, index: Any) => index));
-          await persistFileNow(file);
+          sourceChanged = true;
         }
+        if (created.length || sourceChanged) invalidateCorpusCache(file.id, true);
+        for (const derived of created) await persistFileNow(derived);
+        if (sourceChanged) await persistFileNow(file);
         if (created.length) state.activeFileId = created[0].id;
         corpusCache.fields = null;
-        persistPrefs();
+        persistCorpusPreferences();
         shell();
         renderView();
         toast(trf("works.created_tabs", { count: created.length }), {

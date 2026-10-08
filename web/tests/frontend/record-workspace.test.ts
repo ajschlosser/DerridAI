@@ -34,7 +34,7 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         return vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl") calls.push(name);
+          if (name === "persistRecordViewPreferences" || name === "syncUrl") calls.push(name);
         });
       },
     },
@@ -51,7 +51,7 @@ describe("record workspace commands", () => {
     const { state, calls, workspace } = setup();
     expect(workspace.setRecordWorkspaceFind("outside")).toBe("outside");
     expect(state.recordFind).toBe("outside");
-    expect(calls).toEqual(["persistPrefs", "syncUrl"]);
+    expect(calls).toEqual(["persistRecordViewPreferences", "syncUrl"]);
     expect(workspace.setRecordWorkspaceFind(null)).toBe("");
   });
 

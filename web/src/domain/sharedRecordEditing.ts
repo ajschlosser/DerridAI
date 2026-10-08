@@ -30,6 +30,7 @@ import { shell } from "./sharedWorkspaceStorage";
 // instance.
 export const {
   applyRecordChanges,
+  commitRecordFiles,
   clearRecordUpdates,
   clearAllUpdates,
   historyVersionChanges,

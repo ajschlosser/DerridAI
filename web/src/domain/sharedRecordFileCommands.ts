@@ -18,6 +18,7 @@
 
 import { toast } from "../composables/notifications";
 import { esc } from "./html";
+import { invalidateCorpusCache } from "./corpusCache";
 import { cloneAuditValue } from "./recordValues";
 import { createRecordSubsets } from "./recordSubsets";
 import { showAppModal } from "./disabledControls";
@@ -44,6 +45,7 @@ export const {
   state: state as unknown as Parameters<typeof createRecordSubsets>[0]["state"],
   cloneAuditValue: cloneAuditValue as <T>(value: T) => T,
   downloadBlob,
+  invalidateCorpusCache,
   label,
   navigateTo,
   persistFileNow,

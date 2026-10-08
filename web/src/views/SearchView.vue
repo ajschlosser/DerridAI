@@ -25,6 +25,11 @@ import { label as compatibilityFieldLabel } from "../domain/sharedRecordHelpers"
 import { setSearchQueryDraft, updateSearchQuery } from "../domain/sharedSearchQuery";
 import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
 import { useI18nStore } from "../stores/i18n";
+import { useAuthStore } from "../stores/auth";
+import {
+  accountScopedBrowserStorageKey,
+  browserStorageAccountScope,
+} from "../domain/browserStorageScope";
 import { useNewerData } from "../composables/useNewerData";
 import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import { useShellStore } from "../stores/shell";
@@ -70,7 +75,10 @@ import { forwardVerticalWheelToDocument } from "../composables/forwardVerticalWh
 
 const route = useRoute();
 const i18n = useI18nStore();
+const auth = useAuthStore();
 const shell = useShellStore();
+const accountIdentity = computed(() => browserStorageAccountScope(auth.user));
+const accountStorageKey = (baseKey: string) => accountScopedBrowserStorageKey(baseKey, auth.user);
 const snapshot = ref<SearchWorkspaceSnapshot | null>(null);
 /**
  * Workspace read state. `refreshing` and `stale` keep the already-loaded workspace mounted, so a
@@ -244,13 +252,16 @@ function persistColumnWidths() {
 function loadSavedState() {
   try {
     savedViews.value =
-      JSON.parse(localStorage.getItem("derridai.search.savedViews.v1") || "[]") || [];
+      JSON.parse(
+        localStorage.getItem(accountStorageKey("derridai.search.savedViews.v1")) || "[]",
+      ) || [];
   } catch {
     savedViews.value = [];
   }
   try {
     recentSearches.value =
-      JSON.parse(localStorage.getItem("derridai.search.recent.v1") || "[]") || [];
+      JSON.parse(localStorage.getItem(accountStorageKey("derridai.search.recent.v1")) || "[]") ||
+      [];
   } catch {
     recentSearches.value = [];
   }
@@ -258,7 +269,7 @@ function loadSavedState() {
 function persistSavedViews() {
   try {
     localStorage.setItem(
-      "derridai.search.savedViews.v1",
+      accountStorageKey("derridai.search.savedViews.v1"),
       JSON.stringify(savedViews.value.slice(0, 40)),
     );
   } catch {
@@ -268,7 +279,7 @@ function persistSavedViews() {
 function persistRecent() {
   try {
     localStorage.setItem(
-      "derridai.search.recent.v1",
+      accountStorageKey("derridai.search.recent.v1"),
       JSON.stringify(recentSearches.value.slice(0, 12)),
     );
   } catch {
@@ -295,7 +306,6 @@ function applySnapshot(next: SearchWorkspaceSnapshot) {
   if (next.scope !== "database") shownQuery.value = next.query;
   else if (!next.search_has_run) shownQuery.value = null;
   else if (shownQuery.value === null) shownQuery.value = next.query.trim();
-  shell.sync();
 }
 
 /**
@@ -754,6 +764,24 @@ watch(
     void load({ refresh: false, autoRun: false });
   },
 );
+watch(accountIdentity, (identity, previousIdentity) => {
+  if (identity === previousIdentity) return;
+  // A route can remain mounted while authentication replaces one account with
+  // another. Invalidate all in-flight Search reads and delayed recent-query
+  // writes before loading the new account's local history.
+  window.clearTimeout(localSearchTimer);
+  window.clearTimeout(recentTimer);
+  readRequest += 1;
+  searchTicket += 1;
+  snapshot.value = null;
+  shownQuery.value = null;
+  query.value = "";
+  phase.value = "pending";
+  searchPhase.value = "idle";
+  loadSavedState();
+  void load({ refresh: true, autoRun: true });
+});
+
 watch(
   () => shell.snapshot.activeStore,
   () => {

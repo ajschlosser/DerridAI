@@ -15,6 +15,8 @@ export const DOMAIN_PREFERENCE_KEYS = {
   research: "research-preferences",
   search: "search-preferences",
   settings: "settings-preferences",
+  annotations: "annotations-preferences",
+  corpus: "corpus-preferences",
   works: "works-preferences",
   recordView: "record-view-preferences",
   list: "list-preferences",
@@ -46,6 +48,10 @@ const SEARCH_FIELDS = [
   "searchFacetFilters",
   "storeSearchSort",
 ] as const;
+
+const ANNOTATION_FIELDS = ["annotationSearch", "annotationView"] as const;
+
+const CORPUS_FIELDS = ["activeFileId"] as const;
 
 const WORKS_FIELDS = [
   "worksSearch",
@@ -122,6 +128,8 @@ export function domainPreferenceRecord(state: Loose, name: DomainPreferenceName)
   if (name === "research") return { key, ...pick(state, RESEARCH_FIELDS) };
   if (name === "search") return { key, ...pick(state, SEARCH_FIELDS) };
   if (name === "settings") return { key, ...pick(state, SETTINGS_FIELDS) };
+  if (name === "annotations") return { key, ...pick(state, ANNOTATION_FIELDS) };
+  if (name === "corpus") return { key, ...pick(state, CORPUS_FIELDS) };
   if (name === "works") return { key, ...pick(state, WORKS_FIELDS) };
   if (name === "recordView") return { key, ...pick(state, RECORD_VIEW_FIELDS) };
   if (name === "list") return { key, ...pick(state, LIST_FIELDS) };
@@ -167,7 +175,10 @@ export function applyDomainPreferenceRecord(state: Loose, value: unknown): void 
         ...(state.llmConfig && typeof state.llmConfig === "object" ? state.llmConfig : {}),
         ...(record.llmConfig && typeof record.llmConfig === "object" ? record.llmConfig : {}),
       };
-  } else if (key === DOMAIN_PREFERENCE_KEYS.works) assignFields(state, record, WORKS_FIELDS);
+  } else if (key === DOMAIN_PREFERENCE_KEYS.annotations)
+    assignFields(state, record, ANNOTATION_FIELDS);
+  else if (key === DOMAIN_PREFERENCE_KEYS.corpus) assignFields(state, record, CORPUS_FIELDS);
+  else if (key === DOMAIN_PREFERENCE_KEYS.works) assignFields(state, record, WORKS_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.recordView)
     assignFields(state, record, RECORD_VIEW_FIELDS);
   else if (key === DOMAIN_PREFERENCE_KEYS.list) assignFields(state, record, LIST_FIELDS);
@@ -228,6 +239,8 @@ export function createDomainPreferencePersistence(deps: {
     persistResearchPreferences: () => persist("research"),
     persistSearchPreferences: () => persist("search"),
     persistSettingsPreferences: () => persist("settings"),
+    persistAnnotationsPreferences: () => persist("annotations"),
+    persistCorpusPreferences: () => persist("corpus"),
     persistWorksPreferences: () => persist("works"),
     persistRecordViewPreferences: () => persist("recordView"),
     persistListPreferences: () => persist("list"),
