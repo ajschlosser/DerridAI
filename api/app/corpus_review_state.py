@@ -39,8 +39,10 @@ from .field_assertions import (
 def _metadata_value_missing(field: str, value: Any) -> bool:
     # Booleans are three-state in review: True, False, None. False is a
     # deliberate human decision and must never be treated as missing.
+    # A string or numeric lookalike is not a resolved classification: catch
+    # legacy/imported malformed values before the final publication validator.
     if field == "primary_text":
-        return value is None
+        return not isinstance(value, bool)
     return value is None or value == "" or value == []
 
 
