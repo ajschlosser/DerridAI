@@ -2072,31 +2072,93 @@ class ChromaStore:
         return copy.deepcopy(result)
 
     def work_stats(self, store: str) -> list[dict[str, Any]]:
+        """Aggregate Work metadata without a collection-sized temporary payload.
+
+        Only one value per Work/field is needed to decide whether that field is
+        uniform or mixed. Keep that compact state while scanning Chroma in
+        bounded pages instead of retaining every document and every distinct
+        metadata value at once.
+        """
+
         col = self._collection(store)
-        payload = col.get(include=["metadatas", "documents"])
-        fields = ("document_author", "year", "publication_year", "publisher", "publication_place", "translator", "edition", "isbn", "document_language", "original_language", "canonical_work_id", "full_citation", "cover_url")
+        fields = (
+            "document_author",
+            "year",
+            "publication_year",
+            "publisher",
+            "publication_place",
+            "translator",
+            "edition",
+            "isbn",
+            "document_language",
+            "original_language",
+            "canonical_work_id",
+            "full_citation",
+            "cover_url",
+        )
         grouped: dict[str, dict[str, Any]] = {}
-        metadatas = payload.get("metadatas") or []
-        documents = payload.get("documents") or []
-        for index, metadata in enumerate(metadatas):
-            decoded = decode_metadata(metadata or {})
-            value = decoded.get("work")
-            if value is None or not str(value).strip():
-                continue
-            key = str(value)
-            item = grouped.setdefault(key, {"work": key, "count": 0, "total_words": 0, "_values": {field: set() for field in fields}})
-            item["count"] += 1
-            document = documents[index] if index < len(documents) else ""
-            item["total_words"] += len(str(document or "").split())
-            for field in fields:
-                field_value = decoded.get(field)
-                if field_value is None or not str(field_value).strip():
+        offset = 0
+        page_size = 512
+
+        while True:
+            payload = col.get(
+                include=["metadatas", "documents"],
+                limit=page_size,
+                offset=offset,
+            )
+            ids = list(payload.get("ids") or [])
+            metadatas = list(payload.get("metadatas") or [])
+            documents = list(payload.get("documents") or [])
+            if not ids:
+                break
+
+            for index, metadata in enumerate(metadatas):
+                decoded = decode_metadata(metadata or {})
+                value = decoded.get("work")
+                if value is None or not str(value).strip():
                     continue
-                try:
-                    token = json.dumps(field_value, ensure_ascii=False, sort_keys=True)
-                except TypeError:
-                    token = json.dumps(str(field_value), ensure_ascii=False)
-                item["_values"][field].add(token)
+                key = str(value)
+                item = grouped.setdefault(
+                    key,
+                    {
+                        "work": key,
+                        "count": 0,
+                        "total_words": 0,
+                        "_values": {},
+                        "_mixed": set(),
+                    },
+                )
+                item["count"] += 1
+                document = documents[index] if index < len(documents) else ""
+                item["total_words"] += len(str(document or "").split())
+
+                values = item["_values"]
+                mixed = item["_mixed"]
+                for field in fields:
+                    if field in mixed:
+                        continue
+                    field_value = decoded.get(field)
+                    if field_value is None or not str(field_value).strip():
+                        continue
+                    try:
+                        token = json.dumps(
+                            field_value,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        )
+                    except TypeError:
+                        token = json.dumps(str(field_value), ensure_ascii=False)
+                    prior = values.get(field)
+                    if prior is None:
+                        values[field] = token
+                    elif prior != token:
+                        values.pop(field, None)
+                        mixed.add(field)
+
+            offset += len(ids)
+            if len(ids) < page_size:
+                break
+
         output: list[dict[str, Any]] = []
         for work in sorted(grouped, key=str.casefold):
             item = grouped[work]
@@ -2104,13 +2166,17 @@ class ChromaStore:
                 "work": work,
                 "count": item["count"],
                 "total_words": int(item.get("total_words") or 0),
-                "average_record_length": round((item.get("total_words") or 0) / item["count"]) if item["count"] else 0,
+                "average_record_length": round(
+                    (item.get("total_words") or 0) / item["count"]
+                )
+                if item["count"]
+                else 0,
             }
-            for field, values in item["_values"].items():
-                if len(values) == 1:
-                    result[field] = json.loads(next(iter(values)))
-                elif len(values) > 1:
+            for field in fields:
+                if field in item["_mixed"]:
                     result[f"{field}_mixed"] = True
+                elif field in item["_values"]:
+                    result[field] = json.loads(item["_values"][field])
             output.append(result)
         return output
 
