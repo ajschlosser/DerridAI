@@ -128,9 +128,7 @@ import { resetWorkspaceSessionPersistence } from "./workspaceSessionPersistence"
 export { setUrlSyncHook } from "./sharedNavigation";
 export { setShellRefreshHook } from "./sharedWorkspaceStorage";
 
-export function setUserContext(
-  user: { id?: string | number; role?: string } | null,
-) {
+export function setUserContext(user: { id?: string | number; role?: string } | null) {
   const priorContext = state.userContext;
   const priorKey = priorContext
     ? `${String(priorContext.role || "")}:${String(priorContext.id || "")}`
