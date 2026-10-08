@@ -38,7 +38,7 @@ import { normalizeTouchupItems } from "./touchupLauncher";
 // The touchup (LLM review) workflow over the shared state, usable without the legacy runtime. The runtime registers
 // these through `registerTouchupActions`.
 const { providerProfiles, providerProfile, defaultProviderProfile } = providerProfilesService;
-const { applyRecordChanges } = sharedRecordEditing;
+const { applyRecordChanges, commitRecordFiles } = sharedRecordEditing;
 const { clearReviewSelection } = evidenceSelection;
 
 const HIGH_RISK_TOUCHUP_FIELDS = new Set([
