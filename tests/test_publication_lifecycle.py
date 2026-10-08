@@ -715,3 +715,38 @@ def test_accept_unreviewed_on_a_fully_reviewed_build_stays_conformant(tmp_path:P
     build=_install_publishable(repo)
     publication=manager.publish(build["build_id"],accept_unreviewed=True)
     assert publication["celf_conformant"] is True and publication["unreviewed_record_count"]==0
+
+
+def test_accept_unreviewed_publishes_invalid_primary_text_candidate_without_rewriting_source(tmp_path: Path):
+    """A non-boolean model/legacy value is preserved in audit history, not JSONL scalar."""
+    from app.field_assertions import current_assertion_by_name
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _install_publishable(repo)
+    build_id = build["build_id"]
+    stored = repo.load_records(build_id)
+    stored[0]["primary_text"] = "false"
+    stored[0]["accepted"] = False
+    stored[0]["review_disposition"] = "pending"
+    stored[0]["needs_review"] = True
+    stored[0]["metadata_field_status"]["primary_text"] = {
+        "status": "invalid",
+        "method": "llm",
+        "reason_code": "invalid_value",
+        "reason": "Model supplied a string instead of a boolean.",
+    }
+    repo.save_records(build_id, stored)
+
+    publication = manager.publish(build_id, accept_unreviewed=True)
+    [published] = list(iter_jsonl_zst(repo.publication_path(publication["publication_id"]), rehydrate_evidence=False))
+    assert published["record_id"] == "r1"
+    assert published.get("primary_text") is None
+    assert published["publication_review_status"] == "unreviewed_suggestion"
+    assert publication["record_count"] == 1
+
+    assertion = current_assertion_by_name(published, "primary_text")
+    assert assertion is not None and assertion.value_status == "invalid"
+    assert assertion.legacy_metadata["publication_validation"]["candidate_value"] == "false"
+    # Autonomous publication changes only the immutable snapshot.
+    assert repo.load_records(build_id)[0]["primary_text"] == "false"
