@@ -78,8 +78,7 @@ const i18n = useI18nStore();
 const auth = useAuthStore();
 const shell = useShellStore();
 const accountIdentity = computed(() => browserStorageAccountScope(auth.user));
-const accountStorageKey = (baseKey: string) =>
-  accountScopedBrowserStorageKey(baseKey, auth.user);
+const accountStorageKey = (baseKey: string) => accountScopedBrowserStorageKey(baseKey, auth.user);
 const snapshot = ref<SearchWorkspaceSnapshot | null>(null);
 /**
  * Workspace read state. `refreshing` and `stale` keep the already-loaded workspace mounted, so a
@@ -253,15 +252,15 @@ function persistColumnWidths() {
 function loadSavedState() {
   try {
     savedViews.value =
-      JSON.parse(localStorage.getItem(accountStorageKey("derridai.search.savedViews.v1")) || "[]") ||
-      [];
+      JSON.parse(
+        localStorage.getItem(accountStorageKey("derridai.search.savedViews.v1")) || "[]",
+      ) || [];
   } catch {
     savedViews.value = [];
   }
   try {
     recentSearches.value =
-      JSON.parse(localStorage.getItem(accountStorageKey("derridai.search.recent.v1")) || "[]") ||
-      [];
+      JSON.parse(localStorage.getItem(accountStorageKey("derridai.search.recent.v1")) || "[]") || [];
   } catch {
     recentSearches.value = [];
   }
