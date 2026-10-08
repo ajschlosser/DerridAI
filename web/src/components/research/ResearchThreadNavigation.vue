@@ -142,7 +142,7 @@ const manageExpanded = ref(false);
       </button>
     </div>
     </div>
-    <section v-if="thread" class="research-thread-conversation" :aria-label="thread.title">
+    <section v-if="thread" class="research-thread-conversation" :aria-label="thread.title" tabindex="-1">
       <h2>{{ thread.title }}</h2>
       <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
       <details
