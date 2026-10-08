@@ -67,4 +67,42 @@ describe("SidebarNavigator interaction priority", () => {
 
     setItem.mockRestore();
   });
+  it("keeps sidebar personalization isolated when the signed-in account changes", async () => {
+    const wrapper = mount(SidebarNavigator, {
+      props: {
+        collapsed: false,
+        storageScope: "admin:1",
+        groups: [
+          {
+            id: "Research",
+            section: "Research",
+            items: [
+              { id: "rag", label: "Research", icon: "spark", active: false },
+              { id: "faq", label: "Response Library", icon: "books", active: false },
+            ],
+          },
+        ],
+      },
+    });
+
+    await wrapper.get("button[aria-label='Research']").trigger("click");
+    timing.afterPaint?.();
+    expect(
+      JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]"),
+    ).toEqual(["rag"]);
+    expect(localStorage.getItem("derridai.ui.navigationRecents")).toBeNull();
+
+    await wrapper.setProps({ storageScope: "admin:2" });
+    timing.afterPaint = null;
+    await wrapper.get("button[aria-label='Response Library']").trigger("click");
+    timing.afterPaint?.();
+
+    expect(
+      JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:2") || "[]"),
+    ).toEqual(["faq"]);
+    expect(
+      JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]"),
+    ).toEqual(["rag"]);
+  });
+
 });
