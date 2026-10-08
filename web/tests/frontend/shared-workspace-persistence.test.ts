@@ -22,6 +22,7 @@ const put = vi.fn();
 vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
   workspaceDb: { get: vi.fn(), getAll: vi.fn(), put: (...a: unknown[]) => put(...a) },
   persistPrefs: vi.fn(),
+  persistSettingsPreferences: vi.fn(),
 }));
 const toast = vi.fn();
 vi.mock("../../src/composables/notifications", () => ({ toast: (...a: unknown[]) => toast(...a) }));
