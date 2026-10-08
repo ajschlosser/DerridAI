@@ -1868,6 +1868,8 @@ class ChromaStore:
         filters: dict[str, str] | None = None,
         include_updates: bool = False,
     ) -> dict[str, Any]:
+        """Return one Record page without a collection-sized decoded working set."""
+
         col = self._collection(store)
         filters = {
             str(key): str(value)
@@ -1875,9 +1877,27 @@ class ChromaStore:
             if str(value).strip()
         }
 
-        # Plain work-only browsing can stay fully delegated to Chroma. Column
-        # text filters/sorting require decoded flat records, so those are
-        # handled deterministically in Python and paginated afterward.
+        def count_where(where: dict[str, Any]) -> int:
+            total = 0
+            scan_offset = 0
+            page_size = 1000
+            while True:
+                payload = col.get(
+                    where=where,
+                    include=[],
+                    limit=page_size,
+                    offset=scan_offset,
+                )
+                ids = list(payload.get("ids") or [])
+                total += len(ids)
+                if len(ids) < page_size:
+                    break
+                scan_offset += len(ids)
+            return total
+
+        # Plain work-only browsing can stay fully delegated to Chroma. Counting
+        # a filtered Work still pages ids only instead of materializing all of
+        # that Work's metadata.
         if not filters and not sort_field:
             where = {"work": work} if work else None
             kwargs: dict[str, Any] = {
@@ -1888,13 +1908,12 @@ class ChromaStore:
             if where:
                 kwargs["where"] = where
             payload = col.get(**kwargs)
-            if where:
-                count_payload = col.get(where=where, include=["metadatas"])
-                count = len(count_payload.get("ids") or [])
-            else:
-                count = col.count()
+            count = count_where(where) if where else col.count()
             return {
-                "records": self._decode_result(payload, include_updates=include_updates),
+                "records": self._decode_result(
+                    payload,
+                    include_updates=include_updates,
+                ),
                 "count": count,
                 "limit": limit,
                 "offset": offset,
@@ -1903,12 +1922,6 @@ class ChromaStore:
                 "sort_dir": sort_dir,
                 "filters": filters,
             }
-
-        scan_kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
-        if work:
-            scan_kwargs["where"] = {"work": work}
-        payload = col.get(**scan_kwargs)
-        records = self._decode_result(payload, include_updates=include_updates)
 
         def searchable(value: Any) -> str:
             if value is None:
@@ -1922,34 +1935,80 @@ class ChromaStore:
                 )
             return str(value)
 
-        for field, query in filters.items():
-            needle = query.casefold().strip()
-            records = [
-                record
-                for record in records
-                if needle in searchable(record.get(field)).casefold()
-            ]
+        reverse = str(sort_dir).lower() == "desc"
+
+        def sort_value(record: dict[str, Any]) -> tuple[int, int, Any]:
+            value = record.get(sort_field) if sort_field else None
+            if value is None:
+                return (1, 2, "")
+            if isinstance(value, bool):
+                return (0, 0, 1.0 if value else 0.0)
+            if isinstance(value, (int, float)):
+                return (0, 0, float(value))
+            return (0, 1, searchable(value).casefold())
+
+        scan_kwargs: dict[str, Any] = {
+            "include": ["documents", "metadatas"],
+        }
+        if work:
+            scan_kwargs["where"] = {"work": work}
+
+        scan_offset = 0
+        page_size = 512
+        matched_count = 0
+        page_records: list[dict[str, Any]] = []
+        sorted_window: list[dict[str, Any]] = []
+        window_end = max(0, int(offset)) + max(0, int(limit))
+
+        while True:
+            payload = col.get(
+                **scan_kwargs,
+                limit=page_size,
+                offset=scan_offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+
+            records = self._decode_result(
+                payload,
+                include_updates=include_updates,
+            )
+            for field, query in filters.items():
+                needle = query.casefold().strip()
+                records = [
+                    record
+                    for record in records
+                    if needle in searchable(record.get(field)).casefold()
+                ]
+
+            previous_count = matched_count
+            matched_count += len(records)
+            if sort_field:
+                if window_end:
+                    sorted_window.extend(records)
+                    sorted_window.sort(key=sort_value, reverse=reverse)
+                    if len(sorted_window) > window_end:
+                        del sorted_window[window_end:]
+            elif records and window_end > offset:
+                local_start = max(0, int(offset) - previous_count)
+                local_end = min(
+                    len(records),
+                    window_end - previous_count,
+                )
+                if local_start < local_end:
+                    page_records.extend(records[local_start:local_end])
+
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
 
         if sort_field:
-            reverse = str(sort_dir).lower() == "desc"
+            page_records = sorted_window[offset:offset + limit]
 
-            def sort_value(record: dict[str, Any]):
-                value = record.get(sort_field)
-                if value is None:
-                    return (1, 2, "")
-                if isinstance(value, bool):
-                    return (0, 0, 1.0 if value else 0.0)
-                if isinstance(value, (int, float)):
-                    return (0, 0, float(value))
-                return (0, 1, searchable(value).casefold())
-
-            records.sort(key=sort_value, reverse=reverse)
-
-        count = len(records)
-        page = records[offset:offset + limit]
         return {
-            "records": page,
-            "count": count,
+            "records": page_records,
+            "count": matched_count,
             "limit": limit,
             "offset": offset,
             "work": work,
@@ -2072,31 +2131,93 @@ class ChromaStore:
         return copy.deepcopy(result)
 
     def work_stats(self, store: str) -> list[dict[str, Any]]:
+        """Aggregate Work metadata without a collection-sized temporary payload.
+
+        Only one value per Work/field is needed to decide whether that field is
+        uniform or mixed. Keep that compact state while scanning Chroma in
+        bounded pages instead of retaining every document and every distinct
+        metadata value at once.
+        """
+
         col = self._collection(store)
-        payload = col.get(include=["metadatas", "documents"])
-        fields = ("document_author", "year", "publication_year", "publisher", "publication_place", "translator", "edition", "isbn", "document_language", "original_language", "canonical_work_id", "full_citation", "cover_url")
+        fields = (
+            "document_author",
+            "year",
+            "publication_year",
+            "publisher",
+            "publication_place",
+            "translator",
+            "edition",
+            "isbn",
+            "document_language",
+            "original_language",
+            "canonical_work_id",
+            "full_citation",
+            "cover_url",
+        )
         grouped: dict[str, dict[str, Any]] = {}
-        metadatas = payload.get("metadatas") or []
-        documents = payload.get("documents") or []
-        for index, metadata in enumerate(metadatas):
-            decoded = decode_metadata(metadata or {})
-            value = decoded.get("work")
-            if value is None or not str(value).strip():
-                continue
-            key = str(value)
-            item = grouped.setdefault(key, {"work": key, "count": 0, "total_words": 0, "_values": {field: set() for field in fields}})
-            item["count"] += 1
-            document = documents[index] if index < len(documents) else ""
-            item["total_words"] += len(str(document or "").split())
-            for field in fields:
-                field_value = decoded.get(field)
-                if field_value is None or not str(field_value).strip():
+        offset = 0
+        page_size = 512
+
+        while True:
+            payload = col.get(
+                include=["metadatas", "documents"],
+                limit=page_size,
+                offset=offset,
+            )
+            ids = list(payload.get("ids") or [])
+            metadatas = list(payload.get("metadatas") or [])
+            documents = list(payload.get("documents") or [])
+            if not ids:
+                break
+
+            for index, metadata in enumerate(metadatas):
+                decoded = decode_metadata(metadata or {})
+                value = decoded.get("work")
+                if value is None or not str(value).strip():
                     continue
-                try:
-                    token = json.dumps(field_value, ensure_ascii=False, sort_keys=True)
-                except TypeError:
-                    token = json.dumps(str(field_value), ensure_ascii=False)
-                item["_values"][field].add(token)
+                key = str(value)
+                item = grouped.setdefault(
+                    key,
+                    {
+                        "work": key,
+                        "count": 0,
+                        "total_words": 0,
+                        "_values": {},
+                        "_mixed": set(),
+                    },
+                )
+                item["count"] += 1
+                document = documents[index] if index < len(documents) else ""
+                item["total_words"] += len(str(document or "").split())
+
+                values = item["_values"]
+                mixed = item["_mixed"]
+                for field in fields:
+                    if field in mixed:
+                        continue
+                    field_value = decoded.get(field)
+                    if field_value is None or not str(field_value).strip():
+                        continue
+                    try:
+                        token = json.dumps(
+                            field_value,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        )
+                    except TypeError:
+                        token = json.dumps(str(field_value), ensure_ascii=False)
+                    prior = values.get(field)
+                    if prior is None:
+                        values[field] = token
+                    elif prior != token:
+                        values.pop(field, None)
+                        mixed.add(field)
+
+            offset += len(ids)
+            if len(ids) < page_size:
+                break
+
         output: list[dict[str, Any]] = []
         for work in sorted(grouped, key=str.casefold):
             item = grouped[work]
@@ -2104,13 +2225,17 @@ class ChromaStore:
                 "work": work,
                 "count": item["count"],
                 "total_words": int(item.get("total_words") or 0),
-                "average_record_length": round((item.get("total_words") or 0) / item["count"]) if item["count"] else 0,
+                "average_record_length": round(
+                    (item.get("total_words") or 0) / item["count"]
+                )
+                if item["count"]
+                else 0,
             }
-            for field, values in item["_values"].items():
-                if len(values) == 1:
-                    result[field] = json.loads(next(iter(values)))
-                elif len(values) > 1:
+            for field in fields:
+                if field in item["_mixed"]:
                     result[f"{field}_mixed"] = True
+                elif field in item["_values"]:
+                    result[field] = json.loads(item["_values"][field])
             output.append(result)
         return output
 
@@ -3479,42 +3604,93 @@ class ChromaStore:
 
         return candidates
 
-    def filter_search(self, store: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def filter_search(
+        self,
+        store: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return filter matches without decoding an unbounded native result set."""
+
         col = self._collection(store)
         where = where or {}
         contains_filters: dict[str, str] = {}
         native_where: dict[str, Any] = {}
         for field, value in where.items():
             if isinstance(value, dict) and "$contains" in value:
-                contains_filters[field] = str(value.get("$contains") or "").casefold()
+                contains_filters[field] = str(
+                    value.get("$contains") or ""
+                ).casefold()
             else:
                 native_where[field] = value
+
         args: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if native_where:
             args["where"] = native_where
-        # A contains filter may target array-like metadata that Chroma persists
-        # through DerridAI's metadata codec. Fetch the native-filtered set,
-        # decode it, then perform membership/substring matching on the decoded
-        # values. Exact-only filters retain Chroma's efficient limit path.
         if not contains_filters:
             args["limit"] = n_results
-        rows = self._decode_result(col.get(**args))
-        if contains_filters:
-            def matches(record: dict[str, Any]) -> bool:
-                for field, needle in contains_filters.items():
-                    value = record.get(field)
-                    if isinstance(value, (list, tuple, set)):
-                        values = [str(item).casefold() for item in value]
-                        if needle not in values and not any(needle in item for item in values):
-                            return False
-                    elif isinstance(value, dict):
-                        if needle not in " ".join(f"{k} {v}" for k, v in value.items()).casefold():
-                            return False
-                    elif needle not in str(value or "").casefold():
+            exact_rows = self._decode_result(col.get(**args))
+            return [
+                {
+                    "id": row.get("_chroma_id") or row.get("record_id"),
+                    "distance": None,
+                    "record": row,
+                }
+                for row in exact_rows[:n_results]
+            ]
+
+        def matches(record: dict[str, Any]) -> bool:
+            for field, needle in contains_filters.items():
+                value = record.get(field)
+                if isinstance(value, (list, tuple, set)):
+                    values = [str(item).casefold() for item in value]
+                    if needle not in values and not any(
+                        needle in item for item in values
+                    ):
                         return False
-                return True
-            rows = [row for row in rows if matches(row)]
-        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
+                elif isinstance(value, dict):
+                    if needle not in " ".join(
+                        f"{key} {item}"
+                        for key, item in value.items()
+                    ).casefold():
+                        return False
+                elif needle not in str(value or "").casefold():
+                    return False
+            return True
+
+        # Contains filters target decoded metadata that Chroma may persist through
+        # DerridAI's JSON metadata codec. Chroma cannot perform these comparisons
+        # natively, but the API only needs the first n results in source order.
+        # Scan bounded pages and stop as soon as that result window is full.
+        rows: list[dict[str, Any]] = []
+        scan_offset = 0
+        page_size = 512
+        while len(rows) < n_results:
+            payload = col.get(
+                **args,
+                limit=page_size,
+                offset=scan_offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for row in self._decode_result(payload):
+                if matches(row):
+                    rows.append(row)
+                    if len(rows) >= n_results:
+                        break
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
+
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "record": row,
+            }
+            for row in rows
+        ]
 
     def keyword_search(
         self,
@@ -3565,17 +3741,47 @@ class ChromaStore:
             scan_args["where_document"] = where_document
         # Keep the fallback predictable on very large corpora while making the
         # common researcher search robust across capitalization differences.
-        try:
-            scan_args["limit"] = min(max(n_results * 50, 1000), 10000)
-            candidates = self._decode_result(col.get(**scan_args))
-        except Exception as exc:
-            if not self._is_query_capability_error(exc):
-                raise
-            scan_args.pop("limit", None)
-            candidates = self._decode_result(col.get(**scan_args))
+        # Never remove the limit after a backend capability error: doing so turns
+        # a compatibility fallback into a full-collection materialization.
+        scan_limit = min(max(n_results * 50, 1000), 10000)
+        page_size = min(scan_limit, 512)
         folded = needle.casefold()
-        rows = [row for row in candidates if folded in str(row.get("text") or "").casefold()][:n_results]
-        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
+        rows: list[dict[str, Any]] = []
+        scan_offset = 0
+        while scan_offset < scan_limit and len(rows) < n_results:
+            requested = min(page_size, scan_limit - scan_offset)
+            try:
+                payload = col.get(
+                    **scan_args,
+                    limit=requested,
+                    offset=scan_offset,
+                )
+            except Exception as exc:
+                if self._is_query_capability_error(exc):
+                    raise RuntimeError(
+                        "The vector-store backend cannot perform the bounded "
+                        "keyword-search fallback required for memory safety."
+                    ) from exc
+                raise
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for row in self._decode_result(payload):
+                if folded in str(row.get("text") or "").casefold():
+                    rows.append(row)
+                    if len(rows) >= n_results:
+                        break
+            scan_offset += len(ids)
+            if len(ids) < requested:
+                break
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "record": row,
+            }
+            for row in rows
+        ]
 
     @staticmethod
     def _lexical_tokens(value: Any) -> list[str]:
