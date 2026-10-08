@@ -153,7 +153,11 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 </script>
 
 <template>
-  <section class="research-composer-v031 card" :class="{ 'research-composer-followup': compact }" aria-labelledby="research-compose-title">
+  <section
+    class="research-composer-v031 card"
+    :class="{ 'research-composer-followup': compact }"
+    aria-labelledby="research-compose-title"
+  >
     <header class="research-composer-heading">
       <div>
         <span v-if="!compact" class="section-label">{{ i18n.t("nav.rag") }}</span>
