@@ -87,3 +87,32 @@ export const RetryPending: Story = { args: { retryDisabled: true } };
 export const Library: Story = {
   args: { thread: null, selectedThreadId: "", showPreview: true, search: "responsibility" },
 };
+
+/**
+ * Exercises the navigation/conversation split with a long question and enough
+ * history to reveal horizontal overflow or an excessively tall thread rail.
+ */
+export const LongConversation: Story = {
+  args: {
+    threads: Array.from({ length: 30 }, (_, index) => ({
+      ...summary,
+      thread_id: `thread-${index}`,
+      title: `Research inquiry ${index + 1}`,
+    })),
+    thread: {
+      ...thread,
+      turns: Array.from({ length: 12 }, (_, index) => ({
+        ...thread.turns[0],
+        turn_id: `turn-long-${index}`,
+        ordinal: index + 1,
+        user_question:
+          index === 0
+            ? "How does responsibility to the other resist being reduced to a decision procedure, and what does that mean for Derrida's interpretation of Levinas?"
+            : `Follow-up question ${index + 1}: explain the relevant distinction.`,
+      })),
+    },
+  },
+};
+export const WideDesktop: Story = {
+  parameters: { viewport: { defaultViewport: "responsive" } },
+};

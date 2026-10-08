@@ -155,8 +155,15 @@ describe("Research thread shell", () => {
           .filter((item) => item.find(".thread-answer-text").exists());
     const first = articles[0],
       second = articles[1];
+    const boundCitation = first.find(".thread-answer-citation");
+    expect(boundCitation.exists()).toBe(true);
+    await boundCitation.trigger("click");
+    expect(first.find(".research-result-presentation").exists()).toBe(true);
+    expect(second.find(".research-result-presentation").exists()).toBe(false);
     for (const article of [first, second]) {
-      expect(article.find(".research-result-presentation").exists()).toBe(false);
+      // Selecting a run opens its own audit; unselected turns stay collapsed.
+      const selected = article.find("button[aria-current='true']").exists();
+      expect(article.find(".research-result-presentation").exists()).toBe(selected);
       const inspect = article
         .findAll("details")
         .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
@@ -294,19 +301,17 @@ describe("Research thread shell", () => {
 
     const wrapper = browser();
     await flushPromises();
-    expect(jobs.read).toHaveBeenCalledTimes(20);
+    expect(jobs.read.mock.calls.length).toBeLessThan(20);
     expect(wrapper.findAll(".research-result-presentation")).toHaveLength(0);
 
     await client.invalidateQueries({ queryKey: ["data", "research_threads"] });
     await flushPromises();
-    expect(jobs.read).toHaveBeenCalledTimes(20);
+    expect(jobs.read.mock.calls.length).toBeLessThan(20);
 
-    const firstTurn = wrapper.findAll("article[aria-labelledby]")[0];
-    const inspect = firstTurn
-      .findAll("details")
-      .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
-    (inspect.element as HTMLDetailsElement).open = true;
-    await inspect.trigger("toggle");
+    // Explicitly opening a turn hydrates its immutable result without loading all history.
+    await wrapper.setProps({ jobId: "job-0" });
+    await flushPromises();
+    expect(jobs.read).toHaveBeenCalledWith("/api/jobs/job-0");
     expect(wrapper.findAll(".research-result-presentation")).toHaveLength(1);
   });
 
@@ -469,7 +474,7 @@ describe("Research thread shell", () => {
       },
     });
     mounted.push(wrapper);
-    expect(wrapper.findAll("article h4").map((heading) => heading.text())).toEqual([
+    expect(wrapper.findAll("article h3").map((heading) => heading.text())).toEqual([
       "Question a",
       "Second question",
     ]);
@@ -479,7 +484,7 @@ describe("Research thread shell", () => {
     expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
     expect(wrapper.emitted("page")).toEqual([[50]]);
-    await wrapper.get("section > button").trigger("click");
+    await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
   });
 });
@@ -615,4 +620,36 @@ it("allows follow-ups only for a loaded unarchived thread with no active turn", 
   await wrapper.setProps({ refreshKey: 2 });
   await flushPromises();
   expect(wrapper.emitted("continuable")?.at(-1)).toEqual([false]);
+});
+
+describe("Responsive research navigation", () => {
+  it("allows opening the thread index and collapses it after selection", async () => {
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: {
+        threads: [summary("a"), summary("b")],
+        thread: thread("a"),
+        selectedThreadId: "a",
+        offset: 0,
+      },
+    });
+    mounted.push(wrapper);
+    const toggle = wrapper.get(".research-thread-list-toggle");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    await toggle.trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(".research-thread-sidebar").classes()).toContain("is-expanded");
+    await wrapper.findAll(".research-thread-index button")[1].trigger("click");
+    expect(wrapper.emitted("select")?.[0]).toEqual(["b"]);
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+  });
+
+  it("keeps destructive actions inside the explicit management disclosure", async () => {
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [], thread: thread("a"), selectedThreadId: "a", offset: 0 },
+    });
+    mounted.push(wrapper);
+    expect(wrapper.get(".research-thread-management").element.tagName).toBe("DETAILS");
+    expect(wrapper.find(".research-thread-management summary").exists()).toBe(true);
+    expect(wrapper.get(".research-thread-management button").text()).not.toBe("");
+  });
 });

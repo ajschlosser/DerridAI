@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { useResearchDraft } from "../../features/research/useResearchDraft";
 import { apiRequest, ApiError } from "../../api/http";
@@ -27,14 +27,43 @@ import ResearchResultPresentation from "./ResearchResultPresentation.vue";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
-const props = withDefaults(defineProps<{ turn: ResearchTurn; streamLive?: boolean }>(), {
-  streamLive: true,
-});
+const props = withDefaults(
+  defineProps<{
+    turn: ResearchTurn;
+    streamLive?: boolean;
+    inspectRequested?: boolean;
+    deferLoad?: boolean;
+  }>(),
+  {
+    streamLive: true,
+    inspectRequested: false,
+    deferLoad: false,
+  },
+);
 const emit = defineEmits<{
   openRecord: [item: ResearchResultEvidence];
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
 }>();
 const activeEvidenceIndex = ref(0);
+const answerRegion = ref<HTMLElement | null>(null);
+const visible = ref(!props.deferLoad || typeof IntersectionObserver === "undefined");
+let visibilityObserver: IntersectionObserver | null = null;
+// Load the selected run immediately; hydrate historical runs as they approach the viewport.
+onMounted(() => {
+  if (visible.value || !answerRegion.value) return;
+  visibilityObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        visible.value = true;
+        visibilityObserver?.disconnect();
+        visibilityObserver = null;
+      }
+    },
+    { rootMargin: "480px 0px" },
+  );
+  visibilityObserver.observe(answerRegion.value);
+});
+onBeforeUnmount(() => visibilityObserver?.disconnect());
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
@@ -96,6 +125,7 @@ const answer = useQuery({
   enabled: computed(
     () =>
       allowed.value &&
+      (visible.value || props.inspectRequested) &&
       props.turn.status === "completed" &&
       Boolean(props.turn.job_id || props.turn.response_record_id),
   ),
@@ -122,7 +152,42 @@ function openRelationships(index: number, mode: "trace" | "model") {
   const item = result.value?.evidence?.[index];
   if (item) emit("openRelationships", item, mode);
 }
-const inspectOpen = ref(false);
+const answerParts = computed(() => {
+  const text = result.value?.answer || "";
+  const parts: Array<{ text: string; evidenceIndex: number | null }> = [];
+  const marker = /\[\[(E\d+)\]\]|\[(E\d+)\]/g;
+  let previousEnd = 0;
+  for (const match of text.matchAll(marker)) {
+    const start = match.index ?? 0;
+    if (start > previousEnd) {
+      parts.push({ text: text.slice(previousEnd, start), evidenceIndex: null });
+    }
+    const evidenceId = match[1] || match[2];
+    const index =
+      result.value?.evidence?.findIndex((item) => item.evidence_id === evidenceId) ?? -1;
+    const evidence = index >= 0 ? result.value?.evidence?.[index] : null;
+    parts.push({
+      text: evidence?.inline_citation || match[0],
+      evidenceIndex: index >= 0 ? index : null,
+    });
+    previousEnd = start + match[0].length;
+  }
+  if (previousEnd < text.length) {
+    parts.push({ text: text.slice(previousEnd), evidenceIndex: null });
+  }
+  return parts;
+});
+function inspectCitation(index: number) {
+  activeEvidenceIndex.value = index;
+  inspectOpen.value = true;
+}
+const inspectOpen = ref(Boolean(props.inspectRequested));
+watch(
+  () => props.inspectRequested,
+  (value) => {
+    if (value) inspectOpen.value = true;
+  },
+);
 function onInspectToggle(event: Event) {
   inspectOpen.value = (event.currentTarget as HTMLDetailsElement).open;
 }
@@ -135,6 +200,7 @@ watch(
 </script>
 <template>
   <section
+    ref="answerRegion"
     v-if="
       allowed &&
       (turn.job_id || turn.response_record_id) &&
@@ -148,15 +214,33 @@ watch(
       <p class="thread-answer-text">{{ stream.draft.value?.text }}</p>
     </template>
     <template v-else>
+      <p v-if="!visible && !inspectRequested" role="status">
+        {{ i18n.t("loading.updating") }}
+      </p>
       <p v-if="answer.isFetching.value" role="status">{{ i18n.t("loading.updating") }}</p>
       <div v-if="answer.error.value" role="alert">
-        <p>{{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}</p>
+        <p>
+          {{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}
+        </p>
         <button class="btn" type="button" @click="answer.refetch()">
           {{ i18n.t("ui.retry") }}
         </button>
       </div>
-      <template v-if="result?.answer">
-        <p class="thread-answer-text">{{ result.answer }}</p>
+      <div v-if="result?.answer" class="thread-answer-workspace">
+        <p class="thread-answer-text">
+          <template v-for="(part, index) in answerParts" :key="index">
+            <button
+              v-if="part.evidenceIndex !== null"
+              class="thread-answer-citation"
+              type="button"
+              :aria-label="`${i18n.t('research.works_cited')}: ${part.text}`"
+              @click="inspectCitation(part.evidenceIndex)"
+            >
+              {{ part.text }}
+            </button>
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </p>
         <details v-if="result.evidence?.length">
           <summary>{{ i18n.t("research.works_cited") }}</summary>
           <ul>
@@ -165,9 +249,10 @@ watch(
             </li>
           </ul>
         </details>
-        <details @toggle="onInspectToggle">
+        <details class="thread-answer-audit" :open="inspectOpen" @toggle="onInspectToggle">
           <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
           <template v-if="inspectOpen">
+            <h4 class="sr-only">{{ i18n.t("research.thread_inspect_result") }}</h4>
             <ResearchResultPresentation
               :instance-id="`thread-answer-${turn.turn_id}`"
               :instance-label="`${turn.ordinal}: ${turn.user_question}`"
@@ -187,16 +272,94 @@ watch(
             </details>
           </template>
         </details>
-      </template>
-      <p v-else-if="!answer.isFetching.value && !answer.error.value">
+      </div>
+      <p
+        v-else-if="(visible || inspectRequested) && !answer.isFetching.value && !answer.error.value"
+      >
         {{ i18n.t("research.thread_run_unavailable") }}
       </p>
     </template>
   </section>
 </template>
 <style scoped>
+.thread-answer-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
 .thread-answer-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  line-height: 1.65;
+  max-width: 78ch;
+  margin-block: 0;
+}
+.thread-answer-citation {
+  display: inline;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--accent-fg);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.thread-answer-citation:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+.thread-answer-workspace > details {
+  min-width: 0;
+}
+.thread-answer-workspace > details summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
+.thread-answer-audit {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.thread-answer-audit pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+@media (min-width: 1280px) {
+  .thread-answer-workspace:has(.thread-answer-audit[open]) {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  }
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > .thread-answer-text {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > .thread-answer-audit {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    border-top: 0;
+    border-inline-start: 1px solid var(--border);
+    padding-inline-start: 16px;
+    max-height: min(70vh, 850px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) {
+    grid-column: 1;
+  }
+}
+@media (max-width: 600px) {
+  .thread-answer-audit[open] {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    max-height: 74dvh;
+    overflow: auto;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    background: var(--surface-card);
+    box-shadow: 0 -8px 28px rgb(0 0 0 / 0.18);
+    overscroll-behavior: contain;
+  }
 }
 </style>
