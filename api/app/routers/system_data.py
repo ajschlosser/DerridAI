@@ -44,7 +44,7 @@ def clear_system_response_cache(request: Request) -> dict[str, Any]:
     """Clear saved responses through an administrator-only maintenance endpoint."""
     require_admin(request)
     try:
-        total = int(store.get_response_cache_records(limit=1).get("total") or 0)
+        total = store.response_cache_count()
         if total:
             store.delete_store("_response_cache", force=True)
         return {"deleted": total}

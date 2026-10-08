@@ -28,7 +28,7 @@ import re
 import shutil
 import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -2358,6 +2358,54 @@ class ChromaStore:
             })
         return {"records": summaries, "scanned": len(metadata)}
 
+    def _response_cache_collection(self) -> Any | None:
+        """Open the response-cache collection without materializing its records."""
+
+        try:
+            return self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return None
+            raise RuntimeError(f"Could not open response-cache collection: {exc}") from exc
+
+    def response_cache_count(self) -> int:
+        """Return the saved-response count without reading response payloads."""
+
+        collection = self._response_cache_collection()
+        return int(collection.count()) if collection is not None else 0
+
+    def iter_response_cache_records(
+        self,
+        *,
+        page_size: int = 100,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield saved responses in bounded Chroma pages.
+
+        Maintenance jobs do not need the Response Library sort order. Streaming
+        directly from Chroma prevents cache-wide grading from hydrating every
+        answer, evidence packet, and metadata object at once.
+        """
+
+        collection = self._response_cache_collection()
+        if collection is None:
+            return
+        bounded_page = max(1, min(1000, int(page_size)))
+        offset = 0
+        while True:
+            payload = collection.get(
+                include=["documents", "metadatas"],
+                limit=bounded_page,
+                offset=offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for record in self._decode_result(payload):
+                yield compact_nested_record_payloads(record)
+            offset += len(ids)
+            if len(ids) < bounded_page:
+                break
+
     def get_response_cache_records(
         self,
         *,
@@ -2365,55 +2413,99 @@ class ChromaStore:
         offset: int = 0,
         query: str | None = None,
     ) -> dict[str, Any]:
-        """Read the current response-cache collection."""
-        try:
-            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
-        except Exception as exc:
-            if self._is_missing_collection_error(exc):
-                return {
-                    "records": [],
-                    "count": 0,
-                    "total": 0,
-                    "limit": limit,
-                    "offset": offset,
-                    "query": query or "",
-                    "exists": False,
-                }
-            raise RuntimeError(f"Could not open response-cache collection: {exc}") from exc
+        """Read one Response Library page without hydrating the whole cache.
+
+        Chroma does not expose an order-by-created-at query. Scan metadata in
+        bounded pages, retain only the newest ``offset + limit`` identifiers,
+        then hydrate just the requested page. The large answer/evidence payloads
+        therefore never scale with total response-cache size.
+        """
+
+        bounded_limit = max(1, int(limit))
+        bounded_offset = max(0, int(offset))
+        collection = self._response_cache_collection()
+        if collection is None:
+            return {
+                "records": [],
+                "count": 0,
+                "total": 0,
+                "limit": bounded_limit,
+                "offset": bounded_offset,
+                "query": query or "",
+                "exists": False,
+            }
 
         try:
-            payload = collection.get(include=["documents", "metadatas"])
-            records = [dict(record) for record in self._decode_result(payload)]
+            total = int(collection.count())
+            needle = str(query or "").strip().casefold()
+            keep_count = min(total, bounded_offset + bounded_limit)
+            newest: list[tuple[str, str]] = []
+            match_count = 0
+            scan_offset = 0
+            scan_page = 512
+
+            while scan_offset < total:
+                batch_limit = min(scan_page, total - scan_offset)
+                payload = collection.get(
+                    include=["metadatas"],
+                    limit=batch_limit,
+                    offset=scan_offset,
+                )
+                ids = list(payload.get("ids") or [])
+                metadatas = list(payload.get("metadatas") or [])
+                if not ids:
+                    break
+                for index, chroma_id in enumerate(ids):
+                    metadata = metadatas[index] if index < len(metadatas) else {}
+                    metadata = metadata or {}
+                    if needle and needle not in str(metadata.get("question") or "").casefold():
+                        continue
+                    match_count += 1
+                    if keep_count <= 0:
+                        continue
+                    item = (
+                        str(metadata.get("created_at") or metadata.get("updated_at") or ""),
+                        str(chroma_id),
+                    )
+                    if len(newest) < keep_count:
+                        heapq.heappush(newest, item)
+                    elif item > newest[0]:
+                        heapq.heapreplace(newest, item)
+                scan_offset += len(ids)
+                if len(ids) < batch_limit:
+                    break
+
+            selected_ids = [
+                chroma_id
+                for _created_at, chroma_id in sorted(newest, reverse=True)[
+                    bounded_offset:bounded_offset + bounded_limit
+                ]
+            ]
+            if selected_ids:
+                payload = collection.get(
+                    ids=selected_ids,
+                    include=["documents", "metadatas"],
+                )
+                by_id = {
+                    str(record.get("_chroma_id") or record.get("record_id") or ""): record
+                    for record in self._decode_result(payload)
+                }
+                page = [
+                    compact_nested_record_payloads(by_id[chroma_id])
+                    for chroma_id in selected_ids
+                    if chroma_id in by_id
+                ]
+            else:
+                page = []
         except Exception as exc:
             raise RuntimeError(f"Could not read response-cache records: {exc}") from exc
 
-        records.sort(
-            key=lambda record: str(
-                record.get("created_at")
-                or record.get("updated_at")
-                or ""
-            ),
-            reverse=True,
-        )
-        total = len(records)
-        needle = str(query or "").strip().casefold()
-        if needle:
-            records = [
-                record
-                for record in records
-                if needle in str(record.get("question") or "").casefold()
-            ]
-        count = len(records)
-        page = [
-            compact_nested_record_payloads(record)
-            for record in records[offset:offset + limit]
-        ]
         return {
             "records": page,
-            "count": count,
+            "count": match_count,
             "total": total,
-            "limit": limit,
-            "offset": offset,
+            "limit": bounded_limit,
+            "offset": bounded_offset,
             "query": query or "",
             "exists": True,
         }

@@ -39,8 +39,8 @@ def test_system_data_clear_response_cache_reports_affected_count(monkeypatch) ->
     monkeypatch.setattr(system_data_router, "require_admin", lambda _request: None)
     monkeypatch.setattr(
         system_data_router.store,
-        "get_response_cache_records",
-        lambda **_kwargs: {"total": 12},
+        "response_cache_count",
+        lambda: 12,
     )
     monkeypatch.setattr(
         system_data_router.store,
