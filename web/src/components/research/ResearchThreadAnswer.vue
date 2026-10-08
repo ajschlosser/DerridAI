@@ -143,6 +143,36 @@ function openRelationships(index: number, mode: "trace" | "model") {
   const item = result.value?.evidence?.[index];
   if (item) emit("openRelationships", item, mode);
 }
+const answerParts = computed(() => {
+  const text = result.value?.answer || "";
+  const parts: Array<{ text: string; evidenceIndex: number | null }> = [];
+  const marker = /\\[\\[(E\\d+)\\]\\]|\\[(E\\d+)\\]/g;
+  let previousEnd = 0;
+  for (const match of text.matchAll(marker)) {
+    const start = match.index ?? 0;
+    if (start > previousEnd) {
+      parts.push({ text: text.slice(previousEnd, start), evidenceIndex: null });
+    }
+    const evidenceId = match[1] || match[2];
+    const index = result.value?.evidence?.findIndex(
+      (item) => item.evidence_id === evidenceId,
+    ) ?? -1;
+    const evidence = index >= 0 ? result.value?.evidence?.[index] : null;
+    parts.push({
+      text: evidence?.inline_citation || match[0],
+      evidenceIndex: index >= 0 ? index : null,
+    });
+    previousEnd = start + match[0].length;
+  }
+  if (previousEnd < text.length) {
+    parts.push({ text: text.slice(previousEnd), evidenceIndex: null });
+  }
+  return parts;
+});
+function inspectCitation(index: number) {
+  activeEvidenceIndex.value = index;
+  inspectOpen.value = true;
+}
 const inspectOpen = ref(Boolean(props.inspectRequested));
 watch(() => props.inspectRequested, (value) => {
   if (value) inspectOpen.value = true;
@@ -182,7 +212,20 @@ watch(
         </button>
       </div>
       <div v-if="result?.answer" class="thread-answer-workspace">
-        <p class="thread-answer-text">{{ result.answer }}</p>
+        <p class="thread-answer-text">
+          <template v-for="(part, index) in answerParts" :key="index">
+            <button
+              v-if="part.evidenceIndex !== null"
+              class="thread-answer-citation"
+              type="button"
+              :aria-label="`${i18n.t('research.works_cited')}: ${part.text}`"
+              @click="inspectCitation(part.evidenceIndex)"
+            >
+              {{ part.text }}
+            </button>
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </p>
         <details v-if="result.evidence?.length">
           <summary>{{ i18n.t("research.works_cited") }}</summary>
           <ul>
@@ -233,6 +276,20 @@ watch(
   line-height: 1.65;
   max-width: 78ch;
   margin-block: 0;
+}
+.thread-answer-citation {
+  display: inline;
+  border: 0;
+  background: transparent;
+  padding: 0 2px;
+  color: var(--accent-fg);
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.thread-answer-citation:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 .thread-answer-workspace > details {
   min-width: 0;
