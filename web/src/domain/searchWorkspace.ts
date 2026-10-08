@@ -234,11 +234,11 @@ export function createSearchWorkspace(deps: Deps) {
 
   function localSearchStaticMetadata() {
     const rows = localCorpusRows();
-    let available = localCorpusCache.available;
-    if (!available) {
-      available = tableAvailableFields(rows, ["__file", ...SEARCH_LOADED_COLUMNS]);
-      localCorpusCache.available = available;
-      localCorpusCache.filterFields = available.filter((field: string) =>
+    const availableFields =
+      localCorpusCache.available ?? tableAvailableFields(rows, ["__file", ...SEARCH_LOADED_COLUMNS]);
+    if (!localCorpusCache.available) {
+      localCorpusCache.available = availableFields;
+      localCorpusCache.filterFields = availableFields.filter((field: string) =>
         isSearchFilterFieldName(field),
       );
       localCorpusCache.suggestions = searchSuggestions(rows, {
@@ -246,7 +246,7 @@ export function createSearchWorkspace(deps: Deps) {
       });
     }
     return {
-      available: [...available],
+      available: [...availableFields],
       filterFields: [...(localCorpusCache.filterFields || [])],
       suggestions: localCorpusCache.suggestions || {},
     };
