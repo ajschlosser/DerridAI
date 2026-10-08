@@ -260,7 +260,8 @@ function loadSavedState() {
   }
   try {
     recentSearches.value =
-      JSON.parse(localStorage.getItem(accountStorageKey("derridai.search.recent.v1")) || "[]") || [];
+      JSON.parse(localStorage.getItem(accountStorageKey("derridai.search.recent.v1")) || "[]") ||
+      [];
   } catch {
     recentSearches.value = [];
   }
