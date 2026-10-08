@@ -16,12 +16,12 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import copy
 import re
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from . import operation_events, research_threads
