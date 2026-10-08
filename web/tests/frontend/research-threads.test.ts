@@ -155,6 +155,11 @@ describe("Research thread shell", () => {
           .filter((item) => item.find(".thread-answer-text").exists());
     const first = articles[0],
       second = articles[1];
+    const boundCitation = first.find(".thread-answer-citation");
+    expect(boundCitation.exists()).toBe(true);
+    await boundCitation.trigger("click");
+    expect(first.find(".research-result-presentation").exists()).toBe(true);
+    expect(second.find(".research-result-presentation").exists()).toBe(false);
     for (const article of [first, second]) {
       // Selecting a run opens its own audit; unselected turns stay collapsed.
       const selected = article.find("button[aria-current='true']").exists();
