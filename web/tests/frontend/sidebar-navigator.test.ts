@@ -104,5 +104,4 @@ describe("SidebarNavigator interaction priority", () => {
       JSON.parse(localStorage.getItem("derridai.ui.navigationRecents.admin:1") || "[]"),
     ).toEqual(["rag"]);
   });
-
 });
