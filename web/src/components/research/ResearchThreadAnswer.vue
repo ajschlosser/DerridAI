@@ -163,7 +163,8 @@ const answerParts = computed(() => {
       parts.push({ text: text.slice(previousEnd, start), evidenceIndex: null });
     }
     const evidenceId = match[1] || match[2];
-    const index = result.value?.evidence?.findIndex((item) => item.evidence_id === evidenceId) ?? -1;
+    const index =
+      result.value?.evidence?.findIndex((item) => item.evidence_id === evidenceId) ?? -1;
     const evidence = index >= 0 ? result.value?.evidence?.[index] : null;
     parts.push({
       text: evidence?.inline_citation || match[0],
@@ -213,10 +214,14 @@ watch(
       <p class="thread-answer-text">{{ stream.draft.value?.text }}</p>
     </template>
     <template v-else>
-      <p v-if="!visible && !inspectRequested" role="status">{{ i18n.t("loading.updating") }}</p>
+      <p v-if="!visible && !inspectRequested" role="status">
+        {{ i18n.t("loading.updating") }}
+      </p>
       <p v-if="answer.isFetching.value" role="status">{{ i18n.t("loading.updating") }}</p>
       <div v-if="answer.error.value" role="alert">
-        <p>{{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}</p>
+        <p>
+          {{ denied ? i18n.t("research.thread_run_unavailable") : String(answer.error.value) }}
+        </p>
         <button class="btn" type="button" @click="answer.refetch()">
           {{ i18n.t("ui.retry") }}
         </button>
@@ -336,7 +341,8 @@ watch(
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-    .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) {
+    .thread-answer-workspace:has(.thread-answer-audit[open])
+      > details:not(.thread-answer-audit) {
     grid-column: 1;
   }
 }
