@@ -65,10 +65,7 @@ import { toggleSidebar } from "./domain/sidebarToggle";
 import { CHOOSE_CORPUS_FILES_EVENT } from "./services/corpusFiles";
 import { measureInteractionToNextFrame } from "./domain/interactionTiming";
 import { navigationState } from "./state/workspaceState";
-import {
-  persistSearchPreferences,
-  persistVectorPreferences,
-} from "./domain/sharedWorkspaceStorage";
+import { persistSearchPreferences, persistVectorPreferences } from "./domain/sharedWorkspaceStorage";
 import { flushWorkspaceSessionWrites } from "./domain/workspaceSessionPersistence";
 
 const router = useRouter();
