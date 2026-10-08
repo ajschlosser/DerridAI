@@ -21,10 +21,20 @@ from __future__ import annotations
 import copy
 import hashlib
 import re
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from .corpus_metadata import DISCOURSE_ROLES, REGION_TYPES
-from .field_assertions import accept_unreviewed_suggestions, migrate_record_assertions
+from .field_assertions import (
+    FieldAssertion,
+    accept_unreviewed_suggestions,
+    current_assertion_by_name,
+    field_identity,
+    migrate_record_assertions,
+    project_record_assertions,
+    store_assertion,
+)
 
 
 def warning_key(text: str) -> str:
@@ -224,6 +234,72 @@ REVIEWER_ACCEPTED = "reviewer_accepted"
 UNREVIEWED = "unreviewed_suggestion"
 
 
+def _quarantine_invalid_autonomous_core_values(record: dict[str, Any]) -> int:
+    """Keep malformed core candidates as invalid assertions, never public scalar values.
+
+    An as-is publication may bypass human review, not the public JSONL schema.
+    The source candidate remains in assertion history; only this publication
+    snapshot receives an invalid/unresolved current assertion with no value.
+    Do not coerce truthy strings (especially `"false"`) into booleans.
+    Human-confirmed values are not overridden by an autonomous policy.
+    """
+    invalid_count = 0
+    for field in ("region_type", "primary_text", "discourse_role"):
+        value = record.get(field)
+        invalid = (
+            value is not None and not isinstance(value, bool)
+            if field == "primary_text"
+            else value not in (None, "")
+            and str(value) not in (REGION_TYPES if field == "region_type" else DISCOURSE_ROLES)
+        )
+        if not invalid:
+            continue
+        existing = current_assertion_by_name(record, field)
+        if existing is not None and existing.authority_status in {"human_confirmed", "human_override"}:
+            # A human-owned invalid value requires correction, not silent masking.
+            continue
+        reason = f"Invalid {field} candidate excluded from the autonomous publication projection."
+        provenance = {
+            "reason_code": "invalid_publication_core_value",
+            "candidate_value": copy.deepcopy(value),
+            "prior_assertion_id": existing.assertion_id if existing else None,
+        }
+        if existing is None:
+            invalid_assertion = FieldAssertion(
+                record_id=str(record.get("record_id") or ""),
+                record_revision=int(record.get("record_revision") or 1),
+                field_id=field_identity(field),
+                field_name=field,
+                value=None,
+                derivation_method="imported",
+                evaluation_status="evaluation_failed",
+                value_status="invalid",
+                method="publication_core_value_validation",
+                reason=reason,
+                legacy_metadata={"publication_validation": provenance},
+            )
+        else:
+            invalid_assertion = existing.model_copy(update={
+                "assertion_id": f"assertion-{uuid.uuid4().hex}",
+                "value": None,
+                "evaluation_status": "evaluation_failed",
+                "value_status": "invalid",
+                "legacy_status": None,
+                "reason": reason,
+                "legacy_metadata": {
+                    **copy.deepcopy(existing.legacy_metadata),
+                    "publication_validation": provenance,
+                },
+                "supersedes_assertion_id": existing.assertion_id,
+                "created_at": datetime.now(UTC).isoformat(),
+            })
+        store_assertion(record, invalid_assertion)
+        invalid_count += 1
+    if invalid_count:
+        project_record_assertions(record)
+    return invalid_count
+
+
 def mark_unreviewed_publication(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int, int]:
     """Accept every outstanding suggestion in a publication snapshot, without changing stored review state.
 
@@ -239,8 +315,9 @@ def mark_unreviewed_publication(records: list[dict[str, Any]]) -> tuple[list[dic
     for record in records:
         snapshot = copy.deepcopy(record)
         fields = accept_unreviewed_suggestions(snapshot)
+        invalid_fields = _quarantine_invalid_autonomous_core_values(snapshot)
         accepted_fields += fields
-        reviewed = bool(record.get("accepted")) and not record.get("needs_review") and not fields
+        reviewed = bool(record.get("accepted")) and not record.get("needs_review") and not fields and not invalid_fields
         unreviewed += 0 if reviewed else 1
         snapshot["needs_review"] = False
         snapshot["publication_review_status"] = REVIEWER_ACCEPTED if reviewed else UNREVIEWED
