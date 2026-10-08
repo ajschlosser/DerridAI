@@ -651,7 +651,7 @@ describe("Responsive research navigation", () => {
     });
     mounted.push(wrapper);
     expect(wrapper.get(".research-thread-management").element.tagName).toBe("DETAILS");
-    expect(wrapper.get(".research-thread-management summary").exists()).toBe(true);
+    expect(wrapper.find(".research-thread-management summary").exists()).toBe(true);
     expect(wrapper.get(".research-thread-management button").text()).not.toBe("");
   });
 });
