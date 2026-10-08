@@ -448,8 +448,10 @@ describe("Research thread URL state", () => {
     await flushPromises();
     pending.resolve({ id: "a", status: "completed", result: { answer: "Answer A" } });
     await flushPromises();
-    expect(w.get(".answer").text()).toContain("Answer B");
-    expect(w.get(".answer").text()).not.toContain("Answer A");
+    // Thread results are rendered by the browser, not duplicated in the global result pane.
+    expect(w.findComponent({ name: "ResearchThreadBrowser" }).props("threadId")).toBe("thread-b");
+    expect(w.findComponent({ name: "ResearchThreadBrowser" }).props("jobId")).toBe("b");
+    expect(w.find(".answer").exists()).toBe(false);
   });
 });
 
@@ -462,8 +464,9 @@ it("clears the selected thread answer when Research access is revoked", async ()
   });
   const w = render();
   await flushPromises();
-  expect(w.get(".answer").text()).toContain("Private answer");
+  expect(w.find(".answer").exists()).toBe(false);
   reactive(mocks.auth).allowed = false;
   await flushPromises();
-  expect(w.text()).not.toContain("Private answer");
+  expect(w.find(".answer").exists()).toBe(false);
+  expect(w.findComponent({ name: "ResearchThreadBrowser" }).exists()).toBe(false);
 });
