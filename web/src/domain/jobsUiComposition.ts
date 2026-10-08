@@ -109,7 +109,6 @@ import "./navigation";
 import {
   persistJobPreferences,
   persistLayoutPreferences,
-  persistPrefs,
   persistResearchPreferences,
   persistSettingsPreferences,
   refreshShell,
