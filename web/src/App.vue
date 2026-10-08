@@ -606,10 +606,7 @@ watch(
 );
 
 watch(
-  () =>
-    auth.user
-      ? `${String(auth.user.role || "")}:${String(auth.user.id || "")}`
-      : "",
+  () => (auth.user ? `${String(auth.user.role || "")}:${String(auth.user.id || "")}` : ""),
   (identity, previousIdentity) => {
     if (!identity) {
       pauseRuntime();
