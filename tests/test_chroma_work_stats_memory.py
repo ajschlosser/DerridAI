@@ -1,0 +1,80 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+
+from __future__ import annotations
+
+from app.chroma_store import ChromaStore
+
+
+class _WorkStatsCollection:
+    def __init__(self, count: int = 1200) -> None:
+        self.rows = []
+        self.calls: list[dict] = []
+        for index in range(count):
+            work = "Of Grammatology" if index < 700 else "Writing and Difference"
+            publisher = "Stable Press" if work == "Writing and Difference" else (
+                "Press A" if index == 0 else "Press B"
+            )
+            self.rows.append(
+                (
+                    f"r-{index}",
+                    "one two three four",
+                    {
+                        "work": work,
+                        "document_author": "Jacques Derrida",
+                        "publisher": publisher,
+                    },
+                )
+            )
+
+    def get(self, *, include=(), limit=None, offset=0):
+        self.calls.append({
+            "include": list(include),
+            "limit": limit,
+            "offset": offset,
+        })
+        stop = offset + int(limit or len(self.rows))
+        rows = self.rows[offset:stop]
+        return {
+            "ids": [row[0] for row in rows],
+            "documents": [row[1] for row in rows],
+            "metadatas": [row[2] for row in rows],
+        }
+
+
+def _store(collection: _WorkStatsCollection) -> ChromaStore:
+    store = object.__new__(ChromaStore)
+    store._collection = lambda _name: collection
+    return store
+
+
+def test_work_stats_scans_large_collections_in_bounded_pages() -> None:
+    collection = _WorkStatsCollection()
+
+    rows = _store(collection).work_stats("corpus")
+
+    assert [call["limit"] for call in collection.calls] == [512, 512, 512]
+    assert [call["offset"] for call in collection.calls] == [0, 512, 1024]
+    assert all(
+        call["include"] == ["metadatas", "documents"]
+        for call in collection.calls
+    )
+
+    by_work = {row["work"]: row for row in rows}
+    grammatology = by_work["Of Grammatology"]
+    assert grammatology["count"] == 700
+    assert grammatology["total_words"] == 2800
+    assert grammatology["average_record_length"] == 4
+    assert grammatology["document_author"] == "Jacques Derrida"
+    assert grammatology["publisher_mixed"] is True
+    assert "publisher" not in grammatology
+
+    writing = by_work["Writing and Difference"]
+    assert writing["count"] == 500
+    assert writing["publisher"] == "Stable Press"
+    assert "publisher_mixed" not in writing
