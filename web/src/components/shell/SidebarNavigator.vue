@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import AppIcon from "../AppIcon.vue";
 import SidebarNavButton from "./SidebarNavButton.vue";
@@ -29,6 +29,7 @@ const props = defineProps<{
   groups: SidebarNavGroup[];
   collapsed: boolean;
   pendingId?: string;
+  storageScope?: string;
 }>();
 const emit = defineEmits<{ navigate: [string] }>();
 const i18n = useI18nStore();
@@ -38,13 +39,16 @@ const RECENTS_KEY = "derridai.ui.navigationRecents";
 const COLLAPSED_GROUPS_KEY = "derridai.ui.navigationCollapsedGroups";
 const DEFAULT_COLLAPSED_GROUPS = ["Corpus Management", "AI & Automation", "System"];
 const query = ref("");
+const scopedStorageKey = (key: string) =>
+  props.storageScope ? `${key}.${props.storageScope}` : key;
+
 const favorites = ref<string[]>(loadIds(FAVORITES_KEY));
 const recents = ref<string[]>(loadIds(RECENTS_KEY));
 const collapsedGroups = ref<string[]>(loadIds(COLLAPSED_GROUPS_KEY, DEFAULT_COLLAPSED_GROUPS));
 
 function loadIds(key: string, fallback: string[] = []): string[] {
   try {
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(scopedStorageKey(key));
     if (raw === null) return [...fallback];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map(String).slice(0, 12) : [...fallback];
@@ -55,11 +59,20 @@ function loadIds(key: string, fallback: string[] = []): string[] {
 
 function saveIds(key: string, values: string[]) {
   try {
-    localStorage.setItem(key, JSON.stringify(values));
+    localStorage.setItem(scopedStorageKey(key), JSON.stringify(values));
   } catch {
     /* Navigation personalization is optional. */
   }
 }
+
+watch(
+  () => props.storageScope,
+  () => {
+    favorites.value = loadIds(FAVORITES_KEY);
+    recents.value = loadIds(RECENTS_KEY);
+    collapsedGroups.value = loadIds(COLLAPSED_GROUPS_KEY, DEFAULT_COLLAPSED_GROUPS);
+  },
+);
 
 function groupKey(group: SidebarNavGroup) {
   return group.id || group.section;
