@@ -77,76 +77,81 @@ const manageExpanded = ref(false);
       class="research-thread-sidebar"
       :class="{ 'is-expanded': listExpanded }"
     >
-    <button type="button" class="btn" @click="emit('new')">
-      {{ i18n.t("research.thread_new") }}
-    </button>
-    <label>
-      {{ i18n.t("research.threads_search") }}
-      <input
-        type="search"
-        :value="search"
-        maxlength="200"
-        @input="emit('search', ($event.target as HTMLInputElement).value)"
-      />
-    </label>
-    <label class="research-thread-archive-filter">
-      <input
-        type="checkbox"
-        :checked="includeArchived"
-        @change="emit('includeArchived', ($event.target as HTMLInputElement).checked)"
-      />
-      {{ i18n.t("research.threads_include_archived") }}
-    </label>
-    <p v-if="notice" role="status">{{ notice }}</p>
-    <p v-if="loading || busy" role="status">{{ i18n.t("loading.updating") }}</p>
-    <div v-if="error" role="alert">
-      <p>{{ error }}</p>
-      <button type="button" class="btn" @click="emit('retry')">{{ i18n.t("ui.retry") }}</button>
-    </div>
-    <nav class="research-thread-index" :aria-label="i18n.t('research.threads_title')">
-      <ul>
-        <li v-for="item in threads" :key="item.thread_id">
-          <button
-            type="button"
-            class="btn"
-            :aria-current="selectedThreadId === item.thread_id ? 'true' : undefined"
-            @click="
-              emit('select', item.thread_id);
-              listExpanded = false;
-            "
-          >
-            {{ item.title }}
-            <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
-            <span>{{ i18n.tf("research.thread_turn_count", { count: item.turn_count }) }}</span>
-            <span v-if="showPreview">{{ item.last_question }}</span>
-            <time :datetime="item.updated_at">{{
-              new Date(item.updated_at).toLocaleDateString(i18n.locale)
-            }}</time>
-          </button>
-        </li>
-      </ul>
-    </nav>
-    <p v-if="!loading && !error && !threads.length">{{ i18n.t("research.threads_empty") }}</p>
-    <div class="research-thread-pages">
-      <button
-        type="button"
-        class="btn"
-        :disabled="loading || offset === 0"
-        @click="emit('page', Math.max(0, offset - 50))"
-      >
-        {{ i18n.t("research.threads_previous") }}
+      <button type="button" class="btn" @click="emit('new')">
+        {{ i18n.t("research.thread_new") }}
       </button>
-      <button
-        type="button"
-        class="btn"
-        :disabled="loading || threads.length < 50"
-        @click="emit('page', offset + 50)"
-      >
-        {{ i18n.t("research.threads_next") }}
-      </button>
+      <label>
+        {{ i18n.t("research.threads_search") }}
+        <input
+          type="search"
+          :value="search"
+          maxlength="200"
+          @input="emit('search', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+      <label class="research-thread-archive-filter">
+        <input
+          type="checkbox"
+          :checked="includeArchived"
+          @change="emit('includeArchived', ($event.target as HTMLInputElement).checked)"
+        />
+        {{ i18n.t("research.threads_include_archived") }}
+      </label>
+      <p v-if="notice" role="status">{{ notice }}</p>
+      <p v-if="loading || busy" role="status">{{ i18n.t("loading.updating") }}</p>
+      <div v-if="error" role="alert">
+        <p>{{ error }}</p>
+        <button type="button" class="btn" @click="emit('retry')">{{ i18n.t("ui.retry") }}</button>
+      </div>
+      <nav class="research-thread-index" :aria-label="i18n.t('research.threads_title')">
+        <ul>
+          <li v-for="item in threads" :key="item.thread_id">
+            <button
+              type="button"
+              class="btn"
+              :aria-current="selectedThreadId === item.thread_id ? 'true' : undefined"
+              @click="
+                emit('select', item.thread_id);
+                listExpanded = false;
+              "
+            >
+              {{ item.title }}
+              <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
+              <span>{{ i18n.tf("research.thread_turn_count", { count: item.turn_count }) }}</span>
+              <span v-if="showPreview">{{ item.last_question }}</span>
+              <time :datetime="item.updated_at">{{
+                new Date(item.updated_at).toLocaleDateString(i18n.locale)
+              }}</time>
+            </button>
+          </li>
+        </ul>
+      </nav>
+      <p v-if="!loading && !error && !threads.length">{{ i18n.t("research.threads_empty") }}</p>
+      <div class="research-thread-pages">
+        <button
+          type="button"
+          class="btn"
+          :disabled="loading || offset === 0"
+          @click="emit('page', Math.max(0, offset - 50))"
+        >
+          {{ i18n.t("research.threads_previous") }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="loading || threads.length < 50"
+          @click="emit('page', offset + 50)"
+        >
+          {{ i18n.t("research.threads_next") }}
+        </button>
+      </div>
     </div>
-    </div>
-    <section v-if="thread" class="research-thread-conversation" :aria-label="thread.title" tabindex="-1">
+    <section
+      v-if="thread"
+      class="research-thread-conversation"
+      :aria-label="thread.title"
+      tabindex="-1"
+    >
       <h2>{{ thread.title }}</h2>
       <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
       <details
