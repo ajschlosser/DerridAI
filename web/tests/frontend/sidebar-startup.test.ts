@@ -85,6 +85,7 @@ vi.mock("../../src/domain/appBootstrap", () => ({
 
 import App from "../../src/App.vue";
 import { state as sharedState } from "../../src/domain/sharedUrlState";
+import { navigationState } from "../../src/state/workspaceState";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
@@ -460,7 +461,7 @@ describe("router and runtime stay in agreement", () => {
     runtime.getNavItems.mockReturnValue(NAV);
     runtime.getShellSnapshot.mockReturnValue({});
     runtime.bootstrapRuntime.mockReturnValue(new Promise(() => {}));
-    delete sharedState.view;
+    navigationState.view = "home";
   });
 
   type UrlSyncHook = (href: string, options: { replace?: boolean }) => void;
