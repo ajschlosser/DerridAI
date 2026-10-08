@@ -214,7 +214,7 @@ watch(
           </template>
         </details>
       </div>
-      <p v-else-if="!answer.isFetching.value && !answer.error.value">
+      <p v-else-if="(visible || inspectRequested) && !answer.isFetching.value && !answer.error.value">
         {{ i18n.t("research.thread_run_unavailable") }}
       </p>
     </template>
@@ -240,6 +240,19 @@ watch(
   .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) { grid-column: 1; }
 }
 @media (max-width: 600px) {
-  .thread-answer-audit[open] { max-height: 70vh; overflow: auto; }
+  .thread-answer-audit[open] {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    max-height: 74dvh;
+    overflow: auto;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    background: var(--surface-card);
+    box-shadow: 0 -8px 28px rgb(0 0 0 / 0.18);
+    overscroll-behavior: contain;
+  }
 }
 </style>
