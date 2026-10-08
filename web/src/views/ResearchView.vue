@@ -423,7 +423,7 @@ async function loadAnswer(job: ResearchJob) {
     if (disposed || request !== answerRequest || !isNativeResearch.value) return;
     activeJob.value = answer;
     if (!jobs.value.some((item) => item.id === answer.id)) jobs.value = [answer, ...jobs.value];
-    runsDrawer.value?.close();
+    runsDrawer.value?.close?.();
     schedulePoll();
   } catch (error) {
     if (!disposed && request === answerRequest)
