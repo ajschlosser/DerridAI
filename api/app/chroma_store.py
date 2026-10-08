@@ -3512,42 +3512,93 @@ class ChromaStore:
 
         return candidates
 
-    def filter_search(self, store: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def filter_search(
+        self,
+        store: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return filter matches without decoding an unbounded native result set."""
+
         col = self._collection(store)
         where = where or {}
         contains_filters: dict[str, str] = {}
         native_where: dict[str, Any] = {}
         for field, value in where.items():
             if isinstance(value, dict) and "$contains" in value:
-                contains_filters[field] = str(value.get("$contains") or "").casefold()
+                contains_filters[field] = str(
+                    value.get("$contains") or ""
+                ).casefold()
             else:
                 native_where[field] = value
+
         args: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if native_where:
             args["where"] = native_where
-        # A contains filter may target array-like metadata that Chroma persists
-        # through DerridAI's metadata codec. Fetch the native-filtered set,
-        # decode it, then perform membership/substring matching on the decoded
-        # values. Exact-only filters retain Chroma's efficient limit path.
         if not contains_filters:
             args["limit"] = n_results
-        rows = self._decode_result(col.get(**args))
-        if contains_filters:
-            def matches(record: dict[str, Any]) -> bool:
-                for field, needle in contains_filters.items():
-                    value = record.get(field)
-                    if isinstance(value, (list, tuple, set)):
-                        values = [str(item).casefold() for item in value]
-                        if needle not in values and not any(needle in item for item in values):
-                            return False
-                    elif isinstance(value, dict):
-                        if needle not in " ".join(f"{k} {v}" for k, v in value.items()).casefold():
-                            return False
-                    elif needle not in str(value or "").casefold():
+            rows = self._decode_result(col.get(**args))
+            return [
+                {
+                    "id": row.get("_chroma_id") or row.get("record_id"),
+                    "distance": None,
+                    "record": row,
+                }
+                for row in rows[:n_results]
+            ]
+
+        def matches(record: dict[str, Any]) -> bool:
+            for field, needle in contains_filters.items():
+                value = record.get(field)
+                if isinstance(value, (list, tuple, set)):
+                    values = [str(item).casefold() for item in value]
+                    if needle not in values and not any(
+                        needle in item for item in values
+                    ):
                         return False
-                return True
-            rows = [row for row in rows if matches(row)]
-        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
+                elif isinstance(value, dict):
+                    if needle not in " ".join(
+                        f"{key} {item}"
+                        for key, item in value.items()
+                    ).casefold():
+                        return False
+                elif needle not in str(value or "").casefold():
+                    return False
+            return True
+
+        # Contains filters target decoded metadata that Chroma may persist through
+        # DerridAI's JSON metadata codec. Chroma cannot perform these comparisons
+        # natively, but the API only needs the first n results in source order.
+        # Scan bounded pages and stop as soon as that result window is full.
+        rows: list[dict[str, Any]] = []
+        scan_offset = 0
+        page_size = 512
+        while len(rows) < n_results:
+            payload = col.get(
+                **args,
+                limit=page_size,
+                offset=scan_offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for row in self._decode_result(payload):
+                if matches(row):
+                    rows.append(row)
+                    if len(rows) >= n_results:
+                        break
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
+
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "record": row,
+            }
+            for row in rows
+        ]
 
     def keyword_search(
         self,
