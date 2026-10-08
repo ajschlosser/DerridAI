@@ -59,12 +59,8 @@ const workspacePersistence = createWorkspacePersistence({
   },
 });
 
-export const {
-  persistFileNow,
-  persistFile,
-  flushPendingFileWrites,
-  cancelPendingFileWrites,
-} = workspacePersistence;
+export const { persistFileNow, persistFile, flushPendingFileWrites, cancelPendingFileWrites } =
+  workspacePersistence;
 
 export async function restoreWorkspace() {
   await migrateLegacyWorkspaceForCurrentUser();
