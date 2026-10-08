@@ -44,6 +44,13 @@ class FakeJobRepository:
             if job.get("type") == job_type
         ]
 
+    def load_summaries(self, job_type):
+        rows = self.load(job_type)
+        for job in rows:
+            for key in ("result", "results", "_resume_dictionary", "_resume_failed_keys"):
+                job.pop(key, None)
+        return rows
+
     def get(self, job_id, *, job_type=None):
         job = self.jobs.get(str(job_id))
         if job is None or (job_type is not None and job.get("type") != job_type):
@@ -98,7 +105,6 @@ class FakeJobRepository:
 
 class Jobs(PersistentJobStateMixin):
     JOB_TYPE = "test"
-    RESIDENT_FINISHED_MAX_JOBS = 0
 
     def __init__(self):
         self._lock = threading.RLock()
@@ -163,6 +169,9 @@ def test_terminal_job_is_persisted_once_then_evicted_from_full_resident_state(mo
         "done": _job("done", "completed", payload="z" * 1_000_000),
     }
 
+    repository.footprints = lambda _job_type: (_ for _ in ()).throw(
+        AssertionError("zero-resident policy must not scan durable footprints")
+    )
     manager._persist_job("done")
 
     assert "done" not in manager._jobs
@@ -186,6 +195,59 @@ def test_clear_finished_uses_durable_count_even_when_history_is_not_resident(mon
     assert manager._clear_finished_records() == 2
     assert set(repository.jobs) == {"active"}
     assert set(manager._jobs) == {"active"}
+
+
+def test_llm_history_list_uses_compact_sqlite_summaries(monkeypatch):
+    from app.job_llm import LLMJobManager
+
+    repository = FakeJobRepository([])
+    monkeypatch.setattr(job_state, "job_repository", repository)
+
+    manager = object.__new__(LLMJobManager)
+    manager._lock = threading.RLock()
+    manager._persistence_io_lock = threading.Lock()
+    manager._recent_terminal_summaries = {}
+    manager._jobs = {
+        "llm-done": {
+            "id": "llm-done",
+            "type": "llm",
+            "status": "completed",
+            "created_at": "2026-10-06T00:00:00+00:00",
+            "events": [],
+            "total": 2,
+            "completed": 2,
+            "failed": 1,
+            "dismissed": False,
+            "results": [
+                {
+                    "proposal": {
+                        "changes": {"speaker": "Derrida", "discourse_role": "assertion"}
+                    },
+                    "error": None,
+                },
+                {"proposal": None, "error": {"message": "provider failed"}},
+            ],
+        }
+    }
+
+    manager._persist_job("llm-done")
+
+    assert manager._jobs == {}
+    persisted = repository.jobs["llm-done"]
+    assert persisted["pending_result_count"] == 1
+    assert persisted["pending_change_count"] == 2
+    assert persisted["failure_result_count"] == 1
+
+    repository.load = lambda _job_type: (_ for _ in ()).throw(
+        AssertionError("list must not hydrate full historical LLM results")
+    )
+    listed = manager.list()
+
+    assert len(listed) == 1
+    assert listed[0]["pending_result_count"] == 1
+    assert listed[0]["pending_change_count"] == 2
+    assert listed[0]["failure_result_count"] == 1
+    assert "results" not in listed[0]
 
 
 def test_repository_recovery_preserves_restart_resumable_upserts(tmp_path):
