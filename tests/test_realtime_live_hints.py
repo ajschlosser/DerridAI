@@ -542,6 +542,19 @@ class _ImmediateThread:
         return False
 
 
+class _ImmediateFuture:
+    def __init__(self, value):
+        self._value = value
+
+    def result(self):
+        return self._value
+
+
+class _ImmediateExecutor:
+    def submit(self, function, *args, **kwargs):
+        return _ImmediateFuture(function(*args, **kwargs))
+
+
 def test_rag_job_generation_deltas_are_noted_with_the_jobs_owner(monkeypatch):
     captured: dict = {}
 
@@ -560,6 +573,7 @@ def test_rag_job_generation_deltas_are_noted_with_the_jobs_owner(monkeypatch):
 
     monkeypatch.setattr(job_rag, "run_rag_pipeline", fake_run_rag_pipeline)
     monkeypatch.setattr(job_rag.threading, "Thread", _ImmediateThread)
+    monkeypatch.setattr(job_rag, "_RAG_PIPELINE_EXECUTOR", _ImmediateExecutor())
 
     manager = RAGJobManager(_StubStore(), ollama_max_concurrent=1)
     body = RAGRunRequest(prompt="What is deconstruction?", source_collection="corpus", provider="openai", model="test-model")
