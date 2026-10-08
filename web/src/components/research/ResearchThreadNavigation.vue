@@ -202,46 +202,156 @@ const manageExpanded = ref(false);
   margin-block: var(--page-gap);
   min-width: 0;
 }
-.research-thread-index-title { grid-column: 1; margin: 0 0 12px; }
-.research-thread-list-toggle { display: none; }
+.research-thread-index-title {
+  grid-column: 1;
+  margin: 0 0 12px;
+}
+.research-thread-list-toggle {
+  display: none;
+}
 .research-thread-sidebar {
   grid-column: 1;
   display: grid;
   gap: 12px;
   min-width: 0;
 }
-.research-thread-sidebar > label:not(.research-thread-archive-filter) { display: grid; gap: 8px; }
-.research-thread-sidebar input[type="search"] { width: 100%; min-width: 0; }
-.research-thread-index { max-height: min(58vh, 650px); overflow-y: auto; overscroll-behavior: contain; }
-.research-thread-index ul { list-style: none; display: grid; gap: 8px; padding: 0; margin: 0; }
-.research-thread-index button {
-  display: grid; justify-items: start; gap: 5px; width: 100%; min-height: 72px;
-  padding: 12px; white-space: normal; text-align: start; overflow-wrap: anywhere;
+.research-thread-sidebar > label:not(.research-thread-archive-filter) {
+  display: grid;
+  gap: 8px;
 }
-.research-thread-index button span, .research-thread-index time { font-size: .78rem; color: var(--text-tertiary); font-weight: 400; }
-.research-thread-index button[aria-current="true"] { border-color: var(--accent-fg); background: var(--soft); box-shadow: inset 3px 0 0 var(--accent-fg); font-weight: 700; }
+.research-thread-sidebar input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+.research-thread-index {
+  max-height: min(58vh, 650px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.research-thread-index ul {
+  list-style: none;
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+.research-thread-index button {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px;
+  white-space: normal;
+  text-align: start;
+  overflow-wrap: anywhere;
+}
+.research-thread-index button span, .research-thread-index time {
+  font-size: .78rem;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+.research-thread-index button[aria-current="true"] {
+  border-color: var(--accent-fg);
+  background: var(--soft);
+  box-shadow: inset 3px 0 0 var(--accent-fg);
+  font-weight: 700;
+}
 .research-thread-conversation {
-  grid-column: 2; grid-row: 1 / span 3; min-width: 0;
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  min-width: 0;
   padding-inline: clamp(10px, 2vw, 28px);
   border-inline-start: 1px solid var(--border);
 }
-.research-thread-conversation h3 { font-size: clamp(1.25rem, 1.8vw, 1.65rem); line-height: 1.3; margin: 0 0 8px; overflow-wrap: anywhere; }
-.research-thread-management { border-bottom: 1px solid var(--border); padding-block: 8px 16px; }
-.research-thread-management summary { cursor: pointer; width: fit-content; padding: 8px; }
-.research-thread-management-actions { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 8px; }
-.research-thread-turns { list-style: none; display: grid; gap: 20px; margin: 16px 0; padding: 0; }
-.research-thread-turn { min-width: 0; padding: clamp(14px, 2vw, 24px); background: var(--surface-card); border: 1px solid var(--border); border-radius: var(--radius-card); }
-.research-thread-turn h4 { max-width: 75ch; margin-block: 0 12px; line-height: 1.4; overflow-wrap: anywhere; }
-.research-thread-turn-status { display: inline-block; margin-block: 0 12px; font-size: .78rem; color: var(--text-tertiary); }
-.research-thread-pages, .research-thread-archive-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.research-thread-conversation h3 {
+  font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+  line-height: 1.3;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.research-thread-management {
+  border-bottom: 1px solid var(--border);
+  padding-block: 8px 16px;
+}
+.research-thread-management summary {
+  cursor: pointer;
+  width: fit-content;
+  padding: 8px;
+}
+.research-thread-management-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 8px;
+}
+.research-thread-turns {
+  list-style: none;
+  display: grid;
+  gap: 20px;
+  margin: 16px 0;
+  padding: 0;
+}
+.research-thread-turn {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 24px);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.research-thread-turn h4 {
+  max-width: 75ch;
+  margin-block: 0 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.research-thread-turn-status {
+  display: inline-block;
+  margin-block: 0 12px;
+  font-size: .78rem;
+  color: var(--text-tertiary);
+}
+.research-thread-pages, .research-thread-archive-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 @media (max-width: 900px) {
-  .research-thread-navigation { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .research-thread-index-title { display: none; }
-  .research-thread-list-toggle { display: block; grid-column: 1; justify-self: start; }
-  .research-thread-sidebar { display: none; grid-column: 1; max-height: 65vh; overflow: auto; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
-  .research-thread-sidebar.is-expanded { display: grid; }
-  .research-thread-conversation { grid-column: 1; grid-row: auto; border-inline-start: 0; padding: 12px 0 0; }
-  .research-thread-index { max-height: 220px; }
-  .research-thread-turn { padding: 14px; }
+  .research-thread-navigation {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .research-thread-index-title {
+    display: none;
+  }
+  .research-thread-list-toggle {
+    display: block;
+    grid-column: 1;
+    justify-self: start;
+  }
+  .research-thread-sidebar {
+    display: none;
+    grid-column: 1;
+    max-height: 65vh;
+    overflow: auto;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+  .research-thread-sidebar.is-expanded {
+    display: grid;
+  }
+  .research-thread-conversation {
+    grid-column: 1;
+    grid-row: auto;
+    border-inline-start: 0;
+    padding: 12px 0 0;
+  }
+  .research-thread-index {
+    max-height: 220px;
+  }
+  .research-thread-turn {
+    padding: 14px;
+  }
 }
 </style>
