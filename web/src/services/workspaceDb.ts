@@ -100,6 +100,18 @@ export function createWorkspaceDb(getName: () => string) {
     await idbRequest(tx.objectStore(storeName).put(value));
   }
 
+  async function add(storeName: string, value: unknown): Promise<void> {
+    const db = await open();
+    const tx = db.transaction(storeName, "readwrite");
+    await idbRequest(tx.objectStore(storeName).add(value));
+  }
+
+  async function count(storeName: string): Promise<number> {
+    const db = await open();
+    const tx = db.transaction(storeName, "readonly");
+    return idbRequest(tx.objectStore(storeName).count());
+  }
+
   async function remove(storeName: string, key: IDBValidKey): Promise<void> {
     const db = await open();
     const tx = db.transaction(storeName, "readwrite");
@@ -131,7 +143,7 @@ export function createWorkspaceDb(getName: () => string) {
     });
   }
 
-  return { open, getAll, get, put, remove, close, drop };
+  return { open, getAll, get, put, add, count, remove, close, drop };
 }
 
 export function isDerridaiStorageKey(key: string | null): boolean {
