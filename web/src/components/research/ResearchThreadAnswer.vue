@@ -159,7 +159,7 @@ watch(
           {{ i18n.t("ui.retry") }}
         </button>
       </div>
-      <template v-if="result?.answer">
+      <div v-if="result?.answer" class="thread-answer-workspace">
         <p class="thread-answer-text">{{ result.answer }}</p>
         <details v-if="result.evidence?.length">
           <summary>{{ i18n.t("research.works_cited") }}</summary>
@@ -169,7 +169,7 @@ watch(
             </li>
           </ul>
         </details>
-        <details :open="inspectOpen" @toggle="onInspectToggle">
+        <details class="thread-answer-audit" :open="inspectOpen" @toggle="onInspectToggle">
           <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
           <template v-if="inspectOpen">
             <ResearchResultPresentation
@@ -191,7 +191,7 @@ watch(
             </details>
           </template>
         </details>
-      </template>
+      </div>
       <p v-else-if="!answer.isFetching.value && !answer.error.value">
         {{ i18n.t("research.thread_run_unavailable") }}
       </p>
@@ -199,8 +199,25 @@ watch(
   </section>
 </template>
 <style scoped>
-.thread-answer-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.thread-answer-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
+.thread-answer-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; max-width: 78ch; margin-block: 0; }
+.thread-answer-workspace > details { min-width: 0; }
+.thread-answer-workspace > details summary { cursor: pointer; padding: 8px 0; }
+.thread-answer-audit { border-top: 1px solid var(--border); padding-top: 8px; }
+.thread-answer-audit pre { overflow-x: auto; max-width: 100%; }
+@media (min-width: 1280px) {
+  .thread-answer-workspace:has(.thread-answer-audit[open]) {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  }
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > .thread-answer-text { grid-column: 1; grid-row: 1 / span 2; }
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > .thread-answer-audit {
+    grid-column: 2; grid-row: 1 / span 2; border-top: 0;
+    border-inline-start: 1px solid var(--border); padding-inline-start: 16px;
+    max-height: min(70vh, 850px); overflow-y: auto; overscroll-behavior: contain;
+  }
+  .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) { grid-column: 1; }
+}
+@media (max-width: 600px) {
+  .thread-answer-audit[open] { max-height: 70vh; overflow: auto; }
 }
 </style>
