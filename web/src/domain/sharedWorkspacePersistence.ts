@@ -23,10 +23,7 @@ import { serializableRecordsFile } from "./recordsFiles";
 import { providerProfilesService } from "./sharedProviderProfiles";
 import { trf } from "./sharedTranslate";
 import { state } from "./sharedUrlState";
-import {
-  migrateLegacyWorkspaceForCurrentUser,
-  workspaceDb,
-} from "./sharedWorkspaceStorage";
+import { migrateLegacyWorkspaceForCurrentUser, workspaceDb } from "./sharedWorkspaceStorage";
 import { createWorkspacePersistence } from "./workspacePersistence";
 import { applyDomainPreferenceRecord, DOMAIN_PREFERENCE_KEYS } from "./domainPreferencePersistence";
 
