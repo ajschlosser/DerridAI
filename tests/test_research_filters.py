@@ -182,8 +182,21 @@ def test_chroma_candidate_generation_receives_both_filter_channels() -> None:
     )
 
     assert [item["record"]["record_id"] for item in semantic] == ["r1"]
+    assert semantic[0]["embedding"] == [0.2, 0.3]
+    assert "query_embedding" not in semantic[0]
     assert collection.last_query["where"] == where
     assert collection.last_query["where_document"] == where_document
+
+    semantic_without_vectors = store.semantic_candidates(
+        "corpus",
+        "trace",
+        4,
+        where=where,
+        where_document=where_document,
+        include_embeddings=False,
+    )
+    assert semantic_without_vectors[0]["embedding"] is None
+    assert "embeddings" not in collection.last_query["include"]
 
     lexical = store.lexical_search(
         "corpus",
