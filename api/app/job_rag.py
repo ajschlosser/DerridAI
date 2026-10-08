@@ -16,12 +16,12 @@
 
 from __future__ import annotations
 
-import concurrent.futures
 import copy
 import re
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from . import operation_events, research_threads
@@ -54,7 +54,7 @@ from .rag import extract_evidence_ids, run_rag_pipeline, strip_evidence_markers
 # thread-local high-water arena after each run. Keep the existing lightweight
 # scheduler thread/capacity semantics, but execute the heavy pipeline on reused
 # workers so sequential Research runs reuse the same allocator arenas.
-_RAG_PIPELINE_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+_RAG_PIPELINE_EXECUTOR = ThreadPoolExecutor(
     max_workers=64,
     thread_name_prefix="derridai-rag-pipeline",
 )
