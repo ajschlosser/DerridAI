@@ -366,11 +366,15 @@ const manageExpanded = ref(false);
   .research-thread-list-toggle {
     display: block;
     grid-column: 1;
+    grid-row: 1;
     justify-self: start;
+    position: relative;
+    z-index: 2;
   }
   .research-thread-sidebar {
     display: none;
     grid-column: 1;
+    grid-row: 2;
     max-height: 65vh;
     overflow: auto;
     border-bottom: 1px solid var(--border);
@@ -381,7 +385,7 @@ const manageExpanded = ref(false);
   }
   .research-thread-conversation {
     grid-column: 1;
-    grid-row: auto;
+    grid-row: 3;
     border-inline-start: 0;
     padding: 12px 0 0;
   }
