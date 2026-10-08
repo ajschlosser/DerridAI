@@ -556,7 +556,7 @@ def _mmr_select(
 ) -> list[dict[str, Any]]:
     """Compatibility wrapper that now preserves MMR objective provenance."""
 
-    return mmr_select(
+    selected = mmr_select(
         candidates,
         limit=k,
         lambda_mult=lambda_mult,
@@ -567,6 +567,10 @@ def _mmr_select(
         ),
         vector=lambda candidate: candidate.get("embedding"),
     )
+
+    for item in selected:
+        item.pop("embedding", None)
+    return selected
 
 
 def _tokenize(text: str) -> set[str]:
@@ -1469,13 +1473,27 @@ def run_rag_pipeline(
                     semantic_kwargs["where"] = retrieval_metadata_filter
                 if document_filter:
                     semantic_kwargs["where_document"] = document_filter
-                semantic_candidates = _scope_rag_candidates(
-                    store.semantic_candidates(
+                semantic_limit = min(
+                    collection_semantic_fetch_k,
+                    max(1, collection["count"]),
+                )
+                if isinstance(store, ChromaStore):
+                    semantic_rows = store.semantic_candidates(
                         collection["name"],
                         query,
-                        min(collection_semantic_fetch_k, max(1, collection["count"])),
+                        semantic_limit,
                         **semantic_kwargs,
-                    ),
+                        include_embeddings="mmr" in effective_search_types,
+                    )
+                else:
+                    semantic_rows = store.semantic_candidates(
+                        collection["name"],
+                        query,
+                        semantic_limit,
+                        **semantic_kwargs,
+                    )
+                semantic_candidates = _scope_rag_candidates(
+                    semantic_rows,
                     collection,
                     locale_codes,
                 )
@@ -1504,6 +1522,7 @@ def run_rag_pipeline(
                 start=1,
             ):
                 row = dict(candidate)
+                row.pop("embedding", None)
                 row["search_type"] = "similarity"
                 row["search_rank"] = rank
                 raw_results.append(row)
