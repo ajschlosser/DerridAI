@@ -653,6 +653,7 @@ watch(
         :groups="groupedNavItems"
         :collapsed="effectiveSidebarCollapsed"
         :pending-id="pendingNavId"
+        :storage-scope="`${auth.user.role}:${auth.user.id}`"
         @navigate="navigate"
       />
       <SidebarUtilityNav
@@ -847,6 +848,7 @@ watch(
       :groups="mobileNavGroups"
       :collapsed="false"
       :pending-id="pendingNavId"
+      :storage-scope="`${auth.user.role}:${auth.user.id}`"
       @navigate="navigateFromMobile"
     />
   </dialog>
