@@ -911,7 +911,9 @@ watch(
       answerError.value
     )
       return;
-    const region = document.getElementById("research-selected-run");
+    const region = currentThreadId.value
+      ? document.querySelector<HTMLElement>(".research-thread-conversation")
+      : document.getElementById("research-selected-run");
     if (region) {
       region.focus();
       retryFocusJob.value = "";
@@ -1064,6 +1066,7 @@ onBeforeUnmount(() => {
         />
       </div>
       <ResearchComposer
+        :compact="Boolean(currentThreadId)"
         v-model:prompt="prompt"
         v-model:instructions="instructions"
         v-model:filter-expression="filterExpression"
@@ -1140,7 +1143,7 @@ onBeforeUnmount(() => {
         tabindex="-1"
         role="region"
         :aria-label="i18n.t('research.answer')"
-        v-if="workspace && ((!answerLoading && !answerError) || activeResult)"
+        v-if="workspace && !currentThreadId && ((!answerLoading && !answerError) || activeResult)"
         :job="activeJob"
         :result="activeResult"
         :draft="researchDraft.draft.value"
