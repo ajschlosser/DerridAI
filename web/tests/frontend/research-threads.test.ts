@@ -618,3 +618,35 @@ it("allows follow-ups only for a loaded unarchived thread with no active turn", 
   await flushPromises();
   expect(wrapper.emitted("continuable")?.at(-1)).toEqual([false]);
 });
+
+describe("Responsive research navigation", () => {
+  it("allows opening the thread index and collapses it after selection", async () => {
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: {
+        threads: [summary("a"), summary("b")],
+        thread: thread("a"),
+        selectedThreadId: "a",
+        offset: 0,
+      },
+    });
+    mounted.push(wrapper);
+    const toggle = wrapper.get(".research-thread-list-toggle");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    await toggle.trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.get(".research-thread-sidebar").classes()).toContain("is-expanded");
+    await wrapper.findAll(".research-thread-index button")[1].trigger("click");
+    expect(wrapper.emitted("select")?.[0]).toEqual(["b"]);
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+  });
+
+  it("keeps destructive actions inside the explicit management disclosure", async () => {
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [], thread: thread("a"), selectedThreadId: "a", offset: 0 },
+    });
+    mounted.push(wrapper);
+    expect(wrapper.get(".research-thread-management").element.tagName).toBe("DETAILS");
+    expect(wrapper.get(".research-thread-management summary").exists()).toBe(true);
+    expect(wrapper.get(".research-thread-management button").text()).not.toBe("");
+  });
+});
