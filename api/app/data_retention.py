@@ -248,27 +248,56 @@ class ResponseCacheRetention(OperationalStore):
         self._collection = collection
 
     def items(self) -> list[RetentionItem]:
+        """Scan cache records in bounded pages and retain only compact footprints."""
+
         from .chroma_store import decode_metadata
 
         collection = self._collection()
         if collection is None:
             return []
-        payload = collection.get(include=["documents", "metadatas"])
-        ids = list(payload.get("ids") or [])
-        documents = list(payload.get("documents") or [])
-        metadatas = list(payload.get("metadatas") or [])
-        vector_bytes = 0
-        if ids:
-            sample = collection.get(ids=[ids[0]], include=["embeddings"]).get("embeddings")
-            if sample is not None and len(sample) and sample[0] is not None:
-                vector_bytes = 4 * len(sample[0])
-        out = []
-        for index, chroma_id in enumerate(ids):
-            raw_meta = metadatas[index] if index < len(metadatas) else {}
-            meta = decode_metadata(raw_meta or {})
-            document = documents[index] if index < len(documents) else ""
-            size = len(str(document or "").encode()) + len(json.dumps(raw_meta or {}, default=str).encode()) + vector_bytes
-            out.append(RetentionItem(str(chroma_id), _parse_time(meta.get("created_at") or meta.get("updated_at")), size))
+
+        out: list[RetentionItem] = []
+        vector_bytes: int | None = None
+        offset = 0
+        page_size = 512
+        while True:
+            payload = collection.get(
+                include=["documents", "metadatas"],
+                limit=page_size,
+                offset=offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            documents = list(payload.get("documents") or [])
+            metadatas = list(payload.get("metadatas") or [])
+
+            if vector_bytes is None:
+                vector_bytes = 0
+                sample = collection.get(ids=[ids[0]], include=["embeddings"]).get("embeddings")
+                if sample is not None and len(sample) and sample[0] is not None:
+                    vector_bytes = 4 * len(sample[0])
+
+            for index, chroma_id in enumerate(ids):
+                raw_meta = metadatas[index] if index < len(metadatas) else {}
+                meta = decode_metadata(raw_meta or {})
+                document = documents[index] if index < len(documents) else ""
+                size = (
+                    len(str(document or "").encode())
+                    + len(json.dumps(raw_meta or {}, default=str).encode())
+                    + int(vector_bytes or 0)
+                )
+                out.append(
+                    RetentionItem(
+                        str(chroma_id),
+                        _parse_time(meta.get("created_at") or meta.get("updated_at")),
+                        size,
+                    )
+                )
+
+            offset += len(ids)
+            if len(ids) < page_size:
+                break
         return out
 
     def delete(self, keys: list[str]) -> int:
