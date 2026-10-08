@@ -27,8 +27,9 @@ import ResearchResultPresentation from "./ResearchResultPresentation.vue";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
-const props = withDefaults(defineProps<{ turn: ResearchTurn; streamLive?: boolean }>(), {
+const props = withDefaults(defineProps<{ turn: ResearchTurn; streamLive?: boolean; inspectRequested?: boolean }>(), {
   streamLive: true,
+  inspectRequested: false,
 });
 const emit = defineEmits<{
   openRecord: [item: ResearchResultEvidence];
@@ -122,7 +123,10 @@ function openRelationships(index: number, mode: "trace" | "model") {
   const item = result.value?.evidence?.[index];
   if (item) emit("openRelationships", item, mode);
 }
-const inspectOpen = ref(false);
+const inspectOpen = ref(Boolean(props.inspectRequested));
+watch(() => props.inspectRequested, (value) => {
+  if (value) inspectOpen.value = true;
+});
 function onInspectToggle(event: Event) {
   inspectOpen.value = (event.currentTarget as HTMLDetailsElement).open;
 }
@@ -165,7 +169,7 @@ watch(
             </li>
           </ul>
         </details>
-        <details @toggle="onInspectToggle">
+        <details :open="inspectOpen" @toggle="onInspectToggle">
           <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
           <template v-if="inspectOpen">
             <ResearchResultPresentation
