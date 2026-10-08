@@ -198,7 +198,7 @@ export function createWorkDialogs(deps: Deps) {
         const batchId = uid();
         let changedRecords = 0,
           fieldChanges = 0;
-        const touchedFiles = new Set();
+        const touchedFiles = new Set<Any>();
         for (const row of rows) {
           const count = applyRecordChanges(row.file, row.index, changes, {
             source: "work_metadata",
@@ -394,7 +394,7 @@ export function createWorkDialogs(deps: Deps) {
         const batchId = uid();
         let changedRecords = 0,
           fieldChanges = 0;
-        const touchedFiles = new Set();
+        const touchedFiles = new Set<Any>();
         for (const group of grouped.values())
           for (const row of group.item.rows) {
             const count = applyRecordChanges(row.file, row.index, group.changes, {
