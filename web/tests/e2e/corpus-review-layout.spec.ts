@@ -342,7 +342,7 @@ test.describe("at a wide desktop", () => {
     expect(
       await page.evaluate(
         ({ build, record }) =>
-          localStorage.getItem(`derridai.pdf-corpus.text-draft.${build}.${record}`),
+          localStorage.getItem(`derridai.pdf-corpus.text-draft.${build}.${record}.admin:1`),
         { build: CORPUS_BUILD_ID, record: CORPUS_RECORDS[0].record_id },
       ),
     ).toBe("A draft before starting another build.");
@@ -352,7 +352,7 @@ test.describe("at a wide desktop", () => {
     await page.addInitScript(
       ({ buildId, recordId }) =>
         localStorage.setItem(
-          `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`,
+          `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}.admin:1`,
           JSON.stringify({ speaker: "A saved but uncommitted metadata draft" }),
         ),
       { buildId: CORPUS_BUILD_ID, recordId: CORPUS_RECORDS[0].record_id },
@@ -364,7 +364,7 @@ test.describe("at a wide desktop", () => {
     expect(
       await page.evaluate(
         ({ build, record }) =>
-          localStorage.getItem(`derridai.pdf-corpus.metadata-draft.${build}.${record}`),
+          localStorage.getItem(`derridai.pdf-corpus.metadata-draft.${build}.${record}.admin:1`),
         { build: CORPUS_BUILD_ID, record: CORPUS_RECORDS[0].record_id },
       ),
     ).toContain("A saved but uncommitted metadata draft");
