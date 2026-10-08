@@ -96,13 +96,12 @@ Return exactly one JSON object:
 {{
   "prompt_query": "the actual research question in English",
   "prompt_query_fr": "the same research question in French",
-  "prompt_instructions": "only instructions actually supplied by the user",
   "response_language": "en"
 }}
 
 Rules:
 - Do not answer the research question.
-- Do not invent instructions.
+- Do not return, rewrite, summarize, or infer user instructions.
 - Preserve philosophical terminology.
 - prompt_query_fr is required even when the original prompt is English.
 - response_language should be "fr" only when the user clearly requests a French answer or writes primarily in French; otherwise "en".
@@ -367,11 +366,17 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
 def partition_scope_compatible_records(
     records: Sequence[Mapping[str, Any]],
     allowed_works: Sequence[str],
+    allowed_authors: Sequence[str] = (),
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
-    """Drop non-pinned Records that escape an inferred exclusive work scope."""
+    """Drop non-pinned Records that escape inferred work/source-author scope."""
 
-    allowed = {str(work).strip() for work in allowed_works if str(work).strip()}
-    if not allowed:
+    works = {str(work).strip() for work in allowed_works if str(work).strip()}
+    authors = {
+        _normalized_scope_text(author)
+        for author in allowed_authors
+        if str(author).strip()
+    }
+    if not works and not authors:
         return [dict(item) for item in records], []
 
     kept: list[dict[str, Any]] = []
@@ -379,12 +384,16 @@ def partition_scope_compatible_records(
     for item in records:
         record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
         work = source_work_label(record)
-        if item.get("selected_evidence") or work in allowed:
+        author = source_author(record)
+        work_matches = not works or work in works
+        author_matches = not authors or _normalized_scope_text(author) in authors
+        if item.get("selected_evidence") or (work_matches and author_matches):
             kept.append(dict(item))
             continue
         excluded.append({
             "record_id": str(record.get("record_id") or item.get("id") or "unknown"),
             "work": work,
+            "document_author": author,
         })
     return kept, excluded
 
@@ -453,40 +462,106 @@ def strip_evidence_markers(text: str) -> str:
 
 
 _JSON_OUTPUT_REQUEST_PATTERN = re.compile(
-    r"(?is)(?:\b(?:return|respond|output|format|provide|give)\b.{0,40}\bjson\b|"
-    r"\bjson\s+(?:object|array|format)\b)"
+    r"(?is)(?:"
+    r"\b(?:return|respond|output|format|provide|give|answer)\b.{0,50}\bjson\b|"
+    r"\b(?:as|in|en)\s+(?:valid\s+)?json\b|"
+    r"\bjson\s+(?:please|s['’]il\s+vous\s+pla[iî]t)\b"
+    r")"
+)
+_JSON_OUTPUT_NEGATION_PATTERN = re.compile(
+    r"(?is)(?:"
+    r"\b(?:do\s+not|don't|dont|never)\b.{0,60}\bjson\b|"
+    r"\bno\s+json\b|"
+    r"\bnot\s+(?:as|in)\s+json\b|"
+    r"\b(?:ne|n')\b.{0,60}\bpas\b.{0,60}\bjson\b|"
+    r"\b(?:pas\s+de|sans)\s+json\b"
+    r")"
 )
 _JSON_CODE_FENCE_PATTERN = re.compile(
-    r"(?is)^\s*```(?:json)?\s*(.*?)\s*```\s*$"
+    r"(?is)\`\`\`(?:json)?\s*(.*?)\s*\`\`\`"
 )
-
-
 def _requests_json_output(prompt: str, instructions: str) -> bool:
-    """Return whether the researcher explicitly requested JSON output."""
+    """Return whether the researcher explicitly requested JSON output.
 
-    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(f"{prompt}\n{instructions}"))
+    Negative directives are removed before positive matching so instructions
+    such as "do not answer as JSON" can never disable the prose safeguard.
+    """
+
+    combined = f"{prompt}\n{instructions}"
+    # A negative JSON directive makes the requested form ambiguous at best.
+    # Fail toward prose rather than allowing a positive phrase elsewhere in the
+    # request to disable the prose safeguard.
+    if _JSON_OUTPUT_NEGATION_PATTERN.search(combined):
+        return False
+    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(combined))
+
+
+def _json_payload_like(candidate: str) -> bool:
+    """Return whether one candidate string is a JSON-shaped object or array."""
+
+    value = str(candidate or "").strip()
+    if not value.startswith(("{", "[")):
+        return False
+    try:
+        return isinstance(json.loads(value), (dict, list))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        closing = "}" if value.startswith("{") else "]"
+        return value.endswith(closing) and bool(
+            re.search(r'"[^"]{1,80}"\s*:', value[:4000])
+        )
 
 
 def _json_like_answer(text: str) -> bool:
-    """Detect JSON-shaped output even when a local model emits malformed JSON."""
+    """Detect a JSON-dominated answer, including malformed fenced payloads."""
 
     candidate = str(text or "").strip()
-    fenced = _JSON_CODE_FENCE_PATTERN.fullmatch(candidate)
-    if fenced:
-        candidate = fenced.group(1).strip()
-        # A fenced JSON object/array already violates the prose contract even if
-        # the model produced invalid escapes or otherwise malformed JSON.
-        if candidate.startswith(("{", "[")):
+    if _json_payload_like(candidate):
+        return True
+
+    # Local models often prefix a structured answer with a short courtesy line,
+    # e.g. "Here is the answer:" followed by a JSON fence. Treat a fenced
+    # object/array as the answer form when surrounding prose is only a small
+    # preface/suffix or the structured payload dominates the response.
+    for fenced in _JSON_CODE_FENCE_PATTERN.finditer(candidate):
+        payload = fenced.group(1).strip()
+        if not _json_payload_like(payload):
+            continue
+        surrounding = (candidate[: fenced.start()] + candidate[fenced.end() :]).strip()
+        if len(surrounding) <= 200 or len(payload) >= max(200, len(surrounding) * 2):
             return True
-    if not candidate.startswith(("{", "[")):
-        return False
-    try:
-        return isinstance(json.loads(candidate), (dict, list))
-    except (TypeError, ValueError, json.JSONDecodeError):
-        closing = "}" if candidate.startswith("{") else "]"
-        return candidate.endswith(closing) and bool(
-            re.search(r'"[^"]{1,80}"\s*:', candidate[:4000])
-        )
+    return False
+
+
+def _generation_contract_issues(
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    prose_required: bool,
+    require_evidence_markers: bool,
+) -> list[str]:
+    """Validate answer form and run-local evidence-marker integrity."""
+
+    issues: list[str] = []
+    if prose_required and _json_like_answer(answer):
+        issues.append("structured_json")
+
+    valid_ids = {
+        str(item.get("evidence_id") or "").strip()
+        for item in evidence
+        if str(item.get("evidence_id") or "").strip()
+    }
+    used_ids = extract_evidence_ids(answer)
+    if require_evidence_markers:
+        unknown_ids = sorted({
+            evidence_id
+            for evidence_id in used_ids
+            if evidence_id not in valid_ids
+        })
+        if unknown_ids:
+            issues.append("unknown_evidence_markers:" + ",".join(unknown_ids))
+        if not used_ids:
+            issues.append("missing_evidence_markers")
+    return issues
 
 
 def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
@@ -513,7 +588,7 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     for pattern in EVIDENCE_MARKER_PATTERNS:
         bound = re.sub(pattern, replace_group, bound)
 
-    if include_works_cited:
+    if include_works_cited and used_ids:
         seen: set[str] = set()
         citations: list[str] = []
         for item in evidence:
@@ -699,7 +774,6 @@ def _resolve_search_collections(
                 row["count"] = counts[name]
             output.append(row)
         return output
-
     source = next((item for item in stores if item["name"] == source_name), None)
     if source is None:
         raise ValueError(f"Collection {source_name!r} does not exist.")
@@ -865,6 +939,94 @@ def _mentions_scope_author(question: str, author: str) -> bool:
     return bool(surname and len(surname) >= 4 and surname in set(query.split()))
 
 
+def _mentioned_scope_authors(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Return distinct corpus source authors explicitly named in the request."""
+
+    authors: set[str] = set()
+    for summary in work_summaries:
+        values = summary.get("source_authors")
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        for value in values:
+            author = str(value or "").strip()
+            if author and _mentions_scope_author(question, author):
+                authors.add(author)
+    return sorted(authors, key=str.casefold)
+
+
+def _author_scope_works(
+    work_summaries: Sequence[Mapping[str, Any]],
+    author: str,
+) -> list[str]:
+    """Return compact-inventory works attributed to one source author."""
+
+    target = _normalized_scope_text(author)
+    works: set[str] = set()
+    for summary in work_summaries:
+        values = summary.get("source_authors")
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        if any(_normalized_scope_text(value) == target for value in values):
+            work = str(summary.get("scope_label") or "").strip()
+            if work:
+                works.add(work)
+    return sorted(works)
+
+
+def _source_subject_authors(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Infer one documentary source author from narrow grammatical cues."""
+
+    folded = str(question or "").casefold().replace("’", "'")
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+    if not folded or _COMPARATIVE_SCOPE_PATTERN.search(folded):
+        return []
+
+    scored: dict[str, int] = {}
+    for author in _mentioned_scope_authors(work_summaries, question):
+        normalized = _normalized_scope_text(author)
+        parts = [part for part in normalized.split() if part]
+        aliases = [normalized]
+        if parts and len(parts[-1]) >= 4:
+            aliases.append(parts[-1])
+        best = 0
+        for alias in dict.fromkeys(aliases):
+            escaped = re.escape(alias).replace(r"\ ", r"\s+")
+            patterns = (
+                (4, rf"\baccording\s+to\s+{escaped}\b"),
+                (4, rf"\bselon\s+{escaped}\b"),
+                (4, rf"\bd[' ]apres\s+{escaped}\b"),
+                (3, rf"\b(?:what|how)\s+does\s+{escaped}\b"),
+                (3, rf"\bque\s+dit\s+{escaped}\b"),
+                (3, rf"\b{escaped}(?:'s|s')(?=\s|[,.?!:;]|$)"),
+                (2, rf"\b(?:novels?|works?|writings?|texts?)\s+by\s+{escaped}\b"),
+                (2, rf"\b{escaped}\s+on\b"),
+            )
+            for priority, pattern in patterns:
+                if re.search(pattern, folded, flags=re.IGNORECASE):
+                    best = max(best, priority)
+        if best:
+            scored[author] = best
+
+    if not scored:
+        return []
+    highest = max(scored.values())
+    winners = sorted(
+        (author for author, priority in scored.items() if priority == highest),
+        key=str.casefold,
+    )
+    return winners if len(winners) == 1 else []
+
+
 def _explicitly_named_works(
     work_summaries: Sequence[Mapping[str, Any]],
     question: str,
@@ -874,13 +1036,42 @@ def _explicitly_named_works(
     query = _normalized_scope_text(question)
     if not query:
         return []
-    return sorted({
-        work
-        for summary in work_summaries
-        if (work := str(summary.get("scope_label") or "").strip())
-        and (normalized_work := _normalized_scope_text(work))
-        and normalized_work in query
-    })
+
+    display_question = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", str(question or "").replace("’", "'"))
+        if not unicodedata.combining(character)
+    )
+    named: set[str] = set()
+    for summary in work_summaries:
+        work = str(summary.get("scope_label") or "").strip()
+        normalized_work = _normalized_scope_text(work)
+        if not work or not normalized_work:
+            continue
+        phrase_pattern = re.escape(normalized_work).replace(r"\ ", r"\s+")
+        if not re.search(rf"(?<!\w){phrase_pattern}(?!\w)", query):
+            continue
+        tokens = normalized_work.split()
+        if len(tokens) == 1:
+            display_work = "".join(
+                character
+                for character in unicodedata.normalize("NFKD", work)
+                if not unicodedata.combining(character)
+            )
+            exact_display = re.search(
+                rf"(?<!\w){re.escape(display_work)}(?!\w)",
+                display_question,
+                flags=re.IGNORECASE,
+            )
+            cue = re.search(
+                rf"\b(?:in|from|book|work|text|novel)\s+{re.escape(tokens[0])}\b",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if not exact_display and not cue:
+                continue
+        named.add(work)
+    return sorted(named)
 
 
 def _mentioned_work_groups(
@@ -1414,14 +1605,75 @@ def run_rag_pipeline(
         explicit_scope_text,
         explicitly_named_works=explicitly_named_works,
     )
-    retrieval_metadata_filter = (
-        combine_metadata_filters(metadata_filter, {"work": {"$in": exclusive_scope_works}})
-        if exclusive_scope_works
-        else metadata_filter
+    mentioned_scope_authors = _mentioned_scope_authors(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    source_subject_authors = _source_subject_authors(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    if len(source_subject_authors) == 1:
+        if not exclusive_scope_works:
+            exclusive_scope_works = _author_scope_works(
+                scope_work_summaries,
+                source_subject_authors[0],
+            )
+        exclusive_scope_authors = source_subject_authors
+    elif exclusive_scope_works and len(mentioned_scope_authors) == 1:
+        exclusive_scope_authors = mentioned_scope_authors
+    else:
+        exclusive_scope_authors = []
+
+    inferred_scope_filter = None
+    if exclusive_scope_works:
+        inferred_scope_filter = {"work": {"$in": exclusive_scope_works}}
+    if exclusive_scope_authors:
+        inferred_scope_filter = combine_metadata_filters(
+            inferred_scope_filter,
+            {"document_author": {"$in": exclusive_scope_authors}},
+        )
+    retrieval_metadata_filter = combine_metadata_filters(
+        metadata_filter,
+        inferred_scope_filter,
     )
     filter_detail["explicitly_named_works"] = explicitly_named_works
+    filter_detail["mentioned_source_authors"] = mentioned_scope_authors
+    filter_detail["inferred_source_authors"] = exclusive_scope_authors
     filter_detail["inferred_exclusive_works"] = exclusive_scope_works
-    if pipeline_plan.scope_stage_id and exclusive_scope_works:
+
+    inferred_scope_exemptions = 0
+    if (exclusive_scope_works or exclusive_scope_authors) and selected_candidates:
+        allowed_works = set(exclusive_scope_works)
+        allowed_authors = {
+            _normalized_scope_text(author)
+            for author in exclusive_scope_authors
+        }
+        for item in selected_candidates:
+            record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+            work_matches = (
+                not allowed_works
+                or source_work_label(record) in allowed_works
+            )
+            author_matches = (
+                not allowed_authors
+                or _normalized_scope_text(source_author(record)) in allowed_authors
+            )
+            if not (work_matches and author_matches):
+                inferred_scope_exemptions += 1
+        if inferred_scope_exemptions:
+            # Pinned evidence is an intentional exception to inferred scope.
+            # Record the actual out-of-scope pin count rather than silently
+            # presenting the final evidence packet as scope-pure.
+            filter_detail["selected_evidence_inferred_scope_exempt_count"] = (
+                inferred_scope_exemptions
+            )
+            filter_detail["selected_evidence_exempt_count"] = max(
+                int(filter_detail.get("selected_evidence_exempt_count") or 0),
+                inferred_scope_exemptions,
+            )
+
+    if pipeline_plan.scope_stage_id and (exclusive_scope_works or exclusive_scope_authors):
         scope_stage = next(
             (stage for stage in reversed(stages) if stage["name"] == "research_scope"),
             None,
@@ -1429,6 +1681,13 @@ def run_rag_pipeline(
         if scope_stage is not None:
             scope_stage["detail"]["active"] = True
             scope_stage["detail"]["inferred_exclusive_works"] = exclusive_scope_works
+            scope_stage["detail"]["inferred_source_authors"] = exclusive_scope_authors
+            scope_stage["detail"]["selected_evidence_exempt_count"] = filter_detail.get(
+                "selected_evidence_exempt_count", 0
+            )
+            scope_stage["detail"]["selected_evidence_inferred_scope_exempt_count"] = (
+                inferred_scope_exemptions
+            )
 
     raw_results: list[dict[str, Any]] = []
     total_units = len(collections) * max(1, len(effective_search_types))
@@ -2090,6 +2349,7 @@ def run_rag_pipeline(
     context_candidates, excluded_scope_records = partition_scope_compatible_records(
         context_candidates,
         exclusive_scope_works,
+        exclusive_scope_authors,
     )
     if excluded_scope_records:
         warnings.append(
@@ -2193,6 +2453,7 @@ def run_rag_pipeline(
         "explicit_scope_groups": explicit_scope_seed_detail,
         "explicit_scope_seed_count": len(explicit_scope_seed_ids),
         "inferred_exclusive_scope_works": exclusive_scope_works,
+        "inferred_source_authors": exclusive_scope_authors,
         "response_language": request.response_language,
         "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
         "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
@@ -2291,28 +2552,64 @@ def run_rag_pipeline(
 
     raw_answer = generate_answer(generation_prompt, on_generation_delta)
     generation_attempts = 1
-    prose_contract_retry = False
-    if (
-        not _requests_json_output(request.prompt, request.instructions or "")
-        and _json_like_answer(raw_answer)
-    ):
-        prose_contract_retry = True
+    prose_required = not _requests_json_output(
+        request.prompt,
+        request.instructions or "",
+    )
+    contract_issues = _generation_contract_issues(
+        raw_answer,
+        evidence,
+        prose_required=prose_required,
+        require_evidence_markers=request.bind_citations,
+    )
+    initial_contract_issues = list(contract_issues)
+    output_contract_retry = bool(contract_issues)
+    prose_contract_retry = "structured_json" in contract_issues
+    if contract_issues:
         generation_attempts += 1
-        warnings.append(
-            "Generation returned structured JSON for a prose Research request; regenerated once."
-        )
-        correction_prompt = generation_prompt + """
+        if "structured_json" in contract_issues:
+            warnings.append(
+                "Generation returned structured JSON for a prose Research request; regenerated once."
+            )
+        if "missing_evidence_markers" in contract_issues:
+            warnings.append(
+                "Generation omitted required evidence markers; regenerated once before citation binding."
+            )
+        if any(issue.startswith("unknown_evidence_markers:") for issue in contract_issues):
+            warnings.append(
+                "Generation cited evidence markers outside the current evidence packet; regenerated once."
+            )
+        correction_prompt = generation_prompt + (
+            """
 
 <OUTPUT_CONTRACT_CORRECTION>
-The previous draft violated the requested answer form by returning JSON or a JSON code fence.
-Return only cohesive scholarly prose with evidence markers. Do not return JSON, a schema,
-field names such as title/introduction/themes, or a fenced code block.
+The previous draft failed the Research output or evidence contract.
+Return only cohesive scholarly prose with current evidence markers. Avoid JSON, schemas,
+field-name wrappers such as title/introduction/themes, and fenced code blocks.
 </OUTPUT_CONTRACT_CORRECTION>
 """
+            if prose_required
+            else """
+
+<OUTPUT_CONTRACT_CORRECTION>
+The previous draft failed the Research evidence contract.
+Preserve the output form explicitly requested by the researcher. Ground substantive claims
+with current evidence markers such as [[E0]], cite only IDs present in the current evidence
+packet, and do not switch to prose unless the researcher requested prose.
+</OUTPUT_CONTRACT_CORRECTION>
+"""
+        )
         raw_answer = generate_answer(correction_prompt, None)
-        if _json_like_answer(raw_answer):
+        contract_issues = _generation_contract_issues(
+            raw_answer,
+            evidence,
+            prose_required=prose_required,
+            require_evidence_markers=request.bind_citations,
+        )
+        if contract_issues:
             raise ValueError(
-                "Research generation violated the prose output contract after one retry."
+                "Research generation violated the output/evidence contract after one retry: "
+                + ", ".join(contract_issues)
             )
     stages.append({
         "name": "generation",
@@ -2322,7 +2619,10 @@ field names such as title/introduction/themes, or a fenced code block.
             "model": model,
             "characters": len(raw_answer),
             "attempts": generation_attempts,
+            "output_contract_retry": output_contract_retry,
             "prose_contract_retry": prose_contract_retry,
+            "contract_issues_initial": initial_contract_issues,
+            "contract_issues_final": contract_issues,
         },
     })
     update("generation", 1, 1, "Draft generated")
@@ -2334,7 +2634,7 @@ field names such as title/introduction/themes, or a fenced code block.
         _bind_sources(
             raw_answer,
             evidence,
-            request.include_works_cited,
+            request.include_works_cited and prose_required,
         )
         if request.bind_citations
         else _STRAY_MEMORY_TAG_PATTERN.sub("", raw_answer)

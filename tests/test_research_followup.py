@@ -59,6 +59,15 @@ def test_invalid_bilingual_output_fails_validation(value):
         validate_contextual_query(value)
 
 
+def test_contextual_query_contract_does_not_require_generated_instructions():
+    value = {
+        "prompt_query": "What is responsibility?",
+        "prompt_query_fr": "Qu'est-ce que la responsabilité ?",
+        "response_language": "en",
+    }
+    assert validate_contextual_query(value) == value
+
+
 def test_snapshot_question_and_attempt_fail_closed():
     with pytest.raises(ValueError):
         advisory_context(audit(), "Another question")
@@ -87,22 +96,28 @@ def test_pipeline_keeps_original_question_current_evidence_and_visible_fallback(
                  "prompt_instructions": "Invented instruction", "response_language": "fr"}
         return kwargs["validate"](value)
     monkeypatch.setattr(rag, "structured_chat_complete", structured)
+    generation_calls = 0
     def generate(**kwargs):
+        nonlocal generation_calls
         calls.append(kwargs["prompt"])
-        return "Current claim [[E0]]. Fake reference [[E99]]."
+        generation_calls += 1
+        if generation_calls == 1:
+            return "Current claim [[E0]]. Fake reference [[E99]]."
+        return "Current claim [[E0]]."
     monkeypatch.setattr(rag, "chat_complete", generate)
     request = RAGRunRequest(prompt=question, model="test", skip_retrieval=True,
                            query_decomposition=False, response_language="en", instructions="Keep negation")
     result = rag.run_rag_pipeline(request, types.SimpleNamespace(), thread_audit=snapshot)
     assert result["prompt"] == question
     assert [item["record"]["record_id"] for item in result["evidence"]] == ["r1"]
-    assert "(E99)" in result["answer"]  # Unknown marker remains visibly unresolved.
+    assert "E99" not in result["answer"]
+    assert "Current claim" in result["answer"]
     assert result["query_metadata"]["response_language"] == "en"
     assert result["query_metadata"]["prompt_instructions"] == "Keep negation"
     assert "RESPONSE MEMORY" in calls[-1] and "CLAIM MEMORY" in calls[-1]
     assert ("<CURRENT_QUESTION>\n" if history else "<MASTER PROMPT>\n") + question in calls[-1]
     if history:
-        assert len(calls) == 2
+        assert len(calls) == 3
         assert result["research_thread"]["context_consumed"]
         assert result["research_thread"]["contextualization"]["fallback"] == failure
         assert result["query_metadata"]["prompt_query"] == (question if failure else "What does Levinas say about responsibility?")
@@ -110,4 +125,4 @@ def test_pipeline_keeps_original_question_current_evidence_and_visible_fallback(
         # that invents instructions now warns that the drift was ignored.
         assert bool(result["warnings"]) is True
     else:
-        assert len(calls) == 1 and result["query_metadata"]["prompt_query"] == question
+        assert len(calls) == 2 and result["query_metadata"]["prompt_query"] == question

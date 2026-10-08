@@ -16,12 +16,17 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from app.models import RAGRunRequest
 from app.pipelines.comparison import compare_research_dry_runs
 from app.rag import (
+    _bind_sources,
     _cross_encoder_rerank,
+    _explicitly_named_works,
     _lexical_rerank,
+    _requests_json_output,
     _scope_work_summaries,
     run_rag_pipeline,
 )
@@ -487,6 +492,14 @@ def test_two_named_proust_works_close_scope_despite_missing_diacritics_and_posse
     }
 
 
+def test_single_word_work_title_uses_word_boundaries() -> None:
+    summaries = [{"scope_label": "Glas", "source_authors": ["Jacques Derrida"]}]
+
+    assert _explicitly_named_works(summaries, "Discuss glass and writing.") == []
+    assert _explicitly_named_works(summaries, "Discuss the work Glas.") == ["Glas"]
+    assert _explicitly_named_works(summaries, "Discuss the work glas.") == ["Glas"]
+
+
 def test_single_named_author_closes_retrieval_scope() -> None:
     request = RAGRunRequest(
         prompt="Describe the major themes and stakes of Levinas's philosophy.",
@@ -517,6 +530,147 @@ def test_single_named_author_closes_retrieval_scope() -> None:
     scope_stage = next(stage for stage in result["stages"] if stage["name"] == "research_scope")
     assert scope_stage["detail"]["active"] is True
     assert scope_stage["detail"]["inferred_exclusive_works"] == ["Totality and Infinity"]
+
+
+
+def test_source_author_role_closes_scope_when_target_author_is_also_named() -> None:
+    request = RAGRunRequest(
+        prompt="What does Derrida say about Levinas?",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert [item["record"]["record_id"] for item in result["evidence"]] == ["d1"]
+    assert result["retrieval"]["inferred_source_authors"] == ["Jacques Derrida"]
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == ["Of Grammatology"]
+
+
+def test_author_comparison_keeps_documentary_scope_open() -> None:
+    request = RAGRunRequest(
+        prompt="Compare Derrida and Levinas on alterity.",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert result["retrieval"]["inferred_source_authors"] == []
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == []
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {"d1", "l1"}
+
+
+class _SameTitleScopeStore(_ExplicitScopeStore):
+    def research_scope_inventory(self, names):
+        assert names == ["corpus"]
+        return [{
+            "scope_label": "Shared Title",
+            "source_authors": ["Jacques Derrida", "Marcel Proust"],
+        }]
+
+    def lexical_search(self, name, query, limit, where=None, where_document=None):
+        assert name == "corpus"
+        assert where_document is None
+
+        def matches(record, predicate):
+            if not predicate:
+                return True
+            key, value = next(iter(predicate.items()))
+            if key == "$and":
+                return all(matches(record, child) for child in value)
+            actual = record.get(key)
+            if not isinstance(value, dict):
+                return actual == value
+            operator, expected = next(iter(value.items()))
+            if operator == "$in":
+                return actual in expected
+            if operator == "$eq":
+                return actual == expected
+            raise AssertionError(f"unsupported fake filter operator: {operator}")
+
+        rows = [
+            {
+                "id": "derrida-shared",
+                "record": {
+                    "record_id": "d-shared",
+                    "work": "Shared Title",
+                    "document_author": "Jacques Derrida",
+                    "year": 2000,
+                    "page_start": 1,
+                    "text": "Derrida record with the colliding title.",
+                },
+                "relevance": 0.99,
+            },
+            {
+                "id": "proust-shared",
+                "record": {
+                    "record_id": "p-shared",
+                    "work": "Shared Title",
+                    "document_author": "Marcel Proust",
+                    "year": 1913,
+                    "page_start": 1,
+                    "text": "Proust record with the colliding title.",
+                },
+                "relevance": 0.70,
+            },
+        ]
+        if where:
+            return [row for row in rows if matches(row["record"], where)][:limit]
+        return rows[:limit]
+
+
+def test_named_source_author_disambiguates_same_titled_works() -> None:
+    request = RAGRunRequest(
+        prompt="According to Proust, what is at stake in Shared Title?",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=2,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _SameTitleScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert [item["record"]["record_id"] for item in result["evidence"]] == ["p-shared"]
+    assert result["retrieval"]["inferred_source_authors"] == ["Marcel Proust"]
+    assert result["retrieval"]["inferred_exclusive_scope_works"] == ["Shared Title"]
 
 
 def test_single_citation_directive_remains_open_but_reserves_source() -> None:
@@ -675,6 +829,52 @@ def test_filtered_run_labels_pinned_evidence_exemption(version) -> None:
 
 
 
+def test_inferred_scope_labels_out_of_scope_pinned_evidence_exemption() -> None:
+    request = RAGRunRequest(
+        prompt="Describe the major themes and stakes of Levinas's philosophy.",
+        pipeline_id="research.balanced",
+        pipeline_version=3,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=2,
+        fetch_k=2,
+        rerank_top_n=3,
+        reranker="none",
+        query_decomposition=False,
+        model=None,
+        selected_evidence=[
+            {
+                "record": {
+                    "record_id": "pinned-derrida",
+                    "work": "Of Grammatology",
+                    "document_author": "Jacques Derrida",
+                    "year": 1976,
+                    "page_start": 65,
+                    "text": "Pinned evidence intentionally outside the inferred Levinas scope.",
+                }
+            }
+        ],
+    )
+
+    result = run_rag_pipeline(
+        request,
+        _ExplicitScopeStore(),
+        stop_after_context=True,
+    )
+
+    assert {item["record"]["record_id"] for item in result["evidence"]} == {
+        "l1",
+        "pinned-derrida",
+    }
+    filter_plan = result["retrieval"]["filter_plan"]
+    assert filter_plan["selected_evidence_inferred_scope_exempt_count"] == 1
+    assert filter_plan["selected_evidence_exempt_count"] == 1
+    scope_stage = next(stage for stage in result["stages"] if stage["name"] == "research_scope")
+    assert scope_stage["detail"]["selected_evidence_inferred_scope_exempt_count"] == 1
+    assert scope_stage["detail"]["selected_evidence_exempt_count"] == 1
+
+
 def test_lexical_rerank_distinguishes_source_author_from_mentioned_author() -> None:
     docs = [
         {
@@ -777,6 +977,281 @@ def test_prose_research_retries_json_shaped_generation_once(monkeypatch) -> None
     assert generation_stage["detail"]["attempts"] == 2
     assert generation_stage["detail"]["prose_contract_retry"] is True
 
+
+@pytest.mark.parametrize(
+    ("prompt", "instructions", "expected"),
+    [
+        ("What is the trace? Answer as JSON.", "", True),
+        ("What is the trace?", "Réponds en JSON.", True),
+        ("What is the trace?", "Do not answer as JSON.", False),
+        ("What is the trace?", "Ne réponds pas en JSON.", False),
+        ("Answer as JSON.", "Do not answer as JSON.", False),
+    ],
+)
+def test_json_output_request_detection_respects_positive_and_negative_directives(
+    prompt, instructions, expected
+) -> None:
+    assert _requests_json_output(prompt, instructions) is expected
+
+
+def test_prose_research_retries_when_generation_omits_evidence_markers(monkeypatch) -> None:
+    drafts = [
+        "The trace is not a presence.",
+        "The trace is not a presence [[E0]].",
+    ]
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return drafts[len(prompts) - 1]
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 2
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+    assert any("omitted required evidence markers" in warning for warning in result["warnings"])
+    generation_stage = next(stage for stage in result["stages"] if stage["name"] == "generation")
+    assert generation_stage["detail"]["output_contract_retry"] is True
+    assert generation_stage["detail"]["contract_issues_initial"] == ["missing_evidence_markers"]
+    assert generation_stage["detail"]["contract_issues_final"] == []
+
+
+def test_prose_research_retries_unknown_evidence_marker(monkeypatch) -> None:
+    drafts = [
+        "The trace is not a presence [[E99]].",
+        "The trace is not a presence [[E0]].",
+    ]
+
+    def generate(**_kwargs):
+        return drafts.pop(0)
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+    assert any("outside the current evidence packet" in warning for warning in result["warnings"])
+
+
+def test_insufficiency_statement_still_requires_run_local_evidence_binding(monkeypatch) -> None:
+    drafts = [
+        "The supplied evidence is insufficient to answer the question.",
+        "The supplied passage does not establish the requested claim [[E0]].",
+    ]
+    calls = 0
+
+    def generate(**_kwargs):
+        nonlocal calls
+        answer = drafts[calls]
+        calls += 1
+        return answer
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert calls == 2
+    assert "1976" in result["answer"]
+    assert any("omitted required evidence markers" in warning for warning in result["warnings"])
+
+
+def test_research_fails_after_persistent_ungrounded_generation(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.rag.chat_complete",
+        lambda **_kwargs: "The trace is not a presence.",
+    )
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    with pytest.raises(ValueError, match="output/evidence contract"):
+        run_rag_pipeline(request, _LexicalOnlyStore())
+
+
+def test_explicit_answer_as_json_request_is_not_rewritten_to_prose(monkeypatch) -> None:
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return '{"answer":"The trace is not a presence [[E0]]."}'
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        instructions="Answer as JSON.",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 1
+    assert result["raw_answer"].startswith('{"answer"')
+    assert json.loads(result["answer"])["answer"]
+    assert "Works Cited" not in result["answer"]
+    generation_stage = next(
+        stage for stage in result["stages"] if stage["name"] == "generation"
+    )
+    assert generation_stage["detail"]["output_contract_retry"] is False
+
+
+def test_explicit_json_retry_preserves_requested_form_and_adds_grounding(monkeypatch) -> None:
+    drafts = [
+        '{"answer":"The trace is not a presence."}',
+        '{"answer":"The trace is not a presence [[E0]]."}',
+    ]
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return drafts[len(prompts) - 1]
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        instructions="Answer as JSON.",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 2
+    assert "Preserve the output form explicitly requested" in prompts[1]
+    assert "Return only cohesive scholarly prose" not in prompts[1]
+    assert json.loads(result["answer"])["answer"]
+    assert "Works Cited" not in result["answer"]
+    generation_stage = next(
+        stage for stage in result["stages"] if stage["name"] == "generation"
+    )
+    assert generation_stage["detail"]["output_contract_retry"] is True
+    assert generation_stage["detail"]["prose_contract_retry"] is False
+
+
+def test_explicit_json_binding_stays_valid_json_without_appended_bibliography(monkeypatch) -> None:
+    def generate(**_kwargs):
+        return '{"answer":"The trace is not a presence [[E0]]."}'
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?",
+        instructions="Answer as JSON.",
+        model="test-model",
+        pipeline_id="research.current",
+        pipeline_version=1,
+        source_collection="corpus",
+        locales=["en"],
+        search_types=["lexical"],
+        k=1,
+        fetch_k=1,
+        reranker="none",
+        query_decomposition=False,
+        use_prior_response_memory=False,
+        use_prior_claim_memory=False,
+    )
+
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    parsed = json.loads(result["answer"])
+    assert "1976" in parsed["answer"]
+    assert "Works Cited" not in result["answer"]
+
+
+def test_works_cited_never_implies_binding_when_answer_has_no_evidence_markers() -> None:
+    evidence = [{
+        "evidence_id": "E0",
+        "inline_citation": "Derrida 1976: 65",
+        "full_citation": "Derrida, Jacques. Of Grammatology. 1976.",
+        "record": {
+            "record_id": "r1",
+            "work": "Of Grammatology",
+            "document_author": "Jacques Derrida",
+        },
+    }]
+
+    answer = _bind_sources("An uncited generated claim.", evidence, True)
+
+    assert "Works Cited" not in answer
+    assert "Of Grammatology" not in answer
 
 
 def test_query_decomposition_cannot_invent_json_output_instructions(monkeypatch) -> None:
