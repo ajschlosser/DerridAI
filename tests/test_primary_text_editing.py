@@ -231,3 +231,13 @@ def test_committed_record_update_notes_corpus_records_but_batch_save_does_not(tm
 
     repo.update_record(build["build_id"], {**record, "record_revision": 2, "text": "reviewed"})
     assert "corpus_records" in operation_events.drain().resources
+
+
+def test_primary_text_review_completeness_rejects_malformed_boolean_values():
+    """Legacy strings and numeric lookalikes do not count as resolved metadata."""
+    from app.corpus_review_state import _metadata_value_missing
+
+    assert _metadata_value_missing("primary_text", True) is False
+    assert _metadata_value_missing("primary_text", False) is False
+    for value in (None, "true", "false", "", 0, 1, [], {"value": True}):
+        assert _metadata_value_missing("primary_text", value) is True
