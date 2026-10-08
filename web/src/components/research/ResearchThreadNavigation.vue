@@ -101,7 +101,9 @@ const manageExpanded = ref(false);
       <p v-if="loading || busy" role="status">{{ i18n.t("loading.updating") }}</p>
       <div v-if="error" role="alert">
         <p>{{ error }}</p>
-        <button type="button" class="btn" @click="emit('retry')">{{ i18n.t("ui.retry") }}</button>
+        <button type="button" class="btn" @click="emit('retry')">
+          {{ i18n.t("ui.retry") }}
+        </button>
       </div>
       <nav class="research-thread-index" :aria-label="i18n.t('research.threads_title')">
         <ul>
@@ -126,7 +128,9 @@ const manageExpanded = ref(false);
           </li>
         </ul>
       </nav>
-      <p v-if="!loading && !error && !threads.length">{{ i18n.t("research.threads_empty") }}</p>
+      <p v-if="!loading && !error && !threads.length">
+        {{ i18n.t("research.threads_empty") }}
+      </p>
       <div class="research-thread-pages">
         <button
           type="button"
@@ -276,7 +280,8 @@ const manageExpanded = ref(false);
   text-align: start;
   overflow-wrap: anywhere;
 }
-.research-thread-index button span, .research-thread-index time {
+.research-thread-index button span,
+.research-thread-index time {
   font-size: 0.78rem;
   color: var(--text-tertiary);
   font-weight: 400;
@@ -338,7 +343,7 @@ const manageExpanded = ref(false);
 .research-thread-turn-status {
   display: inline-block;
   margin-block: 0 12px;
-  font-size: .78rem;
+  font-size: 0.78rem;
   color: var(--text-tertiary);
 }
 .research-thread-pages,
