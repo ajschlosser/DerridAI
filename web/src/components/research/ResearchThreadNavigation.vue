@@ -57,7 +57,7 @@ const i18n = useI18nStore();
 
 <template>
   <section class="research-thread-navigation" aria-labelledby="research-threads-title">
-    <h2 id="research-threads-title">{{ i18n.t("research.threads_title") }}</h2>
+    <h2 class="research-thread-index-title" id="research-threads-title">{{ i18n.t("research.threads_title") }}</h2>
     <button type="button" class="btn" @click="emit('new')">
       {{ i18n.t("research.thread_new") }}
     </button>
@@ -84,7 +84,7 @@ const i18n = useI18nStore();
       <p>{{ error }}</p>
       <button type="button" class="btn" @click="emit('retry')">{{ i18n.t("ui.retry") }}</button>
     </div>
-    <nav :aria-label="i18n.t('research.threads_title')">
+    <nav class="research-thread-index" :aria-label="i18n.t('research.threads_title')">
       <ul>
         <li v-for="item in threads" :key="item.thread_id">
           <button
@@ -123,7 +123,7 @@ const i18n = useI18nStore();
         {{ i18n.t("research.threads_next") }}
       </button>
     </div>
-    <section v-if="thread" :aria-label="thread.title">
+    <section v-if="thread" class="research-thread-conversation" :aria-label="thread.title">
       <h3>{{ thread.title }}</h3>
       <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
       <div
@@ -141,11 +141,11 @@ const i18n = useI18nStore();
           {{ i18n.t("research.thread_delete") }}
         </button>
       </div>
-      <ol>
+      <ol class="research-thread-turns">
         <li v-for="turn in thread.turns" :key="turn.turn_id">
-          <article :aria-labelledby="`heading-${turn.turn_id}`">
+          <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
             <h4 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h4>
-            <p>{{ i18n.t(`research.thread_status_${turn.status}`) }}</p>
+            <p class="research-thread-turn-status">{{ i18n.t(`research.thread_status_${turn.status}`) }}</p>
             <slot name="answer" :turn="turn" />
             <div v-if="['failed', 'cancelled'].includes(turn.status)">
               <p>{{ i18n.t("research.thread_retry_help") }}</p>
@@ -183,7 +183,14 @@ const i18n = useI18nStore();
 </template>
 
 <style scoped>
+/* The index and conversation form separate reading regions rather than one vertical card. */
 .research-thread-navigation {
+  display: grid;
+  grid-template-columns: minmax(230px, 270px) minmax(0, 1fr);
+  grid-auto-flow: row;
+  column-gap: var(--space-5, 20px);
+  row-gap: var(--space-3, 12px);
+  align-items: start;
   padding: var(--page-pad-inline);
   background: var(--surface-card);
   border: 1px solid var(--border);
@@ -191,33 +198,136 @@ const i18n = useI18nStore();
   margin-block: var(--page-gap);
   overflow-wrap: anywhere;
 }
-ul,
-ol {
-  display: grid;
-  gap: calc(var(--page-gap) / 2);
-  padding-inline-start: var(--page-pad-inline);
+.research-thread-navigation > :not(.research-thread-conversation) {
+  grid-column: 1;
+  min-width: 0;
 }
-nav button {
+.research-thread-index-title {
+  margin-block: 0;
+}
+.research-thread-navigation > button {
+  justify-self: stretch;
+}
+.research-thread-navigation > label:not(.research-thread-archive-filter) {
+  display: grid;
+  gap: var(--space-2, 8px);
+}
+.research-thread-navigation input[type="search"] {
+  min-width: 0;
+  width: 100%;
+}
+.research-thread-index {
+  min-width: 0;
+  max-height: min(58vh, 650px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.research-thread-index ul {
+  list-style: none;
+  display: grid;
+  gap: var(--space-2, 8px);
+  padding: 0;
+  margin: 0;
+}
+.research-thread-index li {
+  min-width: 0;
+}
+.research-thread-index button {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px;
   white-space: normal;
   text-align: start;
+  overflow-wrap: anywhere;
 }
-nav span {
-  margin-inline-start: calc(var(--page-gap) / 2);
+.research-thread-index button span,
+.research-thread-index time {
+  font-size: .78rem;
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
-[aria-current="true"] {
+.research-thread-index button[aria-current="true"] {
   border-color: var(--accent-fg);
+  background: var(--soft);
+  box-shadow: inset 3px 0 0 var(--accent-fg);
   font-weight: 700;
+}
+.research-thread-conversation {
+  grid-column: 2;
+  grid-row: 1 / span 16;
+  min-width: 0;
+  padding-inline: clamp(10px, 2vw, 28px);
+  border-inline-start: 1px solid var(--border);
+}
+.research-thread-conversation h3 {
+  font-size: clamp(1.25rem, 1.8vw, 1.65rem);
+  line-height: 1.3;
+  margin: 0 0 var(--space-2, 8px);
+}
+.research-thread-management {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
+  padding-block: var(--space-2, 8px) var(--space-4, 16px);
+  border-bottom: 1px solid var(--border);
+}
+.research-thread-turns {
+  list-style: none;
+  display: grid;
+  gap: var(--space-5, 20px);
+  margin: var(--space-4, 16px) 0;
+  padding: 0;
+}
+.research-thread-turn {
+  min-width: 0;
+  padding: clamp(14px, 2vw, 24px);
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.research-thread-turn h4 {
+  max-width: 75ch;
+  margin-block: 0 var(--space-3, 12px);
+  line-height: 1.4;
+}
+.research-thread-turn-status {
+  display: inline-block;
+  margin-block: 0 var(--space-3, 12px);
+  font-size: .78rem;
+  color: var(--text-tertiary);
+}
+.research-thread-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2, 8px);
 }
 .research-thread-archive-filter {
   display: flex;
   align-items: center;
-  gap: calc(var(--page-gap) / 2);
-  margin-block: var(--page-gap);
+  gap: var(--space-2, 8px);
 }
-.research-thread-pages,
-.research-thread-management {
-  display: flex;
-  flex-wrap: wrap;
-  gap: calc(var(--page-gap) / 2);
+@media (max-width: 900px) {
+  .research-thread-navigation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .research-thread-navigation > :not(.research-thread-conversation),
+  .research-thread-conversation {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .research-thread-conversation {
+    border-inline-start: none;
+    border-top: 1px solid var(--border);
+    padding: var(--space-4, 16px) 0 0;
+  }
+  .research-thread-index {
+    max-height: 220px;
+  }
+  .research-thread-turn {
+    padding: 14px;
+  }
 }
 </style>
