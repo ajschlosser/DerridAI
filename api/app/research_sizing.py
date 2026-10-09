@@ -38,6 +38,7 @@ AUTO_MAX_NEIGHBOR_RADIUS = 2
 AUTO_NEIGHBOR_BUDGET_FRACTION = 0.35
 AUTO_MAX_REGION_RECORDS = 3
 AUTO_MAX_REGION_TEXT_CHARS = 4500
+AUTO_DOCUMENT_CACHE_LIMIT = 2
 
 
 def _text_chars(record: Mapping[str, Any]) -> int:
@@ -318,7 +319,10 @@ def expand_context_neighbors(
     used_chars = 0
     neighbors: list[dict[str, Any]] = []
     neighbor_keys: set[tuple[str, str]] = set()
+    # Same-document context can be large. Retain only a tiny LRU of decoded
+    # documents instead of every document touched by the reranked anchors.
     document_cache: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    document_read_count = 0
     load_failures: list[str] = []
 
     def append_neighbor(
@@ -402,13 +406,22 @@ def expand_context_neighbors(
             continue
 
         cache_key = (collection, source_id)
-        if cache_key not in document_cache:
+        if cache_key in document_cache:
+            records = document_cache.pop(cache_key)
+            document_cache[cache_key] = records
+        else:
+            document_read_count += 1
             try:
-                document_cache[cache_key] = list(load_document_records(collection, source_id))
+                records = list(load_document_records(collection, source_id))
             except Exception as exc:  # Context expansion must never abort an otherwise valid Research run.
-                document_cache[cache_key] = []
-                load_failures.append(f"{collection}:{source_id}:{type(exc).__name__}")
-        records = document_cache[cache_key]
+                records = []
+                load_failures.append(
+                    f"{collection}:{source_id}:{type(exc).__name__}"
+                )
+            while len(document_cache) >= AUTO_DOCUMENT_CACHE_LIMIT:
+                oldest = next(iter(document_cache))
+                document_cache.pop(oldest, None)
+            document_cache[cache_key] = records
         if not records:
             continue
 
@@ -446,6 +459,6 @@ def expand_context_neighbors(
         "neighbor_character_budget": budget,
         "target_context_chars": int(target_context_chars),
         "max_neighbor_radius": int(max_radius),
-        "document_reads": len(document_cache),
+        "document_reads": document_read_count,
         "load_failures": load_failures[:20],
     }

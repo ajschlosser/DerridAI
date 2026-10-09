@@ -3256,23 +3256,41 @@ class ChromaStore:
         store: str,
         source_document_id: str,
     ) -> list[dict[str, Any]]:
-        """Load same-document Records for deterministic local context expansion."""
+        """Load same-document Records with a bounded Chroma working page."""
 
         source_id = str(source_document_id or "").strip()
         if not source_id:
             return []
         col = self._collection(store)
+        page_size = 512
+
         for field in ("source_document_id", "source_asset_id"):
+            records: list[dict[str, Any]] = []
+            offset = 0
             try:
-                payload = col.get(
-                    where={field: source_id},
-                    include=["documents", "metadatas"],
-                )
+                while True:
+                    payload = col.get(
+                        where={field: source_id},
+                        include=["documents", "metadatas"],
+                        limit=page_size,
+                        offset=offset,
+                    )
+                    ids = list(payload.get("ids") or [])
+                    if not ids:
+                        break
+                    records.extend(
+                        self._decode_result(
+                            payload,
+                            include_updates=False,
+                        )
+                    )
+                    offset += len(ids)
+                    if len(ids) < page_size:
+                        break
             except Exception as exc:
                 if not self._is_query_capability_error(exc):
                     raise
                 continue
-            records = self._decode_result(payload, include_updates=False)
             if records:
                 return records
         return []
