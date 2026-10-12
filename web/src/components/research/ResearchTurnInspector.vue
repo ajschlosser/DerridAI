@@ -75,7 +75,11 @@ function setSection(next: InspectorSection) {
         {{ i18n.t("ui.close") }}
       </button>
     </header>
-    <div class="research-turn-inspector-sections" role="group" :aria-label="i18n.t('research.thread_inspect_result')">
+    <div
+      class="research-turn-inspector-sections"
+      role="group"
+      :aria-label="i18n.t('research.thread_inspect_result')"
+    >
       <button
         v-for="option in options"
         :key="option.value"
@@ -110,7 +114,10 @@ function setSection(next: InspectorSection) {
         nested
         :heading-id="`${instanceId}-claim-heading`"
         :context-label="contextLabel"
-        @evidence="emit('selectEvidence', $event); section = 'sources'"
+        @evidence="
+          emit('selectEvidence', $event);
+          section = 'sources';
+        "
       />
       <p v-else>{{ i18n.t("ui.none") }}</p>
     </div>
