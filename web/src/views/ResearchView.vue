@@ -58,15 +58,41 @@ const route = useRoute();
 const newQuestionRequested = ref(false);
 const threadContinuable = ref(false);
 const currentThreadId = computed(() => String(route.query.thread || ""));
-watch(currentThreadId, () => {
+watch(currentThreadId, (next, previous) => {
   threadContinuable.value = false;
+  switchComposerDraft(previous, next);
 });
+// Thread-list search, page and archive filters live in the URL beside the
+// selection, so reloads and Back/Forward restore the same list.
+const routeText = (value: unknown) =>
+  Array.isArray(value) ? String(value[0] ?? "") : String(value ?? "");
+function listQuery(extra: Record<string, string> = {}) {
+  const query: Record<string, string> = {};
+  for (const key of ["thread_q", "thread_offset", "thread_archived"]) {
+    const value = routeText(route.query[key]);
+    if (value) query[key] = value;
+  }
+  return { ...query, ...extra };
+}
+function threadListFilters(value: { search: string; offset: number; includeArchived: boolean }) {
+  const next: Record<string, string | undefined> = {
+    thread_q: value.search || undefined,
+    thread_offset: value.offset ? String(value.offset) : undefined,
+    thread_archived: value.includeArchived ? "true" : undefined,
+  };
+  if (Object.entries(next).every(([key, item]) => (item ?? "") === routeText(route.query[key])))
+    return;
+  void router.replace({ path: "/rag", query: { ...route.query, ...next } });
+}
 async function selectThread(id: string) {
-  await router.push({ path: "/rag", query: { thread: id } });
+  await router.push({ path: "/rag", query: listQuery({ thread: id }) });
 }
 async function openThreadTurn(turn: ResearchTurn) {
   if (turn.job_id)
-    await router.push({ path: "/rag", query: { thread: turn.thread_id, job: turn.job_id } });
+    await router.push({
+      path: "/rag",
+      query: listQuery({ thread: turn.thread_id, job: turn.job_id }),
+    });
 }
 async function onThreadRemoved(error?: string) {
   await newThread();
@@ -74,10 +100,16 @@ async function onThreadRemoved(error?: string) {
 }
 async function newThread() {
   newQuestionRequested.value = true;
-  await router.push({ path: "/rag" });
+  const fromThread = Boolean(currentThreadId.value);
+  await router.push({ path: "/rag", query: listQuery() });
   activeJob.value = null;
-  prompt.value = "";
-  instructions.value = "";
+  // Leaving a thread restores the new-question draft; "New question" from the
+  // new-question view starts over.
+  if (!fromThread) {
+    prompt.value = "";
+    instructions.value = "";
+    persistDraft();
+  }
   await nextTick();
   document.getElementById("researchQuestion")?.focus();
 }
@@ -430,7 +462,7 @@ function restoreComposerDraft(expectedPrompt: string, expectedInstructions: stri
   if (composerDraftLoaded || composerDraftLoad) return;
   const epoch = composerDraftEpoch;
   composerDraftLoad = (async () => {
-    const saved = await loadResearchComposerDraft();
+    const saved = await loadResearchComposerDraft(currentThreadId.value);
     if (disposed || epoch !== composerDraftEpoch || !isNativeResearch.value) return;
     composerDraftLoaded = true;
     if (saved && prompt.value === expectedPrompt && instructions.value === expectedInstructions) {
@@ -442,15 +474,41 @@ function restoreComposerDraft(expectedPrompt: string, expectedInstructions: stri
   });
 }
 
+// Each thread (and the new-question view) owns its own draft. On a switch, the
+// pending draft is written to the scope it was typed in before the next loads.
+let draftScopeRequest = 0;
+function switchComposerDraft(previous: string, next: string) {
+  if (previous === next) return;
+  const request = ++draftScopeRequest;
+  if (draftTimer !== undefined) {
+    window.clearTimeout(draftTimer);
+    draftTimer = undefined;
+    void saveResearchComposerDraft(
+      { prompt: prompt.value, instructions: instructions.value },
+      previous,
+    );
+  }
+  prompt.value = "";
+  instructions.value = "";
+  if (!composerDraftLoaded) return;
+  const epoch = composerDraftEpoch;
+  void loadResearchComposerDraft(next).then((saved) => {
+    if (disposed || request !== draftScopeRequest || epoch !== composerDraftEpoch) return;
+    if (saved && !prompt.value && !instructions.value) {
+      prompt.value = saved.prompt;
+      instructions.value = saved.instructions;
+    }
+  });
+}
 function persistDraft() {
   if (!config.value) return;
   window.clearTimeout(draftTimer);
   draftTimer = window.setTimeout(() => {
     draftTimer = undefined;
-    void saveResearchComposerDraft({
-      prompt: prompt.value,
-      instructions: instructions.value,
-    });
+    void saveResearchComposerDraft(
+      { prompt: prompt.value, instructions: instructions.value },
+      currentThreadId.value,
+    );
   }, 250);
 }
 function updateConfig(patch: Partial<ResearchConfig>) {
@@ -546,7 +604,7 @@ async function runResearch(turn?: ResearchTurn) {
     if (route.query.job)
       await router.replace({
         path: "/rag",
-        query: currentThreadId.value ? { thread: currentThreadId.value } : {},
+        query: listQuery(currentThreadId.value ? { thread: currentThreadId.value } : {}),
       });
   }
   const request = ++submissionRequest;
@@ -577,13 +635,24 @@ async function runResearch(turn?: ResearchTurn) {
     })) as ResearchJob;
     if (disposed || request !== submissionRequest) return;
     sessionJobIds.value.add(job.id);
+    if (!turn) {
+      // The submitted question now lives in its turn; a retry never touches the draft.
+      window.clearTimeout(draftTimer);
+      draftTimer = undefined;
+      prompt.value = "";
+      instructions.value = "";
+      void saveResearchComposerDraft({ prompt: "", instructions: "" }, currentThreadId.value);
+    }
     activeJob.value = job;
     activeEvidenceIndex.value = 0;
     jobs.value = [job, ...jobs.value.filter((item) => item.id !== job.id)];
     schedulePoll(true);
     if (turn) retryFocusJob.value = job.id;
     if (job.thread_id) {
-      await router.push({ path: "/rag", query: { thread: job.thread_id, job: job.id } });
+      await router.push({
+        path: "/rag",
+        query: listQuery({ thread: job.thread_id, job: job.id }),
+      });
     }
     await nextTick();
     document
@@ -686,7 +755,7 @@ async function openJob(job: ResearchJob) {
   if (route.query.job)
     await router.replace({
       path: "/rag",
-      query: currentThreadId.value ? { thread: currentThreadId.value } : {},
+      query: listQuery(currentThreadId.value ? { thread: currentThreadId.value } : {}),
     });
   await loadAnswer(job);
 }
@@ -821,7 +890,8 @@ async function gradeAnswer() {
 function prepareRerun() {
   if (!activeJob.value) return;
   newQuestionRequested.value = true;
-  if (route.query.job || currentThreadId.value) void router.replace({ path: "/rag" });
+  if (route.query.job || currentThreadId.value)
+    void router.replace({ path: "/rag", query: listQuery() });
   const next = researchActions.prepareResearchRerun(activeJob.value) as ResearchConfig;
   config.value = { ...next };
   runPipelineOverrides.value = next.run_pipeline_overrides || null;
@@ -961,10 +1031,10 @@ onBeforeUnmount(() => {
   stopJobFollowers();
   if (draftTimer !== undefined) {
     window.clearTimeout(draftTimer);
-    void saveResearchComposerDraft({
-      prompt: prompt.value,
-      instructions: instructions.value,
-    });
+    void saveResearchComposerDraft(
+      { prompt: prompt.value, instructions: instructions.value },
+      currentThreadId.value,
+    );
     draftTimer = undefined;
   }
   researchDraft.clear();
@@ -1044,6 +1114,10 @@ onBeforeUnmount(() => {
         "
         :retry-busy="starting"
         :refresh-key="threadRefreshKey"
+        :initial-search="routeText(route.query.thread_q)"
+        :initial-offset="Math.max(0, Number(route.query.thread_offset) || 0)"
+        :initial-archived="route.query.thread_archived === 'true'"
+        @filters="threadListFilters"
         @continuable="threadContinuable = $event"
         @retry-turn="runResearch"
         @select="selectThread"

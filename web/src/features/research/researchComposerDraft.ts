@@ -25,6 +25,14 @@ export interface ResearchComposerDraft {
   instructions: string;
 }
 
+// A new question and each thread's follow-up keep separate drafts, so text typed
+// for one inquiry never appears as a draft in another.
+function draftKey(threadId = "") {
+  return threadId
+    ? `${RESEARCH_COMPOSER_DRAFT_KEY}:thread:${threadId}`
+    : RESEARCH_COMPOSER_DRAFT_KEY;
+}
+
 type PersistedResearchComposerDraft = ResearchComposerDraft & { key: string };
 
 /**
@@ -32,12 +40,15 @@ type PersistedResearchComposerDraft = ResearchComposerDraft & { key: string };
  * preference snapshot. Legacy prompt/instruction values remain a fallback in
  * ResearchView until the broader preference migration is complete.
  */
-export async function loadResearchComposerDraft(): Promise<ResearchComposerDraft | null> {
+export async function loadResearchComposerDraft(
+  threadId = "",
+): Promise<ResearchComposerDraft | null> {
+  const key = draftKey(threadId);
   try {
-    const value = (await workspaceDb.get("prefs", RESEARCH_COMPOSER_DRAFT_KEY)) as
+    const value = (await workspaceDb.get("prefs", key)) as
       | Partial<PersistedResearchComposerDraft>
       | undefined;
-    if (!value || value.key !== RESEARCH_COMPOSER_DRAFT_KEY) return null;
+    if (!value || value.key !== key) return null;
     return {
       prompt: String(value.prompt || ""),
       instructions: String(value.instructions || ""),
@@ -49,10 +60,13 @@ export async function loadResearchComposerDraft(): Promise<ResearchComposerDraft
 }
 
 /** Persists only the small Research composer draft; no other workspace domain is serialized. */
-export async function saveResearchComposerDraft(draft: ResearchComposerDraft): Promise<void> {
+export async function saveResearchComposerDraft(
+  draft: ResearchComposerDraft,
+  threadId = "",
+): Promise<void> {
   try {
     await workspaceDb.put("prefs", {
-      key: RESEARCH_COMPOSER_DRAFT_KEY,
+      key: draftKey(threadId),
       prompt: String(draft.prompt || ""),
       instructions: String(draft.instructions || ""),
     } satisfies PersistedResearchComposerDraft);

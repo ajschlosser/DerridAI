@@ -57,4 +57,20 @@ describe("Research composer draft repository", () => {
       instructions: "Instruction",
     });
   });
+
+  it("stores each thread's follow-up draft under its own key", async () => {
+    db.get.mockResolvedValue({
+      key: "research-composer-draft",
+      prompt: "New-question draft",
+      instructions: "",
+    });
+    await expect(loadResearchComposerDraft("t1")).resolves.toBeNull();
+    expect(db.get).toHaveBeenCalledWith("prefs", "research-composer-draft:thread:t1");
+    await saveResearchComposerDraft({ prompt: "Follow-up", instructions: "" }, "t1");
+    expect(db.put).toHaveBeenCalledWith("prefs", {
+      key: "research-composer-draft:thread:t1",
+      prompt: "Follow-up",
+      instructions: "",
+    });
+  });
 });

@@ -181,6 +181,21 @@ function retryTurn(turn: ResearchTurn) {
 watch([includeArchived, search], () => {
   offset.value = 0;
 });
+// Debounce typing so each keystroke does not issue a list request; clearing applies at once.
+let searchTimer: number | undefined;
+function updateSearch(value: string) {
+  window.clearTimeout(searchTimer);
+  searchTimer = undefined;
+  if (!value.trim()) {
+    search.value = "";
+    return;
+  }
+  searchTimer = window.setTimeout(() => {
+    searchTimer = undefined;
+    search.value = value;
+  }, 250);
+}
+onBeforeUnmount(() => window.clearTimeout(searchTimer));
 const error = computed(() => {
   const value = list.error.value || (props.threadId ? detail.error.value : null);
   return value instanceof Error ? value.message : value ? String(value) : "";
@@ -293,7 +308,7 @@ function retry() {
     :offset="offset"
     :search="search"
     :show-preview="library || Boolean($slots.workspace)"
-    @search="search = $event"
+    @search="updateSearch"
     :loading="list.isFetching.value || (Boolean(threadId) && detail.isFetching.value)"
     :error="error || (!dialog ? mutationError : '')"
     :include-archived="includeArchived"

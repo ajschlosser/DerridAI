@@ -92,6 +92,7 @@ beforeEach(() => {
     "research.thread_open_run": "Open answer",
     "ui.retry": "Retry",
     "research.thread_retry": "Retry turn",
+    "research.threads_no_match": "No research threads match “{query}”.",
   };
   jobs.read.mockImplementation(async (path: string) => ({
     id: path.split("/").pop(),
@@ -715,5 +716,33 @@ describe("Responsive research navigation", () => {
     expect(wrapper.get(".research-thread-management").element.tagName).toBe("DETAILS");
     expect(wrapper.find(".research-thread-management summary").exists()).toBe(true);
     expect(wrapper.get(".research-thread-management button").text()).not.toBe("");
+  });
+});
+
+describe("Research thread list search", () => {
+  it("debounces typed search, resets paging, and clears on Escape", async () => {
+    vi.useFakeTimers();
+    const wrapper = browser("", "");
+    await flushPromises();
+    api.list.mockClear();
+    const input = wrapper.get("input[type='search']");
+    for (const value of ["G", "Gl", "Glas"]) await input.setValue(value);
+    expect(api.list).not.toHaveBeenCalled();
+    api.list.mockResolvedValue({ threads: [] });
+    await vi.advanceTimersByTimeAsync(300);
+    await flushPromises();
+    expect(api.list).toHaveBeenCalledTimes(1);
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: "Glas", offset: 0 }),
+    );
+    expect(wrapper.text()).toContain("No research threads match “Glas”.");
+    api.list.mockResolvedValue({ threads: [summary("a")] });
+    await input.trigger("keydown", { key: "Escape" });
+    await flushPromises();
+    expect((input.element as HTMLInputElement).value).toBe("");
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ search: expect.anything() }),
+    );
+    expect(wrapper.text()).toContain("a");
   });
 });
