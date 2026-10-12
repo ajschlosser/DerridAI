@@ -24,6 +24,7 @@ import { apiRequest, ApiError } from "../../api/http";
 import { useAuthStore } from "../../stores/auth";
 import { useI18nStore } from "../../stores/i18n";
 import ResearchResultPresentation from "./ResearchResultPresentation.vue";
+import ResearchAnswerContent from "./ResearchAnswerContent.vue";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
@@ -152,31 +153,6 @@ function openRelationships(index: number, mode: "trace" | "model") {
   const item = result.value?.evidence?.[index];
   if (item) emit("openRelationships", item, mode);
 }
-const answerParts = computed(() => {
-  const text = result.value?.answer || "";
-  const parts: Array<{ text: string; evidenceIndex: number | null }> = [];
-  const marker = /\[\[(E\d+)\]\]|\[(E\d+)\]/g;
-  let previousEnd = 0;
-  for (const match of text.matchAll(marker)) {
-    const start = match.index ?? 0;
-    if (start > previousEnd) {
-      parts.push({ text: text.slice(previousEnd, start), evidenceIndex: null });
-    }
-    const evidenceId = match[1] || match[2];
-    const index =
-      result.value?.evidence?.findIndex((item) => item.evidence_id === evidenceId) ?? -1;
-    const evidence = index >= 0 ? result.value?.evidence?.[index] : null;
-    parts.push({
-      text: evidence?.inline_citation || match[0],
-      evidenceIndex: index >= 0 ? index : null,
-    });
-    previousEnd = start + match[0].length;
-  }
-  if (previousEnd < text.length) {
-    parts.push({ text: text.slice(previousEnd), evidenceIndex: null });
-  }
-  return parts;
-});
 function inspectCitation(index: number) {
   activeEvidenceIndex.value = index;
   inspectOpen.value = true;
@@ -227,20 +203,13 @@ watch(
         </button>
       </div>
       <div v-if="result?.answer" class="thread-answer-workspace">
-        <p class="thread-answer-text">
-          <template v-for="(part, index) in answerParts" :key="index">
-            <button
-              v-if="part.evidenceIndex !== null"
-              class="thread-answer-citation"
-              type="button"
-              :aria-label="`${i18n.t('research.works_cited')}: ${part.text}`"
-              @click="inspectCitation(part.evidenceIndex)"
-            >
-              {{ part.text }}
-            </button>
-            <template v-else>{{ part.text }}</template>
-          </template>
-        </p>
+        <ResearchAnswerContent
+          :answer="result.answer"
+          :evidence="result.evidence || []"
+          compact
+          read-only
+          @evidence="inspectCitation"
+        />
         <details v-if="result.evidence?.length">
           <summary>{{ i18n.t("research.works_cited") }}</summary>
           <ul>
