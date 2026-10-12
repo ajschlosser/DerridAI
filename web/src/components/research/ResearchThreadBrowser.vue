@@ -274,7 +274,7 @@ function manage(action: "rename" | "delete") {
   notice.value = "";
   dialog.value = action;
 }
-async function mutate(action: "rename" | "archive" | "delete", title?: string) {
+async function mutate(action: "rename" | "archive" | "pin" | "delete", title?: string) {
   const thread = detail.data.value;
   if (
     busy.value ||
@@ -296,7 +296,11 @@ async function mutate(action: "rename" | "archive" | "delete", title?: string) {
     else
       await researchThreadsApi.patch(
         thread.thread_id,
-        action === "rename" ? { title: title?.trim() ?? "" } : { archived: !thread.archived_at },
+        action === "rename"
+          ? { title: title?.trim() ?? "" }
+          : action === "pin"
+            ? { pinned: !thread.pinned_at }
+            : { archived: !thread.archived_at },
       );
     if (request !== operation) return;
     dialog.value = null;
@@ -308,9 +312,13 @@ async function mutate(action: "rename" | "archive" | "delete", title?: string) {
       notice.value = i18n.t(
         action === "rename"
           ? "research.thread_renamed"
-          : thread.archived_at
-            ? "research.thread_unarchived"
-            : "research.thread_archive_saved",
+          : action === "pin"
+            ? thread.pinned_at
+              ? "research.thread_unpinned"
+              : "research.thread_pinned_saved"
+            : thread.archived_at
+              ? "research.thread_unarchived"
+              : "research.thread_archive_saved",
       );
     await client.invalidateQueries({ queryKey: key });
   } catch (error) {
@@ -395,6 +403,7 @@ function retry() {
     @include-archived="updateArchived"
     @rename="manage('rename')"
     @archive="mutate('archive')"
+    @pin="mutate('pin')"
     @remove="manage('delete')"
     @export="exportThread"
   >

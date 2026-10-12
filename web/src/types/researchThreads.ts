@@ -24,6 +24,8 @@ export interface ResearchThread {
   created_at: string;
   updated_at: string;
   archived_at: string | null;
+  /** Owner-set; pinned threads list first. Optional for payloads from before the migration. */
+  pinned_at?: string | null;
   originating_response_record_id: string | null;
 }
 

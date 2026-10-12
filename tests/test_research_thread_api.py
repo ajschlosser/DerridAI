@@ -526,3 +526,16 @@ def test_export_keeps_run_and_record_identity_without_passage_text(store, monkey
     assert exc.value.status_code == 404
     assert non_admin_route_allowed("researcher", "/api/research/threads/t/export", "GET")
     assert not non_admin_route_allowed("researcher", "/api/research/threads/t/export", "POST")
+
+
+def test_patch_pins_only_the_owners_thread(store, monkeypatch):
+    from app.routers import research_threads as routes
+    from fastapi import HTTPException
+    thread_id = store.create_thread("alice")["thread_id"]
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role="researcher"))
+    assert routes.patch_thread(thread_id, routes.ThreadPatch(pinned=True), None)["pinned_at"]
+    assert store.get_thread(thread_id, "alice")["archived_at"] is None
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="bob", role="researcher"))
+    with pytest.raises(HTTPException) as exc:
+        routes.patch_thread(thread_id, routes.ThreadPatch(pinned=False), None)
+    assert exc.value.status_code == 404 and store.get_thread(thread_id, "alice")["pinned_at"]

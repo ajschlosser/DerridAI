@@ -64,6 +64,7 @@ def _thread_row(row: sqlite3.Row) -> dict[str, Any]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
         "archived_at": row["archived_at"],
+        "pinned_at": row["pinned_at"],
         "originating_response_record_id": row["originating_response_record_id"],
     }
 
@@ -147,6 +148,10 @@ class ResearchThreadStore(PipelineDatabase):
                     ON research_turns(response_record_id) WHERE response_record_id IS NOT NULL;
                 """
             )
+            # Migration: owner-set pins (pinned threads list first; NULL = not pinned).
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(research_threads)")}
+            if "pinned_at" not in columns:
+                conn.execute("ALTER TABLE research_threads ADD COLUMN pinned_at TEXT")
 
     # -- internals ---------------------------------------------------------
 
@@ -220,7 +225,7 @@ class ResearchThreadStore(PipelineDatabase):
               (SELECT status FROM research_turns t WHERE t.thread_id=h.thread_id
                  ORDER BY ordinal DESC LIMIT 1) AS last_status
             FROM research_threads h WHERE {" AND ".join(where)}
-            ORDER BY h.updated_at DESC, h.thread_id LIMIT ? OFFSET ?"""  # noqa: S608 - fixed fragments; values bound
+            ORDER BY (h.pinned_at IS NULL), h.pinned_at DESC, h.updated_at DESC, h.thread_id LIMIT ? OFFSET ?"""  # noqa: S608 - fixed fragments; values bound
         with self.lock, self.connect() as conn:
             rows = conn.execute(sql, (*args, limit, max(0, int(offset)))).fetchall()
         out = []
@@ -263,6 +268,16 @@ class ResearchThreadStore(PipelineDatabase):
             conn.execute(
                 "UPDATE research_threads SET archived_at=? WHERE thread_id=?",
                 (_iso_now() if archived else None, thread_id),
+            )
+            return _thread_row(self._owned_thread(conn, thread_id, owner))
+
+    def set_pinned(self, thread_id: str, owner: str, pinned: bool) -> dict[str, Any]:
+        """Pinning is owner navigation state; it does not touch updated_at or turns."""
+        with self.lock, self.connect() as conn:
+            self._owned_thread(conn, thread_id, owner)
+            conn.execute(
+                "UPDATE research_threads SET pinned_at=? WHERE thread_id=?",
+                (_iso_now() if pinned else None, thread_id),
             )
             return _thread_row(self._owned_thread(conn, thread_id, owner))
 

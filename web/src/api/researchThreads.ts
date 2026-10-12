@@ -46,7 +46,7 @@ export const researchThreadsApi = {
   },
   get: (id: string) =>
     apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),
-  patch: (id: string, patch: { title?: string; archived?: boolean }) =>
+  patch: (id: string, patch: { title?: string; archived?: boolean; pinned?: boolean }) =>
     apiRequest<ResearchThread>(`${THREADS_PATH}/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(patch),

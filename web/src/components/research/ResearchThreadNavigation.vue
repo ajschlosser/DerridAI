@@ -54,6 +54,7 @@ const emit = defineEmits<{
   followUp: [turn: ResearchTurn];
   rename: [];
   archive: [];
+  pin: [];
   remove: [];
   export: [format: "md" | "json"];
   includeArchived: [value: boolean];
@@ -185,6 +186,9 @@ function clearSearch(event: KeyboardEvent) {
               "
             >
               <span class="research-thread-title">{{ item.title }}</span>
+              <span v-if="item.pinned_at" class="research-thread-pinned">{{
+                i18n.t("research.thread_pinned")
+              }}</span>
               <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
               <span
                 v-else-if="item.last_status && item.last_status !== 'completed'"
@@ -258,6 +262,15 @@ function clearSearch(event: KeyboardEvent) {
               {{
                 i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive")
               }}
+            </button>
+            <button
+              class="btn"
+              type="button"
+              :disabled="busy"
+              :aria-pressed="thread.pinned_at ? 'true' : 'false'"
+              @click="emit('pin')"
+            >
+              {{ i18n.t("research.thread_pin") }}
             </button>
             <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
               {{ i18n.t("research.thread_delete") }}

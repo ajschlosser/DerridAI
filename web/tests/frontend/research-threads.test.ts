@@ -682,6 +682,20 @@ describe("Research thread management", () => {
     expect(JSON.parse(await (json as Blob).text()).thread.thread_id).toBe("a");
     expect(api.patch).not.toHaveBeenCalled();
   });
+  it("pins and unpins with a sparse patch and a pressed state", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    const pin = () => wrapper.findAll(".research-thread-management button")[2];
+    expect(pin().attributes("aria-pressed")).toBe("false");
+    api.get.mockResolvedValue({ ...thread("a"), pinned_at: "now" });
+    await pin().trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { pinned: true });
+    expect(pin().attributes("aria-pressed")).toBe("true");
+    await pin().trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { pinned: false });
+  });
   it("archives and unarchives without sending question or answer bodies", async () => {
     const wrapper = browser();
     await flushPromises();
@@ -700,11 +714,11 @@ describe("Research thread management", () => {
   it("only deletes after confirmation and clears selected turns when complete", async () => {
     const wrapper = browser();
     await flushPromises();
-    await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+    await wrapper.findAll(".research-thread-management button")[3].trigger("click");
     expect(api.remove).not.toHaveBeenCalled();
     await wrapper.get('[role="dialog"] button').trigger("click");
     expect(api.remove).not.toHaveBeenCalled();
-    await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+    await wrapper.findAll(".research-thread-management button")[3].trigger("click");
     await wrapper.findAll('[role="dialog"] button')[1].trigger("click");
     await flushPromises();
     expect(api.remove).toHaveBeenCalledWith("a");
@@ -752,7 +766,7 @@ it("does not apply a pending deletion to a replacement account's workspace", asy
       resolve = yes;
     }),
   );
-  await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+  await wrapper.findAll(".research-thread-management button")[3].trigger("click");
   await wrapper.findAll('[role="dialog"] button')[1].trigger("click");
   useAuthStore().user = null;
   await flushPromises();
