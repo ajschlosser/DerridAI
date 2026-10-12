@@ -34,9 +34,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ evidence: [index: number] }>();
 const i18n = useI18nStore();
-const blocks = computed(() =>
-  parseResearchAnswer(props.answer, i18n.t("research.works_cited")),
-);
+const blocks = computed(() => parseResearchAnswer(props.answer, i18n.t("research.works_cited")));
 const heading = computed(() => (props.compact ? "h4" : props.readOnly ? "h6" : "h3"));
 
 function segments(text: string) {
@@ -46,7 +44,6 @@ function segments(text: string) {
 </script>
 
 <template>
-  <!-- prettier-ignore -->
   <article class="research-answer-prose" :class="{ 'thread-answer-text': compact }">
     <template v-for="(block, index) in blocks" :key="index">
       <component :is="heading" v-if="block.kind === 'heading'">{{ block.text }}</component>
