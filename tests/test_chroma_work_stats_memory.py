@@ -212,6 +212,6 @@ def test_keyword_fallback_scans_only_bounded_pages() -> None:
         for call in collection.calls
         if call["include"] == ["documents", "metadatas"]
     ]
-    assert [call["limit"] for call in scan_calls] == [512, 488]
-    assert [call["offset"] for call in scan_calls] == [0, 512]
+    assert [call["limit"] for call in scan_calls] == [512, 512, 512]
+    assert [call["offset"] for call in scan_calls] == [0, 512, 1024]
     assert all(call["limit"] is not None for call in scan_calls)
