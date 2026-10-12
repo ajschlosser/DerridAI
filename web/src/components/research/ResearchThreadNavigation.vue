@@ -59,7 +59,11 @@ const manageExpanded = ref(false);
 </script>
 
 <template>
-  <section class="research-thread-navigation" aria-labelledby="research-threads-title">
+  <section
+    class="research-thread-navigation"
+    :class="{ 'research-thread-workspace-layout': Boolean($slots.workspace) }"
+    aria-labelledby="research-threads-title"
+  >
     <h2 class="research-thread-index-title" id="research-threads-title">
       {{ i18n.t("research.threads_title") }}
     </h2>
@@ -150,78 +154,83 @@ const manageExpanded = ref(false);
         </button>
       </div>
     </div>
-    <section
-      v-if="thread"
-      class="research-thread-conversation"
-      :aria-label="thread.title"
-      tabindex="-1"
-    >
-      <h2>{{ thread.title }}</h2>
-      <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
-      <details
-        class="research-thread-management"
-        :open="manageExpanded"
-        @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open"
+    <div class="research-thread-primary">
+      <section
+        v-if="thread"
+        class="research-thread-conversation"
+        :aria-label="thread.title"
+        tabindex="-1"
       >
-        <summary>{{ i18n.t("research.thread_manage") }}</summary>
-        <div
-          class="research-thread-management-actions"
-          role="group"
-          :aria-label="i18n.t('research.thread_manage')"
+        <h2>{{ thread.title }}</h2>
+        <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
+        <details
+          class="research-thread-management"
+          :open="manageExpanded"
+          @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open"
         >
-          <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
-            {{ i18n.t("research.thread_rename") }}
-          </button>
-          <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
-            {{
-              i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive")
-            }}
-          </button>
-          <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
-            {{ i18n.t("research.thread_delete") }}
-          </button>
-        </div>
-      </details>
-      <ol class="research-thread-turns">
-        <li v-for="turn in thread.turns" :key="turn.turn_id">
-          <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
-            <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
-            <p class="research-thread-turn-status">
-              {{ i18n.t(`research.thread_status_${turn.status}`) }}
-            </p>
-            <slot name="answer" :turn="turn" />
-            <div v-if="['failed', 'cancelled'].includes(turn.status)">
-              <p>{{ i18n.t("research.thread_retry_help") }}</p>
-              <button
-                class="btn"
-                type="button"
-                :disabled="
-                  busy ||
-                  loading ||
-                  retryDisabled ||
-                  Boolean(thread.archived_at) ||
-                  thread.turns.some((item) => ['queued', 'running'].includes(item.status))
-                "
-                @click="emit('retryTurn', turn)"
-              >
-                {{ i18n.t("research.thread_retry") }}
-              </button>
-            </div>
-            <p v-if="turn.error" role="alert">{{ turn.error }}</p>
-            <button
-              v-if="turn.job_id"
-              type="button"
-              class="btn"
-              :aria-current="selectedJobId === turn.job_id ? 'true' : undefined"
-              @click="emit('open', turn)"
-            >
-              {{ i18n.t("research.thread_open_run") }}
+          <summary>{{ i18n.t("research.thread_manage") }}</summary>
+          <div
+            class="research-thread-management-actions"
+            role="group"
+            :aria-label="i18n.t('research.thread_manage')"
+          >
+            <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
+              {{ i18n.t("research.thread_rename") }}
             </button>
-            <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
-          </article>
-        </li>
-      </ol>
-    </section>
+            <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
+              {{
+                i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive")
+              }}
+            </button>
+            <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
+              {{ i18n.t("research.thread_delete") }}
+            </button>
+          </div>
+        </details>
+        <ol class="research-thread-turns">
+          <li v-for="turn in thread.turns" :key="turn.turn_id">
+            <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
+              <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
+              <p class="research-thread-turn-status">
+                {{ i18n.t(`research.thread_status_${turn.status}`) }}
+              </p>
+              <slot name="answer" :turn="turn" />
+              <div v-if="['failed', 'cancelled'].includes(turn.status)">
+                <p>{{ i18n.t("research.thread_retry_help") }}</p>
+                <button
+                  class="btn"
+                  type="button"
+                  :disabled="
+                    busy ||
+                    loading ||
+                    retryDisabled ||
+                    Boolean(thread.archived_at) ||
+                    thread.turns.some((item) => ['queued', 'running'].includes(item.status))
+                  "
+                  @click="emit('retryTurn', turn)"
+                >
+                  {{ i18n.t("research.thread_retry") }}
+                </button>
+              </div>
+              <p v-if="turn.error" role="alert">{{ turn.error }}</p>
+              <button
+                v-if="turn.job_id"
+                type="button"
+                class="btn"
+                :aria-current="selectedJobId === turn.job_id ? 'true' : undefined"
+                @click="emit('open', turn)"
+              >
+                {{ i18n.t("research.thread_open_run") }}
+              </button>
+              <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
+            </article>
+          </li>
+        </ol>
+      </section>
+      <div v-if="$slots.workspace" class="research-thread-workspace">
+        <slot name="workspace" />
+      </div>
+    </div>
   </section>
 </template>
 
@@ -294,12 +303,19 @@ const manageExpanded = ref(false);
   box-shadow: inset 3px 0 0 var(--accent-fg);
   font-weight: 700;
 }
-.research-thread-conversation {
+.research-thread-primary {
   grid-column: 2;
   grid-row: 1 / span 3;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   padding-inline: clamp(10px, 2vw, 28px);
   border-inline-start: 1px solid var(--border);
+}
+.research-thread-conversation {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .research-thread-conversation > h2 {
   font-size: clamp(1.25rem, 1.8vw, 1.65rem);
@@ -355,6 +371,38 @@ const manageExpanded = ref(false);
   gap: 8px;
   align-items: center;
 }
+/* Research uses one coherent thread/list/composer surface. The Library can
+   continue to render the browser on its own without this workspace slot. */
+.research-thread-workspace-layout {
+  min-height: min(72dvh, 760px);
+}
+.research-thread-workspace-layout .research-thread-sidebar {
+  align-content: start;
+}
+.research-thread-workspace-layout .research-thread-primary {
+  min-height: min(72dvh, 760px);
+}
+.research-thread-workspace-layout .research-thread-conversation {
+  max-height: min(66dvh, 680px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline-end: 8px;
+}
+.research-thread-workspace {
+  display: grid;
+  gap: var(--page-gap);
+  min-width: 0;
+}
+.research-thread-workspace :deep(.research-composer-followup) {
+  position: static;
+  inset: auto;
+  transform: none;
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  pointer-events: auto;
+  box-shadow: none;
+}
 @media (max-width: 900px) {
   .research-thread-navigation {
     grid-template-columns: minmax(0, 1fr);
@@ -386,11 +434,19 @@ const manageExpanded = ref(false);
     z-index: 41;
     background: var(--surface-card);
   }
-  .research-thread-conversation {
+  .research-thread-primary {
     grid-column: 1;
     grid-row: 3;
     border-inline-start: 0;
     padding: 12px 0 0;
+  }
+  .research-thread-workspace-layout .research-thread-primary {
+    min-height: 0;
+  }
+  .research-thread-workspace-layout .research-thread-conversation {
+    max-height: none;
+    overflow: visible;
+    padding-inline-end: 0;
   }
   .research-thread-index {
     max-height: 220px;
