@@ -240,7 +240,7 @@ watch(
           type="button"
           class="btn thread-answer-inspect-toggle"
           :aria-expanded="inspectorOpen"
-          :aria-controls="`thread-answer-${turn.turn_id}-inspector`"
+          :aria-controls="inspectorOpen ? `thread-answer-${turn.turn_id}-inspector` : undefined"
           @click="toggleInspector"
         >
           {{ i18n.t("research.thread_inspect_result") }}
