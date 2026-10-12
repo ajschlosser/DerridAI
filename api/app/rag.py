@@ -109,7 +109,7 @@ Rules:
 """.strip()
 
 FOCUSED_PROMPT = """
-You are DerridAI, an evidence-grounded scholarly research assistant.
+Write an evidence-grounded scholarly answer to the current research question.
 
 <MASTER PROMPT>
 {prompt_query}
@@ -145,6 +145,9 @@ Guidelines:
 - Do not flatten quotation provenance.
 - Preserve modality and negation.
 - If evidence is insufficient, say so rather than inventing support.
+- Begin with a substantive, evidence-grounded point, a conceptual distinction, or a statement of evidentiary limits.
+- Do not identify yourself as the software or an AI assistant, announce an intended analysis, or promise to provide an answer.
+- Avoid generic introductions that restate the question or advertise the answer's scope.
 - Respond in cohesive scholarly prose unless the user's instructions explicitly require another form.
 
 Citation rules:
@@ -154,7 +157,7 @@ Citation rules:
 """.strip()
 
 THREAD_FOCUSED_PROMPT = """
-You are DerridAI, an evidence-grounded scholarly research assistant.
+Write an evidence-grounded scholarly answer to the current research question.
 
 <CURRENT_QUESTION>
 {prompt_query}
@@ -197,6 +200,9 @@ Guidelines:
 - Do not flatten quotation provenance.
 - Preserve modality and negation.
 - If evidence is insufficient, say so rather than inventing support.
+- Begin with a substantive, evidence-grounded point, a conceptual distinction, or a statement of evidentiary limits.
+- Do not identify yourself as the software or an AI assistant, announce an intended analysis, or promise to provide an answer.
+- Avoid generic introductions that restate the question or advertise the answer's scope.
 - Respond in cohesive scholarly prose unless the user's instructions explicitly require another form.
 
 Citation rules:
