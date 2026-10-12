@@ -26,7 +26,7 @@ const props = withDefaults(
   defineProps<{
     answer: string;
     evidence?: ResearchResultEvidence[];
-    /** Preserve the current turn's concise reading layout without changing its citation semantics. */
+    /** Keep the thread reading layout without changing citation semantics. */
     compact?: boolean;
     readOnly?: boolean;
   }>(),
@@ -57,7 +57,8 @@ function segments(text: string) {
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
-            >{{ segment.text }}</button>
+            >{{ segment.text }}</button
+            >
             <strong v-else-if="segment.bold">{{ segment.text }}</strong>
             <template v-else>{{ segment.text }}</template>
           </template>
@@ -73,7 +74,8 @@ function segments(text: string) {
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
-            >{{ segment.text }}</button>
+            >{{ segment.text }}</button
+            >
             <strong v-else-if="segment.bold">{{ segment.text }}</strong>
             <template v-else>{{ segment.text }}</template>
           </template>
@@ -91,7 +93,8 @@ function segments(text: string) {
             type="button"
             :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
             @click="emit('evidence', segment.evidenceIndex)"
-          >{{ segment.text }}</button>
+          >{{ segment.text }}</button
+            >
           <strong v-else-if="segment.bold">{{ segment.text }}</strong>
           <template v-else>{{ segment.text }}</template>
         </template>
