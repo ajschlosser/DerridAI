@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phase 1 shared-answer rendering is CI-validated. Phase 2 unified Research workspace changes are committed on `task/research-workspace-ux` with final CI/browser checks pending. Phase 3 turn-scoped inspector implementation is committed; full CI/manual review and richer locator/claim-status tests remain outstanding.  
+**Status:** Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 implementation is proposed in [draft PR #606](https://github.com/ajschlosser/DerridAI/pull/606), branch `task/research-turn-inspector`; full CI, manual review and metadata completeness validation remain pending.
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -182,3 +182,35 @@ Update `docs/USER_GUIDE.md` **when behavior ships**, and `docs/ARCHITECTURE.md` 
 - **Checkpoint E:** independently scoped Phase 5 features.
 
 No phase is complete without its implementation, tests, documentation when applicable, and visual/keyboard review. Do not describe a draft plan or illustrative mockups as actual deployed features.
+
+## 9. Phase 3 stopping point / handoff (2026-10-12)
+
+**Repository state:** PR #605 has been merged into `master`. PR #606 targets current `master` from `task/research-turn-inspector`. The former implementation branch was not reused as the merge target; its Phase 3 file edits were transferred to the new branch. Do **not** interpret PR #606 as complete or merge-ready yet.
+
+### Implemented and committed in PR #606
+
+- `ResearchTurnInspector.vue` provides one contextual Sources / Claims / Run surface, reusing `ResearchEvidencePanel` and `ResearchClaimReviewPanel` instead of duplicating `ResearchAnswerWorkspace`.
+- `ResearchThreadAnswer.vue` now opens the inspector from a resolvable citation or its inspection button; it passes the turn's own result packet, supports Escape and explicit close, and restores the prior focus target on deliberate dismissal.
+- `ResearchThreadBrowser.vue` owns a single expanded inspector turn and clears selection synchronously on thread/job/account/permission changes. The cited evidence index stays local to the turn.
+- Existing thread unit and Playwright cases were adapted to verify nonduplicated answer content, inspector switching, run/claim sections, evidence attribution and keyboard use.
+- `docs/ARCHITECTURE.md` and `docs/USER_GUIDE.md` describe the changed interaction and authorization boundaries.
+
+### CI and verification at handoff
+
+- Initial Phase 3 CI build, lint and Storybook jobs passed. Formatting failed in three Vue files, and one test asserted the old nested result presentation.
+- The obsolete unit-test expectation was corrected. The exact Prettier diagnostic diff was applied to all three files.
+- A **temporary formatting diagnostic workflow was removed** from the branch after use; it is not intended to ship.
+- **The latest normal PR quality-gate run was still in progress at the handoff.** Its completion, end-to-end results and accessibility verdict must be checked on PR #606 before requesting review.
+- No genuine browser screenshot review or manual screen-reader, keyboard/zoom sweep has been completed for this Phase 3 branch.
+
+### Open work required before Phase 3 acceptance
+
+1. Examine final CI failures and correct them without loosening substantive provenance or accessibility assertions. Run both E2E shards after fixes.
+2. Verify that a citation referring to evidence `E1` in two different turns never opens the wrong turn's passage, including saved-result recovery and retry/attempt switches.
+3. Verify the inspector's claim-validation states and source-binding relations against authoritative per-run data; currently the existing claim/evidence panels are reused, **not** expanded to a full cELF source-span/record-revision chain.
+4. Verify absent evidence, absent claim provenance, missing locator, rejected/unresolved/stale support, long citations, and mobile sheet focus/scroll behavior.
+5. Add Storybook stories and actual captured desktop/mobile screenshots; perform manual WCAG 2.2 AA keyboard, focus return, screen-reader, 200–400% zoom and reduced-motion review.
+6. Validate locale parity for new labels and confirm visible text refers to known source metadata rather than inferred fields. The implementation uses existing translation keys.
+
+**Stopping rule:** Leave PR #606 as draft and do not mark the Phase 3 acceptance checklist complete until CI, visual/a11y, metadata and provenance checks above are verified. Phase 4/5 work has not begun on this branch.
+
