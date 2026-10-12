@@ -1,0 +1,28 @@
+# Temporary read-only formatter diagnostic; remove after applying its diff.
+name: Research Inspector Format Diff
+on:
+  pull_request:
+    branches:
+      - master
+permissions:
+  contents: read
+jobs:
+  formatter-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: cd web && npm ci --no-audit --no-fund
+      - name: Print Research inspector Prettier diff
+        run: |
+          ./web/node_modules/.bin/prettier --write --config web/.prettierrc \
+            web/src/components/research/ResearchThreadAnswer.vue \
+            web/src/components/research/ResearchThreadBrowser.vue \
+            web/src/components/research/ResearchTurnInspector.vue
+          git diff -- web/src/components/research/ResearchThreadAnswer.vue \
+            web/src/components/research/ResearchThreadBrowser.vue \
+            web/src/components/research/ResearchTurnInspector.vue
