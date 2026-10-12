@@ -20,6 +20,7 @@ import { apiRequest } from "./http";
 import type {
   ResearchThread,
   ResearchThreadDetail,
+  ResearchThreadExport,
   ResearchThreadSummary,
 } from "../types/researchThreads";
 
@@ -52,4 +53,6 @@ export const researchThreadsApi = {
     }),
   remove: (id: string) =>
     apiRequest<void>(`${THREADS_PATH}/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  exportThread: (id: string) =>
+    apiRequest<ResearchThreadExport>(`${THREADS_PATH}/${encodeURIComponent(id)}/export`),
 };

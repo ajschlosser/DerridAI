@@ -32,6 +32,7 @@ from ..config import settings
 from ..content_filter import enforce_researcher_text
 from ..http_auth import request_user
 from ..models import RAGRunRequest
+from ..research_thread_export import build_thread_export
 from ..research_thread_store import ThreadNotFound
 from ..research_turn_results import owned_turn_result
 from ..researcher_view import sanitize_rag_job
@@ -165,4 +166,17 @@ def get_turn_result(thread_id: str, turn_id: str, request: Request) -> dict[str,
         raise _not_found() from exc
     return job if user.role == "admin" else sanitize_rag_job(
         job, max_chars=settings.researcher_text_max_chars
+    )
+
+
+@router.get("/api/research/threads/{thread_id}/export")
+def export_thread(thread_id: str, request: Request) -> dict[str, Any]:
+    """Questions, answers and citation/audit references; never passage text."""
+    owner = request_user(request).username
+    try:
+        thread = research_threads.thread_store().get_thread(thread_id, owner)
+    except ThreadNotFound as exc:
+        raise _not_found() from exc
+    return build_thread_export(
+        thread, lambda turn: owned_turn_result(turn, owner, rag_jobs, response_store)
     )

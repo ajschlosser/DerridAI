@@ -30,6 +30,11 @@ import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import ResearchTurnComparison from "./ResearchTurnComparison.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
 import { ApiError } from "../../api/http";
+import { downloadBlob } from "../../domain/sharedRecordScopes";
+import {
+  researchThreadExportName,
+  researchThreadMarkdown,
+} from "../../domain/researchThreadExport";
 
 const props = defineProps<{
   threadId: string;
@@ -330,6 +335,31 @@ async function mutate(action: "rename" | "archive" | "delete", title?: string) {
     }
   }
 }
+async function exportThread(format: "md" | "json") {
+  const thread = detail.data.value;
+  if (busy.value || !thread) return;
+  const request = ++operation;
+  busy.value = true;
+  mutationError.value = "";
+  notice.value = "";
+  try {
+    // The server assembles the export from owner-scoped runs; passage text is never included.
+    const data = await researchThreadsApi.exportThread(thread.thread_id);
+    if (request !== operation) return;
+    const text =
+      format === "md"
+        ? researchThreadMarkdown(data, i18n.tf)
+        : JSON.stringify(data, null, 2) + "\n";
+    const type = format === "md" ? "text/markdown" : "application/json";
+    downloadBlob(new Blob([text], { type }), researchThreadExportName(data, format));
+    notice.value = i18n.t("research.thread_exported");
+  } catch (error) {
+    if (request === operation)
+      mutationError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (request === operation) busy.value = false;
+  }
+}
 function retry() {
   mutationError.value = "";
   void list.refetch();
@@ -366,6 +396,7 @@ function retry() {
     @rename="manage('rename')"
     @archive="mutate('archive')"
     @remove="manage('delete')"
+    @export="exportThread"
   >
     <template #compare="{ turns, close }">
       <ResearchTurnComparison :turns="turns" @close="close" />

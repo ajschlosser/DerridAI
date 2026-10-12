@@ -55,6 +55,7 @@ const emit = defineEmits<{
   rename: [];
   archive: [];
   remove: [];
+  export: [format: "md" | "json"];
   includeArchived: [value: boolean];
 }>();
 const i18n = useI18nStore();
@@ -260,6 +261,18 @@ function clearSearch(event: KeyboardEvent) {
             </button>
             <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
               {{ i18n.t("research.thread_delete") }}
+            </button>
+          </div>
+          <div
+            class="research-thread-export-actions"
+            role="group"
+            :aria-label="i18n.t('research.thread_export')"
+          >
+            <button class="btn" type="button" :disabled="busy" @click="emit('export', 'md')">
+              {{ i18n.t("research.thread_export_markdown") }}
+            </button>
+            <button class="btn" type="button" :disabled="busy" @click="emit('export', 'json')">
+              {{ i18n.t("research.thread_export_json") }}
             </button>
           </div>
         </details>

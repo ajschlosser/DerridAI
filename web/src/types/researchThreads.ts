@@ -56,3 +56,43 @@ export interface ResearchTurn {
 export interface ResearchThreadDetail extends ResearchThread {
   turns: ResearchTurn[];
 }
+
+/** One cited EvidenceRef in an export: identity and the run's own citation strings, never passage text. */
+export interface ResearchExportReference {
+  evidence_id: string | null;
+  collection: string | null;
+  record_id: string | null;
+  record_revision: number | null;
+  inline_citation: string | null;
+  full_citation: string | null;
+  locator: Record<string, string | number>;
+}
+
+export interface ResearchExportTurn {
+  turn_id: string;
+  ordinal: number;
+  attempt: number;
+  status: ResearchTurnStatus;
+  question: string;
+  instructions: string | null;
+  research_run_id: string | null;
+  job_id: string | null;
+  answer: string | null;
+  answer_available: boolean;
+  provider: string | null;
+  model: string | null;
+  references: ResearchExportReference[];
+}
+
+export interface ResearchThreadExport {
+  format: string;
+  thread: {
+    thread_id: string;
+    title: string | null;
+    created_at: string;
+    updated_at: string;
+    archived_at: string | null;
+  };
+  turns: ResearchExportTurn[];
+  works_cited: string[];
+}
