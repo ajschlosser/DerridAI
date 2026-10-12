@@ -185,7 +185,7 @@ function citationCandidates(evidence: ResearchResultEvidence[]): CitationCandida
     if (!id) return;
     // Double-bracket markers occur in saved research output. Register the longest
     // marker first so [[E1]] does not become an unlinked pair of surrounding brackets.
-    register(`[[${id}]]`, evidenceIndex, citation || `[E${id.slice(1)}]`);
+    register(`[[${id}]]`, evidenceIndex, citation || `[${id}]`);
     register(`[${id}]`, evidenceIndex, citation || `[${id}]`);
   });
   return [...byMarker.entries()]
