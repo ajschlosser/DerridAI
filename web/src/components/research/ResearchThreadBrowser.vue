@@ -130,6 +130,16 @@ watch(
   },
   { immediate: true },
 );
+// A retry is a separate audit attempt: never carry an open inspector onto it.
+const inspectedAttempt = computed(() => {
+  const turn = detail.data.value?.turns.find((item) => item.turn_id === inspectedTurnId.value);
+  return turn ? { turnId: turn.turn_id, key: `${turn.attempt}:${turn.job_id ?? ""}` } : null;
+});
+watch(inspectedAttempt, (next, previous) => {
+  if (next && previous?.turnId === next.turnId && previous.key !== next.key) {
+    inspectedTurnId.value = "";
+  }
+});
 function inspectTurn(turnId: string) {
   if (
     allowed.value &&

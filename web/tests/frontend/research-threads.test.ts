@@ -258,6 +258,77 @@ describe("Research thread shell", () => {
     expect(turns[1].text()).toContain("Answer /api/jobs/job-b");
     expect(turns[1].text()).toContain("Citation /api/jobs/job-b");
   });
+  it("opens only the cited turn's passage when two turns reuse the same evidence marker", async () => {
+    const detail = thread("a");
+    detail.turns.push({ ...thread("b").turns[0], thread_id: "a", ordinal: 2 });
+    api.get.mockResolvedValue(detail);
+    jobs.read.mockImplementation(async (path: string) => ({
+      id: path.split("/").pop(),
+      status: "completed",
+      result: {
+        answer: "Both turns cite [E1].",
+        evidence: [
+          {
+            evidence_id: "E1",
+            collection: "corpus",
+            inline_citation: `Citation ${path}`,
+            record: { record_id: `${path}-r`, text: `Passage ${path}` },
+          },
+        ],
+      },
+    }));
+    const wrapper = browser();
+    await flushPromises();
+    const [first, second] = wrapper
+      .findAll("article[aria-labelledby]")
+      .filter((item) => item.find(".thread-answer-text").exists());
+    await second.find(".thread-answer-citation").trigger("click");
+    expect(first.find(".research-turn-inspector").exists()).toBe(false);
+    const inspector = second.find(".research-evidence-inspector").text();
+    expect(inspector).toContain("Passage /api/jobs/job-b");
+    expect(inspector).not.toContain("job-a");
+    expect(second.find(".research-evidence-provenance").exists()).toBe(true);
+    await first.find(".thread-answer-citation").trigger("click");
+    expect(second.find(".research-turn-inspector").exists()).toBe(false);
+    expect(first.find(".research-evidence-inspector").text()).toContain("Passage /api/jobs/job-a");
+    expect(first.find(".research-evidence-inspector").text()).not.toContain("job-b");
+  });
+  it("closes the inspector when a retry replaces the inspected attempt", async () => {
+    const detail = thread("a");
+    api.get.mockResolvedValue(detail);
+    const wrapper = browser("a", "");
+    await flushPromises();
+    await wrapper.find(".thread-answer-inspect-toggle").trigger("click");
+    expect(wrapper.find(".research-turn-inspector").exists()).toBe(true);
+    api.get.mockResolvedValue({
+      ...detail,
+      turns: [{ ...detail.turns[0], attempt: 2, job_id: "job-a2", research_run_id: "job-a2" }],
+    });
+    await wrapper.setProps({ refreshKey: 1 });
+    await flushPromises();
+    expect(wrapper.find(".research-turn-inspector").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Answer /api/jobs/job-a2");
+  });
+  it("shows explicit empty states for a turn without evidence or claim provenance", async () => {
+    jobs.read.mockResolvedValue({
+      id: "job-a",
+      status: "completed",
+      result: { answer: "No supported answer.", evidence: [] },
+    });
+    useI18nStore().dictionary["research.no_evidence_text"] = "No evidence was retrieved.";
+    useI18nStore().dictionary["ui.none"] = "None";
+    const wrapper = browser("a", "");
+    await flushPromises();
+    await wrapper.find(".thread-answer-inspect-toggle").trigger("click");
+    const inspector = wrapper.find(".research-turn-inspector");
+    expect(inspector.text()).toContain("No evidence was retrieved.");
+    expect(wrapper.find(".research-evidence-inspector").exists()).toBe(false);
+    const sections = inspector.findAll(".research-turn-inspector-section");
+    await sections[1].trigger("click");
+    expect(sections[1].attributes("aria-pressed")).toBe("true");
+    expect(inspector.find(".research-claim-review").exists()).toBe(false);
+    expect(inspector.text()).toContain("None");
+  });
   it("does not refetch immutable turn results when thread summaries change", async () => {
     const wrapper = browser();
     await flushPromises();
