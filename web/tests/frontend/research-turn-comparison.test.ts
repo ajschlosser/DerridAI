@@ -47,6 +47,28 @@ describe("compareTurnEvidence", () => {
     // Evidence without a Record ID is never matched to anything.
     expect(rows.filter((row) => !row.recordId)).toHaveLength(1);
   });
+  it("treats missing and null revisions as unrecorded rather than revision zero", () => {
+    const left = {
+      evidence: [ev("r1"), ev("r2", 2), ev("r3", 1)],
+    } as ResearchResult;
+    const right = {
+      evidence: [
+        { ...ev("r1"), record: { record_id: "r1", record_revision: null } },
+        ev("r2", 2),
+        ev("r3"),
+      ],
+    } as ResearchResult;
+    const rows = compareTurnEvidence(left, right);
+    const byId = Object.fromEntries(rows.map((row) => [row.recordId, row]));
+    expect(byId.r1.leftRevision).toBeNull();
+    expect(byId.r1.rightRevision).toBeNull();
+    expect(byId.r1.revisionDiffers).toBe(true);
+    expect(byId.r2.leftRevision).toBe(2);
+    expect(byId.r2.rightRevision).toBe(2);
+    expect(byId.r2.revisionDiffers).toBe(false);
+    expect(byId.r3.rightRevision).toBeNull();
+    expect(byId.r3.revisionDiffers).toBe(true);
+  });
   it("counts claim validation as recorded", () => {
     const result = {
       claim_provenance: {
