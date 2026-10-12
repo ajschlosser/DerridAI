@@ -803,9 +803,13 @@ class ReviewActionsMixin:
             if key in edit.model_fields and key not in confirmed_absent_fields
         }
         try:
-            edit.model_validate(schema_input)
+            # Pydantic returns normalized values (e.g. "false" -> False). Persist
+            # those values, not the unvalidated request payload: otherwise a
+            # human-confirmed string can pass review and fail JSONL publication.
+            validated = edit.model_validate(schema_input).model_dump(exclude_unset=True)
         except ValidationError as exc:
             raise ValueError(f"Invalid interpretive metadata: {exc}") from exc
+        changes = {**changes, **validated}
 
         target = self.repo.get_record(build_id, record_id)
         previous_record = json.loads(json.dumps(target))
@@ -974,9 +978,12 @@ class ReviewActionsMixin:
         edit = self._edit_model(build_id)
         schema_input = {key: value for key, value in changes.items() if key in edit.model_fields}
         try:
-            edit.model_validate(schema_input)
+            validated = edit.model_validate(schema_input).model_dump(exclude_unset=True)
         except ValidationError as exc:
             raise ValueError(f"Invalid bulk metadata: {exc}") from exc
+        # Use the same normalized types as single-record edits for assertions,
+        # audit decisions, equivalence checks, and persisted metadata.
+        changes = {**changes, **validated}
         build = self.repo.get_build(build_id)
         records = self.repo.load_records(build_id)
         self._push_review_history(build_id, records, action="bulk_metadata_edit", selected_record_id=(str(record_ids[0]) if record_ids else ""))
