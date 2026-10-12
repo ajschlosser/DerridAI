@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Incremental implementation plan. Unchecked tasks are not implemented by virtue of appearing here.  
+**Status:** Phase 1 in progress on `task/research-workspace-ux`; source changes and focused tests are committed, CI/browser validation outstanding. Unchecked tasks are not implemented by virtue of appearing here.  
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -89,9 +89,9 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 ### Phase 1 — Answer parity and safe citation activation (P0, start here)
 
-- [ ] Extract a shared, escaped answer-body renderer from `ResearchAnswerWorkspace.vue` or adopt its existing `parseResearchAnswer` + `segmentResearchAnswer` logic in both contexts.
-- [ ] Render headings, ordered/unordered lists, paragraph emphasis and citations identically in thread/standalone results; treat unresolved markers as text, never false links.
-- [ ] Ensure both `[E1]` and `[[E1]]` markers and already-bound inline citations resolve correctly only against **this turn's** evidence packet; avoid brittle global regex replacement.
+- [x] Extract a shared, escaped answer-body renderer from `ResearchAnswerWorkspace.vue` or adopt its existing `parseResearchAnswer` + `segmentResearchAnswer` logic in both contexts.
+- [x] Render headings, ordered/unordered lists, paragraph emphasis and citations identically in thread/standalone results; treat unresolved markers as text, never false links.
+- [x] Ensure both `[E1]` and `[[E1]]` markers and already-bound inline citations resolve correctly only against **this turn's** evidence packet; avoid brittle global regex replacement.
 - [ ] Remove redundant second rendering of the answer in the expanded thread audit where possible; retain access to works cited, claim review, evidence and run details.
 - [ ] Tests: multiple citations, different turn evidence with reused `E1`, unresolved/stale citations, HTML-like source content escaped, multi-paragraph/list answers, rerenders after attempt changes.
 
