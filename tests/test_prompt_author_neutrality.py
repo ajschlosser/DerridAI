@@ -83,6 +83,23 @@ def test_record_audit_and_research_prompts_use_document_author_context() -> None
     assert "use it as source-document authorship context" in enrichment_source
 
 
+def test_research_generation_prompts_start_with_substance_not_model_identity() -> None:
+    """Both standalone and threaded generation must discourage self-introduction.
+
+    Scholarly source/stance/citation constraints remain identical for the two
+    paths, so fixing the opening does not weaken provenance requirements.
+    """
+    for prompt in (rag.FOCUSED_PROMPT, rag.THREAD_FOCUSED_PROMPT):
+        assert "You are DerridAI" not in prompt
+        assert "Write an evidence-grounded scholarly answer" in prompt
+        assert "Begin with a substantive, evidence-grounded point" in prompt
+        assert "Do not identify yourself as the software or an AI assistant" in prompt
+        assert "Do not equate document authorship with proposition ownership" in prompt
+        assert "Preserve modality and negation" in prompt
+        assert "If evidence is insufficient, say so" in prompt
+        assert "Tag every substantive claim with one or more evidence IDs" in prompt
+
+
 class _SegmentationProbe(corpus_segmentation_execution.BuildSegmentationExecutionMixin):
     """Captures each boundary prompt instead of asking a model."""
 

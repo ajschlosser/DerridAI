@@ -26,6 +26,7 @@ from app.rag import (
     _cross_encoder_rerank,
     _explicitly_named_works,
     _lexical_rerank,
+    _non_substantive_research_opening,
     _requests_json_output,
     _scope_work_summaries,
     run_rag_pipeline,
@@ -1330,3 +1331,105 @@ def test_first_turn_characterization_preserves_query_generation_and_citation_con
     assert len(result["evidence"]) == 1 and result["evidence"][0]["record"]["record_id"] == "r1"
     assert "[[E0]]" not in result["answer"] and "1976" in result["answer"]
     assert result["raw_answer"] == "The trace is not a presence [[E0]]."
+
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        ("As DerridAI, I will provide a comprehensive comparative analysis [[E0]].", True),
+        ("I will provide a comparative analysis of the trace [[E0]].", True),
+        ("In this comprehensive comparative analysis, I examine the trace [[E0]].", True),
+        ("The passage distinguishes the trace from presence [[E0]].", False),
+        ('"As DerridAI, I will provide" is an unwanted opening [[E0]].', False),
+        ("A first-person formulation appears in the cited passage [[E0]].", False),
+    ],
+)
+def test_research_opening_evaluation_flags_formulaic_preambles(
+    answer: str, expected: bool,
+) -> None:
+    assert _non_substantive_research_opening(
+        answer, "What is the trace?", "", prose_required=True,
+    ) is expected
+
+
+def test_research_opening_evaluation_honors_explicit_user_format() -> None:
+    assert not _non_substantive_research_opening(
+        "I will provide an explanation [[E0]].",
+        "Explain the trace.",
+        "Write in the first person.",
+        prose_required=True,
+    )
+    assert not _non_substantive_research_opening(
+        "As DerridAI, I will provide an explanation [[E0]].",
+        "Explain the trace.",
+        "Begin your response with the words 'As DerridAI'.",
+        prose_required=True,
+    )
+    assert not _non_substantive_research_opening(
+        "I will provide an explanation [[E0]].",
+        "Explain the trace.",
+        "",
+        prose_required=False,
+    )
+
+
+def test_prose_research_retries_non_substantive_opening_without_changing_evidence(monkeypatch) -> None:
+    drafts = [
+        "As DerridAI, I will provide a comprehensive comparative analysis of the trace [[E0]].",
+        "The trace is not a presence [[E0]].",
+    ]
+    prompts: list[str] = []
+
+    def generate(**kwargs):
+        prompts.append(kwargs["prompt"])
+        return drafts[len(prompts) - 1]
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?", model="test-model",
+        pipeline_id="research.current", pipeline_version=1,
+        source_collection="corpus", locales=["en"], search_types=["lexical"],
+        k=1, fetch_k=1, reranker="none", query_decomposition=False,
+        use_prior_response_memory=False, use_prior_claim_memory=False,
+    )
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+
+    assert len(prompts) == 2
+    assert "OPENING_STYLE_CORRECTION" in prompts[1]
+    assert "Begin with a substantive, evidence-grounded point" in prompts[0]
+    assert "You are DerridAI" not in prompts[0]
+    assert result["raw_answer"] == drafts[1]
+    assert "[[E0]]" not in result["answer"]
+    assert "1976" in result["answer"]
+    assert any("formulaic preamble" in warning for warning in result["warnings"])
+    stage = next(item for item in result["stages"] if item["name"] == "generation")
+    assert stage["detail"]["attempts"] == 2
+    assert stage["detail"]["contract_issues_initial"] == ["non_substantive_opening"]
+    assert stage["detail"]["contract_issues_final"] == []
+
+
+def test_persistent_research_preamble_warns_without_discarding_grounded_answer(monkeypatch) -> None:
+    original = "As DerridAI, I will provide a comparison of the trace [[E0]]."
+    calls = 0
+
+    def generate(**_kwargs):
+        nonlocal calls
+        calls += 1
+        return original
+
+    monkeypatch.setattr("app.rag.chat_complete", generate)
+    request = RAGRunRequest(
+        prompt="What is the trace?", model="test-model",
+        pipeline_id="research.current", pipeline_version=1,
+        source_collection="corpus", locales=["en"], search_types=["lexical"],
+        k=1, fetch_k=1, reranker="none", query_decomposition=False,
+        use_prior_response_memory=False, use_prior_claim_memory=False,
+    )
+    result = run_rag_pipeline(request, _LexicalOnlyStore())
+    assert calls == 2
+    assert result["raw_answer"] == original
+    assert "1976" in result["answer"]
+    assert any("text was preserved" in warning for warning in result["warnings"])
+    stage = next(item for item in result["stages"] if item["name"] == "generation")
+    assert stage["detail"]["contract_issues_final"] == ["non_substantive_opening"]
