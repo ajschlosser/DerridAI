@@ -102,9 +102,9 @@ function setSection(next: InspectorSection) {
       />
       <p v-else>{{ i18n.t("research.no_evidence_text") }}</p>
     </div>
-    <div v-if="section === 'claims'" :id="`${instanceId}-claims`">
+    <div v-show="section === 'claims'" :id="`${instanceId}-claims`">
       <ResearchClaimReviewPanel
-        v-if="hasClaims"
+        v-if="section === 'claims' && hasClaims"
         :provenance="result.claim_provenance"
         :evidence="result.evidence || []"
         nested
@@ -114,7 +114,7 @@ function setSection(next: InspectorSection) {
       />
       <p v-else>{{ i18n.t("ui.none") }}</p>
     </div>
-    <div v-if="section === 'run'" :id="`${instanceId}-run`" class="research-turn-inspector-audit">
+    <div v-show="section === 'run'" :id="`${instanceId}-run`" class="research-turn-inspector-audit">
       <dl>
         <template v-if="job?.id">
           <dt>{{ i18n.t("research.run_details") }}</dt>
@@ -129,7 +129,7 @@ function setSection(next: InspectorSection) {
           <dd>{{ result.model }}</dd>
         </template>
         <template v-if="result.elapsed_seconds != null">
-          <dt>{{ i18n.t("research.elapsed") }}</dt>
+          <dt>{{ i18n.t("faq.elapsed") }}</dt>
           <dd>{{ result.elapsed_seconds }}</dd>
         </template>
       </dl>
