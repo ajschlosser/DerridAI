@@ -56,6 +56,17 @@ const auth = useAuthStore();
 const offset = ref(props.initialOffset || 0);
 const search = ref(props.initialSearch || "");
 const includeArchived = ref(Boolean(props.initialArchived));
+const inspectedTurnId = ref("");
+// Only one turn may own an expanded inspector, even in a long conversation.
+// Clear selection before a new thread/job/account can expose stale evidence.
+watch(
+  () => [props.threadId, props.jobId, auth.user?.id, auth.user?.role, auth.can("rag.run")],
+  () => {
+    inspectedTurnId.value = "";
+  },
+  { flush: "sync" },
+);
+
 watch(
   () => [props.initialSearch, props.initialOffset, props.initialArchived],
   () => {
@@ -107,6 +118,31 @@ const detail = useDataQuery("research_threads", () => researchThreadsApi.get(pro
   detail: () => [...scope.value, "thread", props.threadId],
   enabled: () => allowed.value && Boolean(props.threadId),
 });
+const selectedJobTurnId = computed(
+  () =>
+    detail.data.value?.thread_id === props.threadId
+      ? detail.data.value.turns.find((turn) => turn.job_id && turn.job_id === props.jobId)?.turn_id
+      : undefined,
+);
+watch(
+  selectedJobTurnId,
+  (turnId) => {
+    if (turnId) inspectedTurnId.value = turnId;
+  },
+  { immediate: true },
+);
+function inspectTurn(turnId: string) {
+  if (
+    allowed.value &&
+    detail.data.value?.thread_id === props.threadId &&
+    detail.data.value.turns.some((turn) => turn.turn_id === turnId)
+  ) {
+    inspectedTurnId.value = turnId;
+  }
+}
+function closeTurnInspector(turnId: string) {
+  if (inspectedTurnId.value === turnId) inspectedTurnId.value = "";
+}
 watch(() => [props.threadId, ...scope.value], resetMutation);
 watch(
   () => [props.refreshKey, props.jobId],
@@ -272,7 +308,10 @@ function retry() {
         :turn="turn"
         :stream-live="turn.job_id !== jobId"
         :inspect-requested="Boolean(jobId) && turn.job_id === jobId"
+        :inspector-open="inspectedTurnId === turn.turn_id"
         :defer-load="(detail.data.value?.turns.length || 0) > 8 && turn.job_id !== jobId"
+        @inspect="inspectTurn"
+        @close-inspector="closeTurnInspector"
         @open-record="emit('openRecord', $event)"
         @open-relationships="(item, mode) => emit('openRelationships', item, mode)"
       />
