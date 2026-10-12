@@ -3647,21 +3647,19 @@ class ChromaStore:
             scan_args["where"] = where
         if where_document:
             scan_args["where_document"] = where_document
-        # Keep the fallback predictable on very large corpora while making the
-        # common researcher search robust across capitalization differences.
-        # Never remove the limit after a backend capability error: doing so turns
-        # a compatibility fallback into a full-collection materialization.
-        scan_limit = min(max(n_results * 50, 1000), 10000)
-        page_size = min(scan_limit, 512)
+        # Preserve case-insensitive search semantics without ever materializing
+        # the collection at once. Continue paging until enough matches are found
+        # or the filtered collection is exhausted; the bound is peak page size,
+        # not an arbitrary total-candidate cutoff that can hide valid matches.
+        page_size = 512
         folded = needle.casefold()
-        rows: list[dict[str, Any]] = []
+        fallback_rows: list[dict[str, Any]] = []
         scan_offset = 0
-        while scan_offset < scan_limit and len(rows) < n_results:
-            requested = min(page_size, scan_limit - scan_offset)
+        while len(fallback_rows) < n_results:
             try:
                 payload = col.get(
                     **scan_args,
-                    limit=requested,
+                    limit=page_size,
                     offset=scan_offset,
                 )
             except Exception as exc:
@@ -3676,11 +3674,11 @@ class ChromaStore:
                 break
             for row in self._decode_result(payload):
                 if folded in str(row.get("text") or "").casefold():
-                    rows.append(row)
-                    if len(rows) >= n_results:
+                    fallback_rows.append(row)
+                    if len(fallback_rows) >= n_results:
                         break
             scan_offset += len(ids)
-            if len(ids) < requested:
+            if len(ids) < page_size:
                 break
         return [
             {
@@ -3688,7 +3686,7 @@ class ChromaStore:
                 "distance": None,
                 "record": row,
             }
-            for row in rows
+            for row in fallback_rows
         ]
 
     @staticmethod
