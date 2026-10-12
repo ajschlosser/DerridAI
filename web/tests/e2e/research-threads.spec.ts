@@ -396,21 +396,43 @@ test("each turn inspects its own evidence, including a recovered saved answer, w
   const navigation = page.locator(".research-thread-navigation");
   const turns = navigation.locator("article[aria-labelledby]");
   await expect(turns.nth(1).locator(".thread-answer-text")).toContainText("Answer b");
-  for (const turn of [turns.nth(0), turns.nth(1)]) {
-    const inspect = turn.getByText("Inspect this answer and its evidence", { exact: true });
-    await inspect.focus();
-    await page.keyboard.press("Enter");
-  }
-  const firstEvidence = turns.nth(0).locator(".research-evidence-index button").nth(1);
+  const first = turns.nth(0);
+  const second = turns.nth(1);
+  const firstInspect = first.getByRole("button", {
+    name: "Inspect this answer and its evidence",
+  });
+  await firstInspect.focus();
+  await page.keyboard.press("Enter");
+  await expect(first.locator(".research-turn-inspector")).toBeVisible();
+  await expect(second.locator(".research-turn-inspector")).toHaveCount(0);
+  await expect(first.locator(".research-answer-prose")).toHaveCount(1);
+
+  const firstEvidence = first.locator(".research-evidence-index button").nth(1);
   await firstEvidence.focus();
   await page.keyboard.press("Enter");
-  await expect(turns.nth(0).locator(".research-evidence-inspector")).toContainText(
-    "Exact passage a 1",
-  );
-  await expect(turns.nth(1).locator(".research-evidence-inspector")).toContainText(
-    "Exact passage b 0",
-  );
-  await expect(turns.nth(0).locator(".research-evidence-inspector")).toContainText("Other Thinker");
+  await expect(first.locator(".research-evidence-inspector")).toContainText("Exact passage a 1");
+  await expect(first.locator(".research-evidence-inspector")).toContainText("Other Thinker");
+
+  const secondInspect = second.getByRole("button", {
+    name: "Inspect this answer and its evidence",
+  });
+  await secondInspect.focus();
+  await page.keyboard.press("Enter");
+  await expect(first.locator(".research-turn-inspector")).toHaveCount(0);
+  await expect(second.locator(".research-turn-inspector")).toBeVisible();
+  await expect(second.locator(".research-evidence-inspector")).toContainText("Exact passage b 0");
+  await expect(second.locator(".research-answer-prose")).toHaveCount(1);
+
+  await second.getByRole("button", { name: "Run details" }).click();
+  await expect(second.locator(".research-turn-inspector-audit")).toBeVisible();
+  await second.getByRole("button", { name: "Review generated claims" }).click();
+  await expect(second.locator(".research-turn-inspector")).toContainText("None");
+  await second.locator(".research-turn-inspector").focus();
+  await page.keyboard.press("Escape");
+  await expect(second.locator(".research-turn-inspector")).toHaveCount(0);
+  await expect(secondInspect).toBeFocused();
+  await first.locator(".thread-answer-citation").click();
+  await expect(first.locator(".research-evidence-inspector")).toContainText("Exact passage a 0");
   await expect(navigation.getByRole("button", { name: "Re-run with parameters" })).toHaveCount(0);
   await expect(page.locator(".research-run-button")).toBeDisabled();
   await page.setViewportSize({ width: 390, height: 844 });
