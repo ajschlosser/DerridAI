@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phase 1 in progress on `task/research-workspace-ux`; source changes and focused tests are committed, CI/browser validation outstanding. Unchecked tasks are not implemented by virtue of appearing here.  
+**Status:** Phase 1 shared-answer rendering is CI-validated. Phase 2 unified Research workspace changes are committed on `task/research-workspace-ux` with final CI/browser checks pending. Phase 3 contextual inspection remains outstanding.  
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -101,8 +101,8 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 ### Phase 2 — Unified desktop workspace (P0)
 
-- [ ] Bring thread navigation into persistent layout rather than the toggled section preceding composer/result. Preserve a genuinely useful new-question view and no-database state.
-- [ ] Establish one reading column with ordered turns; distinguish question from answer through alignment, hierarchy and spacing, without nesting repetitive cards.
+- [x] Bring thread navigation into persistent layout rather than the toggled section preceding composer/result. Preserve the new-question view and no-database state.
+- [x] Establish one reading column with ordered turns and a composer in the same layout. Deeper visual refinement of the existing turn cards remains outstanding.
 - [ ] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
 - [ ] Integrate run status affordances without competing full-width run/activity panels.
 - [ ] Tests: empty/new, selected/archived, 1 vs many turns, historical missing artifact, permissions and account change, deep links.
