@@ -35,8 +35,12 @@ function recordId(item: ResearchResultEvidence) {
   return String(item.record?.record_id ?? "").trim();
 }
 function revision(item: ResearchResultEvidence | null) {
-  const value = Number(item?.record?.record_revision);
-  return item && Number.isInteger(value) ? value : null;
+  // Number(null) is 0, which would fabricate a recorded revision when the
+  // EvidenceRef explicitly reports that no Record revision is available.
+  const recorded = item?.record?.record_revision;
+  if (recorded === null || recorded === undefined) return null;
+  const value = Number(recorded);
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 /**
