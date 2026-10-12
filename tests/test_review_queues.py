@@ -140,6 +140,27 @@ def test_review_edits_persist_validated_boolean_types(tmp_path: Path):
     assert bulk_assertion.authority_status in {"human_confirmed", "human_override"}
 
 
+def test_metadata_decision_apis_use_persisted_normalized_values(tmp_path: Path):
+    """One-field and batch decision provenance must agree with typed assertions."""
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1"), ready_record("r2", "b2")])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build_id = build["build_id"]
+
+    single = manager.metadata_decision(
+        build_id, "r1", "primary_text", "false", expected_revision=1,
+    )
+    assert single["record"]["primary_text"] is False
+    assert current_assertion_by_name(single["record"], "primary_text").value is False
+    assert single["record"]["metadata_decisions"][-1]["value"] is False
+
+    batch = manager.apply_metadata_decisions(
+        build_id, "r2", {"primary_text": "false"}, expected_revision=1,
+    )
+    assert batch["record"]["primary_text"] is False
+    assert current_assertion_by_name(batch["record"], "primary_text").value is False
+    assert batch["record"]["metadata_decisions"][-1]["value"] is False
+
+
 def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp_path: Path):
     """Resolving the last unresolved field moves the record from the metadata queue to ready.
 
