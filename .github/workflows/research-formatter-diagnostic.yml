@@ -2,6 +2,9 @@
 # This workflow is removed after the formatter's exact diff has been applied.
 name: Research formatter diagnostic
 on:
+  pull_request:
+    branches:
+      - master
   push:
     branches:
       - task/research-workspace-ux
