@@ -70,6 +70,10 @@ watch(
 watch(
   () => [props.initialSearch, props.initialOffset, props.initialArchived],
   () => {
+    // Route restoration is authoritative: do not treat it as a local filter
+    // edit and reset the page. A pending keystroke must not overwrite Back.
+    window.clearTimeout(searchTimer);
+    searchTimer = undefined;
     search.value = props.initialSearch || "";
     includeArchived.value = Boolean(props.initialArchived);
     offset.value = props.initialOffset || 0;
@@ -178,21 +182,28 @@ function retryTurn(turn: ResearchTurn) {
     return;
   emit("retryTurn", turn);
 }
-watch([includeArchived, search], () => {
-  offset.value = 0;
-});
+// Only local filter edits reset pagination. Restoring a bookmarked/Back-Forward
+// URL must preserve its requested offset even when both filters also change.
+function commitSearch(value: string) {
+  if (search.value !== value) offset.value = 0;
+  search.value = value;
+}
+function updateArchived(value: boolean) {
+  if (includeArchived.value !== value) offset.value = 0;
+  includeArchived.value = value;
+}
 // Debounce typing so each keystroke does not issue a list request; clearing applies at once.
 let searchTimer: number | undefined;
 function updateSearch(value: string) {
   window.clearTimeout(searchTimer);
   searchTimer = undefined;
   if (!value.trim()) {
-    search.value = "";
+    commitSearch("");
     return;
   }
   searchTimer = window.setTimeout(() => {
     searchTimer = undefined;
-    search.value = value;
+    commitSearch(value);
   }, 250);
 }
 onBeforeUnmount(() => window.clearTimeout(searchTimer));
@@ -321,7 +332,7 @@ function retry() {
     @new="emit('new')"
     @page="offset = $event"
     @retry="retry"
-    @include-archived="includeArchived = $event"
+    @include-archived="updateArchived"
     @rename="manage('rename')"
     @archive="mutate('archive')"
     @remove="manage('delete')"
