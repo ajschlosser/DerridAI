@@ -51,6 +51,7 @@ const emit = defineEmits<{
   search: [value: string];
   retry: [];
   retryTurn: [turn: ResearchTurn];
+  followUp: [turn: ResearchTurn];
   rename: [];
   archive: [];
   remove: [];
@@ -317,6 +318,14 @@ function clearSearch(event: KeyboardEvent) {
                 {{ i18n.t("research.thread_open_run") }}
               </button>
               <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
+              <button
+                v-if="turn.status === 'completed' && !thread.archived_at && $slots.workspace"
+                type="button"
+                class="btn"
+                @click="emit('followUp', turn)"
+              >
+                {{ i18n.t("research.thread_follow_up") }}
+              </button>
             </article>
           </li>
         </ol>

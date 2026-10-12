@@ -42,6 +42,7 @@ import type {
   ResearchJob,
   ResearchProfile,
   ResearchWorkspaceSnapshot,
+  ResearchResultEvidence,
 } from "../types/research";
 import type { PipelineConfigOverrideSet } from "../types/pipelines";
 import * as researchActions from "../domain/researchActions";
@@ -58,8 +59,13 @@ const route = useRoute();
 const newQuestionRequested = ref(false);
 const threadContinuable = ref(false);
 const currentThreadId = computed(() => String(route.query.thread || ""));
+// Explicit follow-up context scope; null keeps the server's automatic selection.
+const contextScope = ref<Array<{ turn_id: string; ordinal: number; question: string }> | null>(
+  null,
+);
 watch(currentThreadId, (next, previous) => {
   threadContinuable.value = false;
+  contextScope.value = null;
   switchComposerDraft(previous, next);
 });
 // Thread-list search, page and archive filters live in the URL beside the
@@ -93,6 +99,21 @@ async function openThreadTurn(turn: ResearchTurn) {
       path: "/rag",
       query: listQuery({ thread: turn.thread_id, job: turn.job_id }),
     });
+}
+async function followUpFrom(turn: ResearchTurn, evidence: ResearchResultEvidence | null) {
+  if (turn.thread_id !== currentThreadId.value) return;
+  contextScope.value = [
+    { turn_id: turn.turn_id, ordinal: turn.ordinal, question: turn.user_question },
+  ];
+  // The run's own deterministic citation label names the passage; it is editable text.
+  const citation = String(evidence?.inline_citation || "").trim();
+  if (citation && !prompt.value.trim())
+    prompt.value = i18n.tf("research.context_scope_regarding", { citation });
+  await nextTick();
+  document.getElementById("researchQuestion")?.focus();
+}
+function removeContextTurn(turnId: string) {
+  contextScope.value = (contextScope.value || []).filter((item) => item.turn_id !== turnId);
 }
 async function onThreadRemoved(error?: string) {
   await newThread();
@@ -620,6 +641,10 @@ async function runResearch(turn?: ResearchTurn) {
       instructions: turn ? turn.user_instructions || "" : instructions.value,
       filter_plan: turn ? null : filterPlanForRun(),
       thread_id: turn ? undefined : currentThreadId.value || undefined,
+      context_turn_ids:
+        !turn && currentThreadId.value && contextScope.value
+          ? contextScope.value.map((item) => item.turn_id)
+          : undefined,
       retry_thread_id: turn?.thread_id,
       retry_turn_id: turn?.turn_id,
       provider_profile_id: config.value.provider_profile_id,
@@ -641,6 +666,7 @@ async function runResearch(turn?: ResearchTurn) {
       draftTimer = undefined;
       prompt.value = "";
       instructions.value = "";
+      contextScope.value = null;
       void saveResearchComposerDraft({ prompt: "", instructions: "" }, currentThreadId.value);
     }
     activeJob.value = job;
@@ -1120,6 +1146,7 @@ onBeforeUnmount(() => {
         @filters="threadListFilters"
         @continuable="threadContinuable = $event"
         @retry-turn="runResearch"
+        @follow-up="followUpFrom"
         @select="selectThread"
         @open="openThreadTurn"
         @new="newThread"
@@ -1128,6 +1155,9 @@ onBeforeUnmount(() => {
         <template #workspace>
           <ResearchComposer
             :compact="Boolean(currentThreadId)"
+            :context-scope="contextScope"
+            @remove-context-turn="removeContextTurn"
+            @reset-context="contextScope = null"
             v-model:prompt="prompt"
             v-model:instructions="instructions"
             v-model:filter-expression="filterExpression"

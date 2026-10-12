@@ -458,6 +458,10 @@ export function createResearchWorkspace(deps: Deps) {
         prompt,
         instructions: instructions || null,
         filter_plan: input.filter_plan ?? null,
+        // Explicit follow-up context scope travels only for a new thread turn.
+        ...(Array.isArray(input.context_turn_ids) && input.thread_id && !retryTurnId
+          ? { context_turn_ids: input.context_turn_ids.map(String) }
+          : {}),
         pipeline_id: cfg.pipeline_id || null,
         pipeline_version: cfg.pipeline_version || null,
         settings_pipeline_overrides:

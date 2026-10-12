@@ -48,6 +48,7 @@ const emit = defineEmits<{
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
   inspect: [turnId: string];
   closeInspector: [turnId: string];
+  followUp: [turn: ResearchTurn, evidence: ResearchResultEvidence | null];
 }>();
 const activeEvidenceIndex = ref(0);
 const inspectorRegion = ref<HTMLElement | null>(null);
@@ -154,6 +155,9 @@ const result = computed(() =>
 function openRecord(index: number) {
   const item = result.value?.evidence?.[index];
   if (item) emit("openRecord", item);
+}
+function followUpPassage(index: number) {
+  emit("followUp", props.turn, result.value?.evidence?.[index] ?? null);
 }
 function openRelationships(index: number, mode: "trace" | "model") {
   const item = result.value?.evidence?.[index];
@@ -270,6 +274,7 @@ watch(
             @select-evidence="activeEvidenceIndex = $event"
             @open-record="openRecord"
             @open-relationships="openRelationships"
+            @follow-up="followUpPassage"
           />
         </div>
       </div>

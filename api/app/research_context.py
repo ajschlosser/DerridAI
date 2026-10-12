@@ -60,7 +60,7 @@ class ThreadContextItem:
     ordinal: int
     role: Literal["user", "assistant"]
     text: str
-    source: Literal["immediate_previous", "recent_fallback", "semantic"]
+    source: Literal["immediate_previous", "recent_fallback", "semantic", "explicit"]
     response_id: str | None = None
 
 
@@ -72,10 +72,11 @@ class ThreadContextPacket:
     strategy: str = "previous_and_recent_fallback"
     ranking_model: str | None = None
     prior_turn_count: int = 0
+    requested_turn_ids: tuple[str, ...] | None = None
 
     def snapshot(self) -> dict[str, Any]:
         return {
-            "version": "research-thread-context-v2",
+            "version": "research-thread-context-v3",
             "strategy": self.strategy,
             "ranking_model": self.ranking_model,
             "prior_turn_count": self.prior_turn_count,
@@ -85,6 +86,9 @@ class ThreadContextPacket:
             "items": [asdict(item) for item in self.items],
             "selected_turn_ids": list(
                 dict.fromkeys(item.turn_id for item in self.items)
+            ),
+            "requested_turn_ids": (
+                list(self.requested_turn_ids) if self.requested_turn_ids is not None else None
             ),
             "warnings": list(self.warnings),
             "character_count": sum(len(item.text) for item in self.items),
@@ -100,12 +104,17 @@ def select_thread_context(
     policy: ThreadContextPolicy | None = None,
     read_saved: Callable[[dict[str, Any], str], dict[str, Any]] | None = None,
     rank_older: Callable[[str, list[str]], tuple[list[float] | None, str | None]] | None = None,
+    explicit_turn_ids: list[str] | None = None,
 ) -> ThreadContextPacket:
     """Load only the owned thread and verified completed answer artifacts.
 
     The job reader is supplied by the server, never the HTTP client. Missing
     answers retain their exact question with an explicit warning. Unexpected
     reader failures propagate instead of masquerading as empty history.
+
+    ``explicit_turn_ids`` replaces automatic selection with the reviewer's
+    chosen prior turns. Every chosen turn must fit: an explicit choice is never
+    ranked, reordered past ordinal order, or silently dropped.
     """
     policy = policy or ThreadContextPolicy()
     current = store.get_turn(turn_id, owner)
@@ -116,6 +125,8 @@ def select_thread_context(
         if turn["ordinal"] < current["ordinal"] and turn["status"] == "completed"
     ]
     warnings: list[str] = []
+    if explicit_turn_ids is not None:
+        return _explicit_context(previous, explicit_turn_ids, owner, read_job, read_saved, policy)
     selected: list[ThreadContextItem] = []
     characters = 0
     selected_count = 0
@@ -135,32 +146,9 @@ def select_thread_context(
             )
         ]
         if policy.include_answers:
-            job = None
-            if turn["job_id"]:
-                try:
-                    job = read_job(turn["job_id"])
-                except KeyError:
-                    pass
             # Never accept another owner's run or an unrelated run as this answer.
-            valid = (
-                isinstance(job, dict)
-                and job.get("id") == turn["job_id"]
-                and job.get("owner") == owner
-                and job.get("turn_id") == turn["turn_id"]
-                and job.get("status") == "completed"
-            )
-            result = job.get("result") if valid else None
-            answer = result.get("answer") if isinstance(result, dict) else None
-            if (job is None or valid) and not answer and read_saved and turn.get("response_record_id"):
-                try:
-                    recovered = read_saved(turn, owner)
-                except (KeyError, ThreadNotFound):
-                    recovered = None
-                if isinstance(recovered, dict):
-                    answer = (recovered.get("result") or {}).get("answer")
-                    warnings.append(f"prior_answer_recovered:{turn['turn_id']}")
-
-            if isinstance(answer, str) and answer.strip():
+            answer = _turn_answer(turn, owner, read_job, read_saved, warnings)
+            if answer is not None:
                 if len(answer) > policy.max_answer_characters:
                     if index == 0:
                         raise ContextBudgetExceeded(
@@ -214,6 +202,80 @@ def select_thread_context(
         characters += size
     selected.sort(key=lambda item: (item.ordinal, item.role == "assistant"))
     return ThreadContextPacket(tuple(selected), tuple(warnings), policy, strategy, ranking_model, len(previous))
+
+
+def _turn_answer(
+    turn: dict[str, Any],
+    owner: str,
+    read_job: Callable[[str], dict[str, Any]],
+    read_saved: Callable[[dict[str, Any], str], dict[str, Any]] | None,
+    warnings: list[str],
+) -> str | None:
+    job = None
+    if turn["job_id"]:
+        try:
+            job = read_job(turn["job_id"])
+        except KeyError:
+            pass
+    valid = (
+        isinstance(job, dict)
+        and job.get("id") == turn["job_id"]
+        and job.get("owner") == owner
+        and job.get("turn_id") == turn["turn_id"]
+        and job.get("status") == "completed"
+    )
+    result = job.get("result") if valid else None
+    answer = result.get("answer") if isinstance(result, dict) else None
+    if (job is None or valid) and not answer and read_saved and turn.get("response_record_id"):
+        try:
+            recovered = read_saved(turn, owner)
+        except (KeyError, ThreadNotFound):
+            recovered = None
+        if isinstance(recovered, dict):
+            answer = (recovered.get("result") or {}).get("answer")
+            warnings.append(f"prior_answer_recovered:{turn['turn_id']}")
+    return answer if isinstance(answer, str) and answer.strip() else None
+
+
+def _explicit_context(
+    previous: list[dict[str, Any]],
+    turn_ids: list[str],
+    owner: str,
+    read_job: Callable[[str], dict[str, Any]],
+    read_saved: Callable[[dict[str, Any], str], dict[str, Any]] | None,
+    policy: ThreadContextPolicy,
+) -> ThreadContextPacket:
+    requested = tuple(dict.fromkeys(turn_ids))
+    if len(requested) > policy.max_turns:
+        raise ValueError(f"At most {policy.max_turns} prior turns may be chosen as context")
+    by_id = {turn["turn_id"]: turn for turn in previous}
+    unknown = [turn_id for turn_id in requested if turn_id not in by_id]
+    if unknown:
+        raise ValueError("Context turns must be completed earlier turns of this thread")
+    warnings: list[str] = []
+    selected: list[ThreadContextItem] = []
+    for turn in sorted((by_id[turn_id] for turn_id in requested), key=lambda item: item["ordinal"]):
+        selected.append(
+            ThreadContextItem(turn["turn_id"], turn["ordinal"], "user", turn["user_question"], "explicit")
+        )
+        if not policy.include_answers:
+            continue
+        answer = _turn_answer(turn, owner, read_job, read_saved, warnings)
+        if answer is None:
+            warnings.append(f"prior_answer_unavailable:{turn['turn_id']}")
+            continue
+        if len(answer) > policy.max_answer_characters:
+            raise ContextBudgetExceeded("A chosen context answer exceeds the context answer budget")
+        selected.append(
+            ThreadContextItem(
+                turn["turn_id"], turn["ordinal"], "assistant", answer, "explicit", turn.get("research_run_id")
+            )
+        )
+    if sum(len(item.text) for item in selected) > policy.max_characters:
+        raise ContextBudgetExceeded("The chosen context turns exceed the context budget")
+    return ThreadContextPacket(
+        tuple(selected), tuple(warnings), policy, "explicit", None, len(previous), requested
+    )
 
 
 def rank_cached_thread_context(query: str, texts: list[str], model: str) -> tuple[list[float] | None, str]:

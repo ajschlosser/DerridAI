@@ -441,3 +441,51 @@ def test_thread_list_reports_has_more_without_returning_the_probe_row(store, mon
     assert len(last["threads"]) == 1 and last["has_more"] is False
     exact = routes.list_threads(None, limit=3, offset=0, search=None, include_archived=False)
     assert len(exact["threads"]) == 3 and exact["has_more"] is False
+
+
+def test_explicit_context_scope_selects_only_chosen_turns_and_survives_retry(store) -> None:
+    jobs = FakeJobs()
+    first = research_threads.start_run(jobs, _body("Derrida on gift?"), owner="alice")
+    jobs.created[0].update(status="completed", result={"answer": "Gift answer"})
+    research_threads.sync_turn_from_job(jobs.created[0])
+    thread_id = first["thread_id"]
+    second = research_threads.start_run(jobs, _body("And hospitality?"), owner="alice", thread_id=thread_id)
+    jobs.created[1].update(status="completed", result={"answer": "Hospitality answer"})
+    research_threads.sync_turn_from_job(jobs.created[1])
+
+    third = research_threads.start_run(
+        jobs, _body("Compare with the gift", context_turn_ids=[first["turn_id"]]),
+        owner="alice", thread_id=thread_id,
+    )
+    snapshot = store.get_turn(third["turn_id"], "alice")["context_selection"]
+    assert snapshot["strategy"] == "explicit"
+    assert snapshot["requested_turn_ids"] == [first["turn_id"]]
+    assert [item["text"] for item in snapshot["items"]] == ["Derrida on gift?", "Gift answer"]
+    assert snapshot["advisory"] and not snapshot["evidentiary"]
+
+    # A retry without a scope keeps the turn's explicit choice.
+    jobs.created[2].update(status="failed", error_message="provider down")
+    research_threads.sync_turn_from_job(jobs.created[2])
+    research_threads.start_run(jobs, _body("Compare with the gift"), owner="alice", retry_turn_id=third["turn_id"])
+    retried = store.get_turn(third["turn_id"], "alice")["context_selection"]
+    assert retried["strategy"] == "explicit" and retried["selected_turn_ids"] == [first["turn_id"]]
+    jobs.created[-1].update(status="completed", result={"answer": "Comparison"})
+    research_threads.sync_turn_from_job(jobs.created[-1])
+
+    # An empty scope means no prior-turn context at all.
+    fourth = research_threads.start_run(
+        jobs, _body("Standalone", context_turn_ids=[]), owner="alice", thread_id=thread_id
+    )
+    empty = store.get_turn(fourth["turn_id"], "alice")["context_selection"]
+    assert empty["items"] == [] and empty["requested_turn_ids"] == []
+    jobs.created[-1].update(status="completed", result={"answer": "Done"})
+    research_threads.sync_turn_from_job(jobs.created[-1])
+
+    # Turns from another thread, or not yet earlier, are refused and the turn fails visibly.
+    other = research_threads.start_run(FakeJobs(), _body("Elsewhere"), owner="alice")
+    with pytest.raises(ValueError, match="earlier turns of this thread"):
+        research_threads.start_run(
+            jobs, _body("Bad scope", context_turn_ids=[other["turn_id"]]), owner="alice", thread_id=thread_id
+        )
+    failed = store.get_thread(thread_id, "alice")["turns"][-1]
+    assert failed["user_question"] == "Bad scope" and failed["status"] == "failed"

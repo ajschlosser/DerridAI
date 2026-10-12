@@ -42,6 +42,7 @@ const emit = defineEmits<{
   selectEvidence: [index: number];
   openRecord: [index: number];
   openRelationships: [index: number, mode: "trace" | "model"];
+  followUp: [index: number];
 }>();
 const i18n = useI18nStore();
 const section = ref<InspectorSection>("sources");
@@ -112,6 +113,14 @@ function setSection(next: InspectorSection) {
         :evidence="activeEvidence"
         :provenance="result.claim_provenance"
       />
+      <button
+        v-if="activeEvidence"
+        type="button"
+        class="btn research-turn-inspector-follow-up"
+        @click="emit('followUp', activeEvidenceIndex)"
+      >
+        {{ i18n.t("research.thread_follow_up_passage") }}
+      </button>
     </div>
     <div v-show="section === 'claims'" :id="`${instanceId}-claims`">
       <ResearchClaimReviewPanel

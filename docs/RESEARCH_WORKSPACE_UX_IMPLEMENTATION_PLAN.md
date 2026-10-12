@@ -132,7 +132,7 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 ### Phase 5 — Advanced scholarly capabilities (P2; separate PRs)
 
 - [x] Search within a single thread across questions and available answers without fetching all audit payloads.
-- [ ] Start a follow-up from selected answer/source passage with explicit, editable context scope.
+- [x] Start a follow-up from selected answer/source passage with explicit, editable context scope.
 - [ ] Compare two turns/runs and their bound evidence without flattening identity or validation status.
 - [ ] Export conversation and bibliographic/audit references with deterministic citation construction and preserved run/record identities.
 - [ ] Add optional thread pins/labels only if justified by observed library usage.
@@ -241,3 +241,4 @@ No phase is complete without its implementation, tests, documentation when appli
 ## 12. Phase 5 progress
 
 - **Search this thread** (threads with more than one turn) filters turns by question, instructions and answers already loaded in this browser. It never requests answers or audit payloads; a status line says how many matched and how many answers were not loaded, so only their questions were searched. Escape clears it, and it resets on thread change.
+- **Follow up on this turn** (completed turns) and **Follow up on this passage** (inspector Sources) set an explicit context scope shown in the follow-up composer, where each turn can be removed or the scope reset to automatic. A passage follow-up prefills an empty question with the run's own deterministic inline citation, as editable text. Only turn IDs travel (`context_turn_ids`); the scope applies to one follow-up and is kept on retry. The passage is not added to selected evidence: the new run retrieves its own evidence.

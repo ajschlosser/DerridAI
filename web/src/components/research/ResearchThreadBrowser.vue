@@ -49,6 +49,7 @@ const emit = defineEmits<{
   new: [];
   removed: [error?: string];
   retryTurn: [turn: ResearchTurn];
+  followUp: [turn: ResearchTurn, evidence: ResearchResultEvidence | null];
   openRecord: [item: ResearchResultEvidence];
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
 }>();
@@ -354,6 +355,7 @@ function retry() {
     :retry-disabled="retryDisabled || Boolean(error)"
     :answer-text="answerText"
     @retry-turn="retryTurn"
+    @follow-up="emit('followUp', $event, null)"
     @select="emit('select', $event)"
     @open="emit('open', $event)"
     @new="emit('new')"
@@ -373,6 +375,7 @@ function retry() {
         :inspector-open="inspectedTurnId === turn.turn_id"
         :defer-load="(detail.data.value?.turns.length || 0) > 8 && turn.job_id !== jobId"
         @inspect="inspectTurn"
+        @follow-up="(item, evidence) => emit('followUp', item, evidence)"
         @close-inspector="closeTurnInspector"
         @open-record="emit('openRecord', $event)"
         @open-relationships="(item, mode) => emit('openRelationships', item, mode)"

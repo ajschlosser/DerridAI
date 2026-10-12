@@ -51,7 +51,12 @@ vi.mock("../../src/stores/auth", () => ({
   },
 }));
 vi.mock("../../src/stores/i18n", () => ({
-  useI18nStore: () => ({ t: (key: string) => key, tf: (key: string) => key, locale: "en-US" }),
+  useI18nStore: () => ({
+    t: (key: string) => key,
+    tf: (key: string, values?: Record<string, unknown>) =>
+      values ? `${key} ${JSON.stringify(values)}` : key,
+    locale: "en-US",
+  }),
 }));
 vi.mock("../../src/domain/researchActions", () => ({
   startResearchRun: mocks.start,
@@ -100,7 +105,7 @@ const snapshot = () => ({
 });
 const Composer = defineComponent({
   inheritAttrs: false,
-  props: ["prompt", "canRun", "pipelineOverride"],
+  props: ["prompt", "canRun", "pipelineOverride", "contextScope"],
   emits: [
     "update:prompt",
     "run",
@@ -124,7 +129,7 @@ const ThreadBrowser = defineComponent({
     "initialOffset",
     "initialArchived",
   ],
-  emits: ["retryTurn", "filters", "select"],
+  emits: ["retryTurn", "filters", "select", "followUp", "continuable"],
   template: '<div class="thread-browser"><slot name="workspace" /></div>',
 });
 const Result = defineComponent({
@@ -502,6 +507,45 @@ describe("Research progressive reads", () => {
     await flushPromises();
     expect(w.get(".answer").text()).toContain("Answer B");
     expect(w.get(".answer").text()).not.toContain("Answer A");
+  });
+});
+
+describe("Research follow-up context scope", () => {
+  it("scopes a passage follow-up to its turn, prefills the citation and sends only turn IDs", async () => {
+    reactive(mocks.route).query = { thread: "t" };
+    mocks.start.mockResolvedValue({ id: "new", status: "queued", thread_id: "t" });
+    const w = render();
+    await flushPromises();
+    const browser = w.findComponent(ThreadBrowser);
+    browser.vm.$emit("continuable", true);
+    await w.get(".composer").setValue("");
+    const turn = { thread_id: "t", turn_id: "turn-2", ordinal: 2, user_question: "On the gift" };
+    browser.vm.$emit("followUp", turn, { inline_citation: "(Given Time, p. 12)" });
+    await flushPromises();
+    const composer = w.findComponent(Composer);
+    expect(composer.props("contextScope")).toEqual([
+      { turn_id: "turn-2", ordinal: 2, question: "On the gift" },
+    ]);
+    expect(composer.props("prompt")).toBe(
+      'research.context_scope_regarding {"citation":"(Given Time, p. 12)"}',
+    );
+    await w.get(".composer").setValue("Regarding (Given Time, p. 12): is it aneconomic?");
+    await w.get(".run").trigger("click");
+    await flushPromises();
+    expect(mocks.start.mock.calls[0][0]).toMatchObject({
+      thread_id: "t",
+      context_turn_ids: ["turn-2"],
+    });
+    // The scope applies to one follow-up; the next returns to automatic context.
+    expect(composer.props("contextScope")).toBeNull();
+  });
+  it("ignores a follow-up request from a thread that is no longer selected", async () => {
+    reactive(mocks.route).query = { thread: "t" };
+    const w = render();
+    await flushPromises();
+    w.findComponent(ThreadBrowser).vm.$emit("followUp", { thread_id: "other", turn_id: "x" }, null);
+    await flushPromises();
+    expect(w.findComponent(Composer).props("contextScope")).toBeNull();
   });
 });
 

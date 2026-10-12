@@ -478,6 +478,12 @@ class RAGRunRequest(BaseModel):
     # server loads any thread content itself and never accepts prior answers.
     thread_id: str | None = Field(default=None, min_length=1, max_length=80)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=120)
+    # Explicit follow-up context scope: prior turn IDs of the same thread whose
+    # exact text the server loads as advisory context. ``None`` keeps automatic
+    # selection; an empty list means no prior-turn context.
+    context_turn_ids: list[Annotated[str, Field(min_length=1, max_length=80)]] | None = Field(
+        default=None, max_length=16
+    )
     # Pipeline identity is resolved server-side from the active Research
     # assignment unless an authorized caller explicitly selects another
     # executable version. Persisting it on the request makes each run auditable.
