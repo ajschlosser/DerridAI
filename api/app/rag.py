@@ -538,6 +538,46 @@ def _json_like_answer(text: str) -> bool:
     return False
 
 
+# Match only the opening of an answer. Never strip text: citations, source
+# qualification, and even a deliberately quoted opening must remain intact.
+_NON_SUBSTANTIVE_RESEARCH_OPENING = re.compile(
+    r"(?i)^\\s*(?:"
+    r"as\\s+(?:derridai|an?\\s+ai(?:\\s+assistant)?)\\s*[,!:—-]|"
+    r"i\\s+(?:will|shall|'ll|am\\s+going\\s+to)\\s+"
+    r"(?:provide|offer|present|deliver|give|conduct|undertake|"
+    r"explore|examine|discuss|analy[sz]e|compare|outline)\\b|"
+    r"in\\s+this\\s+(?:(?:comprehensive|comparative|detailed|following)\\s+)*"
+    r"(?:analysis|response|answer|discussion|essay)\\b"
+    r")"
+)
+_EXPLICIT_RESEARCH_OPENING_REQUEST = re.compile(
+    r"(?i)\\b(?:start|begin|open)\\s+(?:your\\s+|the\\s+)?"
+    r"(?:answer|response)\\s+(?:with|by)\\b|"
+    r"\\b(?:start|begin|open)\\s+with\\b|"
+    r"\\b(?:write|respond|answer|narrate)\\s+in\\s+(?:the\\s+)?first[- ]person\\b|"
+    r"\\b(?:introduce\\s+yourself|act\\s+as\\s+derridai)\\b"
+)
+
+
+def _non_substantive_research_opening(
+    answer: str,
+    question: str,
+    instructions: str,
+    *,
+    prose_required: bool,
+) -> bool:
+    """Flag formulaic openings only when they contradict the requested form.
+
+    This is a soft prose-quality signal, not an evidence/validation failure.
+    Explicit researcher instructions take precedence, and no output is rewritten.
+    """
+    if not prose_required or _EXPLICIT_RESEARCH_OPENING_REQUEST.search(
+        f"{question}\\n{instructions}"
+    ):
+        return False
+    return bool(_NON_SUBSTANTIVE_RESEARCH_OPENING.match(answer))
+
+
 def _generation_contract_issues(
     answer: str,
     evidence: Sequence[Mapping[str, Any]],
@@ -2587,6 +2627,11 @@ def run_rag_pipeline(
         prose_required=prose_required,
         require_evidence_markers=request.bind_citations,
     )
+    if _non_substantive_research_opening(
+        raw_answer, request.prompt, request.instructions or "",
+        prose_required=prose_required,
+    ):
+        contract_issues.append("non_substantive_opening")
     initial_contract_issues = list(contract_issues)
     output_contract_retry = bool(contract_issues)
     prose_contract_retry = "structured_json" in contract_issues
@@ -2603,6 +2648,10 @@ def run_rag_pipeline(
         if any(issue.startswith("unknown_evidence_markers:") for issue in contract_issues):
             warnings.append(
                 "Generation cited evidence markers outside the current evidence packet; regenerated once."
+            )
+        if "non_substantive_opening" in contract_issues:
+            warnings.append(
+                "Generation opened with a formulaic preamble; requested a direct scholarly answer."
             )
         correction_prompt = generation_prompt + (
             """
@@ -2624,6 +2673,15 @@ packet, and do not switch to prose unless the researcher requested prose.
 </OUTPUT_CONTRACT_CORRECTION>
 """
         )
+        if "non_substantive_opening" in contract_issues:
+            correction_prompt += (
+                "\\n<OPENING_STYLE_CORRECTION>\\n"
+                "The previous draft began with a generic self-introduction or plan. "
+                "Start immediately with a substantive finding or an evidence limitation. "
+                "Do not announce what you intend to do. Preserve all source attribution, "
+                "qualifications, and current evidence markers.\\n"
+                "</OPENING_STYLE_CORRECTION>"
+            )
         raw_answer = generate_answer(correction_prompt, None)
         contract_issues = _generation_contract_issues(
             raw_answer,
@@ -2631,10 +2689,23 @@ packet, and do not switch to prose unless the researcher requested prose.
             prose_required=prose_required,
             require_evidence_markers=request.bind_citations,
         )
-        if contract_issues:
+        if _non_substantive_research_opening(
+            raw_answer, request.prompt, request.instructions or "",
+            prose_required=prose_required,
+        ):
+            contract_issues.append("non_substantive_opening")
+            warnings.append(
+                "The regenerated answer retained a generic introduction; its text was preserved."
+            )
+        # Stylistic noncompliance is diagnosable, not a reason to discard a
+        # properly cited scholarly answer after the single bounded retry.
+        blocking_issues = [
+            issue for issue in contract_issues if issue != "non_substantive_opening"
+        ]
+        if blocking_issues:
             raise ValueError(
                 "Research generation violated the output/evidence contract after one retry: "
-                + ", ".join(contract_issues)
+                + ", ".join(blocking_issues)
             )
     stages.append({
         "name": "generation",
