@@ -583,6 +583,33 @@ describe("Research thread shell", () => {
     expect(document.activeElement).toBe(outside);
     outside.remove();
   });
+  it("searches a thread's questions and loaded answers without fetching more", async () => {
+    const detail = thread("a");
+    detail.turns.push(
+      { ...detail.turns[0], turn_id: "a-2", ordinal: 2, user_question: "On hospitality" },
+      { ...detail.turns[0], turn_id: "a-3", ordinal: 3, user_question: "Third" },
+    );
+    const answerText = vi.fn((turn: { turn_id: string }) =>
+      turn.turn_id === "a-1" ? "Hospitality is unconditional." : null,
+    );
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [], thread: detail, selectedThreadId: "a", offset: 0, answerText },
+    });
+    mounted.push(wrapper);
+    const visible = () =>
+      wrapper
+        .findAll(".research-thread-turns > li")
+        .filter((item) => (item.element as HTMLElement).style.display !== "none")
+        .map((item) => item.get("h3").text());
+    await wrapper.get(".research-thread-turn-search input").setValue("HOSPITALITY");
+    expect(visible()).toEqual(["Question a", "On hospitality"]);
+    const status = wrapper.get(".research-thread-turn-search [role=status]").text();
+    expect(status).toContain("2 of 3");
+    expect(status).toContain("2 answers are not loaded");
+    expect(api.get).not.toHaveBeenCalled();
+    await wrapper.get(".research-thread-turn-search input").trigger("keydown", { key: "Escape" });
+    expect(visible()).toHaveLength(3);
+  });
 });
 
 describe("Research thread management", () => {

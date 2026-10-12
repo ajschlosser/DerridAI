@@ -91,6 +91,31 @@ const busy = ref(false);
 const mutationError = ref("");
 const notice = ref("");
 const client = useQueryClient();
+// Bumped when a cached turn result changes, so in-thread search sees answers
+// as they load without requesting any itself.
+const answerCacheVersion = ref(0);
+const stopAnswerCache = client.getQueryCache().subscribe((event) => {
+  if (event.query.queryKey[0] === "research-turn-result") answerCacheVersion.value++;
+});
+onBeforeUnmount(stopAnswerCache);
+const answerText = computed(() => {
+  void answerCacheVersion.value;
+  return (turn: ResearchTurn): string | null => {
+    const cached = client.getQueriesData<{ result?: { answer?: string } }>({
+      queryKey: [
+        "research-turn-result",
+        auth.user?.id,
+        auth.user?.role,
+        turn.thread_id,
+        turn.turn_id,
+        turn.attempt,
+        turn.job_id,
+      ],
+    });
+    const answer = cached.find(([, data]) => typeof data?.result?.answer === "string")?.[1];
+    return answer?.result?.answer ?? null;
+  };
+});
 const i18n = useI18nStore();
 let operation = 0;
 let dialogTrigger: HTMLElement | null = null;
@@ -327,6 +352,7 @@ function retry() {
     :busy="busy || retryBusy"
     :notice="notice"
     :retry-disabled="retryDisabled || Boolean(error)"
+    :answer-text="answerText"
     @retry-turn="retryTurn"
     @select="emit('select', $event)"
     @open="emit('open', $event)"

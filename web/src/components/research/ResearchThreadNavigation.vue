@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
-import { nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type {
   ResearchThreadDetail,
   ResearchThreadSummary,
@@ -40,6 +40,8 @@ const props = defineProps<{
   busy?: boolean;
   notice?: string;
   retryDisabled?: boolean;
+  /** Text of an answer already loaded in this browser, or null when not loaded. */
+  answerText?: (turn: ResearchTurn) => string | null;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -56,6 +58,32 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const listExpanded = ref(false);
+// In-thread search reads only questions and answers already loaded; it never
+// fetches further answers or audit payloads.
+const turnQuery = ref("");
+watch(
+  () => props.thread?.thread_id,
+  () => (turnQuery.value = ""),
+);
+const turnSearch = computed(() => {
+  const term = turnQuery.value.trim().toLocaleLowerCase();
+  const turns = props.thread?.turns || [];
+  if (!term) return null;
+  let unsearched = 0;
+  const matches = new Set<string>();
+  for (const turn of turns) {
+    const answer = turn.status === "completed" ? (props.answerText?.(turn) ?? null) : "";
+    if (answer === null) unsearched++;
+    const text = [turn.user_question, turn.user_instructions || "", answer || ""].join("\n");
+    if (text.toLocaleLowerCase().includes(term)) matches.add(turn.turn_id);
+  }
+  return { matches, total: turns.length, unsearched };
+});
+function clearTurnSearch(event: KeyboardEvent) {
+  if (!turnQuery.value) return;
+  event.stopPropagation();
+  turnQuery.value = "";
+}
 const conversationHeading = ref<HTMLElement | null>(null);
 const sidebar = ref<HTMLElement | null>(null);
 // When a different thread loads after list selection or browser Back/Forward,
@@ -227,8 +255,34 @@ function clearSearch(event: KeyboardEvent) {
             </button>
           </div>
         </details>
+        <div v-if="thread.turns.length > 1" class="research-thread-turn-search">
+          <label>
+            {{ i18n.t("research.thread_search") }}
+            <input
+              v-model="turnQuery"
+              type="search"
+              maxlength="200"
+              @keydown.escape="clearTurnSearch"
+            />
+          </label>
+          <p v-if="turnSearch" role="status">
+            {{
+              i18n.tf("research.thread_search_count", {
+                shown: turnSearch.matches.size,
+                total: turnSearch.total,
+              })
+            }}
+            <template v-if="turnSearch.unsearched">
+              {{ i18n.tf("research.thread_search_unsearched", { count: turnSearch.unsearched }) }}
+            </template>
+          </p>
+        </div>
         <ol class="research-thread-turns">
-          <li v-for="turn in thread.turns" :key="turn.turn_id">
+          <li
+            v-for="turn in thread.turns"
+            v-show="!turnSearch || turnSearch.matches.has(turn.turn_id)"
+            :key="turn.turn_id"
+          >
             <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
               <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
               <p class="research-thread-turn-status">
@@ -286,6 +340,15 @@ function clearSearch(event: KeyboardEvent) {
   border-radius: var(--radius-card);
   margin-block: var(--page-gap);
   min-width: 0;
+}
+.research-thread-turn-search {
+  display: grid;
+  gap: 6px;
+  margin-block: 8px 12px;
+}
+.research-thread-turn-search label {
+  display: grid;
+  gap: 4px;
 }
 .research-thread-index-title {
   grid-column: 1;
