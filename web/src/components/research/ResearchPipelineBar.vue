@@ -28,8 +28,10 @@ const props = withDefaults(
     jobs?: ResearchJob[];
     selectedJobId?: string;
     canManage?: boolean;
+    /** Thread view: the conversation already shows its own turns' status. */
+    threadId?: string;
   }>(),
-  { jobs: () => [], selectedJobId: "", canManage: false },
+  { jobs: () => [], selectedJobId: "", canManage: false, threadId: "" },
 );
 const emit = defineEmits<{
   select: [job: ResearchJob];
@@ -38,7 +40,11 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const activeJobs = computed(() =>
-  props.jobs.filter((job) => ["queued", "running", "cancelling"].includes(job.status)),
+  props.jobs.filter(
+    (job) =>
+      ["queued", "running", "cancelling"].includes(job.status) &&
+      !(props.threadId && job.thread_id === props.threadId),
+  ),
 );
 function statusLabel(job: ResearchJob) {
   return i18n.t(`research.status_${job.status}`, job.status);
@@ -57,7 +63,7 @@ function detail(job: ResearchJob) {
 <template>
   <section
     v-if="activeJobs.length"
-    class="research-pipeline-bar"
+    :class="['research-pipeline-bar', { compact: Boolean(threadId) }]"
     aria-labelledby="research-pipeline-bar-title"
   >
     <div class="research-pipeline-bar-head">
@@ -74,7 +80,7 @@ function detail(job: ResearchJob) {
                 activeJobs.length === 1 ? "pipeline in progress" : "pipelines in progress",
               )
             }}</b
-          ><small>{{ i18n.t("research.parallel_runs_help") }}</small>
+          ><small v-if="!threadId">{{ i18n.t("research.parallel_runs_help") }}</small>
         </div>
       </div>
       <button class="research-text-action" type="button" @click="emit('openRuns')">
@@ -82,6 +88,7 @@ function detail(job: ResearchJob) {
       </button>
     </div>
     <div
+      v-if="!threadId"
       class="research-pipeline-scroll"
       role="list"
       :aria-label="i18n.t('research.active_pipelines')"
@@ -123,6 +130,10 @@ function detail(job: ResearchJob) {
   border-radius: 12px;
   background: linear-gradient(180deg, var(--card), var(--card));
   box-shadow: 0 4px 16px rgba(35, 50, 70, 0.04);
+}
+.research-pipeline-bar.compact {
+  padding: 6px 12px;
+  box-shadow: none;
 }
 .research-pipeline-bar-head {
   display: flex;

@@ -1185,6 +1185,7 @@ onBeforeUnmount(() => {
             :jobs="jobs"
             :selected-job-id="activeJob?.id || ''"
             :can-manage="canManageRuns"
+            :thread-id="currentThreadId"
             @select="openJob"
             @cancel="cancelJob"
             @open-runs="runsDrawer?.open()"

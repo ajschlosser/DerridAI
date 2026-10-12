@@ -104,7 +104,7 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 - [x] Bring thread navigation into persistent layout rather than the toggled section preceding composer/result. Preserve the new-question view and no-database state.
 - [x] Establish one reading column with ordered turns and a composer in the same layout. Deeper visual refinement of the existing turn cards remains outstanding.
 - [x] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
-- [ ] Integrate run status affordances without competing full-width run/activity panels.
+- [x] Integrate run status affordances without competing full-width run/activity panels.
 - [ ] Tests: empty/new, selected/archived, 1 vs many turns, historical missing artifact, permissions and account change, deep links.
 
 **Phase 2 exit:** Research navigation, reading, and composer feel like a single application surface at desktop widths.
@@ -234,5 +234,6 @@ No phase is complete without its implementation, tests, documentation when appli
 ## 11. Phase 2 follow-up
 
 - Thread selection is derived from `?thread`, so Back/Forward and in-app selection share one source of truth. When a different thread loads and focus is on the page body (Back/Forward) or in the thread list, `ResearchThreadNavigation` moves focus to the conversation heading; focus elsewhere, such as the composer, is not taken. Covered by a unit test.
-- Still open in Phase 2: integrating run status affordances, and the remaining test matrix (permissions/account change and deep links are covered; historical missing artifact and archived states in e2e).
+- In a thread, the active-pipelines bar collapses to one line counting only runs outside that thread (its own turns already show status) and opens **All runs**; outside a thread it keeps the chip list.
+- Still open in Phase 2: the remaining test matrix (permissions/account change and deep links are covered; historical missing artifact and archived states in e2e).
 - Thread list API returns `has_more` (the route reads one row past the page), so **Next** is disabled on an exactly full last page.
