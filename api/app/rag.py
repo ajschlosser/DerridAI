@@ -541,21 +541,21 @@ def _json_like_answer(text: str) -> bool:
 # Match only the opening of an answer. Never strip text: citations, source
 # qualification, and even a deliberately quoted opening must remain intact.
 _NON_SUBSTANTIVE_RESEARCH_OPENING = re.compile(
-    r"(?i)^\\s*(?:"
-    r"as\\s+(?:derridai|an?\\s+ai(?:\\s+assistant)?)\\s*[,!:—-]|"
-    r"i\\s+(?:will|shall|'ll|am\\s+going\\s+to)\\s+"
+    r"(?i)^\s*(?:"
+    r"as\s+(?:derridai|an?\s+ai(?:\s+assistant)?)\s*[,!:—-]|"
+    r"i\s+(?:will|shall|'ll|am\s+going\s+to)\s+"
     r"(?:provide|offer|present|deliver|give|conduct|undertake|"
-    r"explore|examine|discuss|analy[sz]e|compare|outline)\\b|"
-    r"in\\s+this\\s+(?:(?:comprehensive|comparative|detailed|following)\\s+)*"
-    r"(?:analysis|response|answer|discussion|essay)\\b"
+    r"explore|examine|discuss|analy[sz]e|compare|outline)\b|"
+    r"in\s+this\s+(?:(?:comprehensive|comparative|detailed|following)\s+)*"
+    r"(?:analysis|response|answer|discussion|essay)\b"
     r")"
 )
 _EXPLICIT_RESEARCH_OPENING_REQUEST = re.compile(
-    r"(?i)\\b(?:start|begin|open)\\s+(?:your\\s+|the\\s+)?"
-    r"(?:answer|response)\\s+(?:with|by)\\b|"
-    r"\\b(?:start|begin|open)\\s+with\\b|"
-    r"\\b(?:write|respond|answer|narrate)\\s+in\\s+(?:the\\s+)?first[- ]person\\b|"
-    r"\\b(?:introduce\\s+yourself|act\\s+as\\s+derridai)\\b"
+    r"(?i)\b(?:start|begin|open)\s+(?:your\s+|the\s+)?"
+    r"(?:answer|response)\s+(?:with|by)\b|"
+    r"\b(?:start|begin|open)\s+with\b|"
+    r"\b(?:write|respond|answer|narrate)\s+in\s+(?:the\s+)?first[- ]person\b|"
+    r"\b(?:introduce\s+yourself|act\s+as\s+derridai)\b"
 )
 
 
@@ -572,7 +572,7 @@ def _non_substantive_research_opening(
     Explicit researcher instructions take precedence, and no output is rewritten.
     """
     if not prose_required or _EXPLICIT_RESEARCH_OPENING_REQUEST.search(
-        f"{question}\\n{instructions}"
+        f"{question}\n{instructions}"
     ):
         return False
     return bool(_NON_SUBSTANTIVE_RESEARCH_OPENING.match(answer))
@@ -2675,11 +2675,11 @@ packet, and do not switch to prose unless the researcher requested prose.
         )
         if "non_substantive_opening" in contract_issues:
             correction_prompt += (
-                "\\n<OPENING_STYLE_CORRECTION>\\n"
+                "\n<OPENING_STYLE_CORRECTION>\n"
                 "The previous draft began with a generic self-introduction or plan. "
                 "Start immediately with a substantive finding or an evidence limitation. "
                 "Do not announce what you intend to do. Preserve all source attribution, "
-                "qualifications, and current evidence markers.\\n"
+                "qualifications, and current evidence markers.\n"
                 "</OPENING_STYLE_CORRECTION>"
             )
         raw_answer = generate_answer(correction_prompt, None)
