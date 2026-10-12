@@ -449,7 +449,7 @@ def test_explicit_context_scope_selects_only_chosen_turns_and_survives_retry(sto
     jobs.created[0].update(status="completed", result={"answer": "Gift answer"})
     research_threads.sync_turn_from_job(jobs.created[0])
     thread_id = first["thread_id"]
-    second = research_threads.start_run(jobs, _body("And hospitality?"), owner="alice", thread_id=thread_id)
+    research_threads.start_run(jobs, _body("And hospitality?"), owner="alice", thread_id=thread_id)
     jobs.created[1].update(status="completed", result={"answer": "Hospitality answer"})
     research_threads.sync_turn_from_job(jobs.created[1])
 
