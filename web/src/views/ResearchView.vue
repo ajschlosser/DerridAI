@@ -1092,7 +1092,9 @@ onBeforeUnmount(() => {
           <UiLoadingState v-if="runsLoading" variant="inline" :label="i18n.t('loading.updating')" />
           <div v-if="runsError" class="info error research-runs-status" role="alert">
             <p>{{ runsError }}</p>
-            <button type="button" class="btn" @click="refreshRuns()">{{ i18n.t("ui.retry") }}</button>
+            <button type="button" class="btn" @click="refreshRuns()">
+              {{ i18n.t("ui.retry") }}
+            </button>
           </div>
           <UiLoadingState
             v-if="pipelinesLoading"
@@ -1101,7 +1103,9 @@ onBeforeUnmount(() => {
           />
           <div v-if="pipelinesError" class="info error research-pipelines-status" role="alert">
             <p>{{ pipelinesError }}</p>
-            <button type="button" class="btn" @click="loadPipelines()">{{ i18n.t("ui.retry") }}</button>
+            <button type="button" class="btn" @click="loadPipelines()">
+              {{ i18n.t("ui.retry") }}
+            </button>
           </div>
           <ResearchPipelineBar
             :jobs="jobs"
@@ -1119,7 +1123,8 @@ onBeforeUnmount(() => {
           />
           <div v-if="answerError" class="info error research-answer-status" role="alert">
             <p>
-              <template v-if="activeResult">{{ i18n.t("loading.stale") }} </template>{{ answerError }}
+              <template v-if="activeResult">{{ i18n.t("loading.stale") }} </template
+              >{{ answerError }}
             </p>
             <button v-if="activeJob" type="button" class="btn" @click="loadAnswer(activeJob)">
               {{ i18n.t("ui.retry") }}
@@ -1130,7 +1135,9 @@ onBeforeUnmount(() => {
             tabindex="-1"
             role="region"
             :aria-label="i18n.t('research.answer')"
-            v-if="workspace && !currentThreadId && ((!answerLoading && !answerError) || activeResult)"
+            v-if="
+              workspace && !currentThreadId && ((!answerLoading && !answerError) || activeResult)
+            "
             :job="activeJob"
             :result="activeResult"
             :draft="researchDraft.draft.value"
