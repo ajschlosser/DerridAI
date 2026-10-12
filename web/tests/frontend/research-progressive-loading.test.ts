@@ -116,7 +116,7 @@ const ThreadBrowser = defineComponent({
   name: "ResearchThreadBrowser",
   props: ["threadId", "jobId", "retryDisabled", "refreshKey"],
   emits: ["retryTurn"],
-  template: '<div class="thread-browser" />',
+  template: '<div class="thread-browser"><slot name="workspace" /></div>',
 });
 const Result = defineComponent({
   props: ["job", "result"],
@@ -162,6 +162,13 @@ beforeEach(() => {
 });
 afterEach(() => mounted.splice(0).forEach((w) => w.unmount()));
 describe("Research progressive reads", () => {
+  it("keeps the new-question composer inside the thread workspace on /rag", async () => {
+    const wrapper = render();
+    await flushPromises();
+    expect(wrapper.find(".thread-browser .composer").exists()).toBe(true);
+    expect(wrapper.findAll(".composer")).toHaveLength(1);
+  });
+
   it("persists typing through the Research draft repository without updating global config", async () => {
     vi.useFakeTimers();
     try {
