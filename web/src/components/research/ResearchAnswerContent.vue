@@ -57,8 +57,9 @@ function segments(text: string) {
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
-            >{{ segment.text }}</button
             >
+              {{ segment.text }}
+            </button>
             <strong v-else-if="segment.bold">{{ segment.text }}</strong>
             <template v-else>{{ segment.text }}</template>
           </template>
@@ -74,18 +75,16 @@ function segments(text: string) {
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
-            >{{ segment.text }}</button
             >
+              {{ segment.text }}
+            </button>
             <strong v-else-if="segment.bold">{{ segment.text }}</strong>
             <template v-else>{{ segment.text }}</template>
           </template>
         </li>
       </ul>
       <p v-else>
-        <template
-          v-for="(segment, segmentIndex) in segments(block.text || '')"
-          :key="segmentIndex"
-        >
+        <template v-for="(segment, segmentIndex) in segments(block.text || '')" :key="segmentIndex">
           <button
             v-if="segment.evidenceIndex != null"
             class="research-inline-citation"
@@ -93,8 +92,9 @@ function segments(text: string) {
             type="button"
             :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
             @click="emit('evidence', segment.evidenceIndex)"
-          >{{ segment.text }}</button
-            >
+          >
+            {{ segment.text }}
+          </button>
           <strong v-else-if="segment.bold">{{ segment.text }}</strong>
           <template v-else>{{ segment.text }}</template>
         </template>
