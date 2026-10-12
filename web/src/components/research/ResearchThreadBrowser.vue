@@ -277,7 +277,13 @@ function retry() {
         @open-relationships="(item, mode) => emit('openRelationships', item, mode)"
       />
     </template>
+    <template v-if="$slots.workspace" #workspace>
+      <slot name="workspace" />
+    </template>
   </ResearchThreadNavigation>
+  <div v-else class="research-thread-workspace-standalone">
+    <slot name="workspace" />
+  </div>
   <ResearchThreadManageDialog
     v-if="
       allowed &&
