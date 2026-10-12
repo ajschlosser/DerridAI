@@ -213,4 +213,3 @@ No phase is complete without its implementation, tests, documentation when appli
 6. Validate locale parity for new labels and confirm visible text refers to known source metadata rather than inferred fields. The implementation uses existing translation keys.
 
 **Stopping rule:** Leave PR #606 as draft and do not mark the Phase 3 acceptance checklist complete until CI, visual/a11y, metadata and provenance checks above are verified. Phase 4/5 work has not begun on this branch.
-
