@@ -30,7 +30,8 @@ describe("shared Research answer content", () => {
     const wrapper = mount(ResearchAnswerContent, {
       props: {
         compact: true,
-        answer: "### Attribution\n\nA **qualified** proposition [[E1]].\n\n1. First claim [E1]\n2. Second claim",
+        answer:
+          "### Attribution\n\nA **qualified** proposition [[E1]].\n\n1. First claim [E1]\n2. Second claim",
         evidence: packet("E1", "(Derrida 1997: 11)"),
       },
     });
