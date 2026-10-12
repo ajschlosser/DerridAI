@@ -304,7 +304,7 @@ test("retry preserves a cancelled turn and opens its new attempt with keyboard f
   await retry.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/thread=b&job=retry-job/);
-  await expect(nav.locator("article")).toHaveCount(1);
+  await expect(nav.locator("article.research-thread-turn")).toHaveCount(1);
   await expect(nav.getByRole("heading", { name: "Question b", level: 3 })).toBeVisible();
   await expect(retry).toHaveCount(0);
   await expect(nav.locator(".research-thread-conversation")).toBeFocused();
