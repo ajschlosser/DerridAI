@@ -27,6 +27,7 @@ import { useDataQuery } from "../../realtime/dataQuery";
 import type { ResearchResultEvidence } from "../../types/research";
 import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
+import ResearchTurnComparison from "./ResearchTurnComparison.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
 import { ApiError } from "../../api/http";
 
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   new: [];
   removed: [error?: string];
   retryTurn: [turn: ResearchTurn];
+  followUp: [turn: ResearchTurn, evidence: ResearchResultEvidence | null];
   openRecord: [item: ResearchResultEvidence];
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
 }>();
@@ -91,6 +93,31 @@ const busy = ref(false);
 const mutationError = ref("");
 const notice = ref("");
 const client = useQueryClient();
+// Bumped when a cached turn result changes, so in-thread search sees answers
+// as they load without requesting any itself.
+const answerCacheVersion = ref(0);
+const stopAnswerCache = client.getQueryCache().subscribe((event) => {
+  if (event.query.queryKey[0] === "research-turn-result") answerCacheVersion.value++;
+});
+onBeforeUnmount(stopAnswerCache);
+const answerText = computed(() => {
+  void answerCacheVersion.value;
+  return (turn: ResearchTurn): string | null => {
+    const cached = client.getQueriesData<{ result?: { answer?: string } }>({
+      queryKey: [
+        "research-turn-result",
+        auth.user?.id,
+        auth.user?.role,
+        turn.thread_id,
+        turn.turn_id,
+        turn.attempt,
+        turn.job_id,
+      ],
+    });
+    const answer = cached.find(([, data]) => typeof data?.result?.answer === "string")?.[1];
+    return answer?.result?.answer ?? null;
+  };
+});
 const i18n = useI18nStore();
 let operation = 0;
 let dialogTrigger: HTMLElement | null = null;
@@ -313,6 +340,7 @@ function retry() {
   <ResearchThreadNavigation
     v-if="allowed"
     :threads="inaccessible(list.error.value) ? [] : list.data.value?.threads || []"
+    :has-more="!inaccessible(list.error.value) && Boolean(list.data.value?.has_more)"
     :thread="threadId && !inaccessible(detail.error.value) ? detail.data.value : null"
     :selected-thread-id="threadId"
     :selected-job-id="jobId"
@@ -326,7 +354,9 @@ function retry() {
     :busy="busy || retryBusy"
     :notice="notice"
     :retry-disabled="retryDisabled || Boolean(error)"
+    :answer-text="answerText"
     @retry-turn="retryTurn"
+    @follow-up="emit('followUp', $event, null)"
     @select="emit('select', $event)"
     @open="emit('open', $event)"
     @new="emit('new')"
@@ -337,6 +367,9 @@ function retry() {
     @archive="mutate('archive')"
     @remove="manage('delete')"
   >
+    <template #compare="{ turns, close }">
+      <ResearchTurnComparison :turns="turns" @close="close" />
+    </template>
     <template #answer="{ turn }">
       <ResearchThreadAnswer
         :key="turn.turn_id"
@@ -346,6 +379,7 @@ function retry() {
         :inspector-open="inspectedTurnId === turn.turn_id"
         :defer-load="(detail.data.value?.turns.length || 0) > 8 && turn.job_id !== jobId"
         @inspect="inspectTurn"
+        @follow-up="(item, evidence) => emit('followUp', item, evidence)"
         @close-inspector="closeTurnInspector"
         @open-record="emit('openRecord', $event)"
         @open-relationships="(item, mode) => emit('openRelationships', item, mode)"

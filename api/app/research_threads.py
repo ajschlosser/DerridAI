@@ -70,6 +70,12 @@ def start_run(
         turn = store.get_turn(retry_turn_id, owner)
         if body.prompt.strip() != turn["user_question"]:
             raise ValueError("A retry must resubmit the turn's original question.")
+        # A retry keeps the explicit context scope the turn was asked with.
+        previous_selection = turn.get("context_selection") or {}
+        if body.context_turn_ids is None and previous_selection.get("strategy") == "explicit":
+            body = body.model_copy(
+                update={"context_turn_ids": list(previous_selection.get("requested_turn_ids") or [])}
+            )
         turn = store.retry_turn(retry_turn_id, owner)
     else:
         if thread_id is None:
@@ -111,6 +117,7 @@ def start_run(
             read_saved=(lambda prior, username: saved_turn_result(prior, username, cache)) if cache else None,
             rank_older=(lambda query, texts: rank_cached_thread_context(query, texts, body.cross_encoder_model))
             if context_config.get("semantic", True) else None,
+            explicit_turn_ids=body.context_turn_ids,
         )
         store.save_context_selection(turn["turn_id"], owner, context.snapshot())
         job = jobs.create(body, owner=owner, turn_id=turn["turn_id"])

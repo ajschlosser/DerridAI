@@ -17,15 +17,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useQuery } from "@tanstack/vue-query";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRef, watch } from "vue";
 import { useResearchDraft } from "../../features/research/useResearchDraft";
-import { apiRequest, ApiError } from "../../api/http";
+import { useResearchTurnResult } from "../../features/research/useResearchTurnResult";
 import { useAuthStore } from "../../stores/auth";
 import { useI18nStore } from "../../stores/i18n";
 import ResearchTurnInspector from "./ResearchTurnInspector.vue";
 import ResearchAnswerContent from "./ResearchAnswerContent.vue";
-import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
+import type { ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
 
 const props = withDefaults(
@@ -48,6 +47,7 @@ const emit = defineEmits<{
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
   inspect: [turnId: string];
   closeInspector: [turnId: string];
+  followUp: [turn: ResearchTurn, evidence: ResearchResultEvidence | null];
 }>();
 const activeEvidenceIndex = ref(0);
 const inspectorRegion = ref<HTMLElement | null>(null);
@@ -102,58 +102,16 @@ watch(
   { immediate: true, flush: "sync" },
 );
 onBeforeUnmount(stream.clear);
-// A completed turn result is immutable for a specific attempt. Keep it out of the
-// broad research_threads invalidation tree so one thread event does not refetch
-// every historical answer mounted in the browser.
-const answer = useQuery({
-  queryKey: computed(() => [
-    "research-turn-result",
-    auth.user?.id,
-    auth.user?.role,
-    props.turn.thread_id,
-    props.turn.turn_id,
-    props.turn.attempt,
-    props.turn.job_id,
-    props.turn.response_record_id,
-  ]),
-  queryFn: async () => {
-    const turn = { ...props.turn };
-    if (turn.job_id) {
-      try {
-        return await apiRequest<ResearchJob>(`/api/jobs/${encodeURIComponent(turn.job_id)}`);
-      } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 404) throw error;
-      }
-    }
-    return apiRequest<ResearchJob>(
-      `/api/research/threads/${encodeURIComponent(turn.thread_id)}/turns/${encodeURIComponent(turn.turn_id)}/result`,
-    );
-  },
-  enabled: computed(
-    () =>
-      allowed.value &&
-      (visible.value || props.inspectRequested) &&
-      props.turn.status === "completed" &&
-      Boolean(props.turn.job_id || props.turn.response_record_id),
-  ),
-  staleTime: Number.POSITIVE_INFINITY,
-  refetchOnWindowFocus: false,
-  retry: 1,
-});
-const denied = computed(
-  () =>
-    answer.error.value instanceof ApiError && [401, 403, 404].includes(answer.error.value.status),
-);
-const result = computed(() =>
-  allowed.value &&
-  !denied.value &&
-  answer.data.value?.id === (props.turn.research_run_id || props.turn.job_id)
-    ? answer.data.value?.result
-    : null,
+const { answer, denied, result } = useResearchTurnResult(
+  toRef(props, "turn"),
+  computed(() => visible.value || props.inspectRequested),
 );
 function openRecord(index: number) {
   const item = result.value?.evidence?.[index];
   if (item) emit("openRecord", item);
+}
+function followUpPassage(index: number) {
+  emit("followUp", props.turn, result.value?.evidence?.[index] ?? null);
 }
 function openRelationships(index: number, mode: "trace" | "model") {
   const item = result.value?.evidence?.[index];
@@ -270,6 +228,7 @@ watch(
             @select-evidence="activeEvidenceIndex = $event"
             @open-record="openRecord"
             @open-relationships="openRelationships"
+            @follow-up="followUpPassage"
           />
         </div>
       </div>

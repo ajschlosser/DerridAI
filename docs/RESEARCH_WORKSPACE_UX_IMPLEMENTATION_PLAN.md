@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
+**Status:** Phases 2 and 4 are implemented; Phase 5 search, scoped follow-ups and turn comparison are implemented on `claude/research-ux-next`; export and pins/labels remain (see §11–13). Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -103,8 +103,8 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 - [x] Bring thread navigation into persistent layout rather than the toggled section preceding composer/result. Preserve the new-question view and no-database state.
 - [x] Establish one reading column with ordered turns and a composer in the same layout. Deeper visual refinement of the existing turn cards remains outstanding.
-- [ ] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
-- [ ] Integrate run status affordances without competing full-width run/activity panels.
+- [x] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
+- [x] Integrate run status affordances without competing full-width run/activity panels.
 - [ ] Tests: empty/new, selected/archived, 1 vs many turns, historical missing artifact, permissions and account change, deep links.
 
 **Phase 2 exit:** Research navigation, reading, and composer feel like a single application surface at desktop widths.
@@ -131,9 +131,9 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 ### Phase 5 — Advanced scholarly capabilities (P2; separate PRs)
 
-- [ ] Search within a single thread across questions and available answers without fetching all audit payloads.
-- [ ] Start a follow-up from selected answer/source passage with explicit, editable context scope.
-- [ ] Compare two turns/runs and their bound evidence without flattening identity or validation status.
+- [x] Search within a single thread across questions and available answers without fetching all audit payloads.
+- [x] Start a follow-up from selected answer/source passage with explicit, editable context scope.
+- [x] Compare two turns/runs and their bound evidence without flattening identity or validation status.
 - [ ] Export conversation and bibliographic/audit references with deterministic citation construction and preserved run/record identities.
 - [ ] Add optional thread pins/labels only if justified by observed library usage.
 
@@ -229,4 +229,25 @@ No phase is complete without its implementation, tests, documentation when appli
 - Thread list: debounced search (250 ms, clearing applies at once), Escape clears an active search, a no-match state names the query, and Research `/rag` now keeps `thread_q`/`thread_offset`/`thread_archived` in the URL like the Research Library, preserved across thread selection, new question and run navigation.
 - History patterns: the Research Library and Research already share `ResearchThreadBrowser`/`ResearchThreadNavigation`. The composer's **Recent questions** menu reuses prompt text rather than navigating inquiries, so it stays.
 - Test matrix covered by unit tests: composer summary with and without profile/corpus, keyboard search, debounced paging reset, URL filter restoration, per-thread drafts. Existing tests already cover archived read-only follow-ups and owner changes. Long titles wrap (`overflow-wrap: anywhere`).
-- Not done: pinning, which needs an owner-scoped API and migration first (the plan says to add it only then); the list still enables **Next** on an exactly full page because the list API has no `has_more`; manual a11y and screenshot review.
+- Not done: pinning, which needs an owner-scoped API and migration first (the plan says to add it only then); manual a11y and screenshot review.
+
+## 11. Phase 2 follow-up
+
+- Thread selection is derived from `?thread`, so Back/Forward and in-app selection share one source of truth. When a different thread loads and focus is on the page body (Back/Forward) or in the thread list, `ResearchThreadNavigation` moves focus to the conversation heading; focus elsewhere, such as the composer, is not taken. Covered by a unit test.
+- In a thread, the active-pipelines bar collapses to one line counting only runs outside that thread (its own turns already show status) and opens **All runs**; outside a thread it keeps the chip list.
+- Still open in Phase 2: the remaining test matrix (permissions/account change and deep links are covered; historical missing artifact and archived states in e2e).
+- Thread list API returns `has_more` (the route reads one row past the page), so **Next** is disabled on an exactly full last page.
+
+## 12. Phase 5 progress
+
+- **Search this thread** (threads with more than one turn) filters turns by question, instructions and answers already loaded in this browser. It never requests answers or audit payloads; a status line says how many matched and how many answers were not loaded, so only their questions were searched. Escape clears it, and it resets on thread change.
+- **Follow up on this turn** (completed turns) and **Follow up on this passage** (inspector Sources) set an explicit context scope shown in the follow-up composer, where each turn can be removed or the scope reset to automatic. A passage follow-up prefills an empty question with the run's own deterministic inline citation, as editable text. Only turn IDs travel (`context_turn_ids`); the scope applies to one follow-up and is kept on retry. The passage is not added to selected evidence: the new run retrieves its own evidence.
+- **Compare turns** (threads with two or more completed turns) opens `ResearchTurnComparison`: two turn pickers, each side's run ID, provider/model, claim validation counts as recorded and read-only answer, and a cited-passages table that aligns EvidenceRefs by collection + Record ID. Each side keeps its own marker, citation and revision; a shared Record at a different or unrecorded revision is flagged, and evidence without a Record ID is never matched. Both sides load through `useResearchTurnResult`, now shared with `ResearchThreadAnswer`.
+
+## 13. Remaining work (as of 2026-10-12)
+
+- **Export** conversation with bibliographic/audit references (Phase 5): not started. Needs deterministic citation construction from record metadata, preserved run/record identities, and a decision on format (Markdown/JSON) and server vs client assembly; researcher accounts must not receive full corpus text.
+- **Thread pins/labels** (Phases 4–5): deliberately not started; needs an owner-scoped API and migration, and evidence from library usage that they are needed.
+- **Verification debt across phases:** no captured desktop/mobile screenshots; no manual screen-reader, keyboard, 200–400% zoom or reduced-motion review; no Storybook story yet for `ResearchTurnComparison` (it needs a query-client decorator); cross-thread navigation e2e; e2e for archived threads and historical missing artifacts.
+- SourceSpan/SourceDocument identifiers are still not shown because the evidence payload does not carry span IDs.
+- `tests/frontend/sidebar-navigator.test.ts` (an unrelated paint-timing assertion) fails locally in this worktree; not investigated.

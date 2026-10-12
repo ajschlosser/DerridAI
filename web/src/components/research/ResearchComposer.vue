@@ -56,6 +56,8 @@ const props = withDefaults(
     canDraft?: boolean;
     canManageRuns?: boolean;
     disabledReason?: string;
+    /** Explicit follow-up context turns; null keeps automatic selection. */
+    contextScope?: Array<{ turn_id: string; ordinal: number; question: string }> | null;
   }>(),
   {
     busy: false,
@@ -68,10 +70,13 @@ const props = withDefaults(
     pipelineName: "",
     pipelineVersion: null,
     pipelineOverride: false,
+    contextScope: null,
   },
 );
 const emit = defineEmits<{
   "update:prompt": [value: string];
+  removeContextTurn: [turnId: string];
+  resetContext: [];
   "update:instructions": [value: string];
   "update:filterExpression": [value: string];
   scopeAccepted: [source: "deterministic_natural_language" | "model_assisted"];
@@ -329,7 +334,39 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
           </dd>
         </template>
         <dt>{{ i18n.t("research.effective_context") }}</dt>
-        <dd>{{ i18n.t("research.effective_context_followup") }}</dd>
+        <dd v-if="contextScope === null">{{ i18n.t("research.effective_context_followup") }}</dd>
+        <dd v-else class="research-composer-context-scope">
+          <p>
+            {{
+              i18n.t(
+                contextScope.length
+                  ? "research.context_scope_explicit"
+                  : "research.context_scope_none",
+              )
+            }}
+          </p>
+          <ul v-if="contextScope.length">
+            <li v-for="item in contextScope" :key="item.turn_id">
+              <span>{{
+                i18n.tf("research.context_scope_turn", {
+                  ordinal: item.ordinal,
+                  question: item.question,
+                })
+              }}</span>
+              <button
+                type="button"
+                class="btn"
+                :aria-label="i18n.tf('research.context_scope_remove', { ordinal: item.ordinal })"
+                @click="emit('removeContextTurn', item.turn_id)"
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+          <button type="button" class="btn" @click="emit('resetContext')">
+            {{ i18n.t("research.context_scope_automatic") }}
+          </button>
+        </dd>
       </dl>
       <button
         type="button"
@@ -619,5 +656,18 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
     max-height: 48dvh;
     border-radius: var(--radius-card) var(--radius-card) 0 0;
   }
+}
+.research-composer-context-scope ul {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.research-composer-context-scope li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
 }
 </style>

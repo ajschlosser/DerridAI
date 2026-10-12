@@ -536,6 +536,7 @@ describe("Research thread shell", () => {
         thread: detail,
         selectedThreadId: "a",
         offset: 0,
+        hasMore: true,
       },
     });
     mounted.push(wrapper);
@@ -549,8 +550,81 @@ describe("Research thread shell", () => {
     expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
     expect(wrapper.emitted("page")).toEqual([[50]]);
+    // An exactly full last page does not offer an empty next page.
+    await wrapper.setProps({ hasMore: false });
+    expect(
+      wrapper.findAll(".research-thread-pages button")[1].attributes("disabled"),
+    ).toBeDefined();
     await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
+  });
+  it("focuses the newly loaded thread heading only when focus is unclaimed", async () => {
+    const wrapper = mount(ResearchThreadNavigation, {
+      attachTo: document.body,
+      props: {
+        threads: [summary("a"), summary("b")],
+        thread: thread("a"),
+        selectedThreadId: "a",
+        offset: 0,
+      },
+    });
+    mounted.push(wrapper);
+    // Back/Forward: focus is on the body, so the new thread's heading takes it.
+    (document.activeElement as HTMLElement | null)?.blur();
+    await wrapper.setProps({ thread: thread("b"), selectedThreadId: "b" });
+    await flushPromises();
+    expect(document.activeElement).toBe(wrapper.get(".research-thread-conversation h2").element);
+    // Typing elsewhere is not interrupted by a late thread load.
+    const outside = document.createElement("input");
+    document.body.append(outside);
+    outside.focus();
+    await wrapper.setProps({ thread: thread("a"), selectedThreadId: "a" });
+    await flushPromises();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+  it("searches a thread's questions and loaded answers without fetching more", async () => {
+    const detail = thread("a");
+    detail.turns.push(
+      { ...detail.turns[0], turn_id: "a-2", ordinal: 2, user_question: "On hospitality" },
+      { ...detail.turns[0], turn_id: "a-3", ordinal: 3, user_question: "Third" },
+    );
+    const answerText = vi.fn((turn: { turn_id: string }) =>
+      turn.turn_id === "a-1" ? "Hospitality is unconditional." : null,
+    );
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [], thread: detail, selectedThreadId: "a", offset: 0, answerText },
+    });
+    mounted.push(wrapper);
+    const visible = () =>
+      wrapper
+        .findAll(".research-thread-turns > li")
+        .filter((item) => (item.element as HTMLElement).style.display !== "none")
+        .map((item) => item.get("h3").text());
+    await wrapper.get(".research-thread-turn-search input").setValue("HOSPITALITY");
+    expect(visible()).toEqual(["Question a", "On hospitality"]);
+    const status = wrapper.get(".research-thread-turn-search [role=status]").text();
+    expect(status).toContain("2 of 3");
+    expect(status).toContain("2 answers are not loaded");
+    expect(api.get).not.toHaveBeenCalled();
+    await wrapper.get(".research-thread-turn-search input").trigger("keydown", { key: "Escape" });
+    expect(visible()).toHaveLength(3);
+  });
+  it("offers turn comparison only with two completed turns and resets on thread change", async () => {
+    const detail = thread("a");
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [], thread: detail, selectedThreadId: "a", offset: 0 },
+      slots: { compare: '<div class="compare-slot" />' },
+    });
+    mounted.push(wrapper);
+    expect(wrapper.find(".research-thread-compare-toggle").exists()).toBe(false);
+    const two = thread("a");
+    two.turns.push({ ...two.turns[0], turn_id: "a-2", ordinal: 2 });
+    await wrapper.setProps({ thread: two });
+    await wrapper.get(".research-thread-compare-toggle").trigger("click");
+    expect(wrapper.find(".compare-slot").exists()).toBe(true);
+    await wrapper.setProps({ thread: thread("b"), selectedThreadId: "b" });
+    expect(wrapper.find(".compare-slot").exists()).toBe(false);
   });
 });
 

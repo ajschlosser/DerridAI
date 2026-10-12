@@ -18,19 +18,20 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
-import { ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import type {
   ResearchThreadDetail,
   ResearchThreadSummary,
   ResearchTurn,
 } from "../../types/researchThreads";
 
-defineProps<{
+const props = defineProps<{
   threads: ResearchThreadSummary[];
   thread?: ResearchThreadDetail | null;
   selectedThreadId: string;
   selectedJobId?: string;
   offset: number;
+  hasMore?: boolean;
   search?: string;
   showPreview?: boolean;
   loading?: boolean;
@@ -39,6 +40,8 @@ defineProps<{
   busy?: boolean;
   notice?: string;
   retryDisabled?: boolean;
+  /** Text of an answer already loaded in this browser, or null when not loaded. */
+  answerText?: (turn: ResearchTurn) => string | null;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -48,6 +51,7 @@ const emit = defineEmits<{
   search: [value: string];
   retry: [];
   retryTurn: [turn: ResearchTurn];
+  followUp: [turn: ResearchTurn];
   rename: [];
   archive: [];
   remove: [];
@@ -55,6 +59,54 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const listExpanded = ref(false);
+// In-thread search reads only questions and answers already loaded; it never
+// fetches further answers or audit payloads.
+const turnQuery = ref("");
+const compareOpen = ref(false);
+watch(
+  () => props.thread?.thread_id,
+  () => {
+    turnQuery.value = "";
+    compareOpen.value = false;
+  },
+);
+const completedTurns = computed(
+  () => props.thread?.turns.filter((turn) => turn.status === "completed").length || 0,
+);
+const turnSearch = computed(() => {
+  const term = turnQuery.value.trim().toLocaleLowerCase();
+  const turns = props.thread?.turns || [];
+  if (!term) return null;
+  let unsearched = 0;
+  const matches = new Set<string>();
+  for (const turn of turns) {
+    const answer = turn.status === "completed" ? (props.answerText?.(turn) ?? null) : "";
+    if (answer === null) unsearched++;
+    const text = [turn.user_question, turn.user_instructions || "", answer || ""].join("\n");
+    if (text.toLocaleLowerCase().includes(term)) matches.add(turn.turn_id);
+  }
+  return { matches, total: turns.length, unsearched };
+});
+function clearTurnSearch(event: KeyboardEvent) {
+  if (!turnQuery.value) return;
+  event.stopPropagation();
+  turnQuery.value = "";
+}
+const conversationHeading = ref<HTMLElement | null>(null);
+const sidebar = ref<HTMLElement | null>(null);
+// When a different thread loads after list selection or browser Back/Forward,
+// move focus to its heading. Focus elsewhere (e.g. the composer) is left alone.
+watch(
+  () => props.thread?.thread_id || "",
+  async (next, previous) => {
+    if (!next || next === previous) return;
+    const active = document.activeElement;
+    const fromList = Boolean(active && sidebar.value?.contains(active));
+    if (active && active !== document.body && !fromList) return;
+    await nextTick();
+    conversationHeading.value?.focus({ preventScroll: false });
+  },
+);
 const manageExpanded = ref(false);
 // Escape clears an active search first; an empty field lets Escape reach outer handlers.
 function clearSearch(event: KeyboardEvent) {
@@ -86,6 +138,7 @@ function clearSearch(event: KeyboardEvent) {
     </button>
     <div
       id="research-thread-sidebar"
+      ref="sidebar"
       class="research-thread-sidebar"
       :class="{ 'is-expanded': listExpanded }"
     >
@@ -170,7 +223,7 @@ function clearSearch(event: KeyboardEvent) {
         <button
           type="button"
           class="btn"
-          :disabled="loading || threads.length < 50"
+          :disabled="loading || !hasMore"
           @click="emit('page', offset + 50)"
         >
           {{ i18n.t("research.threads_next") }}
@@ -184,7 +237,7 @@ function clearSearch(event: KeyboardEvent) {
         :aria-label="thread.title"
         tabindex="-1"
       >
-        <h2>{{ thread.title }}</h2>
+        <h2 ref="conversationHeading" tabindex="-1">{{ thread.title }}</h2>
         <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
         <details
           class="research-thread-management"
@@ -210,8 +263,48 @@ function clearSearch(event: KeyboardEvent) {
             </button>
           </div>
         </details>
+        <button
+          v-if="completedTurns > 1 && $slots.compare && !compareOpen"
+          type="button"
+          class="btn research-thread-compare-toggle"
+          @click="compareOpen = true"
+        >
+          {{ i18n.t("research.compare_turns") }}
+        </button>
+        <slot
+          v-if="compareOpen"
+          name="compare"
+          :turns="thread.turns"
+          :close="() => (compareOpen = false)"
+        />
+        <div v-if="thread.turns.length > 1" class="research-thread-turn-search">
+          <label>
+            {{ i18n.t("research.thread_search") }}
+            <input
+              v-model="turnQuery"
+              type="search"
+              maxlength="200"
+              @keydown.escape="clearTurnSearch"
+            />
+          </label>
+          <p v-if="turnSearch" role="status">
+            {{
+              i18n.tf("research.thread_search_count", {
+                shown: turnSearch.matches.size,
+                total: turnSearch.total,
+              })
+            }}
+            <template v-if="turnSearch.unsearched">
+              {{ i18n.tf("research.thread_search_unsearched", { count: turnSearch.unsearched }) }}
+            </template>
+          </p>
+        </div>
         <ol class="research-thread-turns">
-          <li v-for="turn in thread.turns" :key="turn.turn_id">
+          <li
+            v-for="turn in thread.turns"
+            v-show="!turnSearch || turnSearch.matches.has(turn.turn_id)"
+            :key="turn.turn_id"
+          >
             <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
               <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
               <p class="research-thread-turn-status">
@@ -246,6 +339,14 @@ function clearSearch(event: KeyboardEvent) {
                 {{ i18n.t("research.thread_open_run") }}
               </button>
               <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
+              <button
+                v-if="turn.status === 'completed' && !thread.archived_at && $slots.workspace"
+                type="button"
+                class="btn"
+                @click="emit('followUp', turn)"
+              >
+                {{ i18n.t("research.thread_follow_up") }}
+              </button>
             </article>
           </li>
         </ol>
@@ -269,6 +370,15 @@ function clearSearch(event: KeyboardEvent) {
   border-radius: var(--radius-card);
   margin-block: var(--page-gap);
   min-width: 0;
+}
+.research-thread-turn-search {
+  display: grid;
+  gap: 6px;
+  margin-block: 8px 12px;
+}
+.research-thread-turn-search label {
+  display: grid;
+  gap: 4px;
 }
 .research-thread-index-title {
   grid-column: 1;

@@ -154,4 +154,25 @@ describe("ResearchComposer follow-up settings", () => {
     expect(wrapper.find("#researchComposerSettings").exists()).toBe(true);
     wrapper.unmount();
   });
+  it("lists an explicit context scope with per-turn removal and a reset", async () => {
+    const wrapper = mount(ResearchComposer, {
+      props: {
+        ...baseProps,
+        compact: true,
+        contextScope: [{ turn_id: "t2", ordinal: 2, question: "On the gift" }],
+      },
+    });
+    const scope = wrapper.get(".research-composer-context-scope");
+    expect(scope.text()).toContain("Only these earlier turns, as context rather than evidence");
+    expect(scope.text()).toContain("Turn 2: On the gift");
+    await scope.get("button[aria-label='Remove turn 2 from context']").trigger("click");
+    expect(wrapper.emitted("removeContextTurn")).toEqual([["t2"]]);
+    await wrapper.setProps({ contextScope: [] });
+    expect(wrapper.get(".research-composer-context-scope").text()).toContain(
+      "No earlier turns are used as context.",
+    );
+    await wrapper.get(".research-composer-context-scope > button").trigger("click");
+    expect(wrapper.emitted("resetContext")).toHaveLength(1);
+    wrapper.unmount();
+  });
 });
