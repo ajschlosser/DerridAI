@@ -132,6 +132,24 @@ const promptMetadataCounts = computed(() => ({
   context: props.promptMetadata?.context?.length || 0,
   record: props.promptMetadata?.record?.length || 0,
 }));
+// Follow-ups keep the full settings collapsed but always state what the run will use.
+const settingsOpen = ref(false);
+const presetLabel = computed(() => {
+  const key = `research.preset_${props.preset}`;
+  const label = i18n.t(key);
+  return label === key ? props.preset : label;
+});
+// Only the evidence and hybrid presets send selected passages as documentary evidence.
+const usesSelectedEvidence = computed(() => ["evidence", "hybrid"].includes(props.preset));
+const evidenceModeLabel = computed(() => {
+  if (!props.evidenceCount) return i18n.t("research.effective_evidence_retrieval");
+  return i18n.tf(
+    usesSelectedEvidence.value
+      ? "research.effective_evidence_used"
+      : "research.effective_evidence_unused",
+    { count: props.evidenceCount },
+  );
+});
 function historyLabel(item: Record<string, unknown>) {
   const value = String(item.prompt || item.instructions || i18n.t("research.saved_prompt"))
     .replace(/\s+/g, " ")
@@ -282,7 +300,58 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
       />
     </details>
 
-    <fieldset v-if="!compact" class="research-compose-context" :disabled="!canConfigure">
+    <section
+      v-if="compact"
+      class="research-composer-effective"
+      :aria-label="i18n.t('research.effective_settings')"
+    >
+      <dl>
+        <dt>{{ i18n.t("research.corpus") }}</dt>
+        <dd>{{ sourceCollection || i18n.t("research.no_database") }}</dd>
+        <dt>{{ i18n.t("research.profile") }}</dt>
+        <dd>
+          <template v-if="selectedProfile"
+            >{{ selectedProfile.name || selectedProfile.id }} ·
+            {{ selectedProfile.model || i18n.t("research.model_auto") }}</template
+          >
+          <template v-else>{{ i18n.t("research.no_profile") }}</template>
+        </dd>
+        <dt>{{ i18n.t("research.retrieval_profile") }}</dt>
+        <dd>{{ presetLabel }}</dd>
+        <dt>{{ i18n.t("research.effective_evidence") }}</dt>
+        <dd :data-evidence-mode="usesSelectedEvidence && evidenceCount ? 'used' : 'retrieval'">
+          {{ evidenceModeLabel }}
+        </dd>
+        <template v-if="filterExpression.trim()">
+          <dt>{{ i18n.t("research.filters.title") }}</dt>
+          <dd>
+            <code>{{ filterExpression }}</code>
+          </dd>
+        </template>
+        <dt>{{ i18n.t("research.effective_context") }}</dt>
+        <dd>{{ i18n.t("research.effective_context_followup") }}</dd>
+      </dl>
+      <button
+        type="button"
+        class="btn research-composer-settings-toggle"
+        :aria-expanded="settingsOpen"
+        aria-controls="researchComposerSettings"
+        @click="settingsOpen = !settingsOpen"
+      >
+        {{
+          settingsOpen
+            ? i18n.t("research.effective_settings_hide")
+            : i18n.t("research.effective_settings_show")
+        }}
+      </button>
+    </section>
+
+    <fieldset
+      v-if="!compact || settingsOpen"
+      id="researchComposerSettings"
+      class="research-compose-context"
+      :disabled="!canConfigure"
+    >
       <legend class="sr-only">{{ i18n.t("research.context") }}</legend>
       <div class="research-pipeline-action research-pipeline-context">
         <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
@@ -435,6 +504,30 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 </template>
 
 <style scoped>
+.research-composer-effective {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.8125rem;
+}
+.research-composer-effective dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.research-composer-effective dt {
+  color: var(--text-tertiary);
+}
+.research-composer-effective dd {
+  margin: 0;
+}
+.research-composer-settings-toggle {
+  justify-self: start;
+}
 .research-context-action,
 .research-pipeline-action {
   display: grid;

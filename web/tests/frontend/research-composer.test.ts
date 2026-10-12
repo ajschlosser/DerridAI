@@ -93,3 +93,63 @@ describe("ResearchComposer prompt metadata setup", () => {
     wrapper.unmount();
   });
 });
+
+describe("ResearchComposer follow-up settings", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+  const summary = (wrapper: ReturnType<typeof mount>) =>
+    Object.fromEntries(
+      wrapper
+        .findAll(".research-composer-effective dt")
+        .map((dt) => [
+          dt.text(),
+          (dt.element.nextElementSibling as HTMLElement).textContent?.trim(),
+        ]),
+    );
+
+  it("states the effective corpus, profile, preset and context, with full settings on demand", async () => {
+    const wrapper = mount(ResearchComposer, {
+      props: { ...baseProps, compact: true, filterExpression: 'work == "Glas"' },
+    });
+    expect(summary(wrapper)).toMatchObject({
+      Corpus: "derrida_primary",
+      Evidence: "Retrieved from the corpus for this question",
+      "Retrieval scope filter": 'work == "Glas"',
+    });
+    expect(Object.values(summary(wrapper))).toContain("Balanced");
+    expect(Object.values(summary(wrapper)).join(" ")).toContain("Phi-4 · phi4:14b");
+    expect(wrapper.text()).toContain("they are not evidence");
+    expect(wrapper.find("#researchComposerSettings").exists()).toBe(false);
+    const toggle = wrapper.get(".research-composer-settings-toggle");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    await toggle.trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(wrapper.find("#researchComposerSettings select").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("distinguishes selected passages used as evidence from ones the preset ignores", async () => {
+    const wrapper = mount(ResearchComposer, {
+      props: { ...baseProps, compact: true, evidenceCount: 2, preset: "balanced" },
+    });
+    const evidence = () => wrapper.get("[data-evidence-mode]");
+    expect(evidence().attributes("data-evidence-mode")).toBe("retrieval");
+    expect(evidence().text()).toBe("2 selected passages, not used by this retrieval profile");
+    await wrapper.setProps({ preset: "hybrid" });
+    expect(evidence().attributes("data-evidence-mode")).toBe("used");
+    expect(evidence().text()).toBe("2 selected passages, used as evidence");
+    wrapper.unmount();
+  });
+
+  it("says when no profile is configured and omits the summary for new questions", async () => {
+    const wrapper = mount(ResearchComposer, {
+      props: { ...baseProps, compact: true, profiles: [], providerProfileId: "" },
+    });
+    expect(Object.values(summary(wrapper))).toContain("No profile");
+    await wrapper.setProps({ compact: false });
+    expect(wrapper.find(".research-composer-effective").exists()).toBe(false);
+    expect(wrapper.find("#researchComposerSettings").exists()).toBe(true);
+    wrapper.unmount();
+  });
+});

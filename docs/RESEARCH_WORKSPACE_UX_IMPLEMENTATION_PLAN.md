@@ -124,8 +124,8 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 - [ ] Collapse competing history patterns into shared thread-list primitives while keeping Research Library accessible.
 - [ ] Improve search/filters, active-run/error cues, stable URL restoration and progressive pagination. Add pinning only with an explicit owner-scoped API and migrations.
-- [ ] Show effective corpus, provider/model, retrieval preset, selected evidence mode and prior-turn context summary in compact follow-ups; disclose full per-run settings on demand.
-- [ ] Avoid implying that pinned workspace evidence is used in ordinary retrieval presets; show contextualization vs evidence selection separately.
+- [x] Show effective corpus, provider/model, retrieval preset, selected evidence mode and prior-turn context summary in compact follow-ups; disclose full per-run settings on demand.
+- [x] Avoid implying that pinned workspace evidence is used in ordinary retrieval presets; show contextualization vs evidence selection separately.
 - [ ] Ensure draft persistence and reset behavior remain predictable between new threads, existing threads, retries and reruns.
 - [ ] Tests: composer settings on all states, long names, keyboard search, archived read-only, no-profile/no-corpus, no stale history after owner changes.
 
@@ -221,3 +221,8 @@ No phase is complete without its implementation, tests, documentation when appli
 - Unit tests now cover a reused `E1` marker in two turns, closing on a retry attempt, and explicit empty Sources/Claims states. Added the `Research/Turn Inspector` Storybook story.
 - `ResearchEvidenceProvenance.vue` (in the Sources section) shows, for the selected EvidenceRef only: work/edition/translator when recorded, a medium-appropriate locator (printed vs PDF pages, or audio time) or an explicit "not recorded", the Record revision, and the support bindings for that evidence marker with relation, binding status and claim status as separate fields plus a revision-mismatch warning. Bindings fall back to record identity only when no marker is recorded. New en-US/fr-CA keys: `research.provenance_*`, `claims.binding_status_*`.
 - Still open: SourceSpan/SourceDocument identifiers are not displayed (the evidence payload does not carry span IDs); captured screenshots; manual screen-reader, keyboard and 200–400% zoom review; cross-thread navigation e2e. Phase 4 has not started.
+
+## 10. Phase 4 progress
+
+- Follow-up composer (`ResearchComposer` `compact` mode) now shows an effective-settings summary: corpus, profile/model, retrieval preset, scope filter when set, evidence mode, and a statement that prior turns are context rather than evidence. Selected passages are reported as used only for the `evidence` and `hybrid` presets. **Show all run settings** discloses the full fieldset on demand.
+- Remaining Phase 4 work: shared thread-list primitives with Research Library, search/filter/active-run cues and pagination, draft persistence/reset across new thread / existing thread / retry / rerun, and the remaining test matrix (long names, keyboard search, archived read-only, no-corpus, owner change). Pinning still requires an owner-scoped API first.
