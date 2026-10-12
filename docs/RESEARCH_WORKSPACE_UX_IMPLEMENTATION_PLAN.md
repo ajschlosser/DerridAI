@@ -44,6 +44,7 @@ Make a single Research workspace in which a researcher can find an inquiry, read
 
 ## 2. Verified baseline (2026-10-11, master)
 
+<!-- prettier-ignore -->
 | Surface | Current implementation | UX/engineering consequence |
 | --- | --- | --- |
 | Research page | `web/src/views/ResearchView.vue` orchestrates workspace, thread browser toggle, composer, active runs, drawers and standalone result | Concurrent top-level surfaces compete for attention; view owns too many concerns |
@@ -65,6 +66,7 @@ A single `ResearchWorkspaceShell` coordinates navigation, conversation and inspe
 
 ### Intended component boundaries
 
+<!-- prettier-ignore -->
 | Component/composable | Responsibility | Migration |
 | --- | --- | --- |
 | `ResearchWorkspaceShell` | Responsive regions, keyboard landmarks, inspector visibility, focus return | Extract from `ResearchView` incrementally |
