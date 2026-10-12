@@ -121,10 +121,17 @@ const manageExpanded = ref(false);
                 listExpanded = false;
               "
             >
-              {{ item.title }}
+              <span class="research-thread-title">{{ item.title }}</span>
               <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
-              <span>{{ i18n.tf("research.thread_turn_count", { count: item.turn_count }) }}</span>
-              <span v-if="showPreview">{{ item.last_question }}</span>
+              <span v-else-if="item.last_status && item.last_status !== 'completed'"
+                class="research-thread-state"
+              >{{ i18n.t(`research.thread_status_${item.last_status}`) }}</span>
+              <span class="research-thread-turn-count">{{
+                i18n.tf("research.thread_turn_count", { count: item.turn_count })
+              }}</span>
+              <span v-if="showPreview && item.last_question" class="research-thread-preview">{{
+                item.last_question
+              }}</span>
               <time :datetime="item.updated_at">{{
                 new Date(item.updated_at).toLocaleDateString(i18n.locale)
               }}</time>
@@ -297,6 +304,23 @@ const manageExpanded = ref(false);
   color: var(--text-tertiary);
   font-weight: 400;
 }
+.research-thread-index button .research-thread-title {
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.research-thread-index button .research-thread-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 1.4;
+}
+.research-thread-index button .research-thread-state {
+  color: var(--tone-danger-fg);
+  font-weight: 650;
+}
 .research-thread-index button[aria-current="true"] {
   border-color: var(--accent-fg);
   background: var(--soft);
@@ -382,7 +406,7 @@ const manageExpanded = ref(false);
   min-height: min(72dvh, 760px);
 }
 .research-thread-workspace-layout .research-thread-conversation {
-  max-height: min(66dvh, 680px);
+  max-height: min(52dvh, 590px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-inline-end: 8px;
