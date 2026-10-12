@@ -427,7 +427,7 @@ test("each turn inspects its own evidence, including a recovered saved answer, w
   await expect(second.locator(".research-turn-inspector-audit")).toBeVisible();
   await second.getByRole("button", { name: "Review generated claims" }).click();
   await expect(second.locator(".research-turn-inspector")).toContainText("None");
-  await second.locator(".research-turn-inspector").focus();
+  await second.locator(".thread-answer-inspector").focus();
   await page.keyboard.press("Escape");
   await expect(second.locator(".research-turn-inspector")).toHaveCount(0);
   await expect(secondInspect).toBeFocused();
