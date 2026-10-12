@@ -1029,6 +1029,7 @@ onBeforeUnmount(() => {
     />
     <template v-else>
       <ResearchThreadBrowser
+        v-if="auth.can('rag.run')"
         @open-record="openThreadEvidenceRecord"
         @open-relationships="openThreadEvidenceRelationships"
         :thread-id="currentThreadId"
@@ -1051,110 +1052,110 @@ onBeforeUnmount(() => {
         @removed="onThreadRemoved"
       >
         <template #workspace>
-        <ResearchComposer
-          :compact="Boolean(currentThreadId)"
-          v-model:prompt="prompt"
-          v-model:instructions="instructions"
-          v-model:filter-expression="filterExpression"
-          @scope-accepted="filterFromInstructions = $event"
-          @filter-change="filterState = $event"
-          :source-collection="config?.source_collection || ''"
-          :provider-profile-id="config?.provider_profile_id || ''"
-          :response-language="config?.response_language || ''"
-          :preset="preset"
-          :evidence-count="selectedEvidence.length"
-          :prompt-metadata="config?.prompt_metadata || normalizedResearchConfig().prompt_metadata"
-          :pipeline-name="effectivePipeline?.name || ''"
-          :pipeline-version="effectivePipeline?.version || null"
-          :pipeline-override="pipelineOverrideActive"
-          :stores="stores"
-          :profiles="profiles"
-          :history="workspace?.history || []"
-          :busy="starting"
-          :can-run="canRun"
-          :can-configure="canConfigureResearch"
-          :can-draft="auth.can('rag.run')"
-          :can-manage-runs="canManageRuns"
-          :disabled-reason="runDisabledReason"
-          @update:source-collection="updateConfig({ source_collection: $event })"
-          @update:provider-profile-id="changeProfile"
-          @update:response-language="updateConfig({ response_language: $event })"
-          @update:preset="applyPreset"
-          @run="runResearch"
-          @settings="settingsDrawer?.open()"
-          @pipeline-settings="settingsDrawer?.open('pipeline')"
-          @prompt-metadata="settingsDrawer?.open('evidence', true)"
-          @runs="runsDrawer?.open()"
-          @history="loadHistory"
-        />
+          <ResearchComposer
+            :compact="Boolean(currentThreadId)"
+            v-model:prompt="prompt"
+            v-model:instructions="instructions"
+            v-model:filter-expression="filterExpression"
+            @scope-accepted="filterFromInstructions = $event"
+            @filter-change="filterState = $event"
+            :source-collection="config?.source_collection || ''"
+            :provider-profile-id="config?.provider_profile_id || ''"
+            :response-language="config?.response_language || ''"
+            :preset="preset"
+            :evidence-count="selectedEvidence.length"
+            :prompt-metadata="config?.prompt_metadata || normalizedResearchConfig().prompt_metadata"
+            :pipeline-name="effectivePipeline?.name || ''"
+            :pipeline-version="effectivePipeline?.version || null"
+            :pipeline-override="pipelineOverrideActive"
+            :stores="stores"
+            :profiles="profiles"
+            :history="workspace?.history || []"
+            :busy="starting"
+            :can-run="canRun"
+            :can-configure="canConfigureResearch"
+            :can-draft="auth.can('rag.run')"
+            :can-manage-runs="canManageRuns"
+            :disabled-reason="runDisabledReason"
+            @update:source-collection="updateConfig({ source_collection: $event })"
+            @update:provider-profile-id="changeProfile"
+            @update:response-language="updateConfig({ response_language: $event })"
+            @update:preset="applyPreset"
+            @run="runResearch"
+            @settings="settingsDrawer?.open()"
+            @pipeline-settings="settingsDrawer?.open('pipeline')"
+            @prompt-metadata="settingsDrawer?.open('evidence', true)"
+            @runs="runsDrawer?.open()"
+            @history="loadHistory"
+          />
 
-        <UiLoadingState v-if="runsLoading" variant="inline" :label="i18n.t('loading.updating')" />
-        <div v-if="runsError" class="info error research-runs-status" role="alert">
-          <p>{{ runsError }}</p>
-          <button type="button" class="btn" @click="refreshRuns()">{{ i18n.t("ui.retry") }}</button>
-        </div>
-        <UiLoadingState
-          v-if="pipelinesLoading"
-          variant="inline"
-          :label="i18n.t('pipelines.loading')"
-        />
-        <div v-if="pipelinesError" class="info error research-pipelines-status" role="alert">
-          <p>{{ pipelinesError }}</p>
-          <button type="button" class="btn" @click="loadPipelines()">{{ i18n.t("ui.retry") }}</button>
-        </div>
-        <ResearchPipelineBar
-          :jobs="jobs"
-          :selected-job-id="activeJob?.id || ''"
-          :can-manage="canManageRuns"
-          @select="openJob"
-          @cancel="cancelJob"
-          @open-runs="runsDrawer?.open()"
-        />
+          <UiLoadingState v-if="runsLoading" variant="inline" :label="i18n.t('loading.updating')" />
+          <div v-if="runsError" class="info error research-runs-status" role="alert">
+            <p>{{ runsError }}</p>
+            <button type="button" class="btn" @click="refreshRuns()">{{ i18n.t("ui.retry") }}</button>
+          </div>
+          <UiLoadingState
+            v-if="pipelinesLoading"
+            variant="inline"
+            :label="i18n.t('pipelines.loading')"
+          />
+          <div v-if="pipelinesError" class="info error research-pipelines-status" role="alert">
+            <p>{{ pipelinesError }}</p>
+            <button type="button" class="btn" @click="loadPipelines()">{{ i18n.t("ui.retry") }}</button>
+          </div>
+          <ResearchPipelineBar
+            :jobs="jobs"
+            :selected-job-id="activeJob?.id || ''"
+            :can-manage="canManageRuns"
+            @select="openJob"
+            @cancel="cancelJob"
+            @open-runs="runsDrawer?.open()"
+          />
 
-        <UiLoadingState
-          v-if="answerLoading"
-          variant="inline"
-          :label="i18n.t('runtime.system_responses_loading')"
-        />
-        <div v-if="answerError" class="info error research-answer-status" role="alert">
-          <p>
-            <template v-if="activeResult">{{ i18n.t("loading.stale") }} </template>{{ answerError }}
-          </p>
-          <button v-if="activeJob" type="button" class="btn" @click="loadAnswer(activeJob)">
-            {{ i18n.t("ui.retry") }}
-          </button>
-        </div>
-        <ResearchResultPresentation
-          id="research-selected-run"
-          tabindex="-1"
-          role="region"
-          :aria-label="i18n.t('research.answer')"
-          v-if="workspace && !currentThreadId && ((!answerLoading && !answerError) || activeResult)"
-          :job="activeJob"
-          :result="activeResult"
-          :draft="researchDraft.draft.value"
-          :selected-evidence="selectedEvidence"
-          :active-evidence-index="activeEvidenceIndex"
-          :busy="starting"
-          :can-grade="canGrade"
-          :can-remove-selected="
-            Boolean(workspace?.can_select_evidence) && auth.can('evidence.select')
-          "
-          :researcher="workspace?.is_researcher || false"
-          @copy="copyAnswer"
-          @grade="gradeAnswer"
-          @rerun="prepareRerun"
-          @details="runsDrawer?.open()"
-          @evidence="focusEvidence"
-          @select-evidence="activeEvidenceIndex = $event"
-          @remove-selected="removeEvidence"
-          @clear-selected="clearEvidence"
-          @open-record="openEvidenceRecord"
-          @open-relationships="openEvidenceRelationships"
-        />
-
+          <UiLoadingState
+            v-if="answerLoading"
+            variant="inline"
+            :label="i18n.t('runtime.system_responses_loading')"
+          />
+          <div v-if="answerError" class="info error research-answer-status" role="alert">
+            <p>
+              <template v-if="activeResult">{{ i18n.t("loading.stale") }} </template>{{ answerError }}
+            </p>
+            <button v-if="activeJob" type="button" class="btn" @click="loadAnswer(activeJob)">
+              {{ i18n.t("ui.retry") }}
+            </button>
+          </div>
+          <ResearchResultPresentation
+            id="research-selected-run"
+            tabindex="-1"
+            role="region"
+            :aria-label="i18n.t('research.answer')"
+            v-if="workspace && !currentThreadId && ((!answerLoading && !answerError) || activeResult)"
+            :job="activeJob"
+            :result="activeResult"
+            :draft="researchDraft.draft.value"
+            :selected-evidence="selectedEvidence"
+            :active-evidence-index="activeEvidenceIndex"
+            :busy="starting"
+            :can-grade="canGrade"
+            :can-remove-selected="
+              Boolean(workspace?.can_select_evidence) && auth.can('evidence.select')
+            "
+            :researcher="workspace?.is_researcher || false"
+            @copy="copyAnswer"
+            @grade="gradeAnswer"
+            @rerun="prepareRerun"
+            @details="runsDrawer?.open()"
+            @evidence="focusEvidence"
+            @select-evidence="activeEvidenceIndex = $event"
+            @remove-selected="removeEvidence"
+            @clear-selected="clearEvidence"
+            @open-record="openEvidenceRecord"
+            @open-relationships="openEvidenceRelationships"
+          />
         </template>
       </ResearchThreadBrowser>
+      <div v-else class="info" role="status">{{ i18n.t("permissions.rag_denied") }}</div>
 
       <ResearchSettingsDrawer
         v-if="workspace && config"
