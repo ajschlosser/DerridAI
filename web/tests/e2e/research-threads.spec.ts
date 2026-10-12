@@ -231,7 +231,10 @@ test("manage a thread through rename, archive, restore, and confirmed deletion",
     .getByRole("dialog")
     .getByRole("button", { name: "Delete thread", exact: true })
     .click();
-  await expect(page).toHaveURL(APP + "/rag");
+  // Deleting the selected thread preserves thread-list filters in the URL.
+  // The selection and run clear, but "Include archived" remains active.
+  await expect(page).toHaveURL(APP + "/rag?thread_archived=true");
+  await expect(nav.getByLabel("Include archived threads", { exact: true })).toBeChecked();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(mutations.filter((item) => item.method === "DELETE")).toHaveLength(1);
   await expect(nav.getByRole("heading", { name: "Question a", exact: true })).toHaveCount(0);

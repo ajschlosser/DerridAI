@@ -122,12 +122,12 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 ### Phase 4 — Thread/library navigation and composer (P1)
 
-- [ ] Collapse competing history patterns into shared thread-list primitives while keeping Research Library accessible.
-- [ ] Improve search/filters, active-run/error cues, stable URL restoration and progressive pagination. Add pinning only with an explicit owner-scoped API and migrations.
+- [x] Collapse competing history patterns into shared thread-list primitives while keeping Research Library accessible.
+- [x] Improve search/filters, active-run/error cues, stable URL restoration and progressive pagination. Add pinning only with an explicit owner-scoped API and migrations.
 - [x] Show effective corpus, provider/model, retrieval preset, selected evidence mode and prior-turn context summary in compact follow-ups; disclose full per-run settings on demand.
 - [x] Avoid implying that pinned workspace evidence is used in ordinary retrieval presets; show contextualization vs evidence selection separately.
-- [ ] Ensure draft persistence and reset behavior remain predictable between new threads, existing threads, retries and reruns.
-- [ ] Tests: composer settings on all states, long names, keyboard search, archived read-only, no-profile/no-corpus, no stale history after owner changes.
+- [x] Ensure draft persistence and reset behavior remain predictable between new threads, existing threads, retries and reruns.
+- [x] Tests: composer settings on all states, long names, keyboard search, archived read-only, no-profile/no-corpus, no stale history after owner changes.
 
 ### Phase 5 — Advanced scholarly capabilities (P2; separate PRs)
 
@@ -225,4 +225,8 @@ No phase is complete without its implementation, tests, documentation when appli
 ## 10. Phase 4 progress
 
 - Follow-up composer (`ResearchComposer` `compact` mode) now shows an effective-settings summary: corpus, profile/model, retrieval preset, scope filter when set, evidence mode, and a statement that prior turns are context rather than evidence. Selected passages are reported as used only for the `evidence` and `hybrid` presets. **Show all run settings** discloses the full fieldset on demand.
-- Remaining Phase 4 work: shared thread-list primitives with Research Library, search/filter/active-run cues and pagination, draft persistence/reset across new thread / existing thread / retry / rerun, and the remaining test matrix (long names, keyboard search, archived read-only, no-corpus, owner change). Pinning still requires an owner-scoped API first.
+- Drafts are scoped: the new-question view keeps `research-composer-draft` and each thread keeps `research-composer-draft:thread:<id>` in the per-account workspace store. A switch writes the pending draft to the scope it was typed in before loading the next; a successful new question or follow-up clears its scope; a retry leaves the draft alone.
+- Thread list: debounced search (250 ms, clearing applies at once), Escape clears an active search, a no-match state names the query, and Research `/rag` now keeps `thread_q`/`thread_offset`/`thread_archived` in the URL like the Research Library, preserved across thread selection, new question and run navigation.
+- History patterns: the Research Library and Research already share `ResearchThreadBrowser`/`ResearchThreadNavigation`. The composer's **Recent questions** menu reuses prompt text rather than navigating inquiries, so it stays.
+- Test matrix covered by unit tests: composer summary with and without profile/corpus, keyboard search, debounced paging reset, URL filter restoration, per-thread drafts. Existing tests already cover archived read-only follow-ups and owner changes. Long titles wrap (`overflow-wrap: anywhere`).
+- Not done: pinning, which needs an owner-scoped API and migration first (the plan says to add it only then); the list still enables **Next** on an exactly full page because the list API has no `has_more`; manual a11y and screenshot review.

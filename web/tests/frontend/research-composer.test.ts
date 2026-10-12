@@ -147,6 +147,8 @@ describe("ResearchComposer follow-up settings", () => {
       props: { ...baseProps, compact: true, profiles: [], providerProfileId: "" },
     });
     expect(Object.values(summary(wrapper))).toContain("No profile");
+    await wrapper.setProps({ sourceCollection: "", stores: [] });
+    expect(summary(wrapper).Corpus).toBe("No corpus database available");
     await wrapper.setProps({ compact: false });
     expect(wrapper.find(".research-composer-effective").exists()).toBe(false);
     expect(wrapper.find("#researchComposerSettings").exists()).toBe(true);

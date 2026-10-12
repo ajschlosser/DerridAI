@@ -56,6 +56,14 @@ const emit = defineEmits<{
 const i18n = useI18nStore();
 const listExpanded = ref(false);
 const manageExpanded = ref(false);
+// Escape clears an active search first; an empty field lets Escape reach outer handlers.
+function clearSearch(event: KeyboardEvent) {
+  const input = event.target as HTMLInputElement;
+  if (!input.value) return;
+  event.stopPropagation();
+  input.value = "";
+  emit("search", "");
+}
 </script>
 
 <template>
@@ -91,6 +99,7 @@ const manageExpanded = ref(false);
           :value="search"
           maxlength="200"
           @input="emit('search', ($event.target as HTMLInputElement).value)"
+          @keydown.escape="clearSearch"
         />
       </label>
       <label class="research-thread-archive-filter">
@@ -142,8 +151,12 @@ const manageExpanded = ref(false);
           </li>
         </ul>
       </nav>
-      <p v-if="!loading && !error && !threads.length">
-        {{ i18n.t("research.threads_empty") }}
+      <p v-if="!loading && !error && !threads.length" role="status">
+        {{
+          search?.trim()
+            ? i18n.tf("research.threads_no_match", { query: search.trim() })
+            : i18n.t("research.threads_empty")
+        }}
       </p>
       <div class="research-thread-pages">
         <button

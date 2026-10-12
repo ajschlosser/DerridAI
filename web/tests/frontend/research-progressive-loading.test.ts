@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   push: vi.fn(),
+  replace: vi.fn(),
   snapshot: vi.fn(),
   update: vi.fn(),
   runs: vi.fn(),
@@ -35,7 +36,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("vue-router", () => ({
   useRoute: () => reactive(mocks.route),
-  useRouter: () => ({ push: mocks.push, replace: vi.fn() }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
 }));
 vi.mock("../../src/stores/auth", () => ({
   useAuthStore: () => {
@@ -114,8 +115,16 @@ const Composer = defineComponent({
 });
 const ThreadBrowser = defineComponent({
   name: "ResearchThreadBrowser",
-  props: ["threadId", "jobId", "retryDisabled", "refreshKey"],
-  emits: ["retryTurn"],
+  props: [
+    "threadId",
+    "jobId",
+    "retryDisabled",
+    "refreshKey",
+    "initialSearch",
+    "initialOffset",
+    "initialArchived",
+  ],
+  emits: ["retryTurn", "filters", "select"],
   template: '<div class="thread-browser"><slot name="workspace" /></div>',
 });
 const Result = defineComponent({
@@ -177,10 +186,10 @@ describe("Research progressive reads", () => {
       await w.get(".composer").setValue("Local draft");
       await vi.advanceTimersByTimeAsync(300);
 
-      expect(mocks.saveComposerDraft).toHaveBeenLastCalledWith({
-        prompt: "Local draft",
-        instructions: "",
-      });
+      expect(mocks.saveComposerDraft).toHaveBeenLastCalledWith(
+        { prompt: "Local draft", instructions: "" },
+        "",
+      );
       expect(mocks.update).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -271,6 +280,68 @@ describe("Research progressive reads", () => {
     await flushPromises();
     expect(browser.props("refreshKey")).toBe(1);
     expect(mocks.start).toHaveBeenCalledOnce();
+  });
+  it("keeps a separate draft per thread and for the new-question view", async () => {
+    vi.useFakeTimers();
+    try {
+      const w = render();
+      await flushPromises();
+      await w.get(".composer").setValue("New-question draft");
+      mocks.loadComposerDraft.mockImplementation(async (threadId: string) =>
+        threadId === "thread-b" ? { prompt: "Thread B draft", instructions: "" } : null,
+      );
+      reactive(mocks.route).query = { thread: "thread-b" };
+      await flushPromises();
+      expect(mocks.saveComposerDraft).toHaveBeenLastCalledWith(
+        { prompt: "New-question draft", instructions: "" },
+        "",
+      );
+      expect(mocks.loadComposerDraft).toHaveBeenLastCalledWith("thread-b");
+      expect((w.get(".composer").element as HTMLInputElement).value).toBe("Thread B draft");
+      mocks.loadComposerDraft.mockImplementation(async (threadId: string) =>
+        threadId === "" ? { prompt: "New-question draft", instructions: "" } : null,
+      );
+      reactive(mocks.route).query = { thread: "thread-c" };
+      await flushPromises();
+      expect((w.get(".composer").element as HTMLInputElement).value).toBe("");
+      reactive(mocks.route).query = {};
+      await flushPromises();
+      expect((w.get(".composer").element as HTMLInputElement).value).toBe("New-question draft");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("clears the submitted question from its draft scope", async () => {
+    mocks.start.mockResolvedValue({ id: "new-job", status: "running", thread_id: "new-thread" });
+    const w = render();
+    await flushPromises();
+    await w.get(".composer").setValue("Submitted inquiry");
+    await w.get(".run").trigger("click");
+    await flushPromises();
+    expect(mocks.saveComposerDraft).toHaveBeenCalledWith({ prompt: "", instructions: "" }, "");
+    expect(mocks.saveComposerDraft).not.toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Submitted inquiry" }),
+      expect.anything(),
+    );
+    expect((w.get(".composer").element as HTMLInputElement).value).toBe("");
+  });
+  it("keeps thread-list filters in the URL across selection", async () => {
+    reactive(mocks.route).query = { thread_q: "Glas", thread_offset: "50" };
+    const w = render();
+    await flushPromises();
+    const list = w.getComponent(ThreadBrowser);
+    expect(list.props("initialSearch")).toBe("Glas");
+    expect(list.props("initialOffset")).toBe(50);
+    list.vm.$emit("filters", { search: "Glas", offset: 0, includeArchived: true });
+    expect(mocks.replace).toHaveBeenLastCalledWith({
+      path: "/rag",
+      query: { thread_q: "Glas", thread_offset: undefined, thread_archived: "true" },
+    });
+    list.vm.$emit("select", "thread-b");
+    expect(mocks.push).toHaveBeenLastCalledWith({
+      path: "/rag",
+      query: { thread_q: "Glas", thread_offset: "50", thread: "thread-b" },
+    });
   });
   it("links a newly submitted run to the server-created thread", async () => {
     mocks.start.mockResolvedValue({
