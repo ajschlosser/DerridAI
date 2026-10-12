@@ -109,6 +109,37 @@ def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp
     assert updated["metadata_field_status"]["primary_text"]["status"] == "human_confirmed"
 
 
+def test_review_edits_persist_validated_boolean_types(tmp_path: Path):
+    """Pydantic accepts "false", but the stored assertion and audit must use False.
+
+    Both individual and bulk review previously discarded the validated result,
+    leaving a human-confirmed string that could not be published as JSONL.
+    """
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1"), ready_record("r2", "b2")])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    single = manager.patch_metadata(
+        build["build_id"], "r1", {"primary_text": "false"}, expected_revision=1,
+    )
+    assert single["primary_text"] is False
+    assert single["metadata_decisions"][-1]["value"] is False
+    single_assertion = current_assertion_by_name(single, "primary_text")
+    assert single_assertion is not None
+    assert single_assertion.value is False
+    assert single_assertion.authority_status in {"human_confirmed", "human_override"}
+
+    manager.bulk_patch_metadata(
+        build["build_id"], {"primary_text": "false"}, record_ids=["r2"],
+    )
+    bulk = repo.get_record(build["build_id"], "r2")
+    assert bulk["primary_text"] is False
+    assert bulk["metadata_decisions"][-1]["value"] is False
+    bulk_assertion = current_assertion_by_name(bulk, "primary_text")
+    assert bulk_assertion is not None
+    assert bulk_assertion.value is False
+    assert bulk_assertion.authority_status in {"human_confirmed", "human_override"}
+
+
 def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp_path: Path):
     """Resolving the last unresolved field moves the record from the metadata queue to ready.
 
