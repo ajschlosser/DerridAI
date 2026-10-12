@@ -118,11 +118,10 @@ const detail = useDataQuery("research_threads", () => researchThreadsApi.get(pro
   detail: () => [...scope.value, "thread", props.threadId],
   enabled: () => allowed.value && Boolean(props.threadId),
 });
-const selectedJobTurnId = computed(
-  () =>
-    detail.data.value?.thread_id === props.threadId
-      ? detail.data.value.turns.find((turn) => turn.job_id && turn.job_id === props.jobId)?.turn_id
-      : undefined,
+const selectedJobTurnId = computed(() =>
+  detail.data.value?.thread_id === props.threadId
+    ? detail.data.value.turns.find((turn) => turn.job_id && turn.job_id === props.jobId)?.turn_id
+    : undefined,
 );
 watch(
   selectedJobTurnId,
