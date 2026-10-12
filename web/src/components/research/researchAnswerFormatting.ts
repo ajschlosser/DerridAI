@@ -233,9 +233,7 @@ export function segmentResearchAnswer(
   }> = [];
 
   if (candidates.length) {
-    const lookup = new Map(
-      candidates.map((candidate) => [candidate.marker, candidate]),
-    );
+    const lookup = new Map(candidates.map((candidate) => [candidate.marker, candidate]));
     const pattern = new RegExp(
       candidates.map((candidate) => escapedPattern(candidate.marker)).join("|"),
       "g",
