@@ -17,13 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { useResearchDraft } from "../../features/research/useResearchDraft";
 import { apiRequest, ApiError } from "../../api/http";
 import { useAuthStore } from "../../stores/auth";
 import { useI18nStore } from "../../stores/i18n";
-import ResearchResultPresentation from "./ResearchResultPresentation.vue";
+import ResearchTurnInspector from "./ResearchTurnInspector.vue";
 import ResearchAnswerContent from "./ResearchAnswerContent.vue";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import type { ResearchTurn } from "../../types/researchThreads";
@@ -33,19 +33,25 @@ const props = withDefaults(
     turn: ResearchTurn;
     streamLive?: boolean;
     inspectRequested?: boolean;
+    inspectorOpen?: boolean;
     deferLoad?: boolean;
   }>(),
   {
     streamLive: true,
     inspectRequested: false,
+    inspectorOpen: false,
     deferLoad: false,
   },
 );
 const emit = defineEmits<{
   openRecord: [item: ResearchResultEvidence];
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
+  inspect: [turnId: string];
+  closeInspector: [turnId: string];
 }>();
 const activeEvidenceIndex = ref(0);
+const inspectorRegion = ref<HTMLElement | null>(null);
+let previousFocus: HTMLElement | null = null;
 const answerRegion = ref<HTMLElement | null>(null);
 const visible = ref(!props.deferLoad || typeof IntersectionObserver === "undefined");
 let visibilityObserver: IntersectionObserver | null = null;
@@ -154,24 +160,42 @@ function openRelationships(index: number, mode: "trace" | "model") {
   if (item) emit("openRelationships", item, mode);
 }
 function inspectCitation(index: number) {
+  if (!allowed.value || !result.value?.evidence?.[index]) return;
   activeEvidenceIndex.value = index;
-  inspectOpen.value = true;
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  emit("inspect", props.turn.turn_id);
+  void nextTick(() => inspectorRegion.value?.focus({ preventScroll: true }));
 }
-const inspectOpen = ref(Boolean(props.inspectRequested));
-watch(
-  () => props.inspectRequested,
-  (value) => {
-    if (value) inspectOpen.value = true;
-  },
-);
-function onInspectToggle(event: Event) {
-  inspectOpen.value = (event.currentTarget as HTMLDetailsElement).open;
+function toggleInspector() {
+  if (props.inspectorOpen) {
+    closeInspector();
+    return;
+  }
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  emit("inspect", props.turn.turn_id);
+  void nextTick(() => inspectorRegion.value?.focus({ preventScroll: true }));
+}
+function closeInspector() {
+  emit("closeInspector", props.turn.turn_id);
+  const focus = previousFocus;
+  previousFocus = null;
+  void nextTick(() => {
+    if (focus?.isConnected) focus.focus({ preventScroll: true });
+  });
 }
 watch(
-  () => [props.turn.thread_id, props.turn.turn_id, props.turn.attempt],
+  () => [
+    props.turn.thread_id,
+    props.turn.turn_id,
+    props.turn.attempt,
+    props.turn.job_id,
+    allowed.value,
+  ],
   () => {
-    inspectOpen.value = false;
+    activeEvidenceIndex.value = 0;
+    previousFocus = null;
   },
+  { flush: "sync" },
 );
 </script>
 <template>
@@ -218,29 +242,36 @@ watch(
             </li>
           </ul>
         </details>
-        <details class="thread-answer-audit" :open="inspectOpen" @toggle="onInspectToggle">
-          <summary>{{ i18n.t("research.thread_inspect_result") }}</summary>
-          <template v-if="inspectOpen">
-            <h4 class="sr-only">{{ i18n.t("research.thread_inspect_result") }}</h4>
-            <ResearchResultPresentation
-              :instance-id="`thread-answer-${turn.turn_id}`"
-              :instance-label="`${turn.ordinal}: ${turn.user_question}`"
-              :job="answer.data.value"
-              :result="result"
-              :active-evidence-index="activeEvidenceIndex"
-              :researcher="!auth.isAdmin"
-              read-only
-              @evidence="activeEvidenceIndex = $event"
-              @select-evidence="activeEvidenceIndex = $event"
-              @open-record="openRecord"
-              @open-relationships="openRelationships"
-            />
-            <details v-if="result.research_thread">
-              <summary>{{ i18n.t("research.thread_context_audit") }}</summary>
-              <pre>{{ JSON.stringify(result.research_thread, null, 2) }}</pre>
-            </details>
-          </template>
-        </details>
+        <button
+          type="button"
+          class="btn thread-answer-inspect-toggle"
+          :aria-expanded="inspectorOpen"
+          :aria-controls="inspectorOpen ? `thread-answer-${turn.turn_id}-inspector` : undefined"
+          @click="toggleInspector"
+        >
+          {{ i18n.t("research.thread_inspect_result") }}
+        </button>
+        <div
+          v-if="inspectorOpen"
+          :id="`thread-answer-${turn.turn_id}-inspector`"
+          ref="inspectorRegion"
+          class="thread-answer-inspector"
+          tabindex="-1"
+          @keydown.esc.stop="closeInspector"
+        >
+          <ResearchTurnInspector
+            :instance-id="`thread-answer-${turn.turn_id}`"
+            :context-label="`${turn.ordinal}: ${turn.user_question}`"
+            :job="answer.data.value"
+            :result="result"
+            :active-evidence-index="activeEvidenceIndex"
+            :researcher="!auth.isAdmin"
+            @close="closeInspector"
+            @select-evidence="activeEvidenceIndex = $event"
+            @open-record="openRecord"
+            @open-relationships="openRelationships"
+          />
+        </div>
       </div>
       <p
         v-else-if="(visible || inspectRequested) && !answer.isFetching.value && !answer.error.value"
@@ -271,48 +302,43 @@ watch(
   cursor: pointer;
   padding: 8px 0;
 }
-.thread-answer-audit {
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
+.thread-answer-inspect-toggle {
+  justify-self: start;
 }
-.thread-answer-audit pre {
-  overflow-x: auto;
-  max-width: 100%;
+.thread-answer-inspector {
+  min-width: 0;
+  outline-offset: 3px;
 }
 @media (min-width: 1280px) {
-  .thread-answer-workspace:has(.thread-answer-audit[open]) {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+  .thread-answer-workspace:has(.thread-answer-inspector) {
+    grid-template-columns: minmax(0, 1fr) minmax(310px, 42%);
   }
-  .thread-answer-workspace:has(.thread-answer-audit[open]) > .thread-answer-text {
+  .thread-answer-workspace:has(.thread-answer-inspector) > .thread-answer-text {
     grid-column: 1;
     grid-row: 1 / span 2;
   }
-  .thread-answer-workspace:has(.thread-answer-audit[open]) > .thread-answer-audit {
+  .thread-answer-workspace:has(.thread-answer-inspector) > .thread-answer-inspector {
     grid-column: 2;
-    grid-row: 1 / span 2;
-    border-top: 0;
-    border-inline-start: 1px solid var(--border);
-    padding-inline-start: 16px;
-    max-height: min(70vh, 850px);
+    grid-row: 1 / span 3;
+    max-height: min(70dvh, 850px);
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  .thread-answer-workspace:has(.thread-answer-audit[open]) > details:not(.thread-answer-audit) {
+  .thread-answer-workspace:has(.thread-answer-inspector) > details {
     grid-column: 1;
   }
 }
 @media (max-width: 600px) {
-  .thread-answer-audit[open] {
+  .thread-answer-inspector {
     position: fixed;
     inset-inline: 0;
     bottom: 0;
     z-index: 30;
     max-height: 74dvh;
     overflow: auto;
-    padding: 16px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    padding: 12px;
     background: var(--surface-card);
+    border-top: 1px solid var(--border);
     box-shadow: 0 -8px 28px rgb(0 0 0 / 0.18);
     overscroll-behavior: contain;
   }

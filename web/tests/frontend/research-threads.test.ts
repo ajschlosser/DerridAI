@@ -158,36 +158,29 @@ describe("Research thread shell", () => {
     const boundCitation = first.find(".thread-answer-citation");
     expect(boundCitation.exists()).toBe(true);
     await boundCitation.trigger("click");
-    expect(first.find(".research-result-presentation").exists()).toBe(true);
-    expect(second.find(".research-result-presentation").exists()).toBe(false);
-    for (const article of [first, second]) {
-      // Selecting a run opens its own audit; unselected turns stay collapsed.
-      const selected = article.find("button[aria-current='true']").exists();
-      expect(article.find(".research-result-presentation").exists()).toBe(selected);
-      const inspect = article
-        .findAll("details")
-        .find((item) => item.find("summary").text() === "Inspect this answer and its evidence")!;
-      (inspect.element as HTMLDetailsElement).open = true;
-      await inspect.trigger("toggle");
-    }
+    expect(first.find(".research-turn-inspector").exists()).toBe(true);
+    expect(second.find(".research-turn-inspector").exists()).toBe(false);
+    // No second full answer is mounted by evidence inspection.
+    expect(first.findAll(".research-answer-prose")).toHaveLength(1);
     await first.findAll(".research-evidence-index button")[1].trigger("click");
     expect(first.find(".research-evidence-inspector").text()).toContain(
       "Exact passage /api/jobs/job-a 1",
-    );
-    expect(second.find(".research-evidence-inspector").text()).toContain(
-      "Exact passage /api/jobs/job-b 0",
-    );
-    expect(first.find(".research-answer-actions").exists()).toBe(false);
-    expect(first.find("h5").exists()).toBe(true);
-    expect(first.find("aside").attributes("id")).not.toBe(second.find("aside").attributes("id"));
-    expect(first.find("aside").attributes("aria-label")).not.toBe(
-      second.find("aside").attributes("aria-label"),
     );
     await first.find(".research-evidence-links button").trigger("click");
     expect(wrapper.emitted("openRecord")?.[0]?.[0]).toMatchObject({
       collection: "corpus",
       record: { record_id: "/api/jobs/job-a-1" },
     });
+    await second.find(".thread-answer-inspect-toggle").trigger("click");
+    expect(first.find(".research-turn-inspector").exists()).toBe(false);
+    expect(second.find(".research-turn-inspector").exists()).toBe(true);
+    expect(second.find(".research-evidence-inspector").text()).toContain(
+      "Exact passage /api/jobs/job-b 0",
+    );
+    expect(second.findAll(".research-answer-prose")).toHaveLength(1);
+    expect(first.find(".research-answer-actions").exists()).toBe(false);
+    await second.find(".research-turn-inspector-header button").trigger("click");
+    expect(wrapper.findAll(".research-turn-inspector")).toHaveLength(0);
     expect(wrapper.emitted("selectEvidence")).toBeUndefined();
   });
   it("recovers a missing job through its exact turn result endpoint", async () => {
@@ -312,7 +305,7 @@ describe("Research thread shell", () => {
     await wrapper.setProps({ jobId: "job-0" });
     await flushPromises();
     expect(jobs.read).toHaveBeenCalledWith("/api/jobs/job-0");
-    expect(wrapper.findAll(".research-result-presentation")).toHaveLength(1);
+    expect(wrapper.findAll(".research-turn-inspector")).toHaveLength(1);
   });
 
   it("clears a revoked inline answer while preserving its durable question", async () => {
