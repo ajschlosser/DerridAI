@@ -196,7 +196,8 @@ class ResearchThreadStore(PipelineDatabase):
         include_archived: bool = False,
     ) -> list[dict[str, Any]]:
         """Bounded summaries only: no evidence packets or answer bodies."""
-        limit = max(1, min(int(limit), 200))
+        # The route asks for one row past its page size to report has_more.
+        limit = max(1, min(int(limit), 201))
         where = ["h.owner=?", "h.deleted_at IS NULL"]
         args: list[Any] = [owner]
         if not include_archived:

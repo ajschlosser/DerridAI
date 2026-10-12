@@ -313,6 +313,7 @@ function retry() {
   <ResearchThreadNavigation
     v-if="allowed"
     :threads="inaccessible(list.error.value) ? [] : list.data.value?.threads || []"
+    :has-more="!inaccessible(list.error.value) && Boolean(list.data.value?.has_more)"
     :thread="threadId && !inaccessible(detail.error.value) ? detail.data.value : null"
     :selected-thread-id="threadId"
     :selected-job-id="jobId"

@@ -67,9 +67,9 @@ def list_threads(
 ) -> dict[str, Any]:
     owner = request_user(request).username
     threads = research_threads.thread_store().list_threads(
-        owner, limit=limit, offset=offset, search=search, include_archived=include_archived
+        owner, limit=limit + 1, offset=offset, search=search, include_archived=include_archived
     )
-    return {"threads": threads}
+    return {"threads": threads[:limit], "has_more": len(threads) > limit}
 
 
 @router.post("/api/research/threads/import-legacy")

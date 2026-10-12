@@ -426,3 +426,18 @@ def test_first_turn_keeps_original_request_and_no_context_artifact_reads(store):
         raise AssertionError("First question must not read/rank history")
     packet = select_thread_context(store, turn["turn_id"], "alice", forbidden)
     assert packet.snapshot()["items"] == [] and packet.snapshot()["character_count"] == 0
+
+
+def test_thread_list_reports_has_more_without_returning_the_probe_row(store, monkeypatch) -> None:
+    from app.routers import research_threads as routes
+
+    for index in range(3):
+        store.create_thread("alice", title=f"Thread {index}")
+    store.create_thread("bob", title="Other owner")
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role="researcher"))
+    page = routes.list_threads(None, limit=2, offset=0, search=None, include_archived=False)
+    assert len(page["threads"]) == 2 and page["has_more"] is True
+    last = routes.list_threads(None, limit=2, offset=2, search=None, include_archived=False)
+    assert len(last["threads"]) == 1 and last["has_more"] is False
+    exact = routes.list_threads(None, limit=3, offset=0, search=None, include_archived=False)
+    assert len(exact["threads"]) == 3 and exact["has_more"] is False

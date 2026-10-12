@@ -39,7 +39,7 @@ export const researchThreadsApi = {
       search: options.search ?? "",
       include_archived: String(options.includeArchived ?? false),
     });
-    return apiRequest<{ threads: ResearchThreadSummary[] }>(`${THREADS_PATH}?${query}`);
+    return apiRequest<{ threads: ResearchThreadSummary[]; has_more?: boolean }>(`${THREADS_PATH}?${query}`);
   },
   get: (id: string) =>
     apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),

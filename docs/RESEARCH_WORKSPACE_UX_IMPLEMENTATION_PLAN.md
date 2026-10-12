@@ -229,9 +229,10 @@ No phase is complete without its implementation, tests, documentation when appli
 - Thread list: debounced search (250 ms, clearing applies at once), Escape clears an active search, a no-match state names the query, and Research `/rag` now keeps `thread_q`/`thread_offset`/`thread_archived` in the URL like the Research Library, preserved across thread selection, new question and run navigation.
 - History patterns: the Research Library and Research already share `ResearchThreadBrowser`/`ResearchThreadNavigation`. The composer's **Recent questions** menu reuses prompt text rather than navigating inquiries, so it stays.
 - Test matrix covered by unit tests: composer summary with and without profile/corpus, keyboard search, debounced paging reset, URL filter restoration, per-thread drafts. Existing tests already cover archived read-only follow-ups and owner changes. Long titles wrap (`overflow-wrap: anywhere`).
-- Not done: pinning, which needs an owner-scoped API and migration first (the plan says to add it only then); the list still enables **Next** on an exactly full page because the list API has no `has_more`; manual a11y and screenshot review.
+- Not done: pinning, which needs an owner-scoped API and migration first (the plan says to add it only then); manual a11y and screenshot review.
 
 ## 11. Phase 2 follow-up
 
 - Thread selection is derived from `?thread`, so Back/Forward and in-app selection share one source of truth. When a different thread loads and focus is on the page body (Back/Forward) or in the thread list, `ResearchThreadNavigation` moves focus to the conversation heading; focus elsewhere, such as the composer, is not taken. Covered by a unit test.
 - Still open in Phase 2: integrating run status affordances, and the remaining test matrix (permissions/account change and deep links are covered; historical missing artifact and archived states in e2e).
+- Thread list API returns `has_more` (the route reads one row past the page), so **Next** is disabled on an exactly full last page.

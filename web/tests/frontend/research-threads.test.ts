@@ -536,6 +536,7 @@ describe("Research thread shell", () => {
         thread: detail,
         selectedThreadId: "a",
         offset: 0,
+        hasMore: true,
       },
     });
     mounted.push(wrapper);
@@ -549,6 +550,11 @@ describe("Research thread shell", () => {
     expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
     expect(wrapper.emitted("page")).toEqual([[50]]);
+    // An exactly full last page does not offer an empty next page.
+    await wrapper.setProps({ hasMore: false });
+    expect(
+      wrapper.findAll(".research-thread-pages button")[1].attributes("disabled"),
+    ).toBeDefined();
     await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
   });

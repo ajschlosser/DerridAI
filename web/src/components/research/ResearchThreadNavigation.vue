@@ -31,6 +31,7 @@ const props = defineProps<{
   selectedThreadId: string;
   selectedJobId?: string;
   offset: number;
+  hasMore?: boolean;
   search?: string;
   showPreview?: boolean;
   loading?: boolean;
@@ -186,7 +187,7 @@ function clearSearch(event: KeyboardEvent) {
         <button
           type="button"
           class="btn"
-          :disabled="loading || threads.length < 50"
+          :disabled="loading || !hasMore"
           @click="emit('page', offset + 50)"
         >
           {{ i18n.t("research.threads_next") }}
