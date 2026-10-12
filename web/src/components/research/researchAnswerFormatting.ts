@@ -225,7 +225,12 @@ export function segmentResearchAnswer(
   if (!normalized.text) return [];
 
   const candidates = citationCandidates(evidence);
-  const citationRanges: Array<{ start: number; end: number; evidenceIndex: number; display: string }> = [];
+  const citationRanges: Array<{
+    start: number;
+    end: number;
+    evidenceIndex: number;
+    display: string;
+  }> = [];
 
   if (candidates.length) {
     const lookup = new Map(
@@ -295,7 +300,8 @@ export function segmentResearchAnswer(
   for (const segment of segments) {
     if (segment.evidenceIndex == null) continue;
     const marker = citationRanges.find(
-      (range) => range.evidenceIndex === segment.evidenceIndex &&
+      (range) =>
+        range.evidenceIndex === segment.evidenceIndex &&
         normalized.text.slice(range.start, range.end) === segment.text,
     );
     if (marker) segment.text = marker.display;
