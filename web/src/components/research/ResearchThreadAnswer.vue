@@ -184,7 +184,13 @@ function closeInspector() {
   });
 }
 watch(
-  () => [props.turn.thread_id, props.turn.turn_id, props.turn.attempt, props.turn.job_id, allowed.value],
+  () => [
+    props.turn.thread_id,
+    props.turn.turn_id,
+    props.turn.attempt,
+    props.turn.job_id,
+    allowed.value,
+  ],
   () => {
     activeEvidenceIndex.value = 0;
     previousFocus = null;
