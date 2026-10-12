@@ -22,6 +22,7 @@ import { useI18nStore } from "../../stores/i18n";
 import type { ResearchJob, ResearchResult } from "../../types/research";
 import ResearchEvidencePanel from "./ResearchEvidencePanel.vue";
 import ResearchClaimReviewPanel from "./ResearchClaimReviewPanel.vue";
+import ResearchEvidenceProvenance from "./ResearchEvidenceProvenance.vue";
 
 type InspectorSection = "sources" | "claims" | "run";
 
@@ -44,6 +45,7 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const section = ref<InspectorSection>("sources");
+const activeEvidence = computed(() => props.result.evidence?.[props.activeEvidenceIndex] ?? null);
 const hasClaims = computed(() => Boolean(props.result.claim_provenance?.claims?.length));
 
 watch(
@@ -105,6 +107,11 @@ function setSection(next: InspectorSection) {
         @open-relationships="(index, mode) => emit('openRelationships', index, mode)"
       />
       <p v-else>{{ i18n.t("research.no_evidence_text") }}</p>
+      <ResearchEvidenceProvenance
+        v-if="activeEvidence"
+        :evidence="activeEvidence"
+        :provenance="result.claim_provenance"
+      />
     </div>
     <div v-show="section === 'claims'" :id="`${instanceId}-claims`">
       <ResearchClaimReviewPanel

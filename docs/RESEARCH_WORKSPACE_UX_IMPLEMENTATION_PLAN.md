@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 implementation is proposed in [draft PR #606](https://github.com/ajschlosser/DerridAI/pull/606), branch `task/research-turn-inspector`; full CI, manual review and metadata completeness validation remain pending.
+**Status:** Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -112,11 +112,11 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 ### Phase 3 — Contextual evidence & claim inspector (P0)
 
 - [x] Create turn-scoped evidence selection; resolved citations open only their run's EvidenceRef; unresolved citations remain visibly unlinked.
-- [ ] One inspector shows direct quote, work/edition, source locator precision, Record revision, speaker/position holder/stance/discourse role, claim bindings and validation status as **distinct** fields when known.
-- [ ] Provide original Record, relationship trace and cELF model actions using existing navigation; distinguish no binding, unsupported, disputed, unresolved and validated.
+- [x] One inspector shows direct quote, work/edition, source locator precision, Record revision, speaker/position holder/stance/discourse role, claim bindings and validation status as **distinct** fields when known.
+- [x] Provide original Record, relationship trace and cELF model actions using existing navigation; distinguish no binding, unsupported, disputed, unresolved and validated.
 - [x] Supply one turn-scoped Sources / Claims / Run inspector, with explicit empty-source/claim states and no duplicate answer.
 - [x] Support Escape, focus return, keyboard-operable section buttons, and turn/job/attempt selection reset. Existing evidence panel provides a live region; manual screen-reader review remains outstanding.
-- [ ] Tests: same E marker in two turns, cross-thread navigation, revision mismatch, missing locator, multiple binding relations, keyboard/a11y.
+- [ ] Tests: same E marker in two turns (done), retry attempt resets the inspector (done), empty evidence/claim states, revision mismatch, missing locator and multiple binding relations (done); cross-thread navigation e2e and manual keyboard/a11y remain.
 
 **Phase 3 exit:** One citation interaction shows the right documentary passage; no nested second full workspace is required.
 
@@ -213,3 +213,11 @@ No phase is complete without its implementation, tests, documentation when appli
 6. Validate locale parity for new labels and confirm visible text refers to known source metadata rather than inferred fields. The implementation uses existing translation keys.
 
 **Stopping rule:** Leave PR #606 as draft and do not mark the Phase 3 acceptance checklist complete until CI, visual/a11y, metadata and provenance checks above are verified. Phase 4/5 work has not begun on this branch.
+
+### Follow-up after merge (2026-10-12)
+
+- PR #606 merged with all quality-gate jobs (both E2E shards and a11y) passing.
+- Retry fix: when a retry gives the inspected turn a new attempt/job, `ResearchThreadBrowser` now closes the inspector instead of carrying it onto the new attempt's evidence.
+- Unit tests now cover a reused `E1` marker in two turns, closing on a retry attempt, and explicit empty Sources/Claims states. Added the `Research/Turn Inspector` Storybook story.
+- `ResearchEvidenceProvenance.vue` (in the Sources section) shows, for the selected EvidenceRef only: work/edition/translator when recorded, a medium-appropriate locator (printed vs PDF pages, or audio time) or an explicit "not recorded", the Record revision, and the support bindings for that evidence marker with relation, binding status and claim status as separate fields plus a revision-mismatch warning. Bindings fall back to record identity only when no marker is recorded. New en-US/fr-CA keys: `research.provenance_*`, `claims.binding_status_*`.
+- Still open: SourceSpan/SourceDocument identifiers are not displayed (the evidence payload does not carry span IDs); captured screenshots; manual screen-reader, keyboard and 200–400% zoom review; cross-thread navigation e2e. Phase 4 has not started.
