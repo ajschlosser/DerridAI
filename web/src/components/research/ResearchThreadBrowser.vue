@@ -281,9 +281,6 @@ function retry() {
       <slot name="workspace" />
     </template>
   </ResearchThreadNavigation>
-  <div v-else class="research-thread-workspace-standalone">
-    <slot name="workspace" />
-  </div>
   <ResearchThreadManageDialog
     v-if="
       allowed &&
