@@ -124,7 +124,7 @@ const manageExpanded = ref(false);
               <span class="research-thread-title">{{ item.title }}</span>
               <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
               <span v-else-if="item.last_status && item.last_status !== 'completed'"
-                class="research-thread-state"
+                :class="['research-thread-state', `is-${item.last_status}`]"
               >{{ i18n.t(`research.thread_status_${item.last_status}`) }}</span>
               <span class="research-thread-turn-count">{{
                 i18n.tf("research.thread_turn_count", { count: item.turn_count })
@@ -318,8 +318,13 @@ const manageExpanded = ref(false);
   line-height: 1.4;
 }
 .research-thread-index button .research-thread-state {
-  color: var(--tone-danger-fg);
   font-weight: 650;
+}
+.research-thread-index button .research-thread-state.is-failed {
+  color: var(--tone-danger-fg);
+}
+.research-thread-index button .research-thread-state.is-running {
+  color: var(--accent-fg);
 }
 .research-thread-index button[aria-current="true"] {
   border-color: var(--accent-fg);
