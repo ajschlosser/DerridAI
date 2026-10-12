@@ -69,6 +69,9 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   });
   await page.goto(`${APP}/rag?thread=a`);
   const navigation = page.locator(".research-thread-navigation");
+  await expect(navigation.locator(".research-thread-sidebar")).toBeVisible();
+  await expect(navigation.locator(".research-thread-workspace #researchQuestion")).toBeVisible();
+  await expect(page.locator("#researchQuestion")).toHaveCount(1);
   await expect(navigation.getByRole("heading", { name: "Question a", level: 3 })).toBeVisible();
   await expect(navigation.locator(".thread-answer-text")).toHaveText("Answer A");
   await expect(page.locator(".research-run-button")).toBeDisabled();
@@ -114,6 +117,8 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await expect(page).toHaveURL(`${APP}/rag`);
   await expect(page.locator("#researchQuestion")).toBeFocused();
   await expect(page.locator("#researchQuestion")).toHaveValue("");
+  await expect(navigation.locator(".research-thread-conversation")).toHaveCount(0);
+  await expect(navigation.locator(".research-thread-workspace #researchQuestion")).toBeVisible();
 });
 
 test("manage a thread through rename, archive, restore, and confirmed deletion", async ({
@@ -299,7 +304,7 @@ test("retry preserves a cancelled turn and opens its new attempt with keyboard f
   await retry.focus();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/thread=b&job=retry-job/);
-  await expect(nav.locator("article")).toHaveCount(1);
+  await expect(nav.locator("article.research-thread-turn")).toHaveCount(1);
   await expect(nav.getByRole("heading", { name: "Question b", level: 3 })).toBeVisible();
   await expect(retry).toHaveCount(0);
   await expect(nav.locator(".research-thread-conversation")).toBeFocused();

@@ -161,20 +161,38 @@ function normalizeStrongMarkup(value: string) {
   return { text, boldRanges };
 }
 
-function citationCandidates(evidence: ResearchResultEvidence[]) {
-  const byMarker = new Map<string, number>();
-  evidence.forEach((item, index) => {
-    const citation = String(item.inline_citation || "").trim();
-    if (citation && !byMarker.has(citation)) byMarker.set(citation, index);
+type CitationCandidate = { marker: string; evidenceIndex: number; display: string };
 
-    const id = String(item.evidence_id || "").trim();
-    if (id) {
-      const marker = id.startsWith("[") && id.endsWith("]") ? id : "[" + id + "]";
-      if (!byMarker.has(marker)) byMarker.set(marker, index);
+function citationCandidates(evidence: ResearchResultEvidence[]): CitationCandidate[] {
+  // The packet is scoped to one ResearchRun. Never guess a source when two records
+  // have the same human-readable citation; only unambiguous markers are actionable.
+  const byMarker = new Map<string, Omit<CitationCandidate, "marker"> | null>();
+  function register(marker: string, evidenceIndex: number, display: string) {
+    if (!marker) return;
+    const existing = byMarker.get(marker);
+    if (byMarker.has(marker)) {
+      if (existing && existing.evidenceIndex !== evidenceIndex) byMarker.set(marker, null);
+    } else {
+      byMarker.set(marker, { evidenceIndex, display });
     }
+  }
+
+  evidence.forEach((item, evidenceIndex) => {
+    const citation = String(item.inline_citation || "").trim();
+    register(citation, evidenceIndex, citation);
+
+    const id = String(item.evidence_id || "")
+      .trim()
+      .replace(/^\[+|\]+$/g, "");
+    if (!id) return;
+    // Double-bracket markers occur in saved research output. Register the longest
+    // marker first so [[E1]] does not become an unlinked pair of surrounding brackets.
+    register(`[[${id}]]`, evidenceIndex, citation || `[${id}]`);
+    register(`[${id}]`, evidenceIndex, citation || `[${id}]`);
   });
   return [...byMarker.entries()]
-    .map(([marker, evidenceIndex]) => ({ marker, evidenceIndex }))
+    .filter((entry): entry is [string, Omit<CitationCandidate, "marker">] => entry[1] !== null)
+    .map(([marker, value]) => ({ marker, ...value }))
     .sort((a, b) => b.marker.length - a.marker.length);
 }
 
@@ -209,24 +227,28 @@ export function segmentResearchAnswer(
   if (!normalized.text) return [];
 
   const candidates = citationCandidates(evidence);
-  const citationRanges: Array<{ start: number; end: number; evidenceIndex: number }> = [];
+  const citationRanges: Array<{
+    start: number;
+    end: number;
+    evidenceIndex: number;
+    display: string;
+  }> = [];
 
   if (candidates.length) {
-    const lookup = new Map(
-      candidates.map((candidate) => [candidate.marker, candidate.evidenceIndex]),
-    );
+    const lookup = new Map(candidates.map((candidate) => [candidate.marker, candidate]));
     const pattern = new RegExp(
       candidates.map((candidate) => escapedPattern(candidate.marker)).join("|"),
       "g",
     );
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(normalized.text))) {
-      const evidenceIndex = lookup.get(match[0]);
-      if (evidenceIndex == null) continue;
+      const candidate = lookup.get(match[0]);
+      if (!candidate) continue;
       citationRanges.push({
         start: match.index,
         end: match.index + match[0].length,
-        evidenceIndex,
+        evidenceIndex: candidate.evidenceIndex,
+        display: candidate.display,
       });
     }
   }
@@ -272,5 +294,17 @@ export function segmentResearchAnswer(
     }
   }
 
+  // Convert resolvable evidence markers to the actual inline citation. Preserve
+  // unresolved markers as ordinary text; a bibliographic string without a unique
+  // packet binding must never look like a verified source link.
+  for (const segment of segments) {
+    if (segment.evidenceIndex == null) continue;
+    const marker = citationRanges.find(
+      (range) =>
+        range.evidenceIndex === segment.evidenceIndex &&
+        normalized.text.slice(range.start, range.end) === segment.text,
+    );
+    if (marker) segment.text = marker.display;
+  }
   return segments;
 }

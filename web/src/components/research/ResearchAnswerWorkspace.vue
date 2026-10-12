@@ -24,7 +24,7 @@ import type { ResearchDraftState } from "../../features/research/useResearchDraf
 import type { ResearchJob, ResearchResult } from "../../types/research";
 import ResearchClaimReviewPanel from "./ResearchClaimReviewPanel.vue";
 import { researchJobDetail } from "./researchI18n";
-import { parseResearchAnswer, segmentResearchAnswer } from "./researchAnswerFormatting";
+import ResearchAnswerContent from "./ResearchAnswerContent.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -48,13 +48,6 @@ const emit = defineEmits<{
   evidence: [index: number];
 }>();
 const i18n = useI18nStore();
-const answerBlocks = computed(() =>
-  parseResearchAnswer(String(props.result?.answer || ""), i18n.t("research.works_cited")),
-);
-
-function citedSegments(value: string) {
-  return segmentResearchAnswer(value, props.result?.evidence || []);
-}
 const runDetail = computed(() =>
   props.job
     ? researchJobDetail(props.job, (key, fallback) => i18n.t(key, fallback), i18n.locale)
@@ -101,61 +94,12 @@ const statusLabel = computed(() => {
       <div v-if="result.warnings?.length" class="research-answer-warning" role="status">
         <p v-for="warning in result.warnings" :key="warning">{{ warning }}</p>
       </div>
-      <article class="research-answer-prose">
-        <template v-for="(block, index) in answerBlocks" :key="index">
-          <component :is="readOnly ? 'h6' : 'h3'" v-if="block.kind === 'heading'">{{
-            block.text
-          }}</component>
-          <ol v-else-if="block.kind === 'ordered'">
-            <li v-for="(item, itemIndex) in block.items" :key="itemIndex">
-              <template v-for="(segment, segmentIndex) in citedSegments(item)" :key="segmentIndex"
-                ><button
-                  v-if="segment.evidenceIndex != null"
-                  class="research-inline-citation"
-                  type="button"
-                  :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
-                  @click="emit('evidence', segment.evidenceIndex)"
-                >
-                  {{ segment.text }}</button
-                ><strong v-else-if="segment.bold">{{ segment.text }}</strong
-                ><template v-else>{{ segment.text }}</template></template
-              >
-            </li>
-          </ol>
-          <ul v-else-if="block.kind === 'unordered'">
-            <li v-for="(item, itemIndex) in block.items" :key="itemIndex">
-              <template v-for="(segment, segmentIndex) in citedSegments(item)" :key="segmentIndex"
-                ><button
-                  v-if="segment.evidenceIndex != null"
-                  class="research-inline-citation"
-                  type="button"
-                  :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
-                  @click="emit('evidence', segment.evidenceIndex)"
-                >
-                  {{ segment.text }}</button
-                ><strong v-else-if="segment.bold">{{ segment.text }}</strong
-                ><template v-else>{{ segment.text }}</template></template
-              >
-            </li>
-          </ul>
-          <p v-else>
-            <template
-              v-for="(segment, segmentIndex) in citedSegments(block.text || '')"
-              :key="segmentIndex"
-              ><button
-                v-if="segment.evidenceIndex != null"
-                class="research-inline-citation"
-                type="button"
-                :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
-                @click="emit('evidence', segment.evidenceIndex)"
-              >
-                {{ segment.text }}</button
-              ><strong v-else-if="segment.bold">{{ segment.text }}</strong
-              ><template v-else>{{ segment.text }}</template></template
-            >
-          </p>
-        </template>
-      </article>
+      <ResearchAnswerContent
+        :answer="result.answer"
+        :evidence="result.evidence || []"
+        :read-only="readOnly"
+        @evidence="emit('evidence', $event)"
+      />
       <ResearchClaimReviewPanel
         v-if="result.claim_provenance?.claims?.length"
         :provenance="result.claim_provenance"
@@ -221,35 +165,6 @@ const statusLabel = computed(() => {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.research-answer-prose {
-  max-width: min(78ch, 100%);
-  padding: 30px 36px 38px;
-  color: var(--text);
-  font-family: var(--font-reading);
-  font-size: 1rem;
-  font-weight: var(--fw-regular);
-  line-height: 1.74;
-  font-variant-ligatures: common-ligatures;
-  text-rendering: optimizeLegibility;
-}
-.research-answer-prose p {
-  margin: 0 0 1.28em;
-}
-.research-answer-prose strong {
-  font-family: inherit;
-  font-size: inherit;
-  line-height: inherit;
-  font-weight: var(--fw-bold);
-}
-.research-answer-prose :is(h3, h6) {
-  margin: 1.8em 0 0.55em;
-  font:
-    700 15px/1.3 system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  color: var(--text);
-}
 .research-draft-pane {
   max-width: 700px;
   margin: 0 auto 28px;
@@ -306,62 +221,6 @@ const statusLabel = computed(() => {
   border-radius: 50%;
   background: var(--ui-accent);
   animation: research-pulse 1.4s ease-in-out infinite;
-}
-@media (max-width: 860px) {
-  .research-answer-prose {
-    padding: 23px 22px 30px;
-  }
-}
-@media (max-width: 560px) {
-  .research-answer-prose {
-    font-size: 0.9375rem;
-    line-height: 1.7;
-    padding: 20px 17px 27px;
-  }
-}
-.research-answer-prose ol,
-.research-answer-prose ul {
-  margin: 0 0 1.35em;
-  padding-left: 1.55em;
-}
-.research-answer-prose li {
-  margin: 0.38em 0;
-  padding-left: 0.16em;
-}
-.research-answer-prose li::marker {
-  color: var(--muted);
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
-  font-size: 0.85em;
-  font-weight: 700;
-}
-.research-inline-citation {
-  min-height: 24px;
-  display: inline-flex;
-  align-items: center;
-  margin: 0 0.08em;
-  padding: 0 0.28em;
-  border: 0;
-  border-radius: 5px;
-  background: var(--ui-accent-soft);
-  color: var(--accent-fg);
-  font: inherit;
-  font-family: inherit;
-  font-size: 0.94em;
-  font-weight: var(--fw-semibold);
-  line-height: 1.25;
-  vertical-align: 0.02em;
-  cursor: pointer;
-}
-.research-inline-citation:hover {
-  box-shadow: inset 0 0 0 1px var(--ui-accent-border);
-}
-.research-inline-citation:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 1px;
 }
 @media (prefers-reduced-motion: reduce) {
   .research-run-orb span {

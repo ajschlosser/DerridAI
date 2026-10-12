@@ -70,12 +70,36 @@ describe("research answer formatting", () => {
     ]);
   });
 
-  it("keeps unresolved evidence markers inspectable instead of losing their binding", () => {
+  it("resolves single and double evidence markers to the run's citation label", () => {
     const evidence = [{ evidence_id: "E7", inline_citation: "(Derrida 1997: 11)" }];
 
-    expect(segmentResearchAnswer("The claim remains provisional [E7].", evidence)).toEqual([
-      { text: "The claim remains provisional " },
-      { text: "[E7]", evidenceIndex: 0 },
+    for (const marker of ["[E7]", "[[E7]]"]) {
+      expect(segmentResearchAnswer(`The claim remains provisional ${marker}.`, evidence)).toEqual([
+        { text: "The claim remains provisional " },
+        { text: "(Derrida 1997: 11)", evidenceIndex: 0 },
+        { text: "." },
+      ]);
+    }
+  });
+
+  it("leaves unknown markers unlinked rather than attaching a nearby citation", () => {
+    const evidence = [{ evidence_id: "E7", inline_citation: "(Derrida 1997: 11)" }];
+    expect(segmentResearchAnswer("Unverified [E9].", evidence)).toEqual([
+      { text: "Unverified [E9]." },
+    ]);
+  });
+
+  it("does not silently bind an ambiguous human-readable citation to either record", () => {
+    const evidence = [
+      { evidence_id: "E1", inline_citation: "(Derrida 1997: 11)" },
+      { evidence_id: "E2", inline_citation: "(Derrida 1997: 11)" },
+    ];
+    expect(segmentResearchAnswer("Ambiguous (Derrida 1997: 11).", evidence)).toEqual([
+      { text: "Ambiguous (Derrida 1997: 11)." },
+    ]);
+    expect(segmentResearchAnswer("Specific [[E2]].", evidence)).toEqual([
+      { text: "Specific " },
+      { text: "(Derrida 1997: 11)", evidenceIndex: 1 },
       { text: "." },
     ]);
   });
