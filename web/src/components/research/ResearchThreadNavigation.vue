@@ -123,9 +123,12 @@ const manageExpanded = ref(false);
             >
               <span class="research-thread-title">{{ item.title }}</span>
               <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
-              <span v-else-if="item.last_status && item.last_status !== 'completed'"
+              <span
+                v-else-if="item.last_status && item.last_status !== 'completed'"
                 :class="['research-thread-state', `is-${item.last_status}`]"
-              >{{ i18n.t(`research.thread_status_${item.last_status}`) }}</span>
+              >
+                {{ i18n.t(`research.thread_status_${item.last_status}`) }}
+              </span>
               <span class="research-thread-turn-count">{{
                 i18n.tf("research.thread_turn_count", { count: item.turn_count })
               }}</span>
