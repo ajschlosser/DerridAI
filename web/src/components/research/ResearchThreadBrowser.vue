@@ -247,7 +247,7 @@ function retry() {
     :selected-job-id="jobId"
     :offset="offset"
     :search="search"
-    :show-preview="library"
+    :show-preview="library || Boolean($slots.workspace)"
     @search="search = $event"
     :loading="list.isFetching.value || (Boolean(threadId) && detail.isFetching.value)"
     :error="error || (!dialog ? mutationError : '')"
