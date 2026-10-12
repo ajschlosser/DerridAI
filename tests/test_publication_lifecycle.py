@@ -750,3 +750,71 @@ def test_accept_unreviewed_publishes_invalid_primary_text_candidate_without_rewr
     assert assertion.legacy_metadata["publication_validation"]["candidate_value"] == "false"
     # Autonomous publication changes only the immutable snapshot.
     assert repo.load_records(build_id)[0]["primary_text"] == "false"
+
+
+def test_accept_unreviewed_repairs_legacy_human_confirmed_primary_text_literal(tmp_path: Path):
+    """Existing builds with reviewed "false" strings can publish without authority loss.
+
+    The old edit API validated boolean input, but persisted the original string.
+    Publication repairs only the immutable snapshot and retains both the original
+    FieldAssertion and the explicitly documented normalized successor.
+    """
+    from app.field_assertions import current_assertion_by_name
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _install_publishable(repo)
+    build_id = build["build_id"]
+    stored = repo.load_records(build_id)
+    stored[0]["primary_text"] = "false"
+    stored[0]["metadata_field_status"]["primary_text"] = {
+        "status": "human_confirmed",
+        "method": "human",
+    }
+    repo.save_records(build_id, stored)
+
+    publication = manager.publish(build_id, accept_unreviewed=True)
+    [published] = list(iter_jsonl_zst(
+        repo.publication_path(publication["publication_id"]),
+        rehydrate_evidence=False,
+    ))
+    assert published["primary_text"] is False
+
+    repaired = current_assertion_by_name(published, "primary_text")
+    assert repaired is not None
+    assert repaired.value is False
+    assert repaired.authority_status == "human_confirmed"
+    audit = repaired.legacy_metadata["publication_type_normalization"]
+    assert audit["original_value"] == "false"
+    assert audit["normalized_value"] is False
+    assert repaired.supersedes_assertion_id == audit["prior_assertion_id"]
+    prior = [
+        assertion for bucket in published["field_assertions"].values()
+        for assertion in bucket
+        if assertion.get("assertion_id") == repaired.supersedes_assertion_id
+    ]
+    assert len(prior) == 1 and prior[0]["value"] == "false"
+
+    # The build's authoritative review history is not silently edited.
+    assert repo.load_records(build_id)[0]["primary_text"] == "false"
+
+
+def test_accept_unreviewed_does_not_guess_ambiguous_reviewed_boolean(tmp_path: Path):
+    """Legacy human authority cannot make an unparseable scalar publishable."""
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _install_publishable(repo)
+    stored = repo.load_records(build["build_id"])
+    stored[0]["primary_text"] = "probably"
+    stored[0]["metadata_field_status"]["primary_text"] = {
+        "status": "human_confirmed",
+        "method": "human",
+    }
+    repo.save_records(build["build_id"], stored)
+
+    try:
+        manager.publish(build["build_id"], accept_unreviewed=True)
+    except ValueError as exc:
+        assert "primary_text must be boolean when present" in str(exc)
+    else:
+        raise AssertionError("ambiguous reviewed metadata must not be guessed")

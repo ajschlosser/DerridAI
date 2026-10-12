@@ -234,6 +234,46 @@ REVIEWER_ACCEPTED = "reviewer_accepted"
 UNREVIEWED = "unreviewed_suggestion"
 
 
+def _normalize_legacy_reviewed_primary_text(record: dict[str, Any]) -> bool:
+    """Repair only unambiguous, already-reviewed boolean literals in a snapshot.
+
+    Older review endpoints validated "false"/"true" as booleans but persisted
+    the original strings. Their human decisions were about the boolean meaning;
+    a lossless type repair retains that authority and both assertion versions.
+    This never mutates the source build, guesses ambiguous values, or upgrades
+    an unreviewed candidate (which must still be quarantined).
+    """
+    raw = record.get("primary_text")
+    if not isinstance(raw, str) or raw.strip().lower() not in {"true", "false"}:
+        return False
+    assertion = current_assertion_by_name(record, "primary_text")
+    if (
+        assertion is None
+        or assertion.authority_status not in {"human_confirmed", "human_override"}
+        or assertion.value != raw
+    ):
+        return False
+
+    normalized = raw.strip().lower() == "true"
+    store_assertion(record, assertion.model_copy(update={
+        "assertion_id": f"assertion-{uuid.uuid4().hex}",
+        "value": normalized,
+        "legacy_metadata": {
+            **copy.deepcopy(assertion.legacy_metadata or {}),
+            "publication_type_normalization": {
+                "reason_code": "legacy_reviewed_boolean_string",
+                "original_value": raw,
+                "normalized_value": normalized,
+                "prior_assertion_id": assertion.assertion_id,
+            },
+        },
+        "supersedes_assertion_id": assertion.assertion_id,
+        "created_at": datetime.now(UTC).isoformat(),
+    }))
+    project_record_assertions(record)
+    return True
+
+
 def _quarantine_invalid_autonomous_core_values(record: dict[str, Any]) -> int:
     """Keep malformed core candidates as invalid assertions, never public scalar values.
 
@@ -315,6 +355,9 @@ def mark_unreviewed_publication(records: list[dict[str, Any]]) -> tuple[list[dic
     for record in records:
         snapshot = copy.deepcopy(record)
         fields = accept_unreviewed_suggestions(snapshot)
+        # Fix representations from the old review-write bug without overriding
+        # the reviewer's semantic decision or rewriting the authoritative build.
+        _normalize_legacy_reviewed_primary_text(snapshot)
         invalid_fields = _quarantine_invalid_autonomous_core_values(snapshot)
         accepted_fields += fields
         reviewed = bool(record.get("accepted")) and not record.get("needs_review") and not fields and not invalid_fields
