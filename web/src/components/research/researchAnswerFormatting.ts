@@ -181,7 +181,9 @@ function citationCandidates(evidence: ResearchResultEvidence[]): CitationCandida
     const citation = String(item.inline_citation || "").trim();
     register(citation, evidenceIndex, citation);
 
-    const id = String(item.evidence_id || "").trim().replace(/^\\[+|\\]+$/g, "");
+    const id = String(item.evidence_id || "")
+      .trim()
+      .replace(/^\\[+|\\]+$/g, "");
     if (!id) return;
     // Double-bracket markers occur in saved research output. Register the longest
     // marker first so [[E1]] does not become an unlinked pair of surrounding brackets.
