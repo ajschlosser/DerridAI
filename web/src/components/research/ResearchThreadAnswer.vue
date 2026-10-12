@@ -187,7 +187,7 @@ watch(
     <template v-if="streamLive">
       <p role="status">{{ i18n.t("research.draft_heading") }}</p>
       <p>{{ i18n.t("research.draft_help") }}</p>
-      <p class="thread-answer-text">{{ stream.draft.value?.text }}</p>
+      <p class="thread-answer-draft">{{ stream.draft.value?.text }}</p>
     </template>
     <template v-else>
       <p v-if="!visible && !inspectRequested" role="status">
@@ -257,26 +257,12 @@ watch(
   gap: 16px;
   min-width: 0;
 }
-.thread-answer-text {
+.thread-answer-draft {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.65;
   max-width: 78ch;
   margin-block: 0;
-}
-.thread-answer-citation {
-  display: inline;
-  border: 0;
-  background: transparent;
-  padding: 0 2px;
-  color: var(--accent-fg);
-  text-decoration: underline;
-  cursor: pointer;
-  font: inherit;
-}
-.thread-answer-citation:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
 }
 .thread-answer-workspace > details {
   min-width: 0;
