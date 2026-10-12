@@ -313,7 +313,6 @@ const manageExpanded = ref(false);
   border-inline-start: 1px solid var(--border);
 }
 .research-thread-conversation {
-  min-width: 0;
   flex: 1 1 auto;
   min-width: 0;
 }
