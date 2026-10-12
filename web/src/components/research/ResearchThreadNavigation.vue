@@ -18,14 +18,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
-import { ref } from "vue";
+import { nextTick, ref, watch } from "vue";
 import type {
   ResearchThreadDetail,
   ResearchThreadSummary,
   ResearchTurn,
 } from "../../types/researchThreads";
 
-defineProps<{
+const props = defineProps<{
   threads: ResearchThreadSummary[];
   thread?: ResearchThreadDetail | null;
   selectedThreadId: string;
@@ -55,6 +55,21 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const listExpanded = ref(false);
+const conversationHeading = ref<HTMLElement | null>(null);
+const sidebar = ref<HTMLElement | null>(null);
+// When a different thread loads after list selection or browser Back/Forward,
+// move focus to its heading. Focus elsewhere (e.g. the composer) is left alone.
+watch(
+  () => props.thread?.thread_id || "",
+  async (next, previous) => {
+    if (!next || next === previous) return;
+    const active = document.activeElement;
+    const fromList = Boolean(active && sidebar.value?.contains(active));
+    if (active && active !== document.body && !fromList) return;
+    await nextTick();
+    conversationHeading.value?.focus({ preventScroll: false });
+  },
+);
 const manageExpanded = ref(false);
 // Escape clears an active search first; an empty field lets Escape reach outer handlers.
 function clearSearch(event: KeyboardEvent) {
@@ -86,6 +101,7 @@ function clearSearch(event: KeyboardEvent) {
     </button>
     <div
       id="research-thread-sidebar"
+      ref="sidebar"
       class="research-thread-sidebar"
       :class="{ 'is-expanded': listExpanded }"
     >
@@ -184,7 +200,7 @@ function clearSearch(event: KeyboardEvent) {
         :aria-label="thread.title"
         tabindex="-1"
       >
-        <h2>{{ thread.title }}</h2>
+        <h2 ref="conversationHeading" tabindex="-1">{{ thread.title }}</h2>
         <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
         <details
           class="research-thread-management"

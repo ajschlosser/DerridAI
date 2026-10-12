@@ -103,7 +103,7 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 - [x] Bring thread navigation into persistent layout rather than the toggled section preceding composer/result. Preserve the new-question view and no-database state.
 - [x] Establish one reading column with ordered turns and a composer in the same layout. Deeper visual refinement of the existing turn cards remains outstanding.
-- [ ] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
+- [x] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
 - [ ] Integrate run status affordances without competing full-width run/activity panels.
 - [ ] Tests: empty/new, selected/archived, 1 vs many turns, historical missing artifact, permissions and account change, deep links.
 
@@ -230,3 +230,8 @@ No phase is complete without its implementation, tests, documentation when appli
 - History patterns: the Research Library and Research already share `ResearchThreadBrowser`/`ResearchThreadNavigation`. The composer's **Recent questions** menu reuses prompt text rather than navigating inquiries, so it stays.
 - Test matrix covered by unit tests: composer summary with and without profile/corpus, keyboard search, debounced paging reset, URL filter restoration, per-thread drafts. Existing tests already cover archived read-only follow-ups and owner changes. Long titles wrap (`overflow-wrap: anywhere`).
 - Not done: pinning, which needs an owner-scoped API and migration first (the plan says to add it only then); the list still enables **Next** on an exactly full page because the list API has no `has_more`; manual a11y and screenshot review.
+
+## 11. Phase 2 follow-up
+
+- Thread selection is derived from `?thread`, so Back/Forward and in-app selection share one source of truth. When a different thread loads and focus is on the page body (Back/Forward) or in the thread list, `ResearchThreadNavigation` moves focus to the conversation heading; focus elsewhere, such as the composer, is not taken. Covered by a unit test.
+- Still open in Phase 2: integrating run status affordances, and the remaining test matrix (permissions/account change and deep links are covered; historical missing artifact and archived states in e2e).

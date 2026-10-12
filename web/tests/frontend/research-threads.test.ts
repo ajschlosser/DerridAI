@@ -552,6 +552,31 @@ describe("Research thread shell", () => {
     await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
   });
+  it("focuses the newly loaded thread heading only when focus is unclaimed", async () => {
+    const wrapper = mount(ResearchThreadNavigation, {
+      attachTo: document.body,
+      props: {
+        threads: [summary("a"), summary("b")],
+        thread: thread("a"),
+        selectedThreadId: "a",
+        offset: 0,
+      },
+    });
+    mounted.push(wrapper);
+    // Back/Forward: focus is on the body, so the new thread's heading takes it.
+    (document.activeElement as HTMLElement | null)?.blur();
+    await wrapper.setProps({ thread: thread("b"), selectedThreadId: "b" });
+    await flushPromises();
+    expect(document.activeElement).toBe(wrapper.get(".research-thread-conversation h2").element);
+    // Typing elsewhere is not interrupted by a late thread load.
+    const outside = document.createElement("input");
+    document.body.append(outside);
+    outside.focus();
+    await wrapper.setProps({ thread: thread("a"), selectedThreadId: "a" });
+    await flushPromises();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
 });
 
 describe("Research thread management", () => {
