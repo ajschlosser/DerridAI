@@ -305,7 +305,7 @@ describe("Research thread shell", () => {
     await wrapper.setProps({ jobId: "job-0" });
     await flushPromises();
     expect(jobs.read).toHaveBeenCalledWith("/api/jobs/job-0");
-    expect(wrapper.findAll(".research-result-presentation")).toHaveLength(1);
+    expect(wrapper.findAll(".research-turn-inspector")).toHaveLength(1);
   });
 
   it("clears a revoked inline answer while preserving its durable question", async () => {
