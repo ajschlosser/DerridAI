@@ -1271,6 +1271,9 @@ class ReviewActionsMixin:
             _record, skipped = self._patch_metadata(build_id, record_id, {field: value}, expected_revision)
             if field in skipped:
                 return self._metadata_decision_result(build_id, record_id, applied=[], deferred=[field])
+            # Carry the persisted, typed value into dispute resolution and
+            # adjudication memory, not the raw input supplied by the reviewer.
+            value = _record.get(field)
             if evidence_block_ids or external_evidence_block_ids or evidence_source == "reviewer_knowledge":
                 # Bind the reviewer's selected evidence (or their own say-so) to the value just saved, in the same request.
                 self.patch_evidence(
@@ -1328,7 +1331,7 @@ class ReviewActionsMixin:
             expected_revision,
             confirmed_absent_fields=absence_fields,
         )
-        applied = {name: value for name, value in decisions.items() if name not in skipped}
+        applied = {name: _record.get(name) for name in decisions if name not in skipped}
         if not applied:
             return self._metadata_decision_result(build_id, record_id, applied=[], deferred=sorted(skipped))
         return self._finish_metadata_decisions(
