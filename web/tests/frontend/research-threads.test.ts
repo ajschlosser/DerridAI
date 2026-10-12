@@ -610,6 +610,22 @@ describe("Research thread shell", () => {
     await wrapper.get(".research-thread-turn-search input").trigger("keydown", { key: "Escape" });
     expect(visible()).toHaveLength(3);
   });
+  it("offers turn comparison only with two completed turns and resets on thread change", async () => {
+    const detail = thread("a");
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [], thread: detail, selectedThreadId: "a", offset: 0 },
+      slots: { compare: '<div class="compare-slot" />' },
+    });
+    mounted.push(wrapper);
+    expect(wrapper.find(".research-thread-compare-toggle").exists()).toBe(false);
+    const two = thread("a");
+    two.turns.push({ ...two.turns[0], turn_id: "a-2", ordinal: 2 });
+    await wrapper.setProps({ thread: two });
+    await wrapper.get(".research-thread-compare-toggle").trigger("click");
+    expect(wrapper.find(".compare-slot").exists()).toBe(true);
+    await wrapper.setProps({ thread: thread("b"), selectedThreadId: "b" });
+    expect(wrapper.find(".compare-slot").exists()).toBe(false);
+  });
 });
 
 describe("Research thread management", () => {

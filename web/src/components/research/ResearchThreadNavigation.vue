@@ -62,9 +62,16 @@ const listExpanded = ref(false);
 // In-thread search reads only questions and answers already loaded; it never
 // fetches further answers or audit payloads.
 const turnQuery = ref("");
+const compareOpen = ref(false);
 watch(
   () => props.thread?.thread_id,
-  () => (turnQuery.value = ""),
+  () => {
+    turnQuery.value = "";
+    compareOpen.value = false;
+  },
+);
+const completedTurns = computed(
+  () => props.thread?.turns.filter((turn) => turn.status === "completed").length || 0,
 );
 const turnSearch = computed(() => {
   const term = turnQuery.value.trim().toLocaleLowerCase();
@@ -256,6 +263,20 @@ function clearSearch(event: KeyboardEvent) {
             </button>
           </div>
         </details>
+        <button
+          v-if="completedTurns > 1 && $slots.compare && !compareOpen"
+          type="button"
+          class="btn research-thread-compare-toggle"
+          @click="compareOpen = true"
+        >
+          {{ i18n.t("research.compare_turns") }}
+        </button>
+        <slot
+          v-if="compareOpen"
+          name="compare"
+          :turns="thread.turns"
+          :close="() => (compareOpen = false)"
+        />
         <div v-if="thread.turns.length > 1" class="research-thread-turn-search">
           <label>
             {{ i18n.t("research.thread_search") }}

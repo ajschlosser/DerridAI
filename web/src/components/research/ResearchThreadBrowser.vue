@@ -27,6 +27,7 @@ import { useDataQuery } from "../../realtime/dataQuery";
 import type { ResearchResultEvidence } from "../../types/research";
 import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
+import ResearchTurnComparison from "./ResearchTurnComparison.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
 import { ApiError } from "../../api/http";
 
@@ -366,6 +367,9 @@ function retry() {
     @archive="mutate('archive')"
     @remove="manage('delete')"
   >
+    <template #compare="{ turns, close }">
+      <ResearchTurnComparison :turns="turns" @close="close" />
+    </template>
     <template #answer="{ turn }">
       <ResearchThreadAnswer
         :key="turn.turn_id"
