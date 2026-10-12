@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phase 1 shared-answer rendering is CI-validated. Phase 2 unified Research workspace changes are committed on `task/research-workspace-ux` with final CI/browser checks pending. Phase 3 contextual inspection remains outstanding.  
+**Status:** Phase 1 shared-answer rendering is CI-validated. Phase 2 unified Research workspace changes are committed on `task/research-workspace-ux` with final CI/browser checks pending. Phase 3 turn-scoped inspector implementation is committed; full CI/manual review and richer locator/claim-status tests remain outstanding.  
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -111,11 +111,11 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 ### Phase 3 — Contextual evidence & claim inspector (P0)
 
-- [ ] Create turn-scoped evidence selection; clicking a citation opens the matching EvidenceRef or explains why it cannot resolve.
+- [x] Create turn-scoped evidence selection; resolved citations open only their run's EvidenceRef; unresolved citations remain visibly unlinked.
 - [ ] One inspector shows direct quote, work/edition, source locator precision, Record revision, speaker/position holder/stance/discourse role, claim bindings and validation status as **distinct** fields when known.
 - [ ] Provide original Record, relationship trace and cELF model actions using existing navigation; distinguish no binding, unsupported, disputed, unresolved and validated.
-- [ ] Supply inspector Sources / Claims / Run views; render clear states for missing sources and unavailable audit artifacts.
-- [ ] Support Escape, focus return, tab order, and non-disruptive live-region status. Clear selection synchronously on turn/attempt change.
+- [x] Supply one turn-scoped Sources / Claims / Run inspector, with explicit empty-source/claim states and no duplicate answer.
+- [x] Support Escape, focus return, keyboard-operable section buttons, and turn/job/attempt selection reset. Existing evidence panel provides a live region; manual screen-reader review remains outstanding.
 - [ ] Tests: same E marker in two turns, cross-thread navigation, revision mismatch, missing locator, multiple binding relations, keyboard/a11y.
 
 **Phase 3 exit:** One citation interaction shows the right documentary passage; no nested second full workspace is required.
