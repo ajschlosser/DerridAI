@@ -46,6 +46,7 @@ def _reference(item: dict[str, Any]) -> dict[str, Any]:
         "collection": item.get("collection"),
         "record_id": record.get("record_id"),
         "record_revision": record.get("record_revision"),
+        "source_document_id": record.get("source_document_id"),
         "inline_citation": item.get("inline_citation"),
         "full_citation": item.get("full_citation"),
         "locator": {k: record[k] for k in _LOCATOR_FIELDS if record.get(k) not in (None, "")},

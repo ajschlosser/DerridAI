@@ -3976,6 +3976,8 @@
   "research.provenance_time": "Time {start}–{end}",
   "research.provenance_revision": "Record revision",
   "research.provenance_revision_missing": "Not recorded",
+  "research.provenance_source_document": "Source document",
+  "research.provenance_source_units": "Source units",
   "research.provenance_bindings": "Claims bound to this passage",
   "research.provenance_no_binding": "No generated claim is bound to this passage.",
   "research.provenance_relation": "Relation",

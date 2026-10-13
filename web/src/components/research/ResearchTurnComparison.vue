@@ -155,7 +155,13 @@ function cited(item: (typeof passages.value)[number]["left"], revision: number |
           </template>
         </article>
       </div>
-      <div v-if="passages.length" class="research-turn-comparison-passages">
+      <div
+        v-if="passages.length"
+        class="research-turn-comparison-passages"
+        role="region"
+        tabindex="0"
+        :aria-label="i18n.t('research.compare_passages')"
+      >
         <table>
           <caption>
             {{
@@ -229,6 +235,20 @@ function cited(item: (typeof passages.value)[number]["left"], revision: number |
   gap: 8px;
   align-content: start;
 }
+.research-turn-comparison dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+}
+.research-turn-comparison dt {
+  color: var(--text-tertiary);
+}
+.research-turn-comparison dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .research-turn-comparison dd span {
   display: inline-block;
   margin-inline-end: 8px;
@@ -255,6 +275,15 @@ function cited(item: (typeof passages.value)[number]["left"], revision: number |
   border-top: 1px solid var(--border);
   text-align: start;
   vertical-align: top;
-  overflow-wrap: anywhere;
+  /* Wrap at words; the region scrolls rather than splitting citations per character. */
+  overflow-wrap: break-word;
+  min-width: 8ch;
+}
+.research-turn-comparison td {
+  min-width: 14ch;
+}
+.research-turn-comparison-passages:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 </style>
