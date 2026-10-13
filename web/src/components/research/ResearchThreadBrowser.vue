@@ -30,6 +30,11 @@ import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import ResearchTurnComparison from "./ResearchTurnComparison.vue";
 import type { ResearchTurn } from "../../types/researchThreads";
 import { ApiError } from "../../api/http";
+import { downloadBlob } from "../../domain/sharedRecordScopes";
+import {
+  researchThreadExportName,
+  researchThreadMarkdown,
+} from "../../domain/researchThreadExport";
 
 const props = defineProps<{
   threadId: string;
@@ -269,7 +274,7 @@ function manage(action: "rename" | "delete") {
   notice.value = "";
   dialog.value = action;
 }
-async function mutate(action: "rename" | "archive" | "delete", title?: string) {
+async function mutate(action: "rename" | "archive" | "pin" | "delete", title?: string) {
   const thread = detail.data.value;
   if (
     busy.value ||
@@ -291,7 +296,11 @@ async function mutate(action: "rename" | "archive" | "delete", title?: string) {
     else
       await researchThreadsApi.patch(
         thread.thread_id,
-        action === "rename" ? { title: title?.trim() ?? "" } : { archived: !thread.archived_at },
+        action === "rename"
+          ? { title: title?.trim() ?? "" }
+          : action === "pin"
+            ? { pinned: !thread.pinned_at }
+            : { archived: !thread.archived_at },
       );
     if (request !== operation) return;
     dialog.value = null;
@@ -303,9 +312,13 @@ async function mutate(action: "rename" | "archive" | "delete", title?: string) {
       notice.value = i18n.t(
         action === "rename"
           ? "research.thread_renamed"
-          : thread.archived_at
-            ? "research.thread_unarchived"
-            : "research.thread_archive_saved",
+          : action === "pin"
+            ? thread.pinned_at
+              ? "research.thread_unpinned"
+              : "research.thread_pinned_saved"
+            : thread.archived_at
+              ? "research.thread_unarchived"
+              : "research.thread_archive_saved",
       );
     await client.invalidateQueries({ queryKey: key });
   } catch (error) {
@@ -328,6 +341,31 @@ async function mutate(action: "rename" | "archive" | "delete", title?: string) {
         if (request === operation && trigger?.isConnected) trigger.focus({ preventScroll: true });
       }
     }
+  }
+}
+async function exportThread(format: "md" | "json") {
+  const thread = detail.data.value;
+  if (busy.value || !thread) return;
+  const request = ++operation;
+  busy.value = true;
+  mutationError.value = "";
+  notice.value = "";
+  try {
+    // The server assembles the export from owner-scoped runs; passage text is never included.
+    const data = await researchThreadsApi.exportThread(thread.thread_id);
+    if (request !== operation) return;
+    const text =
+      format === "md"
+        ? researchThreadMarkdown(data, i18n.tf)
+        : JSON.stringify(data, null, 2) + "\n";
+    const type = format === "md" ? "text/markdown" : "application/json";
+    downloadBlob(new Blob([text], { type }), researchThreadExportName(data, format));
+    notice.value = i18n.t("research.thread_exported");
+  } catch (error) {
+    if (request === operation)
+      mutationError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (request === operation) busy.value = false;
   }
 }
 function retry() {
@@ -365,7 +403,9 @@ function retry() {
     @include-archived="updateArchived"
     @rename="manage('rename')"
     @archive="mutate('archive')"
+    @pin="mutate('pin')"
     @remove="manage('delete')"
+    @export="exportThread"
   >
     <template #compare="{ turns, close }">
       <ResearchTurnComparison :turns="turns" @close="close" />

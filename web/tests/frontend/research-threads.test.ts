@@ -33,7 +33,15 @@ vi.mock("../../src/api/http", async (original) => ({
   ...(await original<typeof import("../../src/api/http")>()),
   apiRequest: jobs.read,
 }));
-const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), patch: vi.fn(), remove: vi.fn() }));
+const api = vi.hoisted(() => ({
+  list: vi.fn(),
+  get: vi.fn(),
+  patch: vi.fn(),
+  remove: vi.fn(),
+  exportThread: vi.fn(),
+}));
+const downloads = vi.hoisted(() => ({ blob: vi.fn() }));
+vi.mock("../../src/domain/sharedRecordScopes", () => ({ downloadBlob: downloads.blob }));
 vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api }));
 const thread = (id: string): ResearchThreadDetail => ({
   thread_id: id,
@@ -651,6 +659,43 @@ describe("Research thread management", () => {
     await flushPromises();
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false);
   });
+  it("exports the server-built thread as Markdown or JSON, even when archived", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    api.exportThread.mockResolvedValue({
+      format: "derridai-research-thread-export-v1",
+      thread: { thread_id: "a", title: "a", created_at: "", updated_at: "", archived_at: "now" },
+      turns: [],
+      works_cited: ["Derrida, Jacques. Margins."],
+    });
+    const buttons = () => wrapper.findAll(".research-thread-export-actions button");
+    await buttons()[0].trigger("click");
+    await flushPromises();
+    expect(api.exportThread).toHaveBeenLastCalledWith("a");
+    const [markdown, name] = downloads.blob.mock.calls.at(-1)!;
+    expect(name).toBe("research-thread-a.md");
+    expect(await (markdown as Blob).text()).toContain("1. Derrida, Jacques. Margins.");
+    await buttons()[1].trigger("click");
+    await flushPromises();
+    const [json, jsonName] = downloads.blob.mock.calls.at(-1)!;
+    expect(jsonName).toBe("research-thread-a.json");
+    expect(JSON.parse(await (json as Blob).text()).thread.thread_id).toBe("a");
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+  it("pins and unpins with a sparse patch and a pressed state", async () => {
+    const wrapper = browser();
+    await flushPromises();
+    const pin = () => wrapper.findAll(".research-thread-management button")[2];
+    expect(pin().attributes("aria-pressed")).toBe("false");
+    api.get.mockResolvedValue({ ...thread("a"), pinned_at: "now" });
+    await pin().trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { pinned: true });
+    expect(pin().attributes("aria-pressed")).toBe("true");
+    await pin().trigger("click");
+    await flushPromises();
+    expect(api.patch).toHaveBeenLastCalledWith("a", { pinned: false });
+  });
   it("archives and unarchives without sending question or answer bodies", async () => {
     const wrapper = browser();
     await flushPromises();
@@ -669,11 +714,11 @@ describe("Research thread management", () => {
   it("only deletes after confirmation and clears selected turns when complete", async () => {
     const wrapper = browser();
     await flushPromises();
-    await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+    await wrapper.findAll(".research-thread-management button")[3].trigger("click");
     expect(api.remove).not.toHaveBeenCalled();
     await wrapper.get('[role="dialog"] button').trigger("click");
     expect(api.remove).not.toHaveBeenCalled();
-    await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+    await wrapper.findAll(".research-thread-management button")[3].trigger("click");
     await wrapper.findAll('[role="dialog"] button')[1].trigger("click");
     await flushPromises();
     expect(api.remove).toHaveBeenCalledWith("a");
@@ -721,7 +766,7 @@ it("does not apply a pending deletion to a replacement account's workspace", asy
       resolve = yes;
     }),
   );
-  await wrapper.findAll(".research-thread-management button")[2].trigger("click");
+  await wrapper.findAll(".research-thread-management button")[3].trigger("click");
   await wrapper.findAll('[role="dialog"] button')[1].trigger("click");
   useAuthStore().user = null;
   await flushPromises();

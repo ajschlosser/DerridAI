@@ -489,3 +489,53 @@ def test_explicit_context_scope_selects_only_chosen_turns_and_survives_retry(sto
         )
     failed = store.get_thread(thread_id, "alice")["turns"][-1]
     assert failed["user_question"] == "Bad scope" and failed["status"] == "failed"
+
+
+def test_export_keeps_run_and_record_identity_without_passage_text(store, monkeypatch):
+    from app.routers import research_threads as routes
+    from fastapi import HTTPException
+    thread_id = store.create_thread("alice", title="Différance")["thread_id"]
+    turn, _ = store.append_turn(thread_id, "alice", "Question")
+    store.bind_job(turn["turn_id"], "alice", job_id="job")
+    turn = store.complete_turn(turn["turn_id"], "alice", research_run_id="job", response_record_id="response")
+    failed, _ = store.append_turn(thread_id, "alice", "Second")
+    store.end_turn(failed["turn_id"], "alice", status="failed", error="boom")
+    cite = {"inline_citation": "(Derrida, Margins 3)", "full_citation": "Derrida, Jacques. Margins."}
+    record = {"record_id": "response", "owner": "alice", "response_id": "job", "question": "Question",
+        "text": "Answer (Derrida, Margins 3)", "raw_answer": "Answer [[E1]]",
+        "research_thread": {"thread_id": thread_id, "turn_id": turn["turn_id"], "attempt": 1},
+        "evidence": [
+            {"evidence_id": "E1", "collection": "c", **cite,
+             "record": {"record_id": "r1", "record_revision": 2, "printed_page_start": 3, "text": "SECRET PASSAGE"}},
+            {"evidence_id": "E2", "collection": "c", **cite, "record": {"record_id": "r2", "text": "uncited"}},
+        ]}
+    monkeypatch.setattr(routes, "rag_jobs", SimpleNamespace(get=lambda _: (_ for _ in ()).throw(KeyError("job"))))
+    monkeypatch.setattr(routes, "response_store", SimpleNamespace(get_record=lambda *_: record))
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role="researcher"))
+    export = routes.export_thread(thread_id, None)
+    assert "SECRET PASSAGE" not in str(export)
+    first, second = export["turns"]
+    assert first["research_run_id"] == "job" and first["answer"] == "Answer (Derrida, Margins 3)"
+    assert first["references"] == [{"evidence_id": "E1", "collection": "c", "record_id": "r1", "record_revision": 2,
+        **cite, "locator": {"printed_page_start": 3}}]
+    assert second["status"] == "failed" and not second["answer_available"] and second["references"] == []
+    assert export["works_cited"] == ["Derrida, Jacques. Margins."]
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="bob", role="researcher"))
+    with pytest.raises(HTTPException) as exc:
+        routes.export_thread(thread_id, None)
+    assert exc.value.status_code == 404
+    assert non_admin_route_allowed("researcher", "/api/research/threads/t/export", "GET")
+    assert not non_admin_route_allowed("researcher", "/api/research/threads/t/export", "POST")
+
+
+def test_patch_pins_only_the_owners_thread(store, monkeypatch):
+    from app.routers import research_threads as routes
+    from fastapi import HTTPException
+    thread_id = store.create_thread("alice")["thread_id"]
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="alice", role="researcher"))
+    assert routes.patch_thread(thread_id, routes.ThreadPatch(pinned=True), None)["pinned_at"]
+    assert store.get_thread(thread_id, "alice")["archived_at"] is None
+    monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="bob", role="researcher"))
+    with pytest.raises(HTTPException) as exc:
+        routes.patch_thread(thread_id, routes.ThreadPatch(pinned=False), None)
+    assert exc.value.status_code == 404 and store.get_thread(thread_id, "alice")["pinned_at"]

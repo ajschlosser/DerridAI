@@ -592,3 +592,96 @@ test("Library imports legacy singletons and preserves thread search URL state", 
   await library.getByRole("button", { name: /Legacy Levinas/ }).click();
   await expect(page).toHaveURL(/rag\?thread=legacy/);
 });
+
+test("switching threads drops the open inspector; archived and missing-artifact turns stay read-only", async ({
+  page,
+}) => {
+  const result = (label: string) => ({
+    prompt: `Question ${label}`,
+    answer: `Answer ${label} [[E0]].`,
+    evidence: [
+      {
+        evidence_id: "E0",
+        collection: "corpus",
+        inline_citation: `Author ${label}: 1`,
+        full_citation: `Source ${label}`,
+        record: { record_id: `${label}-0`, work: `Work ${label}`, text: `Exact passage ${label}` },
+      },
+    ],
+  });
+  const archived = {
+    ...detail("c"),
+    archived_at: "2026-10-06T00:00:00Z",
+    turns: [
+      { ...detail("c").turns[0], status: "completed", job_id: "job-c", error: null },
+      {
+        ...detail("c").turns[0],
+        turn_id: "c-2",
+        ordinal: 2,
+        user_question: "Historical question",
+        status: "completed",
+        job_id: "job-gone",
+        error: null,
+      },
+    ],
+  };
+  await mockBackend(page, {
+    fixtures: {
+      "/api/research/threads": (url: URL) => ({
+        threads:
+          url.searchParams.get("include_archived") === "true"
+            ? [summary("a"), { ...summary("c"), archived_at: archived.archived_at }]
+            : [summary("a")],
+      }),
+      "/api/research/threads/a": detail("a"),
+      "/api/research/threads/c": archived,
+      "/api/jobs/job-a": { id: "job-a", status: "completed", result: result("a") },
+      "/api/jobs/job-c": { id: "job-c", status: "completed", result: result("c") },
+      "/api/research/threads/c/export": {
+        format: "derridai-research-thread-export-v1",
+        thread: { thread_id: "c", title: "Inquiry c", archived_at: archived.archived_at },
+        turns: [],
+        works_cited: ["Source c"],
+      },
+    },
+  });
+  const gone = (route: import("@playwright/test").Route) =>
+    route.fulfill({ status: 404, contentType: "application/json", body: '{"detail":"Gone"}' });
+  await page.route("**/api/jobs/job-gone", gone);
+  await page.route("**/api/research/threads/c/turns/c-2/result", gone);
+
+  await page.goto(`${APP}/rag?thread=a`);
+  const navigation = page.locator(".research-thread-navigation");
+  const turnA = navigation.locator("article[aria-labelledby]").first();
+  await turnA.getByRole("button", { name: "Inspect this answer and its evidence" }).click();
+  await expect(turnA.locator(".research-evidence-inspector")).toContainText("Exact passage a");
+
+  await navigation.getByLabel("Include archived threads").check();
+  await expect(page).toHaveURL(/thread_archived=true/);
+  await navigation.getByRole("button", { name: /Inquiry c/ }).click();
+  await expect(page).toHaveURL(/thread=c/);
+  await expect(navigation.locator(".research-turn-inspector")).toHaveCount(0);
+  await expect(navigation.getByText("Exact passage a")).toHaveCount(0);
+
+  const [first, historical] = [0, 1].map((index) =>
+    navigation.locator("article[aria-labelledby]").nth(index),
+  );
+  await expect(first.locator(".thread-answer-text")).toContainText("Answer c");
+  await expect(historical).toContainText(
+    "The run is unavailable. This question remains in thread history.",
+  );
+  await expect(historical.locator(".thread-answer-text")).toHaveCount(0);
+  await expect(navigation.getByRole("button", { name: "Follow up on this turn" })).toHaveCount(0);
+  await expect(page.locator(".research-run-button")).toBeDisabled();
+
+  await first.getByRole("button", { name: "Inspect this answer and its evidence" }).click();
+  await expect(first.locator(".research-evidence-inspector")).toContainText("Exact passage c");
+
+  await navigation.getByText("Manage thread").click();
+  const download = page.waitForEvent("download");
+  await navigation.getByRole("button", { name: "Export as Markdown" }).click();
+  expect((await download).suggestedFilename()).toBe("research-thread-c.md");
+  expect(
+    (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
+  ).toEqual([]);
+});

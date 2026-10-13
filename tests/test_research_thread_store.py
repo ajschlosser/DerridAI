@@ -183,3 +183,33 @@ def test_store_reopen_keeps_state(tmp_path) -> None:
     first.append_turn(tid, "alice", "Q")
     again = ResearchThreadStore(path)  # idempotent schema init
     assert again.get_thread(tid, "alice")["turns"][0]["user_question"] == "Q"
+
+
+def test_pinned_threads_list_first_without_changing_activity_order_or_other_owners(store) -> None:
+    older = _thread(store)
+    newer = _thread(store)
+    bob = _thread(store, "bob")
+    assert [t["thread_id"] for t in store.list_threads("alice")] == [newer, older]
+    before = store.get_thread(older, "alice")["updated_at"]
+    pinned = store.set_pinned(older, "alice", True)
+    assert pinned["pinned_at"] and pinned["updated_at"] == before
+    assert [t["thread_id"] for t in store.list_threads("alice")] == [older, newer]
+    with pytest.raises(ThreadNotFound):
+        store.set_pinned(bob, "alice", True)
+    assert store.set_pinned(older, "alice", False)["pinned_at"] is None
+    assert [t["thread_id"] for t in store.list_threads("alice")] == [newer, older]
+
+
+def test_pinned_column_is_added_to_an_existing_thread_table(tmp_path) -> None:
+    import sqlite3
+    path = tmp_path / "legacy.sqlite3"
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "CREATE TABLE research_threads (thread_id TEXT PRIMARY KEY, owner TEXT NOT NULL,"
+            " title TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+            " archived_at TEXT, deleted_at TEXT, originating_response_record_id TEXT)"
+        )
+        conn.execute("INSERT INTO research_threads VALUES ('rt_old','alice','Old','t','t',NULL,NULL,NULL)")
+    store = ResearchThreadStore(path)
+    assert store.get_thread("rt_old", "alice")["pinned_at"] is None
+    assert store.set_pinned("rt_old", "alice", True)["pinned_at"]

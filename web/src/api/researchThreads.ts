@@ -20,6 +20,7 @@ import { apiRequest } from "./http";
 import type {
   ResearchThread,
   ResearchThreadDetail,
+  ResearchThreadExport,
   ResearchThreadSummary,
 } from "../types/researchThreads";
 
@@ -45,11 +46,13 @@ export const researchThreadsApi = {
   },
   get: (id: string) =>
     apiRequest<ResearchThreadDetail>(`${THREADS_PATH}/${encodeURIComponent(id)}`),
-  patch: (id: string, patch: { title?: string; archived?: boolean }) =>
+  patch: (id: string, patch: { title?: string; archived?: boolean; pinned?: boolean }) =>
     apiRequest<ResearchThread>(`${THREADS_PATH}/${encodeURIComponent(id)}`, {
       method: "PATCH",
       body: JSON.stringify(patch),
     }),
   remove: (id: string) =>
     apiRequest<void>(`${THREADS_PATH}/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  exportThread: (id: string) =>
+    apiRequest<ResearchThreadExport>(`${THREADS_PATH}/${encodeURIComponent(id)}/export`),
 };

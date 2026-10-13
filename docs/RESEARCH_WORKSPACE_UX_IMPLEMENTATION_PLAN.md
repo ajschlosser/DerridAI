@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phases 2 and 4 are implemented; Phase 5 search, scoped follow-ups and turn comparison are implemented on `claude/research-ux-next`; export and pins/labels remain (see §11–13). Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
+**Status:** Phases 2 and 4 are implemented; Phase 5 search, scoped follow-ups and turn comparison merged in PR #611; thread export and pins are implemented; only verification debt remains (see §13). Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -105,7 +105,7 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 - [x] Establish one reading column with ordered turns and a composer in the same layout. Deeper visual refinement of the existing turn cards remains outstanding.
 - [x] Ensure `?thread` selection and browser Back/Forward stay consistent with internal selection; return focus to selected thread heading where appropriate.
 - [x] Integrate run status affordances without competing full-width run/activity panels.
-- [ ] Tests: empty/new, selected/archived, 1 vs many turns, historical missing artifact, permissions and account change, deep links.
+- [x] Tests: empty/new, selected/archived, 1 vs many turns, historical missing artifact, permissions and account change, deep links.
 
 **Phase 2 exit:** Research navigation, reading, and composer feel like a single application surface at desktop widths.
 
@@ -134,8 +134,8 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 - [x] Search within a single thread across questions and available answers without fetching all audit payloads.
 - [x] Start a follow-up from selected answer/source passage with explicit, editable context scope.
 - [x] Compare two turns/runs and their bound evidence without flattening identity or validation status.
-- [ ] Export conversation and bibliographic/audit references with deterministic citation construction and preserved run/record identities.
-- [ ] Add optional thread pins/labels only if justified by observed library usage.
+- [x] Export conversation and bibliographic/audit references with deterministic citation construction and preserved run/record identities.
+- [x] Add optional thread pins (owner-scoped API + migration). Labels were not added: no observed library usage justifies a second taxonomy.
 
 ## 5. Accessibility, localization, design-system checks (all phases)
 
@@ -244,10 +244,11 @@ No phase is complete without its implementation, tests, documentation when appli
 - **Follow up on this turn** (completed turns) and **Follow up on this passage** (inspector Sources) set an explicit context scope shown in the follow-up composer, where each turn can be removed or the scope reset to automatic. A passage follow-up prefills an empty question with the run's own deterministic inline citation, as editable text. Only turn IDs travel (`context_turn_ids`); the scope applies to one follow-up and is kept on retry. The passage is not added to selected evidence: the new run retrieves its own evidence.
 - **Compare turns** (threads with two or more completed turns) opens `ResearchTurnComparison`: two turn pickers, each side's run ID, provider/model, claim validation counts as recorded and read-only answer, and a cited-passages table that aligns EvidenceRefs by collection + Record ID. Each side keeps its own marker, citation and revision; a shared Record at a different or unrecorded revision is flagged, and evidence without a Record ID is never matched. Both sides load through `useResearchTurnResult`, now shared with `ResearchThreadAnswer`.
 
+- **Export** (Manage thread): `GET /api/research/threads/{id}/export` (owner-scoped, `rag.run`) builds `derridai-research-thread-export-v1` server-side from each completed turn's authorized result: question, instructions, answer, turn/attempt/run/job IDs, provider/model, and for each cited EvidenceRef (from the raw answer's markers; all EvidenceRefs when no raw answer is recorded) its marker, collection, Record ID, revision, locator fields and the run's recorded inline/full citation, plus a deduplicated works-cited list. Passage text is never exported, so Researcher exports carry no corpus text. Turns without an available answer stay listed as unavailable. The client offers JSON (verbatim) and a localized Markdown rendering.
+
 ## 13. Remaining work (as of 2026-10-12)
 
-- **Export** conversation with bibliographic/audit references (Phase 5): not started. Needs deterministic citation construction from record metadata, preserved run/record identities, and a decision on format (Markdown/JSON) and server vs client assembly; researcher accounts must not receive full corpus text.
-- **Thread pins/labels** (Phases 4–5): deliberately not started; needs an owner-scoped API and migration, and evidence from library usage that they are needed.
-- **Verification debt across phases:** no captured desktop/mobile screenshots; no manual screen-reader, keyboard, 200–400% zoom or reduced-motion review; no Storybook story yet for `ResearchTurnComparison` (it needs a query-client decorator); cross-thread navigation e2e; e2e for archived threads and historical missing artifacts.
+- **Thread pins**: `research_threads.pinned_at` is added by an idempotent column migration; `PATCH /api/research/threads/{id}` accepts `pinned`, scoped to the owner (non-owners get 404). The list orders pinned threads first (most recently pinned first), then by activity; pinning does not change `updated_at`. **Pin thread** in Manage thread is an `aria-pressed` toggle and pinned rows show **Pinned**. Labels were deliberately not added.
+- **Verification debt across phases:** no captured desktop/mobile screenshots; no manual screen-reader, keyboard, 200–400% zoom or reduced-motion review (these need a person at a real browser and screen reader). Done since: `Research/Turn Comparison` story (seeds the per-turn query cache), and a Playwright case covering cross-thread navigation with an open inspector, an archived thread (no follow-up, export still available) and a historical turn whose run and saved answer are both gone.
 - SourceSpan/SourceDocument identifiers are still not shown because the evidence payload does not carry span IDs.
 - `tests/frontend/sidebar-navigator.test.ts` (an unrelated paint-timing assertion) fails locally in this worktree; not investigated.
