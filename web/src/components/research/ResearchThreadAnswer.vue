@@ -263,6 +263,10 @@ watch(
 }
 .thread-answer-inspect-toggle {
   justify-self: start;
+  /* Wrap the label instead of overflowing a 320px viewport. */
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
 }
 .thread-answer-inspector {
   min-width: 0;

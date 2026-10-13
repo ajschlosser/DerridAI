@@ -62,6 +62,29 @@ describe("shared Research answer content", () => {
     wrapper.unmount();
   });
 
+  it("opens each of several citations in one paragraph at its own evidence index", async () => {
+    const wrapper = mount(ResearchAnswerContent, {
+      props: {
+        compact: true,
+        answer: "First [[E0]], then [E1], and unresolved [[E7]], then [[E0]] again.",
+        evidence: [
+          { evidence_id: "E0", inline_citation: "(Work A: 1)" },
+          { evidence_id: "E1", inline_citation: "(Work B: 2)" },
+        ] as ResearchResultEvidence[],
+      },
+    });
+    const buttons = wrapper.findAll("button.thread-answer-citation");
+    expect(buttons.map((button) => button.text())).toEqual([
+      "(Work A: 1)",
+      "(Work B: 2)",
+      "(Work A: 1)",
+    ]);
+    for (const button of buttons) await button.trigger("click");
+    expect(wrapper.emitted("evidence")).toEqual([[0], [1], [0]]);
+    expect(wrapper.text()).toContain("E7");
+    wrapper.unmount();
+  });
+
   it("does not convert unknown citations into links or interpret text as HTML", () => {
     const wrapper = mount(ResearchAnswerContent, {
       props: {
