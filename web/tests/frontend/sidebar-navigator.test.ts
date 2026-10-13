@@ -40,7 +40,8 @@ describe("SidebarNavigator interaction priority", () => {
   });
 
   it("emits navigation before persisting recents and defers storage until after paint", async () => {
-    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    // Spy on the instance: some happy-dom builds give localStorage its own setItem.
+    const setItem = vi.spyOn(localStorage, "setItem");
     const wrapper = mount(SidebarNavigator, {
       props: {
         collapsed: false,
