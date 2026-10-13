@@ -506,7 +506,7 @@ def test_export_keeps_run_and_record_identity_without_passage_text(store, monkey
         "research_thread": {"thread_id": thread_id, "turn_id": turn["turn_id"], "attempt": 1},
         "evidence": [
             {"evidence_id": "E1", "collection": "c", **cite,
-             "record": {"record_id": "r1", "record_revision": 2, "printed_page_start": 3, "text": "SECRET PASSAGE"}},
+             "record": {"record_id": "r1", "record_revision": 2, "source_document_id": "doc-1", "printed_page_start": 3, "text": "SECRET PASSAGE"}},
             {"evidence_id": "E2", "collection": "c", **cite, "record": {"record_id": "r2", "text": "uncited"}},
         ]}
     monkeypatch.setattr(routes, "rag_jobs", SimpleNamespace(get=lambda _: (_ for _ in ()).throw(KeyError("job"))))
@@ -516,7 +516,7 @@ def test_export_keeps_run_and_record_identity_without_passage_text(store, monkey
     assert "SECRET PASSAGE" not in str(export)
     first, second = export["turns"]
     assert first["research_run_id"] == "job" and first["answer"] == "Answer (Derrida, Margins 3)"
-    assert first["references"] == [{"evidence_id": "E1", "collection": "c", "record_id": "r1", "record_revision": 2,
+    assert first["references"] == [{"evidence_id": "E1", "collection": "c", "record_id": "r1", "record_revision": 2, "source_document_id": "doc-1",
         **cite, "locator": {"printed_page_start": 3}}]
     assert second["status"] == "failed" and not second["answer_available"] and second["references"] == []
     assert export["works_cited"] == ["Derrida, Jacques. Margins."]

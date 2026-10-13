@@ -46,6 +46,14 @@ function range(start: unknown, end: unknown) {
 }
 
 const record = computed(() => props.evidence.record || {});
+// Source units come from the Record's own spans (or its recorded unit list);
+// they are shown only when the run's evidence carried them.
+const sourceUnits = computed(() => {
+  const spans = Array.isArray(record.value.source_spans) ? record.value.source_spans : [];
+  const fromSpans = spans.map((span: { source_unit_id?: unknown }) => text(span?.source_unit_id));
+  const listed = Array.isArray(record.value.source_unit_ids) ? record.value.source_unit_ids : [];
+  return [...new Set([...fromSpans, ...listed.map(text)].filter(Boolean))];
+});
 const sourceRows = computed(() =>
   [
     {
@@ -62,6 +70,16 @@ const sourceRows = computed(() =>
       key: "translator",
       label: i18n.t("research.provenance_translator"),
       value: text(record.value.translator),
+    },
+    {
+      key: "source_document",
+      label: i18n.t("research.provenance_source_document"),
+      value: text(record.value.source_document_id),
+    },
+    {
+      key: "source_units",
+      label: i18n.t("research.provenance_source_units"),
+      value: sourceUnits.value.join(", "),
     },
   ].filter((row) => row.value),
 );

@@ -41,6 +41,19 @@ describe("Research evidence provenance", () => {
     expect(wrapper.text()).toContain("No generated claim is bound to this passage.");
   });
 
+  it("shows source document and unit identities only when the evidence carries them", () => {
+    const wrapper = render({
+      evidence_id: "E1",
+      record: {
+        record_id: "r1",
+        source_document_id: "doc-7",
+        source_spans: [{ source_unit_id: "u2" }, { source_unit_id: "u2" }, { block_id: "b1" }],
+        source_unit_ids: ["u3"],
+      },
+    });
+    expect(rows(wrapper)).toMatchObject({ "Source document": "doc-7", "Source units": "u2, u3" });
+  });
+
   it("keeps printed and physical pages distinct and shows known source metadata only", () => {
     const wrapper = render({
       evidence_id: "E1",
