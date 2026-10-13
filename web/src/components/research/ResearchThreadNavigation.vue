@@ -484,6 +484,13 @@ function clearSearch(event: KeyboardEvent) {
   box-shadow: inset 3px 0 0 var(--accent-fg);
   font-weight: 700;
 }
+/* Tertiary text falls below 4.5:1 on the dark selected background. */
+.research-thread-index
+  button[aria-current="true"]
+  span:not(.research-thread-state, .research-thread-title),
+.research-thread-index button[aria-current="true"] time {
+  color: var(--text-secondary);
+}
 .research-thread-primary {
   grid-column: 2;
   grid-row: 1 / span 3;

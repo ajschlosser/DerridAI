@@ -19,7 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 # Research Workspace UX Implementation Plan
 
 **Scope:** Research (`/rag`), persisted Research threads and turns, Research Library entry points, evidence/claim inspection, and follow-up composition.  
-**Status:** Phases 2 and 4 are implemented; Phase 5 search, scoped follow-ups and turn comparison merged in PR #611; thread export and pins are implemented; only verification debt remains (see §13). Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
+**Status:** Phases 0–5 are implemented and merged (PRs #605–#613 and the Phase 0 baseline in §14). Only manual screen-reader, keyboard, zoom and reduced-motion review remains (see §13). Phases 1–2 merged into `master` in PR #605; the final quality-gate run passed. Phase 3 merged in PR #606 with a passing quality gate; manual visual/screen-reader review and full cELF chain display remain pending.
 **Design input:** October 2026 Research / Research Threads UX assessment; treat illustrative mockups as proposals, not live screenshots.  
 **Normative authority:** [cELF 1.0](../SPECIFICATION.md), [research requirements](requirements/RESEARCH_RETRIEVAL_AND_EVIDENCE.md), [architecture](ARCHITECTURE.md), [current user guide](USER_GUIDE.md), and [contributor instructions](../AGENTS.md).
 
@@ -84,18 +84,18 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 
 ### Phase 0 — Baseline and tests
 
-- [ ] Capture **actual** before screenshots at desktop (1440, 1280), tablet (~900), mobile (390, 320), and zoomed layouts from a locally running app (not illustrative mockups).
-- [ ] Inventory current Storybook and Playwright scenarios for Research, thread management, evidence, citation links, streaming, retry and authorized-result recovery.
-- [ ] Add focused characterization tests for answer markup, citation activation, thread change cleanup and evidence selection; ensure static-source locale checks are preserved.
-- [ ] Record baseline performance for 1, 10 and 100 turns, and network requests on thread switch. Do not assert timings without measurements.
+- [x] Capture **actual** before screenshots at desktop (1440, 1280), tablet (~900), mobile (390, 320), and zoomed layouts from a locally running app (not illustrative mockups).
+- [x] Inventory current Storybook and Playwright scenarios for Research, thread management, evidence, citation links, streaming, retry and authorized-result recovery.
+- [x] Add focused characterization tests for answer markup, citation activation, thread change cleanup and evidence selection; ensure static-source locale checks are preserved.
+- [x] Record baseline performance for 1, 10 and 100 turns, and network requests on thread switch. Do not assert timings without measurements.
 
 ### Phase 1 — Answer parity and safe citation activation (P0, start here)
 
 - [x] Extract a shared, escaped answer-body renderer from `ResearchAnswerWorkspace.vue` or adopt its existing `parseResearchAnswer` + `segmentResearchAnswer` logic in both contexts.
 - [x] Render headings, ordered/unordered lists, paragraph emphasis and citations identically in thread/standalone results; treat unresolved markers as text, never false links.
 - [x] Ensure both `[E1]` and `[[E1]]` markers and already-bound inline citations resolve correctly only against **this turn's** evidence packet; avoid brittle global regex replacement.
-- [ ] Remove redundant second rendering of the answer in the expanded thread audit where possible; retain access to works cited, claim review, evidence and run details.
-- [ ] Tests: multiple citations, different turn evidence with reused `E1`, unresolved/stale citations, HTML-like source content escaped, multi-paragraph/list answers, rerenders after attempt changes.
+- [x] Remove redundant second rendering of the answer in the expanded thread audit where possible; retain access to works cited, claim review, evidence and run details.
+- [x] Tests: multiple citations, different turn evidence with reused `E1`, unresolved/stale citations, HTML-like source content escaped, multi-paragraph/list answers, rerenders after attempt changes.
 
 **Phase 1 exit:** A completed thread answer requires no expansion to obtain the same structured scholarly answer as a standalone run; every citation selects only its own turn's evidence.
 
@@ -116,7 +116,7 @@ Prefer an evolutionary extraction over a parallel implementation. The names are 
 - [x] Provide original Record, relationship trace and cELF model actions using existing navigation; distinguish no binding, unsupported, disputed, unresolved and validated.
 - [x] Supply one turn-scoped Sources / Claims / Run inspector, with explicit empty-source/claim states and no duplicate answer.
 - [x] Support Escape, focus return, keyboard-operable section buttons, and turn/job/attempt selection reset. Existing evidence panel provides a live region; manual screen-reader review remains outstanding.
-- [ ] Tests: same E marker in two turns (done), retry attempt resets the inspector (done), empty evidence/claim states, revision mismatch, missing locator and multiple binding relations (done); cross-thread navigation e2e and manual keyboard/a11y remain.
+- [x] Tests: same E marker in two turns, retry attempt resets the inspector, empty evidence/claim states, revision mismatch, missing locator, multiple binding relations, and cross-thread navigation e2e. Manual keyboard/screen-reader review remains (§13).
 
 **Phase 3 exit:** One citation interaction shows the right documentary passage; no nested second full workspace is required.
 
@@ -252,3 +252,12 @@ No phase is complete without its implementation, tests, documentation when appli
 - **Verification debt across phases:** Storybook captures of the turn inspector, comparison, thread navigation and follow-up composer were reviewed at 1440×900 and 390×844 in light and dark (no horizontal page overflow). That review fixed the comparison's unstyled run metadata and its cited-passages table splitting citations per character on mobile; the table now wraps at words and scrolls in a labelled, focusable region. Still missing: screenshots of the full running app; no manual screen-reader, keyboard, 200–400% zoom or reduced-motion review (these need a person at a real browser and screen reader). Done since: `Research/Turn Comparison` story (seeds the per-turn query cache), and a Playwright case covering cross-thread navigation with an open inspector, an archived thread (no follow-up, export still available) and a historical turn whose run and saved answer are both gone.
 - Source identity: the inspector's provenance section now shows the Record's `source_document_id` and its source unit IDs (deduplicated from `source_spans[].source_unit_id` and `source_unit_ids`) when the run's evidence record carries them, and omits the rows otherwise. Thread export references include `source_document_id`. Spans have no stable span ID of their own, so none is shown.
 - `tests/frontend/sidebar-navigator.test.ts` failed locally because its spy was on `Storage.prototype.setItem`, which some happy-dom builds bypass (`localStorage` has its own `setItem`); the test now spies on the instance. Not a product bug.
+
+## 14. Phase 0 baseline (recorded after the fact, 2026-10-12)
+
+Phase 0 was not done before implementation; this records the same measurements against current `master`, so it is a baseline for future work, not a before/after comparison.
+
+- **Screenshots:** the production build against the e2e mock backend, with a 10-turn thread open, at 1440, 1280, 900, 390 and 320px in light and dark. (A CSS-`zoom` capture was discarded: it does not trigger responsive breakpoints the way browser zoom does, so zoom review stays manual.) These are review aids and are not committed. At 320px, **Inspect this answer and its evidence** did not wrap and scrolled the page 15px sideways; it now wraps, and the inspector e2e asserts no horizontal overflow at 320px. No other width overflowed.
+- **Contrast:** the selected thread row's metadata used `--text-tertiary` on the dark `--soft` background (4.06:1), which failed the existing "active thread previews" axe test on `master`. Selected rows now use `--text-secondary`.
+- **Scenario inventory:** Playwright `research-threads.spec.ts` covers URL state and guarded follow-ups, thread management, retry, active previews in both themes, per-turn inspection with saved-answer recovery, first question, follow-up, Library import, and cross-thread/archived/missing-artifact navigation; `research-progressive-loading.spec.ts` and `research-filter-editor-a11y.spec.ts` cover loading and filters. Storybook has `Research/Turn Inspector` and `Research/Turn Comparison`. Answer markup and citation activation are characterized in `research-answer-content.test.ts` and `research-answer-formatting.test.ts`, which now include several citations (resolved, repeated and unresolved) in one paragraph.
+- **Performance (one local run, Chromium, mock backend; not asserted):** opening a thread with 10 or 100 turns rendered all turns and reached network idle in about 70–160 ms with 5 API requests, of which **one** was a job result, so turn results load lazily rather than once per turn. The 1-turn figure (~3.9 s, 8 requests) includes cold application start-up and is not comparable.

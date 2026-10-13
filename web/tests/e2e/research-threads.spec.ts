@@ -448,6 +448,13 @@ test("each turn inspects its own evidence, including a recovered saved answer, w
       (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
     ).toEqual([]);
   }
+  // The inspect button's label wraps rather than scrolling the page sideways.
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    ),
+  ).toBeLessThanOrEqual(0);
 });
 
 test("first question keeps the existing composer and submits one history-free run", async ({
