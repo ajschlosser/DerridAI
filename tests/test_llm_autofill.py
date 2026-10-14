@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """LLM autofill in the reconcile step: the blended confidence, the ledger, and remembered rejections."""
 
 from __future__ import annotations
@@ -38,8 +54,11 @@ def test_a_confident_value_is_filled_even_though_the_model_asked_for_review(tmp_
 
 
 def test_no_cited_evidence_keeps_it_in_review(tmp_path):
-    status = reconcile(manager(tmp_path), cite=False)["metadata_field_status"]["discourse_role"]
+    result = reconcile(manager(tmp_path), cite=False)
+    status = result["metadata_field_status"]["discourse_role"]
     assert status["status"] != "model_inferred" or not status.get("autofilled")
+    assert result["metadata_evidence"]["discourse_role"]["block_ids"] == []
+    assert result["metadata_evidence"]["discourse_role"]["confidence"] is None
 
 
 def test_below_the_bar_it_still_needs_review(tmp_path):
@@ -71,7 +90,7 @@ def test_a_rejection_is_recorded_and_shown_to_the_next_pass(tmp_path):
 def test_the_concurrency_limit_refuses_an_extra_run(tmp_path, monkeypatch):
     m = manager(tmp_path)
     monkeypatch.setattr(m, "active_enrichment_runs", lambda: 1)
-    monkeypatch.setattr(m, "_validate_execution_budget", lambda request: None)
+    monkeypatch.setattr(cb, "_validate_execution_budget", lambda request: None)
     build = m.repo.create_build({"asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
                                  "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": "0", "provider": "ollama", "model": "m", "request": {}})
     build.update(status="awaiting_review")

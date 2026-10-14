@@ -1,15 +1,49 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // Search facets, filter descriptors and row/record filter matching for the Search and Records views. Moved
 // verbatim from the legacy runtime; the state it read is passed in as dependencies.
 
-import {
-  SEARCH_AUTOCOMPLETE_EXCLUDED,
-  SEARCH_FACET_FIELDS,
-  SEARCH_FILTER_FIELDS,
-} from "./runtimeConstants";
+import { SEARCH_AUTOCOMPLETE_EXCLUDED } from "./runtimeConstants";
+import { bindCopy } from "../i18n/bindCopy";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/**
+ * Compatibility-only display order for schema-less/legacy loaded records.
+ *
+ * Eligibility still comes from recordFields(); these names merely keep the
+ * historical high-value facets first when no explicit schema/index capability
+ * set is available.
+ */
+const LEGACY_SEARCH_FACET_ORDER = [
+  "work",
+  "needs_review",
+  "__db_status",
+  "document_author",
+  "quoted_speaker",
+  "speaker",
+  "position_holder",
+  "discourse_role",
+  "document_language",
+  "topics",
+  "concepts",
+];
 
 interface Deps {
   tr: (key: string, fallback?: string) => string;
@@ -26,7 +60,6 @@ interface Deps {
 
 export function createSearchFacets(deps: Deps) {
   const {
-    tr,
     label,
     display,
     recordDbStatus,
@@ -36,6 +69,12 @@ export function createSearchFacets(deps: Deps) {
     dbSearchWhere,
     filterOpsForField,
   } = deps;
+  const { tr } = bindCopy(deps.tr, (_key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback,
+    ),
+  );
   function searchFacetRawValues(record: Loose, field: string, row: Loose | null = null) {
     if (field === "needs_review") return [record?.needs_review ? "true" : "false"];
     if (field === "__db_status") {
@@ -54,21 +93,19 @@ export function createSearchFacets(deps: Deps) {
   }
   function searchFacetDisplay(field: string, value: string) {
     if (field === "needs_review")
-      return value === "true"
-        ? tr("search.needs_review", "Needs review")
-        : tr("search.reviewed", "Reviewed");
+      return value === "true" ? tr("search.needs_review") : tr("search.reviewed");
     if (field === "__db_status") {
       const labelsByKind: Record<string, string> = {
-        synced: tr("search.db_synced", "Synced"),
-        changed: tr("search.db_pending", "Pending"),
-        exists: tr("search.db_in_database", "In DB"),
-        absent: tr("search.db_not_in_database", "Not in DB"),
-        unknown: tr("search.db_unknown", "Unknown"),
-        none: tr("search.db_none", "No database"),
+        synced: tr("search.db_synced"),
+        changed: tr("search.db_pending"),
+        exists: tr("search.db_in_database"),
+        absent: tr("search.db_not_in_database"),
+        unknown: tr("search.db_unknown"),
+        none: tr("search.db_none"),
       };
       return labelsByKind[value] || value;
     }
-    return value || tr("ui.none", "None");
+    return value || tr("ui.none");
   }
   function searchFacetMatches(
     record: Loose,
@@ -114,10 +151,24 @@ export function createSearchFacets(deps: Deps) {
     }
     return counts;
   }
-  function buildSearchFacets(source: Loose[], { database = false } = {}) {
+  function buildSearchFacets(
+    source: Loose[],
+    { database = false, fields = [] }: { database?: boolean; fields?: string[] } = {},
+  ) {
     const rows = (database ? null : source) as Loose[];
     const records = (database ? source : null) as Loose[];
-    return SEARCH_FACET_FIELDS.filter((field) => !(database && field === "__db_status"))
+    const requestedFields = fields.length
+      ? fields
+      : [...LEGACY_SEARCH_FACET_ORDER, ...recordFields()];
+    const facetFields = [...new Set(requestedFields.map(String))].filter(
+      (field) =>
+        !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field) &&
+        field !== "text" &&
+        field !== "field_assertions" &&
+        field !== "current_field_assertions",
+    );
+    return facetFields
+      .filter((field) => !(database && field === "__db_status"))
       .map((field) => {
         const counts = database
           ? searchFacetCountsFromRecords(records, field)
@@ -145,16 +196,14 @@ export function createSearchFacets(deps: Deps) {
       })
       .filter((facet) => facet.values.length);
   }
-  function searchSuggestions(recordsOrRows: Loose[], { database = false } = {}) {
+  function searchSuggestions(
+    recordsOrRows: Loose[],
+    { database = false, fields = [] }: { database?: boolean; fields?: string[] } = {},
+  ) {
     const out: Record<string, string[]> = {};
     const rows = database ? recordsOrRows.map((record) => ({ record })) : recordsOrRows;
-    const fields = [
-      ...new Set([
-        ...SEARCH_FILTER_FIELDS,
-        ...recordFields().filter((field) => !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field)),
-      ]),
-    ];
-    for (const field of fields) {
+    const requestedFields = fields.length ? fields : recordFields();
+    for (const field of [...new Set(requestedFields.map(String))]) {
       if (SEARCH_AUTOCOMPLETE_EXCLUDED.has(field)) continue;
       const values = new Set<string>();
       for (const row of rows as Loose[]) {
@@ -192,9 +241,7 @@ export function createSearchFacets(deps: Deps) {
         field,
         field_label: label(field),
         op: contains ? "has" : "eq",
-        op_label: contains
-          ? tr("search.operator_has", "contains")
-          : tr("search.operator_eq", "equals"),
+        op_label: contains ? tr("search.operator_has") : tr("search.operator_eq"),
         value: String(contains ? value.$contains : (value ?? "")),
       };
     });
@@ -233,12 +280,9 @@ export function createSearchFacets(deps: Deps) {
       if (terms.some((term) => text.includes(term))) reasons.push(label(field));
       if (reasons.length >= 3) break;
     }
-    if (database && method === "similarity")
-      reasons.unshift(tr("search.semantic_match", "Semantic similarity"));
-    if (database && method === "mmr")
-      reasons.unshift(tr("search.mmr_match", "Semantic relevance + diversity"));
-    if (database && method === "filter")
-      reasons.unshift(tr("search.filter_match", "Metadata filter match"));
+    if (database && method === "similarity") reasons.unshift(tr("search.semantic_match"));
+    if (database && method === "mmr") reasons.unshift(tr("search.mmr_match"));
+    if (database && method === "filter") reasons.unshift(tr("search.filter_match"));
     if (
       !database &&
       terms.length &&
@@ -246,7 +290,7 @@ export function createSearchFacets(deps: Deps) {
         .toLocaleLowerCase()
         .includes(terms[0])
     )
-      reasons.unshift(tr("search.text_match", "Text match"));
+      reasons.unshift(tr("search.text_match"));
     return [...new Set(reasons)].slice(0, 4);
   }
   function rowMatchesListFilters(row: Loose, filters: Loose[]) {

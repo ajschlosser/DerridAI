@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Corpus Builder must not drop an OpenAI key the browser already sent.
 
 Why: administrator profiles keep that key in the browser. A published profile may
@@ -15,12 +30,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
-from app.main import _resolve_pdf_corpus_provider  # noqa: E402
+from app.routers.corpus import _resolve_pdf_corpus_provider  # noqa: E402
 
 
 def _stored(monkeypatch, **profile):
     monkeypatch.setattr(
-        "app.main.system_store.researcher_profile",
+        "app.routers.corpus.system_store.researcher_profile",
         lambda profile_id: {"id": profile_id, "type": "openai", "model": "stored-model", **profile},
     )
 
@@ -53,3 +68,29 @@ def test_a_blank_request_key_uses_the_key_stored_with_the_profile(monkeypatch):
     })
     assert resolved["api_key"] == "sk-stored"
     assert resolved["base_url"] == "https://stored.example/v1"
+
+
+def test_missing_selected_profile_fails_explicitly(monkeypatch):
+    monkeypatch.setattr("app.routers.corpus.system_store.researcher_profile", lambda profile_id: None)
+    try:
+        _resolve_pdf_corpus_provider({"provider_profile_id": "removed-profile"})
+    except ValueError as exc:
+        assert str(exc) == "The selected LLM provider profile is not available."
+    else:
+        raise AssertionError("A missing provider profile must not produce a success-shaped request.")
+
+
+def test_direct_provider_configuration_remains_valid_without_a_stored_profile(monkeypatch):
+    """Interactive Corpus Builder actions may authenticate with browser-supplied credentials."""
+    monkeypatch.setattr("app.routers.corpus.system_store.researcher_profile", lambda profile_id: None)
+    resolved = _resolve_pdf_corpus_provider({
+        "provider_profile_id": "openai-1",
+        "provider": "openai",
+        "model": "browser-model",
+        "base_url": "https://api.openai.com/v1",
+        "api_key": "sk-browser",
+    })
+    assert resolved["provider"] == "openai"
+    assert resolved["model"] == "browser-model"
+    assert resolved["base_url"] == "https://api.openai.com/v1"
+    assert resolved["api_key"] == "sk-browser"

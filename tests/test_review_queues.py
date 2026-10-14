@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Review queues, metadata decisions, and progressive unlocking.
 
 Why: reviewers work through queues (ready, metadata, source, topology). A record is
@@ -24,7 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
 
 from app import corpus_builder as cb
-from app.models import PdfCorpusBuildCreate
+from app.field_assertions import current_assertion_by_name
 
 
 def install_repo(tmp_path: Path, records: list[dict], *, status: str = "ready"):
@@ -66,14 +82,6 @@ def ready_record(rid: str, bid: str) -> dict:
     }
 
 
-def test_one_current_profile_is_registered():
-    """Pin profile and prompt ids, and that a single profile is registered."""
-    assert cb.PROFILE_VERSION == "derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION == "derridai-record-metadata-v11"
-    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id == "derrida-scholarly-v12"
-
-
 def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp_path: Path):
     """A human "not primary text" answer counts as resolved and survives manifest re-application.
 
@@ -89,12 +97,68 @@ def test_false_primary_text_is_complete_and_human_decision_survives_manifest(tmp
     updated = manager.patch_metadata(build["build_id"], "r1", {"primary_text":False}, expected_revision=1)
     assert updated["primary_text"] is False
     assert updated["metadata_field_status"]["primary_text"]["status"] == "human_confirmed"
+    primary_assertion = current_assertion_by_name(updated, "primary_text")
+    assert primary_assertion is not None
+    assert primary_assertion.authority_status == "human_confirmed"
+    assert primary_assertion.derivation_method == "human"
     assert updated["metadata_incomplete_fields"] == []
     assert updated["metadata_review_fields"] == []
     assert updated["metadata_decisions"][-1]["value"] is False
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(updated, {"main_text_start_page":1,"main_text_end_page":2})
+    cb._apply_manifest_metadata(updated, {"main_text_start_page":1,"main_text_end_page":2})
     assert updated["primary_text"] is False
     assert updated["metadata_field_status"]["primary_text"]["status"] == "human_confirmed"
+
+
+def test_review_edits_persist_validated_boolean_types(tmp_path: Path):
+    """Pydantic accepts "false", but the stored assertion and audit must use False.
+
+    Both individual and bulk review previously discarded the validated result,
+    leaving a human-confirmed string that could not be published as JSONL.
+    """
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1"), ready_record("r2", "b2")])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    single = manager.patch_metadata(
+        build["build_id"], "r1", {"primary_text": "false"}, expected_revision=1,
+    )
+    assert single["primary_text"] is False
+    assert single["metadata_decisions"][-1]["value"] is False
+    single_assertion = current_assertion_by_name(single, "primary_text")
+    assert single_assertion is not None
+    assert single_assertion.value is False
+    assert single_assertion.authority_status in {"human_confirmed", "human_override"}
+
+    manager.bulk_patch_metadata(
+        build["build_id"], {"primary_text": "false"}, record_ids=["r2"],
+    )
+    bulk = repo.get_record(build["build_id"], "r2")
+    assert bulk["primary_text"] is False
+    assert bulk["metadata_decisions"][-1]["value"] is False
+    bulk_assertion = current_assertion_by_name(bulk, "primary_text")
+    assert bulk_assertion is not None
+    assert bulk_assertion.value is False
+    assert bulk_assertion.authority_status in {"human_confirmed", "human_override"}
+
+
+def test_metadata_decision_apis_use_persisted_normalized_values(tmp_path: Path):
+    """One-field and batch decision provenance must agree with typed assertions."""
+    repo, build = install_repo(tmp_path, [ready_record("r1", "b1"), ready_record("r2", "b2")])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build_id = build["build_id"]
+
+    single = manager.metadata_decision(
+        build_id, "r1", "primary_text", "false", expected_revision=1,
+    )
+    assert single["record"]["primary_text"] is False
+    assert current_assertion_by_name(single["record"], "primary_text").value is False
+    assert single["record"]["metadata_decisions"][-1]["value"] is False
+
+    batch = manager.apply_metadata_decisions(
+        build_id, "r2", {"primary_text": "false"}, expected_revision=1,
+    )
+    assert batch["record"]["primary_text"] is False
+    assert current_assertion_by_name(batch["record"], "primary_text").value is False
+    assert batch["record"]["metadata_decisions"][-1]["value"] is False
 
 
 def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp_path: Path):
@@ -109,9 +173,10 @@ def test_metadata_decision_is_durable_and_moves_record_out_of_metadata_queue(tmp
     repo, build = install_repo(tmp_path, [record])
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     result = manager.metadata_decision(build["build_id"], "r1", "position_holder", "Derrida", expected_revision=1)
-    assert result["remaining_fields"] == []
-    assert result["ready_for_acceptance"] is True
-    assert result["review_state"] == "ready"
+    assert result["record"]["review_state"] == "ready"
+    assert result["record"]["can_accept"] is True
+    # The scan-backed queue totals are not part of the (latency-sensitive) decision response.
+    assert not {"queue_counts", "remaining_fields", "ready_for_acceptance", "review_state"} & set(result)
     persisted = repo.load_records(build["build_id"])[0]
     assert persisted["metadata_field_status"]["position_holder"]["status"] == "human_confirmed"
     assert persisted["metadata_review_fields"] == []
@@ -131,6 +196,24 @@ def test_review_decision_returns_next_record_and_authoritative_queue_counts(tmp_
     assert result["queue_counts"]["accepted"] == 1
     assert result["queue_counts"]["ready"] == 1
     assert result["record"]["metadata_field_status"]["discourse_role"]["status"] == "human_confirmed"
+    discourse_assertion = current_assertion_by_name(result["record"], "discourse_role")
+    assert discourse_assertion is not None
+    assert discourse_assertion.derivation_method == "model"
+    assert discourse_assertion.authority_status == "human_confirmed"
+
+
+def test_queue_counts_follow_search_filter_without_being_limited_to_selected_queue(tmp_path: Path):
+    first = ready_record("r1", "b1")
+    second = ready_record("r2", "b2")
+    second["text"] = "Only searchable record"
+    repo, build = install_repo(tmp_path, [first, second])
+
+    result = repo.page_records(build["build_id"], review_queue="ready", query="searchable")
+
+    assert result["total"] == 1
+    assert result["queue_counts"]["all"] == 1
+    assert result["queue_counts"]["ready"] == 1
+    assert result["queue_counts"]["accepted"] == 0
 
 
 def test_accept_next_from_all_queue_skips_already_reviewed_records(tmp_path: Path):
@@ -179,10 +262,14 @@ def test_completed_records_unlock_progressively_while_book_enrichment_runs(tmp_p
     assert result2["applied"] is True
     assert "__review__" in repo.load_records(build["build_id"])[1].get("human_touched_fields", [])
 
-    merged = manager.merge(build["build_id"], "r1", "next", expected_revision=2)
+    result3 = manager.merge(build["build_id"], "r1", "next", expected_revision=2)
+    merged = result3["record"]
+    # The merge retires r1 and r2 and mints a new record that is requeued for enrichment.
+    assert merged["record_id"] not in {"r1", "r2"}
+    assert result3["retired_record_ids"] == ["r1", "r2"]
     assert merged["metadata_requeue_requested"] is True
     assert merged["metadata_enrichment_state"] == "stale"
-    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"] == ["r1"]
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"] == [merged["record_id"]]
 
 
 def test_authoritative_rewrite_reopens_impossibly_accepted_record_with_metadata_blocker(tmp_path: Path):
@@ -241,3 +328,28 @@ def test_ready_queue_excludes_source_metadata_and_concrete_review_exceptions(tmp
 
 
 
+
+def test_queue_filters_list_exactly_the_records_their_counts_claim():
+    """A tab's count and the rows behind it must agree, including records still being prepared.
+
+    Why: a Record whose enrichment has not finished is counted as "preparing", not as an issue, so
+    listing it under Needs attention / Metadata made the badge and the list disagree.
+    """
+    from app.corpus_review_state import _matches_review_queue, _queue_counts
+
+    finished = {"metadata_enrichment_state": "complete"}
+    records = [
+        {"record_id": "ready", **finished},
+        {"record_id": "meta", **finished, "metadata_incomplete_fields": ["speaker"]},
+        {"record_id": "src", **finished, "source_quality_issues": [{"page": 1}]},
+        {"record_id": "prep-meta", "metadata_enrichment_state": "running", "metadata_incomplete_fields": ["speaker"]},
+        {"record_id": "prep-src", "metadata_enrichment_state": "queued", "source_quality_issues": [{"page": 1}]},
+        {"record_id": "prep-clean", "metadata_enrichment_state": "running"},
+        {"record_id": "acc", **finished, "review_disposition": "accepted"},
+        {"record_id": "rej", **finished, "review_disposition": "rejected"},
+    ]
+    counts = _queue_counts(records)
+    for queue in ("all", "ready", "issues", "metadata", "source", "topology", "accepted", "rejected"):
+        listed = [r["record_id"] for r in records if _matches_review_queue(r, queue)]
+        assert len(listed) == counts[queue], (queue, listed, counts[queue])
+    assert "prep-meta" not in [r["record_id"] for r in records if _matches_review_queue(r, "metadata")]

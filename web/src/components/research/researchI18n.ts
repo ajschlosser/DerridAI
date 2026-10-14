@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import type { ResearchJob } from "../../types/research";
 
 type Translate = (key: string, fallback?: string) => string;
@@ -62,13 +80,13 @@ export function researchStageLabel(stage: unknown, t: Translate, locale = "en-US
     failed: ["research.stage_failed", "Research failed"],
   };
   const match = labels[canonical];
-  if (match) return t(match[0], match[1]);
+  if (match) return t(match[0]);
   // English may safely retain a server-provided stage name. For French and any
   // other localized UI, avoid leaking an untranslated English implementation
   // label into the workspace.
   return locale === "en-US" && String(stage || "").trim()
     ? String(stage)
-    : t("research.pipeline_stage", "Pipeline stage");
+    : t("research.pipeline_stage");
 }
 
 export function researchJobDetail(job: ResearchJob, t: Translate, locale = "en-US"): string {

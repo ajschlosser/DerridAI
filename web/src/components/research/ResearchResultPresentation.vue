@@ -1,43 +1,71 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import type { ResearchDraftState } from "../../features/research/useResearchDraft";
 import ResearchAnswerWorkspace from "./ResearchAnswerWorkspace.vue";
 import ResearchEvidencePanel from "./ResearchEvidencePanel.vue";
 import type { ResearchEvidenceSelection, ResearchJob, ResearchResult } from "../../types/research";
 
-const props=withDefaults(defineProps<{
-  job?:ResearchJob|null;
-  result?:ResearchResult|null;
-  selectedEvidence?:ResearchEvidenceSelection[];
-  activeEvidenceIndex?:number;
-  busy?:boolean;
-  canGrade?:boolean;
-  canRemoveSelected?:boolean;
-  researcher?:boolean;
-}>(),{
-  job:null,
-  result:null,
-  selectedEvidence:()=>[],
-  activeEvidenceIndex:0,
-  busy:false,
-  canGrade:true,
-  canRemoveSelected:false,
-  researcher:false,
-});
+withDefaults(
+  defineProps<{
+    job?: ResearchJob | null;
+    result?: ResearchResult | null;
+    /** A streamed, unverified draft of the running job's answer (see useResearchDraft). */
+    draft?: ResearchDraftState | null;
+    selectedEvidence?: ResearchEvidenceSelection[];
+    activeEvidenceIndex?: number;
+    busy?: boolean;
+    canGrade?: boolean;
+    readOnly?: boolean;
+    instanceId?: string;
+    instanceLabel?: string;
+    canRemoveSelected?: boolean;
+    researcher?: boolean;
+  }>(),
+  {
+    job: null,
+    result: null,
+    draft: null,
+    selectedEvidence: () => [],
+    activeEvidenceIndex: 0,
+    busy: false,
+    canGrade: true,
+    readOnly: false,
+    instanceId: "",
+    instanceLabel: "",
+    canRemoveSelected: false,
+    researcher: false,
+  },
+);
 
-const emit=defineEmits<{
-  copy:[];
-  grade:[];
-  rerun:[];
-  details:[];
-  evidence:[index:number];
-  selectEvidence:[index:number];
-  removeSelected:[key:string];
-  clearSelected:[];
+const emit = defineEmits<{
+  copy: [];
+  grade: [];
+  rerun: [];
+  details: [];
+  evidence: [index: number];
+  selectEvidence: [index: number];
+  removeSelected: [key: string];
+  clearSelected: [];
+  openRecord: [index: number];
+  openRelationships: [index: number, mode: "trace" | "model"];
 }>();
-// Citations for the evidence item being previewed (hover/focus) or, failing
-// that, the item open in the inspector are highlighted in the answer.
-const previewIndex=ref<number|null>(null);
-const highlightIndex=computed(()=>props.result?.evidence?.length?(previewIndex.value??props.activeEvidenceIndex):null);
 </script>
 
 <template>
@@ -45,26 +73,31 @@ const highlightIndex=computed(()=>props.result?.evidence?.length?(previewIndex.v
     <ResearchAnswerWorkspace
       :job="job"
       :result="result"
+      :draft="draft"
       :busy="busy"
       :can-grade="canGrade"
-      :highlight-index="highlightIndex"
+      :read-only="readOnly"
+      :instance-id="instanceId"
+      :context-label="instanceLabel"
       @copy="emit('copy')"
       @grade="emit('grade')"
       @rerun="emit('rerun')"
       @details="emit('details')"
-      @evidence="emit('evidence',$event)"
+      @evidence="emit('evidence', $event)"
     />
     <ResearchEvidencePanel
+      :panel-id="instanceId ? `${instanceId}-evidence` : 'researchEvidencePanel'"
+      :context-label="instanceLabel"
       :selected-evidence="selectedEvidence"
-      :result-evidence="result?.evidence||[]"
+      :result-evidence="result?.evidence || []"
       :active-index="activeEvidenceIndex"
-      :answer="result?.answer||''"
       :can-remove="canRemoveSelected"
       :researcher="researcher"
-      @select="emit('selectEvidence',$event)"
-      @preview="previewIndex=$event"
-      @remove="emit('removeSelected',$event)"
+      @select="emit('selectEvidence', $event)"
+      @remove="emit('removeSelected', $event)"
       @clear="emit('clearSelected')"
+      @open-record="emit('openRecord', $event)"
+      @open-relationships="(index, mode) => emit('openRelationships', index, mode)"
     />
   </div>
 </template>

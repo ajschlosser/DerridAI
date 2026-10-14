@@ -1,32 +1,61 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
+import { currentFieldAssertions } from "../../domain/fieldAssertions";
 import { useI18nStore } from "../../stores/i18n";
-import type { ResearchEvidenceSelection, ResearchResultEvidence } from "../../types/research";
+import type {
+  ResearchEvidenceSelection,
+  ResearchFieldAssertionSummary,
+  ResearchResultEvidence,
+} from "../../types/research";
 
 const props = withDefaults(
   defineProps<{
     selectedEvidence?: ResearchEvidenceSelection[];
     resultEvidence?: ResearchResultEvidence[];
     activeIndex?: number;
-    answer?: string;
     canRemove?: boolean;
     researcher?: boolean;
+    panelId?: string;
+    contextLabel?: string;
   }>(),
   {
     selectedEvidence: () => [],
     resultEvidence: () => [],
     activeIndex: 0,
-    answer: "",
     canRemove: false,
     researcher: false,
+    panelId: "researchEvidencePanel",
+    contextLabel: "",
   },
 );
 const emit = defineEmits<{
   select: [index: number];
-  preview: [index: number | null];
   remove: [key: string];
   clear: [];
+  openRecord: [index: number];
+  openRelationships: [index: number, mode: "trace" | "model"];
 }>();
+const linkable = computed(() =>
+  Boolean(active.value && String(record.value.record_id || "").trim()),
+);
 const i18n = useI18nStore();
 const showingResult = computed(() => props.resultEvidence.length > 0);
 const active = computed(() =>
@@ -37,19 +66,20 @@ const active = computed(() =>
     : null,
 );
 const record = computed(() => active.value?.record || {});
-// How often the answer cites the active item, so the reader can see whether a
-// passage carries the answer or was merely retrieved.
-const citedCount = computed(() => {
-  const citation = String(active.value?.inline_citation || "").trim();
-  if (!citation || !props.answer) return 0;
-  return props.answer.split(citation).length - 1;
-});
-const hasRetrievalDetails = computed(
-  () =>
-    Boolean(active.value?.collection) ||
-    active.value?.rerank_score != null ||
-    Boolean(display(record.value.topics)) ||
-    Boolean(display(record.value.concepts)),
+const excerptExpanded = ref(false);
+const EXCERPT_COLLAPSE_CHARS = 900;
+const activeText = computed(() => display(record.value.text));
+const excerptCanExpand = computed(() => activeText.value.length > EXCERPT_COLLAPSE_CHARS);
+const excerptText = computed(() =>
+  excerptExpanded.value || !excerptCanExpand.value
+    ? activeText.value
+    : activeText.value.slice(0, EXCERPT_COLLAPSE_CHARS).trimEnd() + "…",
+);
+watch(
+  () => props.activeIndex,
+  () => {
+    excerptExpanded.value = false;
+  },
 );
 function pageLabel(record: Record<string, unknown>) {
   const start = record.page_start ?? record.page ?? null,
@@ -68,35 +98,99 @@ function display(value: unknown) {
   if (value == null) return "";
   return String(value);
 }
-const relationRows = computed(() =>
-  [
-    [i18n.t("research.speaker", "Speaker"), record.value.speaker],
-    [i18n.t("research.position_holder", "Position holder"), record.value.position_holder],
-    [i18n.t("research.stance", "Stance"), record.value.stance],
-    [i18n.t("research.discourse_role", "Discourse role"), record.value.discourse_role],
-    [i18n.t("research.proposition_status", "Proposition status"), record.value.proposition_status],
-    [i18n.t("research.target", "Target"), record.value.target],
-    [i18n.t("research.quoted_speaker", "Quoted speaker"), record.value.quoted_speaker],
-  ].filter(([, value]) => display(value)),
-);
+const HIDDEN_RESEARCH_METADATA = new Set(["region_type", "region_author", "primary_text"]);
+
+function fieldLabel(field: string) {
+  return i18n.t(
+    `field.${field}`,
+    field.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
+  );
+}
+
+function assertionDisplayValue(assertion: ResearchFieldAssertionSummary) {
+  if (assertion.value_status === "confirmed_absent") return i18n.t("ui.none");
+  return display(assertion.value);
+}
+
+function rowsFromAssertions(assertions: ResearchFieldAssertionSummary[]) {
+  return assertions
+    .filter(
+      (assertion) =>
+        assertion.field_name &&
+        !HIDDEN_RESEARCH_METADATA.has(assertion.field_name) &&
+        (assertion.value_status === "confirmed_absent" || display(assertion.value)),
+    )
+    .map((assertion) => ({
+      field: assertion.field_name,
+      label: fieldLabel(assertion.field_name),
+      value: assertionDisplayValue(assertion),
+      assertion,
+    }));
+}
+
+function fallbackRows(source: Record<string, unknown>) {
+  const fields = [
+    "speaker",
+    "position_holder",
+    "stance",
+    "discourse_role",
+    "proposition_status",
+    "target",
+    "quoted_speaker",
+    "topics",
+    "concepts",
+  ];
+  return fields
+    .filter((field) => display(source[field]))
+    .map((field) => ({
+      field,
+      label: fieldLabel(field),
+      value: display(source[field]),
+      assertion: null,
+    }));
+}
+
+const relationRows = computed(() => {
+  const canonical = rowsFromAssertions(
+    currentFieldAssertions(record.value) as ResearchFieldAssertionSummary[],
+  );
+  return canonical.length ? canonical : fallbackRows(record.value);
+});
+
+function selectedRows(item: ResearchEvidenceSelection) {
+  const canonical = rowsFromAssertions(item.assertions || []);
+  if (canonical.length) return canonical;
+  const metadata = item.metadata || {};
+  const dynamic = Object.entries(metadata)
+    .filter(([field, value]) => !HIDDEN_RESEARCH_METADATA.has(field) && display(value))
+    .map(([field, value]) => ({
+      field,
+      label: fieldLabel(field),
+      value: display(value),
+      assertion: null,
+    }));
+  return dynamic.length ? dynamic : fallbackRows(item as Record<string, unknown>);
+}
 </script>
 
 <template>
   <aside
-    id="researchEvidencePanel"
+    :id="panelId"
     class="research-evidence-panel card"
-    :aria-label="i18n.t('research.evidence_panel', 'Evidence')"
+    :aria-label="
+      contextLabel
+        ? `${i18n.t('research.evidence_panel')} ${contextLabel}`
+        : i18n.t('research.evidence_panel')
+    "
   >
     <header class="research-panel-heading">
       <div>
         <b>{{
-          showingResult
-            ? i18n.t("research.answer_evidence", "Answer evidence")
-            : i18n.t("rag.selected_evidence", "Selected evidence")
+          showingResult ? i18n.t("research.answer_evidence") : i18n.t("rag.selected_evidence")
         }}</b
         ><small
           >{{ showingResult ? resultEvidence.length : selectedEvidence.length }}
-          {{ i18n.t("research.records", "records") }}</small
+          {{ i18n.t("research.records") }}</small
         >
       </div>
       <button
@@ -105,43 +199,35 @@ const relationRows = computed(() =>
         type="button"
         @click="emit('clear')"
       >
-        {{ i18n.t("ui.clear", "Clear") }}
+        {{ i18n.t("ui.clear") }}
       </button>
     </header>
 
     <template v-if="showingResult">
-      <div
-        class="research-evidence-index"
-        role="list"
-        :aria-label="i18n.t('research.evidence_list', 'Evidence list')"
-      >
-        <button
-          v-for="(item, index) in resultEvidence"
-          :key="item.evidence_id || index"
-          type="button"
-          role="listitem"
-          :class="{ active: index === activeIndex }"
-          @click="emit('select', index)"
-          @mouseenter="emit('preview', index)"
-          @mouseleave="emit('preview', null)"
-          @focus="emit('preview', index)"
-          @blur="emit('preview', null)"
-        >
-          <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
-          <span
-            ><b>{{
-              display(item.record?.work) ||
-              display(item.record?.record_id) ||
-              i18n.t("research.evidence", "Evidence")
-            }}</b
-            ><small
-              ><template v-if="pageLabel(item.record || {})"
-                >pp. {{ pageLabel(item.record || {}) }} · </template
-              >{{ item.inline_citation || item.collection || "" }}</small
-            ></span
+      <ul class="research-evidence-index" :aria-label="i18n.t('research.evidence_list')">
+        <li v-for="(item, index) in resultEvidence" :key="item.evidence_id || index">
+          <button
+            type="button"
+            :class="{ active: index === activeIndex }"
+            :aria-current="index === activeIndex ? 'true' : undefined"
+            @click="emit('select', index)"
           >
-        </button>
-      </div>
+            <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
+            <span
+              ><b>{{
+                display(item.record?.work) ||
+                display(item.record?.record_id) ||
+                i18n.t("research.evidence")
+              }}</b
+              ><small
+                ><template v-if="pageLabel(item.record || {})"
+                  >pp. {{ pageLabel(item.record || {}) }} · </template
+                >{{ item.inline_citation || item.collection || "" }}</small
+              ></span
+            >
+          </button>
+        </li>
+      </ul>
       <section v-if="active" class="research-evidence-inspector" aria-live="polite">
         <div class="research-evidence-inspector-head">
           <span class="research-evidence-tag large">{{
@@ -149,71 +235,115 @@ const relationRows = computed(() =>
           }}</span>
           <div>
             <b>{{
-              display(record.work) ||
-              display(record.record_id) ||
-              i18n.t("research.evidence", "Evidence")
+              display(record.work) || display(record.record_id) || i18n.t("research.evidence")
             }}</b
-            ><small
-              ><template v-if="pageLabel(record)">pp. {{ pageLabel(record) }} · </template
-              >{{ active.inline_citation || "" }}</small
-            >
+            ><small>{{ active.inline_citation || "" }}</small>
           </div>
-          <span class="research-evidence-cited" :class="{ uncited: !citedCount }">{{
-            citedCount
-              ? i18n.tf(
-                  citedCount === 1
-                    ? "research.cited_in_answer_one"
-                    : "research.cited_in_answer_other",
-                  citedCount === 1 ? "Cited once in the answer" : "Cited {count}× in the answer",
-                  { count: citedCount },
-                )
-              : i18n.t("research.not_cited_in_answer", "Retrieved, not cited")
-          }}</span>
         </div>
-        <blockquote v-if="display(record.text)" class="research-evidence-text">
-          {{ display(record.text) }}
-        </blockquote>
+        <div
+          v-if="linkable"
+          class="research-evidence-links"
+          role="group"
+          :aria-label="i18n.t('research.evidence_links')"
+        >
+          <button
+            type="button"
+            class="research-text-action"
+            @click="emit('openRecord', activeIndex)"
+          >
+            {{ i18n.t("research.open_in_record_view") }}
+          </button>
+          <button
+            type="button"
+            class="research-text-action"
+            @click="emit('openRelationships', activeIndex, 'trace')"
+          >
+            {{ i18n.t("research.open_relationship_map") }}
+          </button>
+          <button
+            type="button"
+            class="research-text-action"
+            @click="emit('openRelationships', activeIndex, 'model')"
+          >
+            {{ i18n.t("research.open_celf_model") }}
+          </button>
+        </div>
+
+        <section v-if="activeText" class="research-evidence-passage">
+          <header>
+            <b>{{ i18n.t("research.evidence_passage", "Evidence passage") }}</b>
+            <button
+              v-if="excerptCanExpand"
+              type="button"
+              class="research-text-action"
+              :aria-expanded="excerptExpanded"
+              @click="excerptExpanded = !excerptExpanded"
+            >
+              {{
+                excerptExpanded
+                  ? i18n.t("research.collapse_passage", "Show less")
+                  : i18n.t("research.expand_passage", "Show full passage")
+              }}
+            </button>
+          </header>
+          <p class="research-evidence-text">{{ excerptText }}</p>
+        </section>
         <p v-else class="note">
           {{
             researcher
-              ? i18n.t(
-                  "research.researcher_evidence_summary",
-                  "Corpus text may be summarized for researcher accounts.",
-                )
-              : i18n.t(
-                  "research.no_evidence_text",
-                  "No retained passage text for this evidence item.",
-                )
+              ? i18n.t("research.researcher_evidence_summary")
+              : i18n.t("research.no_evidence_text")
           }}
         </p>
-        <p v-if="active.full_citation" class="research-evidence-citation">
-          <b>{{ i18n.t("research.full_citation", "Full citation") }}</b
-          >{{ active.full_citation }}
-        </p>
-        <dl v-if="relationRows.length" class="research-relation-grid">
-          <template v-for="([label, value], index) in relationRows" :key="index"
-            ><dt>{{ label }}</dt>
-            <dd>{{ display(value) }}</dd></template
-          >
-        </dl>
-        <details v-if="hasRetrievalDetails" class="research-evidence-metadata">
-          <summary>{{ i18n.t("research.retrieval_details", "Retrieval details") }}</summary>
-          <span v-if="active.collection"
-            ><b>{{ i18n.t("research.collection", "Collection") }}</b
-            >{{ active.collection }}</span
-          >
-          <span v-if="active.rerank_score != null"
-            ><b>{{ i18n.t("research.rerank_score", "Rerank score") }}</b
-            >{{ Number(active.rerank_score).toFixed(3) }}</span
-          >
-          <span v-if="display(record.topics)"
-            ><b>{{ i18n.t("research.topics", "Topics") }}</b
-            >{{ display(record.topics) }}</span
-          >
-          <span v-if="display(record.concepts)"
-            ><b>{{ i18n.t("research.concepts", "Concepts") }}</b
-            >{{ display(record.concepts) }}</span
-          >
+
+        <details v-if="relationRows.length" class="research-evidence-disclosure" open>
+          <summary>
+            <span>{{ i18n.t("research.evidence_context", "Evidence context") }}</span>
+            <small>{{ relationRows.length }}</small>
+          </summary>
+          <dl class="research-relation-grid">
+            <template v-for="row in relationRows" :key="row.field"
+              ><dt>{{ row.label }}</dt>
+              <dd>{{ row.value }}</dd></template
+            >
+          </dl>
+        </details>
+
+        <details
+          v-if="
+            active.full_citation ||
+            active.collection ||
+            active.rerank_score != null ||
+            display(record.topics) ||
+            display(record.concepts)
+          "
+          class="research-evidence-disclosure"
+        >
+          <summary>
+            <span>{{ i18n.t("research.source_details", "Source details") }}</span>
+          </summary>
+          <div class="research-evidence-metadata">
+            <span v-if="active.full_citation"
+              ><b>{{ i18n.t("research.full_citation") }}</b
+              >{{ active.full_citation }}</span
+            >
+            <span v-if="active.collection"
+              ><b>{{ i18n.t("research.collection") }}</b
+              >{{ active.collection }}</span
+            >
+            <span v-if="active.rerank_score != null"
+              ><b>{{ i18n.t("research.rerank_score") }}</b
+              >{{ Number(active.rerank_score).toFixed(3) }}</span
+            >
+            <span v-if="display(record.topics)"
+              ><b>{{ i18n.t("research.topics") }}</b
+              >{{ display(record.topics) }}</span
+            >
+            <span v-if="display(record.concepts)"
+              ><b>{{ i18n.t("research.concepts") }}</b
+              >{{ display(record.concepts) }}</span
+            >
+          </div>
         </details>
       </section>
     </template>
@@ -224,7 +354,7 @@ const relationRows = computed(() =>
           <details class="research-selected-details">
             <summary>
               <span
-                ><b>{{ item.work || item.record_id || i18n.t("research.evidence", "Evidence") }}</b
+                ><b>{{ item.work || item.record_id || i18n.t("research.evidence") }}</b
                 ><small
                   >{{ item.record_id
                   }}<template v-if="selectedPage(item)"> · pp. {{ selectedPage(item) }}</template
@@ -236,59 +366,24 @@ const relationRows = computed(() =>
               <span aria-hidden="true" class="research-selected-chevron">⌄</span>
             </summary>
             <div class="research-selected-preview">
-              <dl
-                v-if="
-                  item.speaker ||
-                  item.position_holder ||
-                  item.stance ||
-                  item.discourse_role ||
-                  item.proposition_status ||
-                  item.target
-                "
-                class="research-relation-grid compact"
-              >
-                <template v-if="item.speaker"
-                  ><dt>{{ i18n.t("research.speaker", "Speaker") }}</dt>
-                  <dd>{{ item.speaker }}</dd></template
-                >
-                <template v-if="item.position_holder"
-                  ><dt>{{ i18n.t("research.position_holder", "Position holder") }}</dt>
-                  <dd>{{ item.position_holder }}</dd></template
-                >
-                <template v-if="item.stance"
-                  ><dt>{{ i18n.t("research.stance", "Stance") }}</dt>
-                  <dd>{{ item.stance }}</dd></template
-                >
-                <template v-if="item.discourse_role"
-                  ><dt>{{ i18n.t("research.discourse_role", "Discourse role") }}</dt>
-                  <dd>{{ item.discourse_role }}</dd></template
-                >
-                <template v-if="item.proposition_status"
-                  ><dt>{{ i18n.t("research.proposition_status", "Proposition status") }}</dt>
-                  <dd>{{ item.proposition_status }}</dd></template
-                >
-                <template v-if="item.target"
-                  ><dt>{{ i18n.t("research.target", "Target") }}</dt>
-                  <dd>{{ item.target }}</dd></template
+              <dl v-if="selectedRows(item).length" class="research-relation-grid compact">
+                <template v-for="row in selectedRows(item)" :key="row.field"
+                  ><dt>{{ row.label }}</dt>
+                  <dd>{{ row.value }}</dd></template
                 >
               </dl>
               <p v-if="item.text_preview">
                 {{ item.text_preview }}<template v-if="item.text_preview.length >= 280">…</template>
               </p>
               <p v-else class="note">
-                {{
-                  i18n.t(
-                    "research.selected_preview_unavailable",
-                    "Passage preview is unavailable for evidence selected before this release; the full record is resolved when Research runs.",
-                  )
-                }}
+                {{ i18n.t("research.selected_preview_unavailable") }}
               </p>
             </div>
           </details>
           <button
             v-if="canRemove"
             type="button"
-            :aria-label="`${i18n.t('ui.remove_evidence', 'Remove from evidence')}: ${item.record_id || item.work}`"
+            :aria-label="`${i18n.t('ui.remove_evidence')}: ${item.record_id || item.work}`"
             @click="emit('remove', item.key)"
           >
             ×
@@ -297,14 +392,9 @@ const relationRows = computed(() =>
       </div>
       <div v-else class="research-evidence-empty">
         <span aria-hidden="true">∴</span>
-        <b>{{ i18n.t("research.no_selected_evidence", "No pinned evidence") }}</b>
+        <b>{{ i18n.t("research.no_selected_evidence") }}</b>
         <p>
-          {{
-            i18n.t(
-              "research.no_selected_evidence_help",
-              "Add records from Search, Works, or Record View. Retrieval can still find evidence automatically.",
-            )
-          }}
+          {{ i18n.t("research.no_selected_evidence_help") }}
         </p>
       </div>
     </template>
@@ -312,13 +402,86 @@ const relationRows = computed(() =>
 </template>
 
 <style scoped>
+.research-evidence-passage {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 11px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-inset);
+}
+.research-evidence-passage > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.research-evidence-passage > header > b {
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+}
+.research-evidence-passage .research-text-action {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding-block: 3px;
+}
+.research-evidence-disclosure {
+  border-top: 1px solid var(--line);
+}
+.research-evidence-disclosure > summary {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.research-evidence-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.research-evidence-disclosure > summary::after {
+  content: "⌄";
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+.research-evidence-disclosure[open] > summary::after {
+  transform: rotate(180deg);
+}
+.research-evidence-disclosure > summary small {
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.research-evidence-disclosure > .research-relation-grid {
+  margin-top: 0;
+}
 .research-evidence-inspector {
+  min-height: 0;
   overflow: auto;
-  padding: 14px 15px 18px;
+  padding: 13px 14px 16px;
+  scrollbar-gutter: stable;
+}
+.research-evidence-links {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: -2px 0 10px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+}
+.research-evidence-links .research-text-action {
+  min-height: 30px;
+  padding: 4px 6px;
 }
 .research-evidence-inspector-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 9px;
   align-items: center;
   margin-bottom: 12px;
@@ -335,60 +498,19 @@ const relationRows = computed(() =>
   font-size: 0.8125rem;
   color: var(--muted);
 }
-.research-evidence-cited {
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--ui-accent-soft);
-  color: var(--accent-fg);
-  font-size: 0.75rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.research-evidence-cited.uncited {
-  background: var(--surface-raised);
-  color: var(--muted);
-}
 .research-evidence-text {
-  margin: 0 0 12px;
-  padding: 2px 0 2px 14px;
-  border-left: 3px solid var(--ui-accent-border);
-  color: var(--text);
-  font:
-    15px/1.7 Georgia,
-    "Times New Roman",
-    serif;
-  white-space: pre-line;
-}
-.research-evidence-citation {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 12px;
+  margin: 0;
   color: var(--text-2);
-  font-size: 0.8125rem;
-}
-.research-evidence-citation b {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.045em;
-  color: var(--muted);
+  font-family: var(--font-reading);
+  font-size: var(--fs-sm);
+  line-height: 1.62;
+  white-space: pre-line;
 }
 .research-evidence-metadata {
   display: grid;
   gap: 8px;
-  margin-top: 4px;
-}
-.research-evidence-metadata > summary {
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  color: var(--text-2);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-.research-evidence-metadata > summary:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 1px;
+  margin: 0 0 3px;
+  padding: 2px 0 8px;
 }
 .research-evidence-metadata span {
   display: grid;
@@ -500,16 +622,16 @@ const relationRows = computed(() =>
 .research-selected-preview > p {
   margin: 0;
   color: var(--text-2);
-  font:
-    12px/1.55 Georgia,
-    "Times New Roman",
-    serif;
+  font-family: var(--font-reading);
+  font-size: var(--fs-xs);
+  line-height: 1.55;
 }
 .research-selected-list article > button {
   margin-top: 3px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .research-selected-chevron {
+  .research-selected-chevron,
+  .research-evidence-disclosure > summary::after {
     transition: none;
   }
 }

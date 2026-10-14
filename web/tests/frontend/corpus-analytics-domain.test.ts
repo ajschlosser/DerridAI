@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCorpusAnalytics } from "../../src/domain/corpusAnalytics";
 
@@ -133,12 +150,42 @@ describe("corpus analytics", () => {
     let builds = 0;
     const a = createCorpusAnalytics({
       allRows: () => [],
-      memoCorpus: (key, builder) => {
+      memoCorpus: (_key: string, builder: () => unknown) => {
         builds++;
         return builder();
       },
     } as never);
     a.publicationYearSeries();
     expect(builds).toBe(1);
+  });
+});
+
+describe("work index de-duplication", () => {
+  type Row = { file: Record<string, unknown>; record: Record<string, unknown>; index: number };
+  const build = (rows: Row[]) =>
+    createCorpusAnalytics({
+      allRows: () => rows,
+      memoCorpus: (_key: string, builder: () => unknown) => builder(),
+    } as never).workIndex() as Map<string, { count: number; review: number; rows: Row[] }>;
+  const load = (name: string, dirty: number[] = []): Row[] =>
+    [1, 2, 3, 4].map((n, index) => ({
+      file: { id: name, name, dirty: new Set(dirty) },
+      record: { work: "W", record_id: `r${n}`, needs_review: n === 1 },
+      index,
+    }));
+
+  it("counts a record once when it is loaded in two files", () => {
+    const item = build([...load("a"), ...load("b")]).get("W");
+    expect(item?.count).toBe(4);
+    expect(item?.review).toBe(1);
+  });
+  it("keeps the copy with unsaved edits", () => {
+    const item = build([...load("a"), ...load("b", [2])]).get("W");
+    expect(item?.rows[2].file.name).toBe("b");
+    expect(item?.rows[0].file.name).toBe("a");
+  });
+  it("never merges records without an id", () => {
+    const rows = load("a").map((row) => ({ ...row, record: { work: "W" } }));
+    expect(build(rows).get("W")?.count).toBe(4);
   });
 });

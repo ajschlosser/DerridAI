@@ -1,0 +1,46 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Dependencies and generated build/runtime output
+.git/
+.venv/
+venv/
+data/
+web/node_modules/
+web/dist/
+web/storybook-static/
+web/coverage/
+web/test-results/
+web/playwright-report/
+
+# Generated characterization baselines: whitespace is part of the recorded output.
+web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/
+
+# Generated snapshot artifacts are updated by their owning test runner.
+*.snap
+
+# Published-site browser assets are shipped verbatim: the reference interface and reusable SDK are distinct.
+api/app/site_assets/derridai-site.js
+api/app/site_assets/derridai-sdk.js
+
+# Generated GraphQL contract artifacts: exact bytes are checked by their generators
+# (scripts/export_graphql_schema.py --check and npm run codegen:check).
+web/src/api/graphql/schema.graphql
+web/src/api/graphql/generated.ts
+
+# Generated Pipeline Studio catalog fixture: exact bytes are checked by
+# scripts/export_pipeline_catalog_fixture.py --check.
+web/src/components/pipelines/fixtures/pipelineCatalogContract.json

@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
@@ -5,36 +23,99 @@ import { useI18nStore } from "../../stores/i18n";
 import type { ResearchJob } from "../../types/research";
 import { researchJobDetail } from "./researchI18n";
 
-const props=withDefaults(defineProps<{
-  jobs?:ResearchJob[];
-  selectedJobId?:string;
-  canManage?:boolean;
-}>(),{jobs:()=>[],selectedJobId:"",canManage:false});
-const emit=defineEmits<{select:[job:ResearchJob];cancel:[job:ResearchJob];openRuns:[]}>();
-const i18n=useI18nStore();
-const activeJobs=computed(()=>props.jobs.filter(job=>["queued","running","cancelling"].includes(job.status)));
-function statusLabel(job:ResearchJob){return i18n.t(`research.status_${job.status}`,job.status)}
-function shortPrompt(job:ResearchJob){const value=String(job.prompt||i18n.t("research.untitled_run","Untitled research run")).replace(/\s+/g," ").trim();return value.length>72?`${value.slice(0,69)}…`:value}
-function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i18n.t(key,fallback),i18n.locale)}
+const props = withDefaults(
+  defineProps<{
+    jobs?: ResearchJob[];
+    selectedJobId?: string;
+    canManage?: boolean;
+    /** Thread view: the conversation already shows its own turns' status. */
+    threadId?: string;
+  }>(),
+  { jobs: () => [], selectedJobId: "", canManage: false, threadId: "" },
+);
+const emit = defineEmits<{
+  select: [job: ResearchJob];
+  cancel: [job: ResearchJob];
+  openRuns: [];
+}>();
+const i18n = useI18nStore();
+const activeJobs = computed(() =>
+  props.jobs.filter(
+    (job) =>
+      ["queued", "running", "cancelling"].includes(job.status) &&
+      !(props.threadId && job.thread_id === props.threadId),
+  ),
+);
+function statusLabel(job: ResearchJob) {
+  return i18n.t(`research.status_${job.status}`, job.status);
+}
+function shortPrompt(job: ResearchJob) {
+  const value = String(job.prompt || i18n.t("research.untitled_run"))
+    .replace(/\s+/g, " ")
+    .trim();
+  return value.length > 72 ? `${value.slice(0, 69)}…` : value;
+}
+function detail(job: ResearchJob) {
+  return researchJobDetail(job, (key, fallback) => i18n.t(key, fallback), i18n.locale);
+}
 </script>
 
 <template>
-  <section v-if="activeJobs.length" class="research-pipeline-bar" aria-labelledby="research-pipeline-bar-title">
+  <section
+    v-if="activeJobs.length"
+    :class="['research-pipeline-bar', { compact: Boolean(threadId) }]"
+    aria-labelledby="research-pipeline-bar-title"
+  >
     <div class="research-pipeline-bar-head">
       <div>
         <span class="research-live-dot" aria-hidden="true"></span>
-        <div><b id="research-pipeline-bar-title">{{activeJobs.length}} {{i18n.t(activeJobs.length===1?'research.pipeline_running_one':'research.pipelines_running_many',activeJobs.length===1?'pipeline in progress':'pipelines in progress')}}</b><small>{{i18n.t('research.parallel_runs_help','Start another question at any time. Each run continues independently and provider concurrency limits determine when queued work executes.')}}</small></div>
+        <div>
+          <b id="research-pipeline-bar-title"
+            >{{ activeJobs.length }}
+            {{
+              i18n.t(
+                activeJobs.length === 1
+                  ? "research.pipeline_running_one"
+                  : "research.pipelines_running_many",
+                activeJobs.length === 1 ? "pipeline in progress" : "pipelines in progress",
+              )
+            }}</b
+          ><small v-if="!threadId">{{ i18n.t("research.parallel_runs_help") }}</small>
+        </div>
       </div>
-      <button class="research-text-action" type="button" @click="emit('openRuns')"><AppIcon name="history"/>{{i18n.t('research.view_all_runs','View all runs')}}</button>
+      <button class="research-text-action" type="button" @click="emit('openRuns')">
+        <AppIcon name="history" />{{ i18n.t("research.view_all_runs") }}
+      </button>
     </div>
-    <div class="research-pipeline-scroll" role="list" :aria-label="i18n.t('research.active_pipelines','Active research pipelines')">
-      <article v-for="job in activeJobs" :key="job.id" :class="['research-pipeline-chip',{selected:job.id===selectedJobId}]" role="listitem">
-        <button class="research-pipeline-chip-main" type="button" @click="emit('select',job)">
-          <span :class="['research-run-status-dot',job.status]" aria-hidden="true"></span>
-          <span><b>{{shortPrompt(job)}}</b><small>{{detail(job)}}</small></span>
-          <span class="research-run-status">{{statusLabel(job)}}</span>
+    <div
+      v-if="!threadId"
+      class="research-pipeline-scroll"
+      role="list"
+      :aria-label="i18n.t('research.active_pipelines')"
+    >
+      <article
+        v-for="job in activeJobs"
+        :key="job.id"
+        :class="['research-pipeline-chip', { selected: job.id === selectedJobId }]"
+        role="listitem"
+      >
+        <button class="research-pipeline-chip-main" type="button" @click="emit('select', job)">
+          <span :class="['research-run-status-dot', job.status]" aria-hidden="true"></span>
+          <span
+            ><b>{{ shortPrompt(job) }}</b
+            ><small>{{ detail(job) }}</small></span
+          >
+          <span class="research-run-status">{{ statusLabel(job) }}</span>
         </button>
-        <button v-if="canManage" class="research-pipeline-chip-cancel" type="button" :disabled="job.status==='cancelling'||job.cancel_requested" :aria-label="i18n.t('research.cancel_run','Cancel research run')" @click="emit('cancel',job)">×</button>
+        <button
+          v-if="canManage"
+          class="research-pipeline-chip-cancel"
+          type="button"
+          :disabled="job.status === 'cancelling' || job.cancel_requested"
+          :aria-label="i18n.t('research.cancel_run')"
+          v-text="'×'"
+          @click="emit('cancel', job)"
+        ></button>
       </article>
     </div>
   </section>
@@ -47,8 +128,12 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(180deg,var(--card),var(--card));
-  box-shadow: 0 4px 16px rgba(35,50,70,.04);
+  background: linear-gradient(180deg, var(--card), var(--card));
+  box-shadow: 0 4px 16px rgba(35, 50, 70, 0.04);
+}
+.research-pipeline-bar.compact {
+  padding: 6px 12px;
+  box-shadow: none;
 }
 .research-pipeline-bar-head {
   display: flex;
@@ -56,13 +141,13 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
   justify-content: space-between;
   gap: 16px;
 }
-.research-pipeline-bar-head>div {
+.research-pipeline-bar-head > div {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   min-width: 0;
 }
-.research-pipeline-bar-head>div>div {
+.research-pipeline-bar-head > div > div {
   display: grid;
   gap: 2px;
 }
@@ -72,7 +157,7 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
 }
 .research-pipeline-bar-head small {
   color: var(--muted);
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   line-height: 1.45;
 }
 .research-live-dot {
@@ -81,7 +166,7 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
   margin-top: 4px;
   border-radius: 50%;
   background: #d18b26;
-  box-shadow: 0 0 0 5px rgba(209,139,38,.12);
+  box-shadow: 0 0 0 5px rgba(209, 139, 38, 0.12);
   flex: 0 0 auto;
 }
 .research-pipeline-scroll {
@@ -93,7 +178,7 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
 }
 .research-pipeline-chip-main {
   display: grid;
-  grid-template-columns: 9px minmax(0,1fr) auto;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
   width: 100%;
@@ -113,7 +198,7 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
   outline: 3px solid var(--ui-accent-focus);
   outline-offset: -2px;
 }
-.research-pipeline-chip-main>span:nth-child(2) {
+.research-pipeline-chip-main > span:nth-child(2) {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -128,7 +213,7 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
   font-size: 0.78125rem;
 }
 .research-pipeline-chip-main small {
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   color: var(--muted);
 }
 .research-pipeline-chip-cancel {
@@ -152,21 +237,21 @@ function detail(job:ResearchJob){return researchJobDetail(job,(key,fallback)=>i1
   color: var(--tone-danger-fg);
 }
 .research-pipeline-chip-cancel:disabled {
-  opacity: .45;
+  opacity: 0.45;
   cursor: not-allowed;
 }
-@media (max-width:600px) {
+@media (max-width: 600px) {
   .research-pipeline-bar-head {
     align-items: flex-start;
     flex-direction: column;
   }
 }
-@media (prefers-reduced-motion:reduce) {
+@media (prefers-reduced-motion: reduce) {
   .research-live-dot {
     box-shadow: none;
   }
 }
-@media (prefers-reduced-motion:reduce) {
+@media (prefers-reduced-motion: reduce) {
   .research-pipeline-scroll {
     scroll-behavior: auto;
   }

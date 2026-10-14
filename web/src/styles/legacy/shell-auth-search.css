@@ -1,0 +1,442 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Vue application shell */
+.nav-tooltip-wrap,
+.action-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.nav-tooltip-wrap {
+  display: block;
+}
+.nav-tooltip-wrap > button {
+  width: 100%;
+}
+.nav-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after,
+.action-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 120;
+  left: 50%;
+  top: calc(100% + 7px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 320px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  background: #17231e;
+  color: var(--accent-on);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  white-space: normal;
+}
+.nav-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after {
+  left: 12px;
+  top: calc(100% + 4px);
+  transform: none;
+}
+.action-tooltip-wrap > button:disabled,
+.nav-tooltip-wrap > button:disabled {
+  pointer-events: none;
+  cursor: not-allowed;
+}
+.vue-breadcrumb-path {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.vue-breadcrumb-path strong {
+  color: var(--text);
+}
+.vue-breadcrumb-path b {
+  opacity: 0.35;
+}
+.runtime-surface {
+  min-height: calc(100vh - 190px);
+}
+@media (max-width: 980px) {
+  .nav-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after,
+  .action-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after {
+    display: none;
+  }
+}
+
+/* Authentication + roles */
+
+.auth-heading p {
+  margin: 0 0 7px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  color: var(--accent-fg);
+}
+.auth-heading h1 {
+  margin: 0;
+  font-size: 1.5625rem;
+  letter-spacing: -0.025em;
+}
+.auth-heading > span {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted, #667085);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.vue-native-page {
+  display: grid;
+  gap: var(--page-gap);
+}
+.user-create-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.1fr) minmax(220px, 1.5fr) minmax(150px, 0.7fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 16px;
+}
+.user-create-grid .btn {
+  height: 38px;
+}
+.user-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.user-identity b {
+  font-size: 0.8125rem;
+}
+.user-identity span {
+  font-size: 0.8125rem;
+  color: var(--muted, #667085);
+}
+@media (max-width: 900px) {
+  .user-create-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.researcher-db-toolbar .field {
+  min-width: min(520px, 100%);
+  margin: 0;
+}
+.researcher-semantic-search > .inline {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.researcher-semantic-search > .inline .control {
+  flex: 1;
+}
+
+/* v0.21.1 performance, progressive rendering, and overlay fixes */
+.work {
+  overflow: visible;
+  contain: layout style;
+  content-visibility: visible;
+}
+.works,
+.faq-list,
+.db-work-grid {
+  isolation: isolate;
+}
+.progressive-loading {
+  grid-column: 1/-1;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  min-height: 120px;
+}
+.progressive-loading-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.progressive-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.progressive-skeleton-card {
+  display: grid;
+  gap: 9px;
+  min-height: 105px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  overflow: hidden;
+}
+.progressive-skeleton-card i {
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--soft) 20%, var(--soft) 50%, var(--soft) 80%);
+  background-size: 220% 100%;
+  animation: progressive-shimmer 1.2s linear infinite;
+}
+.progressive-skeleton-card i:nth-child(1) {
+  width: 68%;
+  height: 16px;
+}
+.progressive-skeleton-card i:nth-child(2) {
+  width: 92%;
+}
+.progressive-skeleton-card i:nth-child(3) {
+  width: 54%;
+}
+.view-loading-card {
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+.view-loading-copy {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.view-loading-copy p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+@keyframes progressive-shimmer {
+  to {
+    background-position: -220% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progressive-skeleton-card i {
+    animation: none;
+  }
+}
+.dashboard-secondary-grid > .card,
+.dashboard-system-grid > .card,
+.dash-chart {
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
+}
+.compare-autocomplete-results button.active {
+  background: var(--soft);
+  outline: 1px solid rgba(57, 93, 70, 0.14);
+}
+.progressive-render-error {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  margin: 6px 0;
+}
+.progressive-render-error span {
+  overflow-wrap: anywhere;
+}
+.rank-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.rank-row:hover,
+.rank-row:focus-visible {
+  background: var(--soft);
+  outline: 0;
+}
+.rank-row:focus-visible {
+  box-shadow: inset 3px 0 #4e735a;
+}
+.rag-auto-grade-config.disabled-section {
+  opacity: 0.58;
+}
+.rag-auto-grade-config .note {
+  padding-bottom: 9px;
+}
+.bulk-grade-result {
+  display: grid;
+  gap: 12px;
+}
+.compare-toolbar .note {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  margin-top: 5px;
+}
+.compare-picker .field {
+  gap: 7px;
+}
+.compare-record-summary .btn {
+  justify-self: start;
+  margin-top: 4px;
+}
+.current-diff .del {
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger-fg);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.proposed-diff .ins {
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+}
+.operation-progress.failed {
+  border-color: var(--tone-danger-edge);
+  background: var(--tone-danger-bg);
+}
+.operation-progress.failed .operation-progress-head > div > b {
+  color: var(--tone-danger-fg);
+}
+
+/* v0.23 PDF Explorer: keep the document full-width and move text/link tools below it. */
+.pdfgrid-v2 {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: start;
+}
+.pdf-side-stack > .card:last-child {
+  grid-column: 1/-1;
+}
+.chart-hover-tooltip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* v0.23.0: corpus search, evidence selection, annotations, i18n ------------ */
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--line);
+  border-top-color: var(--tone-ok-border);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.researcher-sort-head.active {
+  color: var(--tone-ok-fg);
+}
+.similarity-score {
+  display: inline-grid;
+  gap: 1px;
+  cursor: help;
+}
+.similarity-score b {
+  font-variant-numeric: tabular-nums;
+}
+.similarity-score small {
+  font-size: 0.8125rem;
+  color: var(--muted, #657069);
+}
+.citation-actions,
+.record-inline-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.selected-evidence-chip {
+  display: grid;
+  grid-template-columns: auto auto 22px;
+  gap: 5px 8px;
+  align-items: center;
+  padding: 7px 8px 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+}
+.selected-evidence-chip b {
+  font-size: 0.8125rem;
+}
+.selected-evidence-chip small {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted, #657069);
+}
+.chip-remove {
+  border: 0;
+  background: transparent;
+  font-size: 1.0625rem;
+  cursor: pointer;
+  color: var(--tone-danger-fg);
+}
+.selected-evidence-only {
+  margin-top: 10px;
+}
+.record-annotation blockquote,
+.annotation-selection-preview {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--line-strong);
+  background: var(--soft);
+  font-family: Georgia, serif;
+  line-height: 1.5;
+}
+.user-identity small {
+  display: block;
+  color: var(--muted, #657069);
+  margin-top: 2px;
+}
+.native-confirm-card {
+  max-width: 460px;
+  width: 100%;
+  padding: 18px;
+}
+.native-confirm-card h2 {
+  margin-top: 0;
+}
+.native-confirm-card .tools {
+  justify-content: flex-end;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.record-row-actions .btn.tiny {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+}
+.record-citation-popover .btn {
+  justify-content: flex-start;
+  width: 100%;
+}

@@ -1,0 +1,341 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Focus View: a full-window layout of the same review components the workspace uses. Only layout lives here. */
+.focus-review {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--surface-page, var(--bg));
+  color: var(--text);
+}
+.focus-review :is(button, [tabindex], textarea, input, summary):focus-visible {
+  outline: var(--focus-ring-width, 3px) solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.eyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  font-weight: 800;
+}
+kbd {
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* Workspace: the reading surface is dominant; the inspector is a fixed-comfort column beside it. */
+.focus-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(380px, 38vw, 560px);
+  min-height: 0;
+  overflow: hidden;
+}
+.focus-record {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--surface-card, var(--card));
+  border-inline-end: 1px solid var(--line);
+}
+.focus-record-heading {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem clamp(20px, 4vw, 56px);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-card, var(--card));
+}
+.focus-record-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.125rem 0 0;
+  font-size: 1rem;
+}
+.heading-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.human-corrected {
+  display: inline-flex;
+  padding: 0.125rem 0.5rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.context-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.source-warn-icon {
+  display: grid;
+  place-items: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--tone-warn-border);
+  border-radius: var(--radius-control, 10px);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  cursor: pointer;
+}
+.source-warn-icon svg {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+.focus-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  max-inline-size: 78ch;
+  margin: 1rem auto 0;
+  inline-size: calc(100% - 2 * clamp(20px, 4vw, 56px));
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--tone-info-border);
+  border-radius: var(--radius-card, 10px);
+  background: var(--tone-info-bg);
+  color: var(--tone-info-fg);
+  font-size: 0.8125rem;
+}
+.focus-note[data-tone="warn"] {
+  border-color: var(--tone-warn-border);
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
+.focus-note[data-tone="danger"] {
+  border-color: var(--tone-danger-border);
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger-fg);
+}
+.focus-note .btn {
+  margin-inline-start: auto;
+}
+.focus-record-text {
+  outline: none;
+}
+/* The reader sets the measure and typography. Its window is sized to the pane so the record under review sits in
+   the reader's line of sight; the reader fits its neighbours to that room. */
+.focus-record-text :deep(.context-reader) {
+  max-inline-size: 78ch;
+  max-block-size: calc(100vh - 17rem);
+  margin-inline: auto;
+  padding: 1.5rem clamp(20px, 4vw, 56px) 2rem;
+  font-family: var(--font-reading, Georgia, serif);
+  font-size: 1.125rem;
+  line-height: 1.75;
+}
+.focus-record-text :deep(.ctx-item) {
+  font-size: 0.9375rem;
+}
+
+.focus-text-edit {
+  display: grid;
+  gap: 0.75rem;
+  max-inline-size: 90ch;
+  margin: 1.5rem auto;
+  padding: 0 clamp(20px, 4vw, 56px);
+}
+.focus-text-editor {
+  inline-size: 100%;
+  min-block-size: 58vh;
+  resize: vertical;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card, 10px);
+  background: var(--surface-page, var(--bg));
+  color: var(--text);
+  font: 1.0625rem/1.7 var(--font-reading, Georgia, serif);
+}
+.resolve-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.resolve-check input {
+  flex: none;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+/* Inspector. */
+.focus-inspector {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--surface-card, var(--card));
+}
+.focus-tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-card, var(--card));
+}
+.focus-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-block-size: 3rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.focus-tabs button:hover {
+  background: var(--surface-hover, var(--soft));
+  color: var(--text);
+}
+.focus-tabs button[aria-selected="true"] {
+  color: var(--text);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+.focus-tab-count {
+  min-inline-size: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--tone-warn-bg);
+  border: 1px solid var(--tone-warn-border);
+  color: var(--tone-warn-fg);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-align: center;
+}
+.focus-inspector-body {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--soft);
+}
+.focus-panel {
+  min-width: 0;
+}
+.focus-metadata-panel :deep(.metadata-review) {
+  border: 0;
+  border-radius: 0;
+}
+.focus-guidance {
+  display: grid;
+  gap: 0.375rem;
+  margin: 1rem 1rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--ui-accent-border);
+  border-radius: var(--radius-card, 10px);
+  background: var(--ui-accent-soft);
+}
+.focus-guidance h3,
+.focus-guidance p {
+  margin: 0;
+}
+.focus-guidance h3 {
+  font-size: 0.875rem;
+}
+.focus-guidance p,
+.focus-guidance li {
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.focus-guidance ul {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-inline-start: 1.125rem;
+}
+.focus-guidance li span {
+  margin-inline-start: 0.5rem;
+}
+
+/* Narrow windows: read first, then the inspector; the page scrolls and the dock (its own sticky) stays reachable. */
+@media (max-width: 900px) {
+  .focus-workspace {
+    grid-template-columns: 1fr;
+    overflow: auto;
+  }
+  .focus-record {
+    overflow: visible;
+    border-inline-end: 0;
+  }
+  .focus-inspector {
+    display: block;
+    border-block-start: 1px solid var(--line);
+  }
+  .focus-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+  .focus-inspector-body {
+    overflow: visible;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-progress span {
+    transition: none;
+  }
+  * {
+    scroll-behavior: auto !important;
+  }
+}
+
+/* The LLM touch-up notice: title over a wrapping explanation, with the action kept beside it (or below when narrow). */
+.focus-note.touchup-note {
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.touchup-note-copy {
+  display: grid;
+  flex: 1 1 22ch;
+  gap: 0.125rem;
+  min-inline-size: 0;
+  line-height: 1.45;
+}
+.focus-note.touchup-note .btn {
+  flex: none;
+}

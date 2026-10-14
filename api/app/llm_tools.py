@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
 
 import copy
@@ -19,7 +34,14 @@ from .models import (
     WorkMetadataRequest,
     WorkMetadataSeed,
 )
-from .rag import _extract_json, chat_complete
+from .rag import chat_complete, structured_chat_complete
+from .work_metadata_sources import (
+    applicable_fields_for,
+    canonical_source_type,
+    catalogue_sources_for,
+    is_catalogue_supported,
+    web_page_candidate,
+)
 
 
 def _model_for(provider: str, model: str | None) -> str:
@@ -42,6 +64,38 @@ def run_pdf_llm(
         f"PDF author: {body.pdf_author or ''}\n"
         f"PDF page: {body.pdf_page or ''}\n"
     )
+
+    if body.mode == "detect_language":
+        if not body.raw_text.strip():
+            raise ValueError("No extractable source text is available for language detection.")
+        prompt = f"""Identify the primary language of this source excerpt.
+
+{source}
+
+SOURCE EXCERPT:
+{body.raw_text[:12000]}
+
+Return exactly one JSON object with:
+{{"language":"ISO 639-1 or 639-3 code, optionally with a region","confidence":0.0,"reason":"brief source-grounded reason"}}
+
+Use only a language code. If the excerpt is too short or mixed to identify reliably,
+return an empty language and confidence 0. Do not translate or summarize the source."""
+        result = structured_chat_complete(
+            provider=body.provider, model=model, base_url=body.base_url,
+            api_key=body.api_key, prompt=prompt, options=body.generation,
+            max_tokens=256, attempts=2, completion=chat_complete, cancelled=cancelled,
+        )
+        language = str(result.get("language") or "").strip().replace("_", "-").lower()
+        if language and not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", language):
+            raise ValueError("The language detector returned an invalid language code.")
+        confidence = max(0.0, min(1.0, float(result.get("confidence") or 0)))
+        return {
+            "mode": body.mode,
+            "language": language or None,
+            "confidence": confidence,
+            "reason": str(result.get("reason") or "").strip()[:500],
+            "model": model,
+        }
 
     if body.mode == "clean_text":
         if not body.raw_text.strip():
@@ -80,14 +134,14 @@ Return exactly one JSON object. Populate only source-supported fields.
 Preserve quotation provenance and flat corpus fields. text must preserve the
 cleaned source text rather than summarize it. Set needs_review=true,
 updates=[], and use supplied PDF context. Do not invent edition/year/citation data."""
-        raw = chat_complete(
+        record = structured_chat_complete(
             provider=body.provider, model=model, base_url=body.base_url,
             api_key=body.api_key, prompt=prompt, options=body.generation,
-            json_mode=True,
             max_tokens=(body.generation.num_predict if body.generation and body.generation.num_predict else 8192),
+            attempts=2,
+            completion=chat_complete,
             cancelled=cancelled,
         )
-        record = _extract_json(raw)
         record["text"] = str(record.get("text") or body.raw_text)
         record["text_length"] = len(record["text"])
         record["needs_review"] = True
@@ -163,12 +217,11 @@ Return exactly one JSON object:
 {{"key":"candidate KEY or empty string","record_id":"matched record ID or empty string","confidence":0.0,"reason":"short explanation"}}
 Prefer exact page/citation/work/text correspondence. Do not choose a record
 merely because it discusses the same concept. Return empty IDs if unsupported."""
-    raw = chat_complete(
+    match = structured_chat_complete(
         provider=body.provider, model=model, base_url=body.base_url,
         api_key=body.api_key, prompt=prompt, options=body.generation,
-        json_mode=True, max_tokens=768, cancelled=cancelled,
+        max_tokens=768, attempts=2, completion=chat_complete, cancelled=cancelled,
     )
-    match = _extract_json(raw)
     valid_keys = {str(item.get("key") or "") for item in retained_candidates}
     if str(match.get("key") or "") not in valid_keys:
         match["key"] = ""
@@ -442,6 +495,51 @@ def _crossref_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     return out
 
 
+def _openalex_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
+    current = seed.current_metadata or {}
+    query = str(current.get("document_title") or seed.work).strip()
+    author = str(current.get("document_author") or "").strip()
+    with httpx.Client(
+        timeout=20.0,
+        follow_redirects=True,
+        headers={"User-Agent": "DerridAI (metadata lookup; mailto:research@derridai.local)"},
+    ) as client:
+        response = client.get(
+            "https://api.openalex.org/works",
+            params={"search": " ".join(value for value in (query, author) if value), "per-page": 8},
+        )
+        response.raise_for_status()
+        items = list((response.json() or {}).get("results") or [])
+    out: list[dict[str, Any]] = []
+    for item in items:
+        title = _catalog_text(item.get("title"))
+        primary_location = item.get("primary_location") or {}
+        source = primary_location.get("source") or {}
+        publication_year = item.get("publication_year")
+        authors = [
+            str((authorship.get("author") or {}).get("display_name") or "").strip()
+            for authorship in item.get("authorships") or []
+            if isinstance(authorship, dict)
+        ]
+        metadata = {
+            "source_type": seed.source_type_scope,
+            "document_type": seed.source_type_scope,
+            "document_title": title or None,
+            "short_title": title or None,
+            "document_author": ", ".join(value for value in authors if value) or None,
+            "container_title": _catalog_text(source.get("display_name")) or None,
+            "journal_title": _catalog_text(source.get("display_name")) or None,
+            "publication_year": publication_year,
+            "year": publication_year,
+            "doi": _catalog_text(item.get("doi")) or None,
+            "url": _catalog_text((item.get("primary_location") or {}).get("landing_page_url")) or None,
+            "_catalog_source": "OpenAlex",
+        }
+        metadata["full_citation"] = _mla_citation(metadata) or None
+        out.append(metadata)
+    return out
+
+
 def _google_books_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
     current = seed.current_metadata or {}
     query = str(current.get("document_title") or seed.work).strip()
@@ -475,15 +573,25 @@ def _google_books_candidates(seed: WorkMetadataSeed) -> list[dict[str, Any]]:
 
 
 def _multi_catalog_candidates(seed: WorkMetadataSeed) -> tuple[list[dict[str, Any]], list[str]]:
-    """Try format-appropriate bibliographic sources instead of stopping at Open Library."""
-    current = seed.current_metadata or {}
-    source_type = str(current.get("source_type") or current.get("document_type") or "").casefold()
+    """Try only sources appropriate to the scoped source type."""
+    source_type = canonical_source_type(seed.source_type_scope)
     attempted_sources: list[str] = []
-    result_sources: list[str] = []
     candidates: list[dict[str, Any]] = []
-    lookups = []
-    if any(token in source_type for token in ("article", "journal", "chapter")):
-        lookups = [("Crossref", _crossref_candidates), ("Open Library", _openlibrary_candidates), ("Google Books", _google_books_candidates)]
+    if source_type == "web":
+        attempted_sources.append("Source webpage metadata")
+        try:
+            candidate = web_page_candidate(seed.current_metadata or {})
+        except httpx.HTTPError:
+            candidate = None
+        return ([candidate] if candidate else []), attempted_sources
+    if not is_catalogue_supported(source_type):
+        return [], catalogue_sources_for(source_type)
+    if source_type == "journal_article":
+        lookups = [("Crossref", _crossref_candidates), ("OpenAlex", _openalex_candidates), ("Open Library", _openlibrary_candidates)]
+    elif source_type == "chapter":
+        lookups = [("Crossref", _crossref_candidates), ("Open Library", _openlibrary_candidates)]
+    elif source_type == "thesis":
+        lookups = [("OpenAlex", _openalex_candidates), ("Crossref", _crossref_candidates)]
     else:
         lookups = [("Open Library", _openlibrary_candidates), ("Google Books", _google_books_candidates), ("Crossref", _crossref_candidates)]
     for name, lookup in lookups:
@@ -493,7 +601,6 @@ def _multi_catalog_candidates(seed: WorkMetadataSeed) -> tuple[list[dict[str, An
         except httpx.HTTPError:
             found = []
         if found:
-            result_sources.append(name)
             for item in found:
                 item = dict(item)
                 item.setdefault("_catalog_source", name)
@@ -524,26 +631,37 @@ def run_work_metadata_lookup(
     if cancelled and cancelled():
         raise InterruptedError()
     if not candidates:
+        source_type = canonical_source_type(seed.source_type_scope)
+        message = (
+            f"No external metadata adapter is configured for {source_type}; "
+            "source-derived metadata was left unchanged."
+            if not is_catalogue_supported(source_type) and source_type != "web"
+            else "No matching metadata record was found across the configured sources."
+        )
         return {
             "work": seed.work,
+            "source_type_scope": source_type,
             "current_metadata": seed.current_metadata,
             "changes": {},
             "rationale": {},
             "catalog_source": ", ".join(catalog_sources) or "Open Library / Google Books / Crossref",
-            "message": "No matching bibliographic catalogue result was found across the configured public catalogues.",
+            "message": message,
         }
 
     compact = [_candidate_public(item) for item in candidates]
     model = _model_for(request.provider, request.model)
-    prompt = f"""You are matching a DerridAI work to bibliographic catalogue records.
+    prompt = f"""You are matching a DerridAI source to format-appropriate metadata records.
 
 WORK LABEL:
 {seed.work}
 
+SOURCE TYPE:
+{canonical_source_type(seed.source_type_scope)}
+
 CURRENT METADATA:
 {json.dumps(seed.current_metadata or {}, ensure_ascii=False, indent=2)}
 
-BIBLIOGRAPHIC CANDIDATES (Open Library, Google Books, and/or Crossref):
+BIBLIOGRAPHIC CANDIDATES:
 {json.dumps(compact, ensure_ascii=False, indent=2)}
 
 Return exactly one JSON object:
@@ -554,18 +672,18 @@ the current edition, publisher, year, ISBN, language, or translator. Do not choo
 candidate merely because its title contains similar words. If no candidate is reliable,
 return candidate_index=-1. Confidence is 0.0 to 1.0. Do not return bibliographic values;
 DerridAI will copy them deterministically from the selected catalogue record."""
-    raw = chat_complete(
+    choice = structured_chat_complete(
         provider=request.provider,
         model=model,
         base_url=request.base_url,
         api_key=request.api_key,
         prompt=prompt,
         options=request.generation,
-        json_mode=True,
         max_tokens=384,
+        attempts=2,
+        completion=chat_complete,
         cancelled=cancelled,
     )
-    choice = _extract_json(raw)
     try:
         index = int(choice.get("candidate_index", -1))
     except Exception:
@@ -573,6 +691,7 @@ DerridAI will copy them deterministically from the selected catalogue record."""
     if index < 0 or index >= len(candidates):
         return {
             "work": seed.work,
+            "source_type_scope": canonical_source_type(seed.source_type_scope),
             "current_metadata": seed.current_metadata,
             "changes": {},
             "rationale": {},
@@ -589,14 +708,10 @@ DerridAI will copy them deterministically from the selected catalogue record."""
     rationale: dict[str, str] = {}
     current = seed.current_metadata or {}
     for field, proposed in public.items():
-        if field not in {
-            "source_type", "document_type", "document_title", "short_title", "original_title",
-            "document_author", "container_title", "journal_title", "editor", "edition",
-            "volume", "issue", "pages", "year", "publication_year", "publisher",
-            "publication_place", "translator", "document_language", "original_language",
-            "document_is_translation", "isbn", "doi", "url", "full_citation", "cover_url",
-        }:
+        if field not in applicable_fields_for(seed.source_type_scope):
             continue
+        if field in {"source_type", "document_type"}:
+            proposed = canonical_source_type(seed.source_type_scope)
         if proposed in (None, "", []):
             continue
         current_value = current.get(field)
@@ -607,6 +722,7 @@ DerridAI will copy them deterministically from the selected catalogue record."""
 
     return {
         "work": seed.work,
+        "source_type_scope": canonical_source_type(seed.source_type_scope),
         "current_metadata": seed.current_metadata,
         "changes": changes,
         "rationale": rationale,
@@ -643,6 +759,7 @@ def run_work_metadata_batch(
             errors.append({"work": seed.work, "error": str(exc)})
             proposals.append({
                 "work": seed.work,
+                "source_type_scope": seed.source_type_scope,
                 "current_metadata": seed.current_metadata,
                 "changes": {},
                 "rationale": {},
@@ -767,6 +884,7 @@ def run_rag_grade(
         f"[{item.get('evidence_id', f'E{index}')}] "
         f"{(item.get('record') or {}).get('work', '')} "
         f"{item.get('inline_citation', '')}\n"
+        f"document_author={(item.get('record') or {}).get('document_author', '')}\n"
         f"{str((item.get('record') or {}).get('text', ''))[:3500]}"
         for index, item in enumerate(evidence)
     )
@@ -788,15 +906,17 @@ interpretive_usefulness. Each category must contain an integer `score` from 0-10
 and a concise `analysis` explaining the score against the supplied evidence. Also
 include `overall` as an object with `score` and `analysis`, plus top-level
 `strengths`, `weaknesses`, `unsupported_or_risky_claims`, `summary`, and
-`analysis`. Preserve source-role distinctions: distinguish Derrida's claims from
-quoted, attributed, reconstructed, questioned, criticized, or endorsed positions."""
-    raw = chat_complete(
+`analysis`. Use document_author from each evidence item, when present, as the
+source-document author; never substitute a default author. Preserve source-role
+distinctions: distinguish the source author's claims from quoted, attributed,
+reconstructed, questioned, criticized, or endorsed positions."""
+    grade = structured_chat_complete(
         provider=body.provider, model=_model_for(body.provider, body.model),
         base_url=body.base_url, api_key=body.api_key, prompt=prompt,
-        options=body.generation, json_mode=True, max_tokens=4096,
+        options=body.generation, max_tokens=4096, attempts=2,
+        validate=_normalize_rag_grade_payload, completion=chat_complete,
         cancelled=cancelled,
     )
-    grade = _normalize_rag_grade_payload(_extract_json(raw))
     cache_summary = None
     cache_error = None
     if body.response_record_id:
@@ -814,6 +934,17 @@ quoted, attributed, reconstructed, questioned, criticized, or endorsed positions
                 "grade_history_count": len(cached.get("grades") or []),
                 "updated_at": cached.get("updated_at"),
             }
+            # The durable response row carries the grade that decides whether this
+            # answer may steer later Research runs.
+            from .research_memory import PROJECTION, grade_summary
+            from .system_store import system_store
+
+            if system_store.record_response_memory_grade(
+                body.response_record_id, grade_summary(dict(cached.get("latest_grade") or {}))
+            ):
+                system_store.mark_semantic_memory_dirty(
+                    PROJECTION, record_id=body.response_record_id, reason="response_graded"
+                )
         except Exception as exc:
             # The grade itself is valuable even if cache persistence fails. Do
             # not turn an otherwise successful background grading operation into

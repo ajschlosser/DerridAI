@@ -1,0 +1,70 @@
+DerridAI WCAG 2.2 AA deferred TODOs
+October 2026 engineering sweep
+
+This list intentionally contains the larger/manual work deferred from the
+low-impact WCAG sweep. Do not claim complete WCAG 2.2 AA conformance until
+these items are closed or an applicable WCAG exception is documented.
+
+P1 — 2.5.7 Dragging Movements
+- Add a non-drag way to create document layout regions in
+  DocumentStructureConfigurator.vue and DocumentLayoutRegionLayer.vue.
+- Existing regions already support keyboard move/resize; creation still
+  depends on drag-to-draw.
+
+P1 — 2.4.11 Focus Not Obscured (Minimum)
+- Run route-complete keyboard traversal with the operation dock, sticky bars,
+  drawers, Focus Review, and dialogs open.
+- Verify focused controls are never fully hidden by overlays or viewport edges.
+- Add browser regression tests for failures found.
+
+P1 — 1.4.10 Reflow / 1.4.12 Text Spacing
+- Test every substantive route at 320 CSS px equivalent width.
+- Apply WCAG text-spacing overrides:
+  line height 1.5;
+  paragraph spacing 2x font size;
+  letter spacing 0.12em;
+  word spacing 0.16em.
+- Fix clipping and overlap found.
+
+P1 — 2.5.8 Target Size (Minimum)
+- Add rendered-hitbox coverage for relation maps, semantic maps, custom SVG
+  targets, and bespoke compact controls.
+- Provide a 24x24 CSS-pixel target, satisfy the spacing exception, or document
+  the applicable exception.
+
+P2 — 1.4.11 Non-text Contrast
+- Complete a forced-colors/high-contrast pass on custom graph boundaries,
+  selection states, status marks, and focus indicators.
+
+P2 — 3.3.7 Redundant Entry
+- Review multi-step Corpus Builder, capture/import, and administrative
+  workflows for repeated data entry.
+- Reuse previously supplied values unless re-entry is essential,
+  security-sensitive, or used to confirm data.
+
+P2 — 3.3.8 Accessible Authentication (Minimum)
+- Verify password-manager fill, paste, and browser autofill in AuthScreen.vue.
+- Verify any deployment-specific MFA or identity-provider flow.
+
+P2 — 3.2.6 Consistent Help
+- Verify Help access remains in a consistent relative location across routes,
+  modal workspaces, and narrow-screen shell states.
+
+P2 — screen-reader behavior
+- Complete NVDA plus Firefox/Chrome and VoiceOver plus Safari passes.
+- Verify accessible names, state changes, live-region verbosity, modal
+  boundaries, graph navigation, and focus return.
+
+Exit evidence for a 100% claim
+- All configured axe/WCAG 2.2 AA suites pass in light and dark themes.
+- Route-complete keyboard-only traversal passes without traps, unreachable
+  actions, or obscured focus.
+- Every substantive route passes 320 CSS px reflow and WCAG text-spacing checks.
+- Dragging functionality has a non-drag alternative unless dragging is
+  essential.
+- Rendered pointer targets satisfy 2.5.8 or a documented exception.
+- Authentication and redundant-entry criteria are verified against the
+  deployed workflow.
+- At least one Windows screen-reader/browser combination and VoiceOver/Safari
+  complete the primary research, search, corpus-review, administration, and
+  publication workflows.

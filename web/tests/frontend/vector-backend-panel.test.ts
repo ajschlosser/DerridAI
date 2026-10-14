@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { describe, expect, it } from "vitest";
@@ -25,7 +43,10 @@ const health: ChromaHealth = {
 function mountPanel(props: Record<string, unknown> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  return mount(VectorBackendPanel, { props: {health, probing: false, applying: false, probeResult: null, error: "", ...props}, global: {plugins: [pinia]} });
+  return mount(VectorBackendPanel, {
+    props: { health, probing: false, applying: false, probeResult: null, error: "", ...props },
+    global: { plugins: [pinia] },
+  });
 }
 
 describe("VectorBackendPanel", () => {
@@ -34,14 +55,19 @@ describe("VectorBackendPanel", () => {
     expect(wrapper.find("#chroma-url").exists()).toBe(false);
     await wrapper.get("#chroma-path").setValue("/data/chroma-lab");
     await wrapper.get("form").trigger("submit");
-    expect(wrapper.emitted("apply")?.[0]?.[0]).toEqual({mode: "embedded", path: "/data/chroma-lab"});
+    expect(wrapper.emitted("apply")?.[0]?.[0]).toEqual({
+      mode: "embedded",
+      path: "/data/chroma-lab",
+    });
   });
 
   it("rejects credentials in the Chroma URL instead of probing", async () => {
-    const wrapper = mountPanel({health: {...health, mode: "http", path: null, url: "http://chroma:8000"}});
+    const wrapper = mountPanel({
+      health: { ...health, mode: "http", path: null, url: "http://chroma:8000" },
+    });
     await flushPromises();
     await wrapper.get("#chroma-url").setValue("http://user:secret@chroma:8000");
-    await wrapper.get("button[type=button]").trigger("click");
+    await wrapper.get(".vector-backend-actions button[type=button]").trigger("click");
     expect(wrapper.text()).toContain("Do not put credentials");
     expect(wrapper.emitted("probe")).toBeUndefined();
   });

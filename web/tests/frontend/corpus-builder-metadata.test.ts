@@ -1,45 +1,162 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataResolutionPanel.vue";
 
-function lastEmission(wrapper:any,event:string){const events=wrapper.emitted(event)||[];return events[events.length-1]||[]}
-function record(overrides:Record<string,unknown>={}){
-  return {record_id:"r-1",record_revision:1,text:"A passage under review.",source_block_ids:["b1"],source_spans:[],pdf_pages:[1],needs_review:true,review_disposition:"pending",metadata_complete:false,metadata_incomplete_fields:[],metadata_review_fields:[],metadata_field_status:{},...overrides} as any;
+function lastEmission(wrapper: any, event: string) {
+  const events = wrapper.emitted(event) || [];
+  return events[events.length - 1] || [];
 }
-const mountPanel=(item:any)=>mount(CorpusMetadataResolutionPanel,{
-  props:{record:item,regionTypes:["main_text","front_matter","back_matter"],discourseRoles:["assertion","analysis","quotation"]},
-  global:{stubs:{CorpusMetadataFieldEditor:true,CorpusFieldOwnershipBadge:true}},
-});
+function record(overrides: Record<string, unknown> = {}) {
+  return {
+    record_id: "r-1",
+    record_revision: 1,
+    text: "A passage under review.",
+    source_block_ids: ["b1"],
+    source_spans: [],
+    pdf_pages: [1],
+    needs_review: true,
+    review_disposition: "pending",
+    metadata_complete: false,
+    metadata_incomplete_fields: [],
+    metadata_review_fields: [],
+    metadata_field_status: {},
+    ...overrides,
+  } as any;
+}
+const mountPanel = (item: any) =>
+  mount(CorpusMetadataResolutionPanel, {
+    props: {
+      record: item,
+      regionTypes: ["main_text", "front_matter", "back_matter"],
+      discourseRoles: ["assertion", "analysis", "quotation"],
+    },
+    global: {
+      stubs: {
+        CorpusMetadataFieldEditor: true,
+        CorpusFieldOwnershipBadge: true,
+        PipelineRunTracePanel: true,
+      },
+    },
+  });
 
-describe("Corpus Builder metadata resolution",()=>{
-  it("offers one-click confirmation for unresolved LLM proposals without filtering them by raw confidence",async()=>{
-    const wrapper=mountPanel(record({discourse_role:"analysis",metadata_incomplete_fields:["discourse_role"],metadata_review_fields:["discourse_role"],metadata_field_status:{discourse_role:{status:"unresolved",method:"llm",confidence:.42,reason:"Model proposal requires review."}}}));
+describe("Corpus Builder metadata resolution", () => {
+  it("offers one-click confirmation for unresolved LLM proposals without filtering them by raw confidence", async () => {
+    const wrapper = mountPanel(
+      record({
+        discourse_role: "analysis",
+        metadata_incomplete_fields: ["discourse_role"],
+        metadata_review_fields: ["discourse_role"],
+        metadata_field_status: {
+          discourse_role: {
+            status: "unresolved",
+            method: "llm",
+            confidence: 0.42,
+            reason: "Model proposal requires review.",
+          },
+        },
+      }),
+    );
     expect(wrapper.get(".suggestion-toolbar").text()).toContain("1 LLM suggestion");
     await wrapper.get(".suggestion-toolbar button").trigger("click");
-    expect(lastEmission(wrapper,"resolveMany")[0]).toEqual({discourse_role:"analysis"});
+    expect(lastEmission(wrapper, "resolveMany")[0]).toEqual({ discourse_role: "analysis" });
   });
 
-  it("shows progressive enrichment as processing rather than falsely settled",()=>{
-    const wrapper=mountPanel(record({metadata_enrichment_state:"running",metadata_incomplete_fields:["position_holder"],metadata_review_fields:["position_holder"],metadata_field_status:{position_holder:{status:"unresolved",method:"llm"}}}));
+  it("shows progressive enrichment as processing rather than falsely settled", () => {
+    const wrapper = mountPanel(
+      record({
+        metadata_enrichment_state: "running",
+        metadata_incomplete_fields: ["position_holder"],
+        metadata_review_fields: ["position_holder"],
+        metadata_field_status: { position_holder: { status: "unresolved", method: "llm" } },
+      }),
+    );
     expect(wrapper.get(".review-status").attributes("data-state")).toBe("processing");
     expect(wrapper.get(".review-status").text()).toContain("LLM enrichment pending");
-    expect(wrapper.get('[role="status"]').text()).toContain("editable now");
+    expect(wrapper.get(".enrichment-note").text()).toContain("editable now");
   });
 
-  it("separates inherited document metadata from record-level decisions",()=>{
-    const wrapper=mountPanel(record({work:"On Cosmopolitanism and Forgiveness",document_author:"Jacques Derrida",region_type:"main_text",metadata_field_status:{
-      work:{status:"inherited",method:"document_manifest",confidence:1},
-      document_author:{status:"inherited",method:"document_manifest",confidence:1},
-      region_type:{status:"human_confirmed",method:"human",confidence:1},
-    }}));
+  it("shows the exact metadata retrieval pipeline trace at the point of review", () => {
+    const wrapper = mountPanel(
+      record({
+        editorial_memory_used: {
+          pipeline_trace: {
+            run_id: "metadata-precedents-build-1-r-1-abc",
+            feature: "metadata_precedents",
+            pipeline_id: "metadata.precedents.current",
+            pipeline_version: 1,
+            resolved_pipeline: {},
+            resolved_hash: "hash",
+            status: "completed",
+            started_at: "2026-09-29T00:00:00Z",
+            finished_at: "2026-09-29T00:00:00Z",
+            total_elapsed_ms: 10,
+            warnings: [],
+            stages: [
+              {
+                stage_id: "retrieve",
+                strategy_id: "retrieve.metadata_exemplars",
+                strategy_version: 1,
+                status: "completed",
+                parameters: {},
+                warnings: [],
+                score_summary: {},
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(wrapper.get(".metadata-pipeline-trace").text()).toContain(
+      "How metadata precedents were retrieved",
+    );
+    expect(wrapper.find("pipeline-run-trace-panel-stub").exists()).toBe(true);
+  });
+
+  it("separates inherited document metadata from record-level decisions", () => {
+    const wrapper = mountPanel(
+      record({
+        work: "On Cosmopolitanism and Forgiveness",
+        document_author: "Jacques Derrida",
+        region_type: "main_text",
+        metadata_field_status: {
+          work: { status: "inherited", method: "document_manifest", confidence: 1 },
+          document_author: { status: "inherited", method: "document_manifest", confidence: 1 },
+          region_type: { status: "human_confirmed", method: "human", confidence: 1 },
+        },
+      }),
+    );
     expect(wrapper.get(".inherited-metadata").text()).toContain("Inherited document metadata");
-    expect(wrapper.get(".settled-metadata").exists()).toBe(true);
+    expect(wrapper.find(".settled-metadata").exists()).toBe(true);
     expect(wrapper.find(".suggestion-toolbar").exists()).toBe(false);
   });
 
-  it("keeps invalid or unresolved active fields in the attention group",()=>{
-    const wrapper=mountPanel(record({stance:"affirm",metadata_field_status:{stance:{status:"invalid",method:"llm",confidence:.9}}}));
-    expect(wrapper.get('.metadata-grid[role="list"]').exists()).toBe(true);
+  it("keeps invalid or unresolved active fields in the attention group", () => {
+    const wrapper = mountPanel(
+      record({
+        stance: "affirm",
+        metadata_field_status: { stance: { status: "invalid", method: "llm", confidence: 0.9 } },
+      }),
+    );
+    expect(wrapper.find('.metadata-grid[role="list"]').exists()).toBe(true);
     expect(wrapper.get(".review-status").attributes("data-state")).toBe("attention");
   });
 });

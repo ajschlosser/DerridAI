@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Language-agnostic illegibility scoring for extracted record text.
 
 0 means the tokens still look like writing-system words. 100 means the text is
@@ -223,7 +238,11 @@ def fuse_record_noise(
 
 
 def raster_score_for_pages(record: dict[str, Any], pages: list[dict[str, Any]] | None) -> float | None:
-    """Highest raster-noise among pages this record spans; None if no raster evidence."""
+    """Typical raster noise across the pages this record spans; None if unavailable.
+
+    A single damaged page is retained in page-level source diagnostics, but must
+    not make an otherwise readable multi-page record unusable by itself.
+    """
     if not pages:
         return None
     wanted = {int(value) for value in (record.get("pdf_pages") or []) if isinstance(value, int)}
@@ -239,7 +258,13 @@ def raster_score_for_pages(record: dict[str, Any], pages: list[dict[str, Any]] |
             scores.append(float(raster.get("noise")))
         except (TypeError, ValueError):
             continue
-    return max(scores) if scores else None
+    if not scores:
+        return None
+    scores.sort()
+    middle = len(scores) // 2
+    if len(scores) % 2:
+        return scores[middle]
+    return (scores[middle - 1] + scores[middle]) / 2
 
 
 def median_score(records: list[dict[str, Any]]) -> float | None:

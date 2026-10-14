@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import type { Locator, Page } from "@playwright/test";
 import { FAQ_RECORDS, LANGUAGES, type Fixtures, type Role } from "./mock-backend";
 
@@ -66,12 +83,12 @@ export const scenarios: Scenario[] = [
   // Languages
   {
     id: "languages-default",
-    path: "/languages",
-    ready: (p) => p.getByRole("heading", { name: /Languages & internationalization/ }),
+    path: "/locale",
+    ready: (p) => p.getByRole("heading", { name: "Locale", exact: true }),
   },
   {
     id: "languages-policy-needed",
-    path: "/languages",
+    path: "/locale",
     ready: (p) => p.getByRole("heading", { name: /Deutsch/ }),
     steps: async (p) => {
       await p.getByRole("button", { name: /de-DE/ }).click();
@@ -79,7 +96,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-install-dialog",
-    path: "/languages",
+    path: "/locale",
     ready: (p) => p.getByRole("dialog"),
     steps: async (p) => {
       await p.getByRole("button", { name: /Install language/ }).click();
@@ -87,7 +104,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-translation-report",
-    path: "/languages",
+    path: "/locale",
     fixtures: {
       "/api/i18n/languages/fr-CA": {
         ...LANGUAGES[1],
@@ -102,7 +119,7 @@ export const scenarios: Scenario[] = [
   },
   {
     id: "languages-job-running",
-    path: "/languages",
+    path: "/locale",
     fixtures: { "/api/jobs": { jobs: [runningJob] }, "/api/jobs/job-lang-1": runningJob },
     ready: (p) => p.getByText(/Batch 3 of 9/).first(),
   },
@@ -121,7 +138,7 @@ export const scenarios: Scenario[] = [
     ready: (p) => p.getByRole("dialog"),
     steps: async (p) => {
       await p
-        .getByRole("button", { name: /Browse saved research/ })
+        .getByRole("button", { name: /Find a question/ })
         .first()
         .click();
     },
@@ -171,7 +188,7 @@ export const scenarios: Scenario[] = [
     ready: (p) => p.getByRole("heading", { name: "Using DerridAI" }),
     scan: ".ui-dialog",
     steps: async (p) => {
-      await p.getByRole("button", { name: "Help" }).click();
+      await p.locator(".topbar-chrome").getByRole("button", { name: "Help" }).click();
     },
   },
   {
@@ -201,7 +218,7 @@ export const scenarios: Scenario[] = [
     id: "users-default",
     path: "/users",
     role: "admin",
-    ready: (p) => p.getByRole("heading", { name: "Users" }),
+    ready: (p) => p.getByRole("heading", { name: "Users & roles" }),
   },
   // Record (a researcher reads a record from the database)
   {
@@ -214,9 +231,9 @@ export const scenarios: Scenario[] = [
     id: "record-provenance",
     path: "/record",
     role: "researcher",
-    ready: (p) => p.getByRole("tab", { name: "Provenance", selected: true }),
+    ready: (p) => p.getByRole("tab", { name: "Attribution", selected: true }),
     steps: async (p) => {
-      await p.getByRole("tab", { name: "Provenance" }).click();
+      await p.getByRole("tab", { name: "Attribution" }).click();
     },
   },
   {

@@ -1,25 +1,251 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import type { CorpusBuild } from '../api/pdfCorpus';
-import { useI18nStore } from '../stores/i18n';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
-const props=withDefaults(defineProps<{builds:CorpusBuild[];selectedBuildId?:string;total?:number}>(),{selectedBuildId:'',total:0});
-const emit=defineEmits<{select:[build:CorpusBuild];refresh:[]}>();
-const i18n=useI18nStore();
-function statusLabel(build:CorpusBuild){if(build.publication)return i18n.t('pdf_corpus.status.published_snapshot','published');return i18n.t(`pdf_corpus.status.${String(build.status||'unknown')}`,String(build.status||'unknown').replace(/_/g,' '))}
-function formatDate(value?:string|null){if(!value)return '—';try{return new Intl.DateTimeFormat(i18n.locale||undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))}catch{return value}}
+import { ref } from "vue";
+import type { CorpusBuild } from "../api/pdfCorpus";
+import { corpusStatusTone } from "../features/corpus-builder/domain/workflowPresentation";
+import { useI18nStore } from "../stores/i18n";
+import UiButton from "./ui/UiButton.vue";
+withDefaults(
+  defineProps<{
+    builds: CorpusBuild[];
+    selectedBuildId?: string;
+    pendingBuildId?: string;
+    total?: number;
+  }>(),
+  { selectedBuildId: "", pendingBuildId: "", total: 0 },
+);
+const emit = defineEmits<{ select: [build: CorpusBuild]; refresh: [] }>();
+const root = ref<HTMLDetailsElement | null>(null);
+const i18n = useI18nStore();
+function statusLabel(build: CorpusBuild) {
+  if (build.publication) return i18n.t("pdf_corpus.status.published_snapshot");
+  return i18n.t(
+    `pdf_corpus.status.${String(build.status || "unknown")}`,
+    String(build.status || "unknown").replace(/_/g, " "),
+  );
+}
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return new Intl.DateTimeFormat(i18n.locale || undefined, {
+      timeZone: i18n.timeZone,
+      dateStyle: "medium",
+      timeStyle: "short",
+    }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+function selectBuild(build: CorpusBuild) {
+  // Selection immediately dismisses the popover; the parent can keep the
+  // current workspace stable while it resolves the next authoritative build.
+  root.value?.removeAttribute("open");
+  emit("select", build);
+}
 </script>
 <template>
-<details class="history-menu">
-  <summary class="btn">{{i18n.t('pdf_corpus.builds','Corpus builds')}} <span class="count">{{total}}</span></summary>
-  <div class="history-popover" role="region" :aria-label="i18n.t('pdf_corpus.build_history_panel','Corpus build history')" data-surface="overlay">
-    <header><div><b>{{i18n.t('pdf_corpus.builds','Corpus builds')}}</b><small>{{i18n.t('pdf_corpus.build_history_anywhere','Open or monitor another build without leaving the current task.')}}</small></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" @click="emit('refresh')">↻</button></header>
-    <div class="history-list">
-      <button v-for="build in builds" :key="build.build_id" type="button" class="history-row" :class="{active:build.build_id===selectedBuildId}" :aria-current="build.build_id===selectedBuildId?'true':undefined" @click="emit('select',build)"><span class="dot" :data-status="build.status" aria-hidden="true"></span><span><b>{{build.source_filename}}</b><small>{{statusLabel(build)}} · {{Math.round((build.progress||0)*100)}}% · {{build.record_count||0}} {{i18n.t('pdf_corpus.records','records')}}</small><small>{{formatDate(build.created_at)}}</small></span></button>
-      <p v-if="!builds.length" class="empty">{{i18n.t('pdf_corpus.no_builds','No builds yet.')}}</p>
+  <details ref="root" class="history-menu">
+    <summary class="btn" :aria-busy="pendingBuildId ? 'true' : undefined">
+      {{ i18n.t("pdf_corpus.builds") }} <span class="count">{{ total }}</span>
+    </summary>
+    <div
+      class="history-popover"
+      role="region"
+      :aria-label="i18n.t('pdf_corpus.build_history_panel')"
+      data-surface="overlay"
+    >
+      <header>
+        <div>
+          <b>{{ i18n.t("pdf_corpus.builds") }}</b
+          ><small>{{ i18n.t("pdf_corpus.build_history_anywhere") }}</small>
+        </div>
+        <UiButton
+          icon="refresh"
+          icon-only
+          variant="ghost"
+          size="small"
+          :label="i18n.t('pdf_corpus.refresh_builds')"
+          @click="emit('refresh')"
+        />
+      </header>
+      <div class="history-list">
+        <button
+          v-for="build in builds"
+          :key="build.build_id"
+          type="button"
+          class="history-row"
+          :class="{ active: build.build_id === selectedBuildId }"
+          :aria-current="build.build_id === selectedBuildId ? 'true' : undefined"
+          :aria-busy="build.build_id === pendingBuildId ? 'true' : undefined"
+          :data-pending="build.build_id === pendingBuildId ? 'true' : undefined"
+          @click="selectBuild(build)"
+        >
+          <span
+            class="dot"
+            :data-status="build.status"
+            :data-tone="corpusStatusTone(build)"
+            aria-hidden="true"
+          ></span
+          ><span class="history-body"
+            ><b
+              ><span v-if="build.build_id === selectedBuildId" class="selected-mark"
+                >✓ <span class="sr-only">{{ i18n.t("pdf_corpus.build_selected") }}</span></span
+              >{{ build.source_filename }}</b
+            ><small
+              >{{ statusLabel(build) }} · {{ Math.round((build.progress || 0) * 100) }}% ·
+              {{ build.record_count || 0 }} {{ i18n.t("pdf_corpus.records") }}</small
+            ><small>{{ formatDate(build.created_at) }}</small
+            ><small class="build-id">{{ build.build_id }}</small></span
+          >
+        </button>
+        <p v-if="!builds.length" class="empty">{{ i18n.t("pdf_corpus.no_builds") }}</p>
+      </div>
     </div>
-  </div>
-</details>
+  </details>
 </template>
 <style scoped>
-.history-menu{position:relative}.history-menu>summary{list-style:none;display:flex;align-items:center;gap:7px;cursor:pointer}.history-menu>summary::-webkit-details-marker{display:none}.count{display:grid;place-items:center;min-width:21px;height:21px;padding:0 6px;border-radius:999px;background:var(--soft);font-size:.75rem}.history-popover{position:absolute;z-index:40;top:calc(100% + 8px);inset-inline-end:0;width:min(410px,calc(100vw - 28px));max-height:min(560px,72vh);display:grid;grid-template-rows:auto minmax(0,1fr);overflow:hidden;border:1px solid var(--line);border-radius:12px;background:var(--surface-overlay,#fff);box-shadow:0 18px 48px rgb(15 23 42 / .18)}.history-popover header{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:12px 13px;border-bottom:1px solid var(--line)}.history-popover header>div{display:grid;gap:2px}.history-popover b{font-size:.875rem}.history-popover small{font-size:.8125rem;color:var(--muted);line-height:1.4}.history-list{overflow:auto;padding:7px}.history-row{width:100%;display:grid;grid-template-columns:10px minmax(0,1fr);gap:9px;padding:9px;border:1px solid transparent;border-radius:9px;background:var(--surface-overlay,#fff);color:inherit;text-align:start;cursor:pointer}.history-row:hover,.history-row.active{border-color:var(--line);background:var(--surface-raised,#fff)}.history-row>span:last-child{display:grid;gap:2px;min-width:0}.history-row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.dot{width:8px;height:8px;border-radius:50%;background:#777;margin-top:5px}.dot[data-status="ready"],.dot[data-status="published"]{background:#287a4c}.dot[data-status="running"],.dot[data-status="queued"]{background:#8e6815}.dot[data-status="failed"],.dot[data-status="interrupted"]{background:#a13f3f}.empty{margin:0;padding:18px;color:var(--muted);font-size:.8125rem}.icon-button{border:0;background:transparent;min-width:36px;min-height:36px;border-radius:8px;cursor:pointer;font-size:1.125rem}.history-menu :is(summary,button):focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.history-menu {
+  position: relative;
+}
+.history-menu > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+.history-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.count {
+  display: grid;
+  place-items: center;
+  min-width: 21px;
+  height: 21px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  font-size: var(--fs-xs);
+}
+.history-popover {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  width: min(410px, calc(100vw - 28px));
+  max-height: min(560px, 72vh);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+}
+.history-popover header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.history-popover header > div {
+  display: grid;
+  gap: 2px;
+}
+.history-popover b {
+  font-size: var(--fs-sm);
+}
+.history-popover small {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+.history-list {
+  overflow: auto;
+  padding: var(--space-2);
+}
+.history-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: var(--surface-overlay);
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.history-row:hover {
+  border-color: var(--border-subtle);
+  background: var(--surface-raised);
+}
+.history-row.active {
+  border-color: var(--border-interactive);
+  background: var(--surface-raised);
+}
+.history-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.history-row b {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.selected-mark {
+  margin-inline-end: var(--space-1);
+  color: var(--tone-ok-fg);
+}
+.build-id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  overflow-wrap: anywhere;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  margin-top: 5px;
+}
+.dot[data-tone="success"] {
+  background: var(--tone-ok-fg);
+}
+.dot[data-tone="warning"] {
+  background: var(--tone-warn-fg);
+}
+.dot[data-tone="danger"] {
+  background: var(--tone-danger-fg);
+}
+.empty {
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.history-menu :is(summary, button):focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+}
 </style>

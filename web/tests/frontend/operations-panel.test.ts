@@ -1,9 +1,28 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import OperationsPanel from "../../src/components/OperationsPanel.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 import type { OperationView, OperationsBridge } from "../../src/domain/operationsPanel";
+import { realtimeFallback, realtimeStatus } from "../../src/realtime";
 
 const NOW = new Date("2026-09-20T15:00:00").getTime();
 const iso = (seconds: number) => new Date(NOW + seconds * 1000).toISOString();
@@ -189,6 +208,49 @@ describe("Operations panel semantics", () => {
       .find((c) => c.text().startsWith("Running"))!
       .trigger("click");
     expect(filtered.wrapper.get(".ops-empty-inline").text()).toContain("No operations match");
+  });
+
+  it("withholds the empty-state claim while the initial refresh is still pending", async () => {
+    setActivePinia(createPinia());
+    const fake = makeBridge([]);
+    let resolveRefresh!: () => void;
+    fake.bridge.refresh.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    const wrapper = mount(OperationsPanel, {
+      props: { bridge: fake.bridge },
+      attachTo: document.body,
+      global: { stubs: { TransitionGroup: false } },
+    });
+    mountedPanels.push(wrapper);
+    await flushPromises();
+
+    expect(wrapper.find(".ops-empty").exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "UiLoadingState" }).exists()).toBe(true);
+
+    resolveRefresh();
+    await flushPromises();
+    expect(wrapper.get(".ops-empty h3").text()).toBe("Nothing in flight");
+  });
+
+  it("retains known operations when an initial refresh fails", async () => {
+    setActivePinia(createPinia());
+    const fake = makeBridge([running()]);
+    fake.bridge.refresh.mockRejectedValueOnce(new Error("Transport offline"));
+    const wrapper = mount(OperationsPanel, {
+      props: { bridge: fake.bridge },
+      attachTo: document.body,
+      global: { stubs: { TransitionGroup: false } },
+    });
+    mountedPanels.push(wrapper);
+    await flushPromises();
+
+    expect(wrapper.findAll("li.ops-row")).toHaveLength(1);
+    expect(wrapper.get(".ops-refresh-error").text()).toContain("Transport offline");
+    expect(wrapper.find(".ops-empty").exists()).toBe(false);
   });
 });
 
@@ -403,5 +465,36 @@ describe("language and formatting", () => {
     await more.trigger("click");
     expect(wrapper.findAll("li.ops-row")).toHaveLength(9);
     expect(more.attributes("aria-expanded")).toBe("true");
+  });
+});
+
+describe("operations panel realtime status", () => {
+  afterEach(() => {
+    realtimeStatus.value = "idle";
+    realtimeFallback.value = false;
+  });
+
+  it("shows a quiet connection line that is not a live region", async () => {
+    realtimeStatus.value = "connected";
+    const { wrapper } = await mountPanel([job()]);
+    const line = wrapper.get('[data-testid="realtime-status"]');
+    expect(line.attributes("data-state")).toBe("connected");
+    expect(line.text()).toBe("Live updates on");
+    expect(line.attributes("role")).toBeUndefined();
+    expect(line.attributes("aria-live")).toBeUndefined();
+  });
+
+  it("explains the fallback refresh cadence when live updates are unavailable", async () => {
+    realtimeStatus.value = "offline";
+    realtimeFallback.value = true;
+    const { wrapper } = await mountPanel([job()]);
+    const line = wrapper.get('[data-testid="realtime-status"]');
+    expect(line.attributes("data-state")).toBe("offline");
+    expect(line.text()).toContain("25 s");
+  });
+
+  it("stays hidden before the realtime client starts", async () => {
+    const { wrapper } = await mountPanel([job()]);
+    expect(wrapper.find('[data-testid="realtime-status"]').exists()).toBe(false);
   });
 });

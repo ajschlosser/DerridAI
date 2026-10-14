@@ -1,12 +1,33 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // The Record workspace: the record the Record view shows (loaded or from the database), moving between records, and the
 // commands it sends (evidence, selection, citation and JSON copy, saving edits, annotations, the primary action). Moved
 // verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
+import { execute } from "../api/graphql/client";
+import { CelfModelDocument, RecordGraphDocument } from "../api/graphql/generated";
 import { fullCitation, inlineCitation, mlaPageSpan } from "./citations";
 import { compactRecordHistory, pdfLinks, recordPayload } from "./recordPayloads";
 import { countOccurrences } from "./recordQuery";
 import { cloneAuditValue } from "./recordValues";
+import { bindCopy } from "../i18n/bindCopy";
+import { englishDefault } from "../i18n/englishDefault";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -38,7 +59,8 @@ type Helper =
   | "openRecordHistoryBrowser"
   | "openTouchup"
   | "pdfDisplayTitle"
-  | "persistPrefs"
+  | "persistListPreferences"
+  | "persistRecordViewPreferences"
   | "refreshServerAnnotations"
   | "refreshStores"
   | "researcherDbRecords"
@@ -49,7 +71,6 @@ type Helper =
   | "setReviewSelected"
   | "shell"
   | "syncUrl"
-  | "toast"
   | "toggleDbEvidence"
   | "toggleWorkspaceEvidence"
   | "tr"
@@ -85,7 +106,8 @@ export function createRecordWorkspace(deps: Deps) {
     openRecordHistoryBrowser,
     openTouchup,
     pdfDisplayTitle,
-    persistPrefs,
+    persistListPreferences,
+    persistRecordViewPreferences,
     refreshServerAnnotations,
     refreshStores,
     researcherDbRecords,
@@ -96,16 +118,21 @@ export function createRecordWorkspace(deps: Deps) {
     setReviewSelected,
     shell,
     syncUrl,
-    toast,
     toggleDbEvidence,
     toggleWorkspaceEvidence,
-    tr,
     uid,
     unlinkAllPdfLinks,
     unlinkPdfLink,
     upsertRows,
     workspaceEvidenceKey,
   } = deps;
+  const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback || englishDefault(key) || key,
+    ),
+  );
+  let derridaiModelCache: Any = null;
   function recordWorkspaceRecord(record: Any) {
     const out = recordPayload(record, { includeChromaId: true });
     delete out.updates;
@@ -160,7 +187,7 @@ export function createRecordWorkspace(deps: Deps) {
         return {
           available: false,
           mode: "database",
-          reason: tr("research.no_records", "No records available"),
+          reason: tr("research.no_records"),
         };
       const id = String(record._chroma_id || record.record_id || state.researcherRecordId || "");
       const list = researcherDbRecords();
@@ -171,7 +198,10 @@ export function createRecordWorkspace(deps: Deps) {
         .filter(
           (item: Any) =>
             String(item.store || "") === String(state.activeStore) &&
-            String(item.record_id || "") === id,
+            (String(item.record_id || "") === id ||
+              (Array.isArray(item.linked_record_ids) &&
+                item.linked_record_ids.map(String).includes(id)) ||
+              (item.scope === "work" && String(item.work || "") === String(record.work || ""))),
         )
         .map((item: Any, index: Any) =>
           normalizedRecordAnnotation(item, index, { removable: false }),
@@ -224,13 +254,8 @@ export function createRecordWorkspace(deps: Deps) {
       return {
         available: false,
         mode: "workspace",
-        reason: tr("record.no_record_selected", "No record selected."),
+        reason: tr("record.no_record_selected"),
       };
-    const pointer = { kind: "workspace", fileId: file.id, index };
-    if (JSON.stringify(state.lastViewedRecord) !== JSON.stringify(pointer)) {
-      state.lastViewedRecord = pointer;
-      persistPrefs();
-    }
     const text = String(record.text || "");
     const q = String(state.recordFind || "");
     const links = pdfLinks(record);
@@ -288,6 +313,54 @@ export function createRecordWorkspace(deps: Deps) {
       },
     };
   }
+  function rememberRecordWorkspaceSnapshot(snapshot: Any) {
+    if (!snapshot?.available) return;
+    const pointer =
+      snapshot.mode === "database"
+        ? {
+            kind: "database",
+            store: String(snapshot.collection || ""),
+            id: String(snapshot.record_id || ""),
+          }
+        : {
+            kind: "workspace",
+            fileId: String(snapshot.file_id || ""),
+            index: Number(snapshot.current_index),
+          };
+    if (
+      (pointer.kind === "database" && (!pointer.store || !pointer.id)) ||
+      (pointer.kind === "workspace" &&
+        (!pointer.fileId || !Number.isInteger(pointer.index) || pointer.index < 0))
+    )
+      return;
+
+    const current = state.lastViewedRecord || {};
+    const unchanged =
+      current.kind === pointer.kind &&
+      (pointer.kind === "database"
+        ? current.store === pointer.store && String(current.id || "") === pointer.id
+        : current.fileId === pointer.fileId && Number(current.index) === pointer.index);
+    if (unchanged) return;
+
+    state.lastViewedRecord = pointer;
+    persistRecordViewPreferences();
+  }
+
+  async function getRecordObjectGraph(recordOverride: Any = null) {
+    const source =
+      recordOverride && typeof recordOverride === "object"
+        ? recordOverride
+        : (await getRecordWorkspaceSnapshot()).record;
+    if (!source || !String(source.record_id || "").trim()) return null;
+    // cELF reads go through the GraphQL façade; the REST routes remain for compatibility.
+    const { record_graph } = await execute(RecordGraphDocument, { record: source });
+    return record_graph;
+  }
+  async function getDerridaiNormativeModel({ refresh = false } = {}) {
+    if (!refresh && derridaiModelCache) return cloneAuditValue(derridaiModelCache);
+    derridaiModelCache = (await execute(CelfModelDocument, {})).celf_model;
+    return cloneAuditValue(derridaiModelCache);
+  }
   async function recordWorkspaceNavigate(delta: Any) {
     const step = Number(delta) || 0;
     if (!step) return getRecordWorkspaceSnapshot();
@@ -302,7 +375,7 @@ export function createRecordWorkspace(deps: Deps) {
       const next = list[index + step];
       if (next) {
         state.researcherRecordId = String(next._chroma_id || next.record_id || "");
-        persistPrefs();
+        persistRecordViewPreferences();
         syncUrl({ replace: true });
         shell();
       }
@@ -313,14 +386,14 @@ export function createRecordWorkspace(deps: Deps) {
     const index = selectedIndex(file),
       next = Math.max(0, Math.min(file.records.length - 1, index + step));
     state.selected[file.id] = next;
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
     shell();
     return getRecordWorkspaceSnapshot();
   }
   function setRecordWorkspaceFind(value: Any) {
     state.recordFind = String(value || "");
-    persistPrefs();
+    persistRecordViewPreferences();
     syncUrl({ replace: true });
     return state.recordFind;
   }
@@ -364,7 +437,7 @@ export function createRecordWorkspace(deps: Deps) {
       );
       return true;
     } catch (error) {
-      toast(`${tr("record.copy_failed", "Could not copy citation")}: ${(error as Error).message}`, {
+      toast(`${tr("record.copy_failed")}: ${(error as Error).message}`, {
         tone: "danger",
       });
       return false;
@@ -374,19 +447,19 @@ export function createRecordWorkspace(deps: Deps) {
     if (isResearcher()) {
       const record = await researcherCurrentRecord();
       if (!record) return false;
-      await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json", "record"));
+      await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json"));
       return true;
     }
     const record = selectedRecord();
     if (!record) return false;
-    await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json", "record"));
+    await copyJsonToClipboard(recordWorkspaceRecord(record), tr("record.record_json"));
     return true;
   }
   async function saveCurrentRecordChanges(changes = {}) {
     if (isResearcher() || !canUse("editLocalRecords"))
-      throw new Error(tr("permissions.record_edit_denied", "Your role cannot edit local records."));
+      throw new Error(tr("permissions.record_edit_denied"));
     const file = activeFile();
-    if (!file) throw new Error(tr("record.no_record_selected", "No record selected."));
+    if (!file) throw new Error(tr("record.no_record_selected"));
     const index = selectedIndex(file);
     const safe: Loose = {};
     for (const [field, value] of Object.entries(changes || {})) {
@@ -394,28 +467,35 @@ export function createRecordWorkspace(deps: Deps) {
     }
     const count = applyRecordChanges(file, index, safe, { source: "record_workspace" });
     shell();
-    if (count) toast(tr("record.saved", "Record changes saved"), { tone: "success" });
-    else toast(tr("record.no_changes", "No record fields changed"), { tone: "info" });
+    if (count) toast(tr("record.saved"), { tone: "success" });
+    else toast(tr("record.no_changes"), { tone: "info" });
     return getRecordWorkspaceSnapshot();
   }
   async function addCurrentRecordAnnotation(payload: Loose = {}) {
-    if (!hasCapability("annotations.write"))
-      throw new Error(tr("permissions.annotations_denied", "Your role cannot create annotations."));
+    if (!hasCapability("annotations.write")) throw new Error(tr("permissions.annotations_denied"));
     const field = String(payload.field || "text"),
+      scope = payload.scope === "work" || payload.scope === "record" ? payload.scope : "text",
       quote = String(payload.quote || "").trim(),
       note = String(payload.note || "").trim(),
-      tags = Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [];
-    if (!quote && !note && !tags.length)
-      throw new Error(tr("annotations.empty", "Add a quotation, note, or tag first."));
+      tags = Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [],
+      linkedRecordIds = Array.isArray(payload.linkedRecordIds)
+        ? payload.linkedRecordIds
+            .map(String)
+            .map((value: string) => value.trim())
+            .filter(Boolean)
+        : [];
+    if (!quote && !note && !tags.length) throw new Error(tr("annotations.empty"));
     if (isResearcher()) {
       const record = await researcherCurrentRecord();
-      if (!record) throw new Error(tr("record.no_record_selected", "No record selected."));
+      if (!record) throw new Error(tr("record.no_record_selected"));
       await api("/api/annotations", {
         method: "POST",
         body: JSON.stringify({
           store: state.activeStore,
-          record_id: String(record._chroma_id || record.record_id || ""),
+          scope,
+          record_id: scope === "work" ? null : String(record._chroma_id || record.record_id || ""),
           work: String(record.work || ""),
+          linked_record_ids: linkedRecordIds,
           page_start: record.page_start ?? null,
           page_end: record.page_end ?? null,
           field,
@@ -426,19 +506,22 @@ export function createRecordWorkspace(deps: Deps) {
       });
       state.annotationsFetchedAt = 0;
       await refreshServerAnnotations(true);
-      toast(tr("annotations.saved", "Record annotation saved"), { tone: "success" });
+      toast(tr("annotations.saved"), { tone: "success" });
       return getRecordWorkspaceSnapshot();
     }
     const file = activeFile();
-    if (!file) throw new Error(tr("record.no_record_selected", "No record selected."));
+    if (!file) throw new Error(tr("record.no_record_selected"));
     const index = selectedIndex(file),
       record = file.records[index];
     const shared = await api("/api/annotations", {
       method: "POST",
       body: JSON.stringify({
         store: state.activeStore || null,
-        record_id: String(record._chroma_id || record.record_id || index + 1),
+        scope,
+        record_id:
+          scope === "work" ? null : String(record._chroma_id || record.record_id || index + 1),
         work: String(record.work || ""),
+        linked_record_ids: linkedRecordIds,
         page_start: record.page_start ?? null,
         page_end: record.page_end ?? null,
         field,
@@ -453,6 +536,11 @@ export function createRecordWorkspace(deps: Deps) {
     annotations.push({
       id: uid(),
       shared_annotation_id: shared?.id || null,
+      scope,
+      linked_record_ids: linkedRecordIds,
+      parent_id: null,
+      thread_id: shared?.thread_id || shared?.id || null,
+      deleted_at: null,
       field,
       quote,
       note,
@@ -464,14 +552,28 @@ export function createRecordWorkspace(deps: Deps) {
     state.annotationsFetchedAt = 0;
     await refreshServerAnnotations(true);
     shell();
-    toast(tr("annotations.saved", "Record annotation saved"), { tone: "success" });
+    toast(tr("annotations.saved"), { tone: "success" });
     return getRecordWorkspaceSnapshot();
+  }
+  async function replyToCurrentAnnotation(annotationId: string, payload: Loose = {}) {
+    if (!hasCapability("annotations.write")) throw new Error(tr("permissions.annotations_denied"));
+    const result = await api(`/api/annotations/${encodeURIComponent(annotationId)}/replies`, {
+      method: "POST",
+      body: JSON.stringify({
+        quote: String(payload.quote || "").trim(),
+        note: String(payload.note || "").trim(),
+        tags: Array.isArray(payload.tags) ? payload.tags.map(String).filter(Boolean) : [],
+      }),
+    });
+    state.annotationsFetchedAt = 0;
+    await refreshServerAnnotations(true);
+    return result;
   }
   async function removeCurrentRecordAnnotation(annotationId: Any) {
     if (isResearcher() || !canUse("editLocalRecords"))
-      throw new Error(tr("permissions.record_edit_denied", "Your role cannot edit local records."));
+      throw new Error(tr("permissions.record_edit_denied"));
     const file = activeFile();
-    if (!file) throw new Error(tr("record.no_record_selected", "No record selected."));
+    if (!file) throw new Error(tr("record.no_record_selected"));
     const index = selectedIndex(file),
       record = file.records[index];
     const annotations = Array.isArray(record.annotations)
@@ -491,15 +593,13 @@ export function createRecordWorkspace(deps: Deps) {
     annotations.splice(at, 1);
     applyRecordChanges(file, index, { annotations }, { source: "annotation" });
     shell();
-    toast(tr("annotations.removed", "Record annotation removed"), { tone: "success" });
+    toast(tr("annotations.removed"), { tone: "success" });
     return getRecordWorkspaceSnapshot();
   }
   async function currentRecordPrimaryAction(action: Any, payload: Loose = {}) {
     if (action === "upsert") {
       if (isResearcher() || !canUse("manageCorpus"))
-        throw new Error(
-          tr("permissions.corpus_denied", "Your role cannot manage corpus databases."),
-        );
+        throw new Error(tr("permissions.corpus_denied"));
       const file = activeFile();
       if (!file) return false;
       await upsertRows(
@@ -510,9 +610,7 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "llm") {
       if (isResearcher() || !canUse("editLocalRecords"))
-        throw new Error(
-          tr("permissions.record_edit_denied", "Your role cannot edit local records."),
-        );
+        throw new Error(tr("permissions.record_edit_denied"));
       const file = activeFile();
       if (!file) return false;
       const index = selectedIndex(file);
@@ -521,9 +619,7 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "ocr") {
       if (isResearcher() || !canUse("editLocalRecords"))
-        throw new Error(
-          tr("permissions.record_edit_denied", "Your role cannot edit local records."),
-        );
+        throw new Error(tr("permissions.record_edit_denied"));
       const file = activeFile();
       if (!file) return false;
       cleanRecord(file, selectedIndex(file));
@@ -531,17 +627,14 @@ export function createRecordWorkspace(deps: Deps) {
     }
     if (action === "history") {
       if (isResearcher() || !canUse("editLocalRecords"))
-        throw new Error(
-          tr("permissions.record_edit_denied", "Your role cannot edit local records."),
-        );
+        throw new Error(tr("permissions.record_edit_denied"));
       const file = activeFile();
       if (!file) return false;
       openRecordHistoryBrowser(file, selectedIndex(file));
       return true;
     }
     if (action === "open_pdf") {
-      if (!canAccessPage("pdf"))
-        throw new Error(tr("permissions.pdf_denied", "Your role cannot open PDF Explorer."));
+      if (!canAccessPage("pdf")) throw new Error(tr("permissions.pdf_denied"));
       const snapshot: Loose = await getRecordWorkspaceSnapshot();
       const link = snapshot?.pdf_links?.[Number(payload.index) || 0];
       if (!link) return false;
@@ -559,8 +652,7 @@ export function createRecordWorkspace(deps: Deps) {
       return true;
     }
     if (action === "pdf_explorer") {
-      if (!canAccessPage("pdf"))
-        throw new Error(tr("permissions.pdf_denied", "Your role cannot open PDF Explorer."));
+      if (!canAccessPage("pdf")) throw new Error(tr("permissions.pdf_denied"));
       openPdfExplorerWorkspace();
       return true;
     }
@@ -600,6 +692,9 @@ export function createRecordWorkspace(deps: Deps) {
     recordWorkspaceRecord,
     researcherCurrentRecord,
     getRecordWorkspaceSnapshot,
+    rememberRecordWorkspaceSnapshot,
+    getRecordObjectGraph,
+    getDerridaiNormativeModel,
     recordWorkspaceNavigate,
     setRecordWorkspaceFind,
     toggleCurrentRecordEvidence,
@@ -608,6 +703,7 @@ export function createRecordWorkspace(deps: Deps) {
     copyCurrentRecordJson,
     saveCurrentRecordChanges,
     addCurrentRecordAnnotation,
+    replyToCurrentAnnotation,
     removeCurrentRecordAnnotation,
     currentRecordPrimaryAction,
     searchCurrentRecordMetadata,

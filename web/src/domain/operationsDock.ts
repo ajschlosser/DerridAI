@@ -1,4 +1,20 @@
-// Copyright 2026 Aaron John Schlosser, PhD.
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 export const ACTIVE_JOB_STATUSES = ["queued", "running", "cancelling"] as const;
 export const TERMINAL_JOB_STATUSES = ["completed", "cancelled", "failed", "blocked"] as const;
@@ -25,12 +41,17 @@ export function shouldMountOperationDock(visibleCount: number): boolean {
   return Number(visibleCount) > 0;
 }
 
-export function jobIdsToPruneFromDock(visibleJobIds: Iterable<string>, liveJobIds: Iterable<string>): string[] {
+export function jobIdsToPruneFromDock(
+  visibleJobIds: Iterable<string>,
+  liveJobIds: Iterable<string>,
+): string[] {
   const live = new Set([...liveJobIds].map(String).filter(Boolean));
   return [...visibleJobIds].map(String).filter((id) => Boolean(id) && !live.has(id));
 }
 
-export function jobProgressPercent(job: {total?: number | null; completed?: number | null} | null | undefined): number {
+export function jobProgressPercent(
+  job: { total?: number | null; completed?: number | null } | null | undefined,
+): number {
   const total = Number(job?.total || 0);
   const done = Number(job?.completed || 0);
   if (!total) return 0;
@@ -68,16 +89,17 @@ export function dockCollapsedSummary(input: {
   const active = Math.max(0, Number(input.activeCount) || 0);
   const failed = Math.max(0, Number(input.failedCount) || 0);
   const finished = Math.max(0, Number(input.finishedCount) || 0);
-  const percent = input.primaryPercent == null || Number.isNaN(Number(input.primaryPercent))
-    ? null
-    : Math.max(0, Math.min(100, Math.round(Number(input.primaryPercent))));
+  const percent =
+    input.primaryPercent == null || Number.isNaN(Number(input.primaryPercent))
+      ? null
+      : Math.max(0, Math.min(100, Math.round(Number(input.primaryPercent))));
   const primaryLabel = String(input.primaryLabel || "").trim();
 
   if (failed > 0 && active === 0) {
     return {
       key: failed === 1 ? "operations.pill_failed_one" : "operations.pill_failed_other",
       fallback: "{count} failed",
-      values: {count: failed},
+      values: { count: failed },
       tone: "danger",
       percent: null,
     };
@@ -87,7 +109,7 @@ export function dockCollapsedSummary(input: {
       return {
         key: "operations.pill_primary_progress",
         fallback: "{label} · {percent}%",
-        values: {label: primaryLabel, percent},
+        values: { label: primaryLabel, percent },
         tone: "info",
         percent,
       };
@@ -95,7 +117,7 @@ export function dockCollapsedSummary(input: {
     return {
       key: "operations.pill_primary",
       fallback: "{label}",
-      values: {label: primaryLabel},
+      values: { label: primaryLabel },
       tone: "info",
       percent: null,
     };
@@ -104,7 +126,7 @@ export function dockCollapsedSummary(input: {
     return {
       key: "operations.pill_running_failed",
       fallback: "{running} running · {failed} failed",
-      values: {running: active, failed},
+      values: { running: active, failed },
       tone: "danger",
       percent,
     };
@@ -113,7 +135,7 @@ export function dockCollapsedSummary(input: {
     return {
       key: active === 1 ? "operations.pill_running_one" : "operations.pill_running_other",
       fallback: "{count} running",
-      values: {count: active},
+      values: { count: active },
       tone: "info",
       percent,
     };
@@ -122,7 +144,7 @@ export function dockCollapsedSummary(input: {
     return {
       key: finished === 1 ? "operations.pill_finished_one" : "operations.pill_finished_other",
       fallback: finished === 1 ? "{count} needs attention" : "{count} need attention",
-      values: {count: finished},
+      values: { count: finished },
       tone: "warning",
       percent: null,
     };

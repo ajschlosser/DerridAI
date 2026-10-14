@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Semantic-atom reconstruction and MLA citation formatting.
 
 Why: PDF text arrives as visual lines, not sentences. Segmentation needs
@@ -28,7 +44,7 @@ def test_semantic_atom_reconstruction_preserves_real_boundary_anchor():
         {"block_id":"b2","page":1,"type":"body","text":"continues the same sentence.", "bbox":[0,1,1,2]},
         {"block_id":"b3","page":1,"type":"body","text":"A new paragraph begins here and completes its thought.", "bbox":[0,3,1,4]},
     ]
-    atoms = cb.PdfCorpusBuildManager._semantic_atoms(blocks)
+    atoms = cb._semantic_atoms(blocks)
     assert atoms
     assert atoms[0]["block_id"] in {"b2", "b3"}
     assert atoms[0]["source_block_ids"][0] == "b1"

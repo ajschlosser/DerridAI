@@ -1,0 +1,350 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* -------------------------------------------------------------------------
+   DerridAI 0.30.9 — Works, Compare, Record annotations, Research, roles
+   ------------------------------------------------------------------------- */
+
+/* Modern readable baseline. Small metadata remains compact without dropping
+   below a practical 12px floor; interactive labels remain 13px+. */
+:root {
+  --content-grid-gap: 14px;
+  --control-min-h: 40px;
+}
+body {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+:where(.btn, .control, button, input, select, textarea) {
+  font-size: 0.8125rem;
+}
+:where(.btn, .control, input, select) {
+  min-height: var(--control-min-h);
+}
+:where(
+  .note,
+  small,
+  .section-label,
+  .badge,
+  .pill,
+  .chip,
+  .field > span,
+  .field > label,
+  label > span,
+  table th,
+  table td
+) {
+  font-size: 0.8125rem !important;
+  line-height: 1.45;
+}
+:where(h1, h2, h3, .cardhead b, .dashboard-card-title b) {
+  line-height: 1.25;
+}
+.researcher-index-card .metadata-badge-section {
+  padding: 13px 14px !important;
+}
+.researcher-index-card .metadata-badge-section + .metadata-badge-section {
+  border-top: 1px solid var(--line);
+}
+.researcher-index-chip .chip-search-link {
+  display: block;
+  max-width: min(300px, 100%);
+  padding: 6px 10px !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.research-page-0309 .rag-runner-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+.research-page-0309 .rag-runner-main {
+  padding: 0;
+  overflow: hidden;
+}
+.research-page-0309 .card-inset {
+  margin: 14px 18px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--card) !important;
+  box-shadow: none !important;
+}
+.research-page-0309 .rag-memory {
+  border-color: color-mix(in srgb, var(--ui-accent) 22%, var(--line)) !important;
+  background: linear-gradient(180deg, var(--card), var(--card)) !important;
+}
+.research-page-0309 .rag-prompt {
+  min-height: 150px !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.55;
+}
+
+/* Shared-page permission model: pages retain one visual shell; role-specific
+   permissions only hide/disable privileged controls. */
+[data-permission-disabled="true"] {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+/* -------------------------------------------------------------------------
+   DerridAI 0.30.10 — Searching for Answers Fix
+   ------------------------------------------------------------------------- */
+.search-layout-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+}
+.search-layout-switcher .btn {
+  min-height: 30px !important;
+  border-color: transparent;
+  background: transparent;
+}
+.search-layout-switcher .btn.active {
+  background: var(--card);
+  border-color: var(--line);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  color: var(--accent-fg);
+}
+.search-results-toolbar {
+  align-items: center;
+  gap: 12px;
+}
+.search-results-toolbar > .tools:first-child {
+  flex-wrap: wrap;
+}
+.search-result-table.compact-results td {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+  font-size: 0.78125rem !important;
+}
+.search-result-table.roomy-results td {
+  padding-top: 13px !important;
+  padding-bottom: 13px !important;
+  font-size: 0.8125rem !important;
+}
+.search-result-table.roomy-results .textcell,
+.search-result-table.roomy-results .extracted-text-cell {
+  font-size: 0.90625rem !important;
+  line-height: 1.6;
+}
+.search-result-table .textcell {
+  min-width: 300px;
+}
+.search-empty-cell {
+  padding: 28px !important;
+  text-align: center;
+}
+.workspace-search-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+  gap: 12px;
+}
+.workspace-search-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+.workspace-search-card > header,
+.workspace-search-card > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.workspace-search-card > header label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 750;
+}
+.workspace-search-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.workspace-search-card p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.workspace-search-card.selected {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ui-accent) 10%, transparent);
+}
+.metadata-search-link,
+.table-metadata-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--accent-fg);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--ui-accent) 35%, transparent);
+  text-underline-offset: 2px;
+}
+.metadata-search-link:hover,
+.table-metadata-link:hover {
+  text-decoration-color: currentColor;
+}
+.table-metadata-link.scroll-cell {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editable-chip .chip-search-link {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.editable-chip .chip-search-link:hover {
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+.shared-record-annotations .record-annotation {
+  grid-template-columns: 1fr !important;
+}
+.researcher-index-card .metadata-badge-section {
+  padding: 14px !important;
+}
+.researcher-index-card .metadata-badge-section + .metadata-badge-section {
+  border-top: 1px solid var(--line);
+}
+.researcher-index-chip .chip-search-link {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Upserts >500 are modal/blocking; keep progress easy to parse and cancel. */
+
+/* Vector store collection wizard: rows beat columns for provider and sync choices. */
+.collection-wizard-dialog .vector-provider-options {
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+}
+.collection-wizard-dialog .vector-provider-options label {
+  grid-template-columns: auto 42px minmax(0, 1fr) !important;
+  align-items: center !important;
+}
+.collection-wizard-dialog .workflow-step-body {
+  grid-template-columns: minmax(170px, 0.3fr) minmax(0, 1fr) !important;
+}
+.collection-wizard-dialog .wizard-work-list {
+  max-height: 220px !important;
+}
+.collection-wizard-dialog .wizard-sync-summary {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+.collection-wizard-dialog .wizard-sync-summary .info {
+  grid-column: 1/-1 !important;
+  margin: 0 !important;
+}
+.collection-wizard-dialog .workflow-steps li:not(:last-child)::after {
+  z-index: 0 !important;
+  top: 14px !important;
+}
+.collection-wizard-dialog .workflow-steps li > b {
+  background: var(--card);
+  padding-right: 8px;
+  z-index: 2;
+}
+.collection-wizard-dialog .workflow-steps li > span {
+  z-index: 3 !important;
+}
+.btn,
+.control,
+input,
+select,
+textarea,
+button {
+  font-size: max(0.8125rem, 0.8125rem);
+}
+.cardhead b,
+.section h3,
+.quick-index h3 {
+  font-size: max(0.8125rem, 0.8125rem);
+}
+.mr > span {
+  font-size: 0.8125rem !important;
+}
+.mr > b,
+.mr > .metadata-search-link {
+  font-size: 0.8125rem !important;
+  line-height: 1.4;
+}
+.recordtext {
+  font-size: 0.9375rem !important;
+  line-height: 1.68 !important;
+}
+
+/* 0.30.12 — All the Little Things */
+:root {
+  --chart-1: #355f52;
+  --chart-2: #527c70;
+  --chart-3: #72988c;
+  --chart-4: #8b7258;
+  --chart-5: #6d7893;
+  --chart-6: #9a806b;
+  --chart-7: #73836a;
+  --chart-8: #8b7188;
+}
+.dashboard-metric-body .dash-chart {
+  min-height: 96px;
+  max-height: 118px;
+}
+.record-history-dialog .dialog-title {
+  font-size: 1.1875rem;
+}
+.secondary-danger {
+  background: var(--card) !important;
+  color: var(--danger) !important;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)) !important;
+  box-shadow: none !important;
+}
+.secondary-danger:hover {
+  background: var(--danger-bg) !important;
+  border-color: var(--danger) !important;
+}
+
+/* Users & roles now reflects researcher access managed by the main profile page. */
+.researcher-provider-access-card > .cardhead {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+.researcher-provider-empty-state.compact {
+  margin: 12px;
+  padding: 14px;
+}

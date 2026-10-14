@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../stores/i18n";
@@ -5,6 +23,8 @@ import UiStatusBadge from "./ui/UiStatusBadge.vue";
 const props = defineProps<{
   status?: string;
   method?: string;
+  /** The assertion's derivation method; namespaced values (derridai:memory, :nlp, :computed) get their own labels. */
+  derivation?: string;
   verification?: string;
   source?: string;
   audit?: boolean;
@@ -17,6 +37,10 @@ const sourceKind = computed(() => {
   if (status === "human_override") return "override";
   if (status === "human_confirmed" || status === "confirmed_absent") return "human";
   if (status === "inherited") return "inherited";
+  const derivation = String(props.derivation || "");
+  if (derivation === "derridai:memory") return "memory";
+  if (derivation === "derridai:nlp") return "nlp";
+  if (derivation === "derridai:computed") return "computed";
   if (
     method.includes("llm") ||
     method === "hybrid" ||
@@ -37,6 +61,9 @@ const sourceLabel = computed(() =>
         inherited: "Inherited",
         deterministic: "Source derived",
         llm: "LLM source",
+        memory: "Metadata memory",
+        nlp: "NLP-derived",
+        computed: "Computed",
         unknown: "Unclassified",
       } as Record<string, string>
     )[sourceKind.value],
@@ -52,6 +79,10 @@ const sourceHelp = computed(() =>
         inherited: "Inherited from the document manifest; it may be overridden for this record.",
         deterministic: "Derived from source structure or deterministic rules.",
         llm: "The current value or proposal originated with a language model. Verification is shown separately.",
+        memory:
+          "Suggested by earlier reviewed precedents whose evidence matches this source span. A reviewer must confirm it.",
+        nlp: "Proposed by a statistical language tagger. A reviewer must confirm it.",
+        computed: "Computed from an exact pattern or arithmetic. A reviewer must confirm it.",
         unknown: "No source provenance has been recorded.",
       } as Record<string, string>
     )[sourceKind.value],
@@ -60,7 +91,7 @@ const sourceHelp = computed(() =>
 const sourceTone = computed(() =>
   sourceKind.value === "human" || sourceKind.value === "override"
     ? "success"
-    : sourceKind.value === "llm"
+    : ["llm", "memory", "nlp"].includes(sourceKind.value)
       ? "info"
       : "neutral",
 );
@@ -70,51 +101,40 @@ const verificationKind = computed(() => {
   const status = String(props.status || "");
   if (status === "unresolved" || status === "invalid") return "pending_review";
   if (status === "model_inferred") return "auto_resolved";
-  if (
-    status === "human_confirmed" ||
-    status === "human_override" ||
-    status === "confirmed_absent"
-  )
+  if (status === "human_confirmed" || status === "human_override" || status === "confirmed_absent")
     return "human_confirmed";
   return "";
 });
 const verificationLabel = computed(() =>
   verificationKind.value === "pending_review"
-    ? i18n.t("pdf_corpus.verification.pending", "Needs review")
+    ? i18n.t("pdf_corpus.verification.pending")
     : verificationKind.value === "auto_resolved"
-      ? i18n.t("pdf_corpus.verification.auto", "Auto-resolved")
+      ? i18n.t("pdf_corpus.verification.auto")
       : verificationKind.value === "human_confirmed"
-        ? i18n.t("pdf_corpus.verification.human", "Human confirmed")
+        ? i18n.t("pdf_corpus.verification.human")
         : "",
 );
 </script>
 <template>
-  <span class="ownership-badges"
-    ><UiStatusBadge :label="sourceLabel" :help="sourceHelp" :tone="sourceTone" /><UiStatusBadge
+  <span class="ownership-badges">
+    <UiStatusBadge :label="sourceLabel" :tone="sourceTone" :help="sourceHelp" />
+    <UiStatusBadge
       v-if="sourceKind === 'llm' && verificationLabel"
       :label="verificationLabel"
+      :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'"
       :help="
         verificationKind === 'auto_resolved'
-          ? i18n.t(
-              'pdf_corpus.verification_help.auto',
-              'Calibrated autofill approved this value without requiring a field-level human decision.',
-            )
-          : i18n.t(
-              'pdf_corpus.verification_help.pending',
-              'The model value is visible but still requires a human decision.',
-            )
+          ? i18n.t('pdf_corpus.verification_help.auto')
+          : i18n.t('pdf_corpus.verification_help.pending')
       "
-      :tone="verificationKind === 'auto_resolved' ? 'success' : 'warning'" /><UiStatusBadge
+    />
+    <UiStatusBadge
       v-if="audit && sourceKind === 'llm'"
-      :label="i18n.t('pdf_corpus.ownership.spot_check', 'Spot check')"
-      :help="
-        i18n.t(
-          'pdf_corpus.ownership_help.spot_check',
-          'This value was filled in automatically and was picked at random for a quick check. Confirm or correct it.',
-        )
-      "
+      :label="i18n.t('pdf_corpus.ownership.spot_check')"
       tone="warning"
-  /></span>
+      :help="i18n.t('pdf_corpus.ownership_help.spot_check')"
+    />
+  </span>
 </template>
 <style scoped>
 .ownership-badges {

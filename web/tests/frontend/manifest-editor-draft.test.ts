@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import DocumentManifestEditor from "../../src/components/DocumentManifestEditor.vue";
@@ -81,5 +99,57 @@ describe("Document manifest editor drafts", () => {
     await field(wrapper, /main text starts/i).setValue("18");
     await field(wrapper, /main text starts/i).setValue("53");
     expect(wrapper.text()).toContain("No unsaved changes");
+  });
+});
+
+describe("Document manifest editor origins", () => {
+  const withOrigins = () =>
+    manifest({
+      publication_place: "Baltimore",
+      publication_year: 1967,
+      deterministic_ingest: {
+        applied: {
+          publication_place: {
+            value: "Baltimore",
+            method: "nlp:spacy:en_core_web_lg:place_near_publisher",
+            confidence: 0.7,
+            derivation: "nlp_derived",
+            alternatives: [{ value: "London", confidence: 0.5, derivation: "nlp_derived" }],
+          },
+          publication_year: {
+            value: "1967",
+            method: "pattern:copyright_year",
+            confidence: 0.9,
+            derivation: "computed",
+            alternatives: [{ value: "1976", confidence: 0.55, derivation: "computed" }],
+          },
+        },
+      },
+    });
+
+  it("labels pre-filled values as NLP-derived or computed", () => {
+    const wrapper = mount(DocumentManifestEditor, { props: { manifest: withOrigins() } });
+    const chips = wrapper.findAll(".origin-chip").map((chip) => chip.text());
+    expect(chips.some((text) => text.includes("NLP-derived") && text.includes("70%"))).toBe(true);
+    expect(chips.some((text) => text.includes("Computed") && text.includes("90%"))).toBe(true);
+  });
+
+  it("offers the less certain alternatives, which fill the field on click", async () => {
+    const wrapper = mount(DocumentManifestEditor, { props: { manifest: withOrigins() } });
+    const alternative = wrapper
+      .findAll(".origin-alt")
+      .find((button) => button.text().includes("London"))!;
+    await alternative.trigger("click");
+    expect(
+      (field(wrapper, /place of publication|publication place|^place/i).element as HTMLInputElement)
+        .value,
+    ).toBe("London");
+  });
+
+  it("drops the origin chip once the reviewer changes the value, but keeps the suggestions", async () => {
+    const wrapper = mount(DocumentManifestEditor, { props: { manifest: withOrigins() } });
+    await field(wrapper, /place of publication|publication place|^place/i).setValue("Paris");
+    expect(wrapper.findAll(".origin-chip").some((chip) => chip.text().includes("70%"))).toBe(false);
+    expect(wrapper.findAll(".origin-alt").length).toBeGreaterThan(0);
   });
 });

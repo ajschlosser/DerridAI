@@ -1,9 +1,24 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Metadata schemas: the built-in one reproduces today's prompts, and custom ones are validated and portable."""
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import pytest
 from app import metadata_schema as ms
@@ -12,8 +27,16 @@ from app.corpus_metadata import (
     METADATA_FAMILY_FIELDS,
     REVIEW_METADATA_FIELDS,
 )
+from app.metadata_schema import MetadataSchema, SchemaField, SchemaGroup
+from app.metadata_schema_profiles import (
+    BUILTIN_SCHEMA_IDS,
+    FICTION_SCHEMA_ID,
+    NONFICTION_SCHEMA_ID,
+    fiction_schema,
+    nonfiction_schema,
+)
+from pydantic import BaseModel, ValidationError
 
-LEGACY = json.loads((Path(__file__).parent / "fixtures" / "legacy_prompts.json").read_text(encoding="utf-8"))
 CONTEXT = "<<CONTEXT>>\n"
 
 
@@ -31,11 +54,83 @@ def test_the_built_in_schema_prompts_require_complete_assessments():
         assert "no_supported_value" in text
         assert "uncertain" in text
     assert "even when its metadata value is null or empty" in discourse
+    assert "Never put a proposed value only in the reason" in discourse
+    assert "requires the corresponding metadata value to be non-null/non-empty" in discourse
     assert "every one of is_direct_quote" in quotation
+    assert "assessed_value" in quotation
+    assert "MUST exactly repeat the corresponding metadata value" in quotation
+    assert "never put a proposed value only in the reason" in quotation
     assert "even when the corresponding metadata list is empty" in indexing
+    assert "supported_value\" only for a supported non-empty list" in indexing
 
 
-def test_response_consistency_rejects_assessment_value_contradictions():
+def test_group_prompt_and_response_contract_can_be_scoped_to_unresolved_fields():
+    schema = ms.default_schema()
+    scoped_prompt = ms.build_group_prompt(
+        schema,
+        "indexing",
+        base_context=CONTEXT,
+        field_names={"topics", "concepts"},
+    )
+    assert "- topics " in scoped_prompt
+    assert "- concepts " in scoped_prompt
+    assert "- persons " not in scoped_prompt
+    assert "- works_referenced " not in scoped_prompt
+    assert "topics and concepts" in scoped_prompt
+
+    model = ms.response_model_for(
+        schema,
+        "indexing",
+        field_names={"topics", "concepts"},
+    )
+    parsed = model.model_validate({
+        "metadata": {"topics": ["hospitality"], "concepts": ["sovereignty"]},
+        "field_assessments": {
+            "topics": {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "Explicit subject matter.",
+                "outcome": "supported_value",
+            },
+            "concepts": {
+                "confidence": 0.85,
+                "needs_review": False,
+                "reason": "Explicit conceptual vocabulary.",
+                "outcome": "supported_value",
+            },
+        },
+        "review_reason": "",
+    })
+    assert parsed.metadata.model_dump() == {
+        "topics": ["hospitality"],
+        "concepts": ["sovereignty"],
+    }
+    with pytest.raises(ValidationError):
+        model.model_validate({
+            "metadata": {
+                "topics": ["hospitality"],
+                "concepts": ["sovereignty"],
+                "persons": ["Derrida"],
+            },
+            "field_assessments": {
+                "topics": {
+                    "confidence": 0.9,
+                    "needs_review": False,
+                    "reason": "Explicit.",
+                    "outcome": "supported_value",
+                },
+                "concepts": {
+                    "confidence": 0.85,
+                    "needs_review": False,
+                    "reason": "Explicit.",
+                    "outcome": "supported_value",
+                },
+            },
+            "review_reason": "",
+        })
+
+
+def test_response_consistency_degrades_assessment_value_contradictions_to_review():
     schema = ms.default_schema()
     model = ms.response_model_for(schema, "discourse")
     fields = {
@@ -50,34 +145,69 @@ def test_response_consistency_rejects_assessment_value_contradictions():
         for name in assessed
     }
     for name in ("region_type", "primary_text", "discourse_role"):
-        assessments[name] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
+        assessments[name] = {
+            "confidence": 0.95,
+            "needs_review": False,
+            "reason": "clear",
+            "outcome": "supported_value",
+            **({"assessed_value": True} if name == "primary_text" else {}),
+        }
     evidence = {
         name: {"block_ids": ["b1"], "confidence": 0.95, "reason": "clear"}
         for name in ("region_type", "primary_text", "discourse_role")
     }
     model.model_validate({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence})
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "The speaker is clearly Derrida.", "outcome": "supported_value"}
-    with pytest.raises(Exception, match="supported_value requires a non-empty metadata value"):
-        model.model_validate(bad)
+    missing_value = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    missing_value["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "The speaker is clearly Derrida.",
+        "outcome": "supported_value",
+    }
+    accepted = model.model_validate(missing_value)
+    assert accepted.field_assessments.speaker.outcome == "uncertain"
+    assert accepted.field_assessments.speaker.needs_review is True
+    assert "contradiction" in accepted.field_assessments.speaker.reason.lower()
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["metadata"]["speaker"] = "Jacques Derrida"
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "No speaker applies.", "outcome": "no_supported_value"}
-    with pytest.raises(Exception, match="no_supported_value requires an empty metadata value"):
-        model.model_validate(bad)
+    contradictory_value = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    contradictory_value["metadata"]["speaker"] = "Jacques Derrida"
+    contradictory_value["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "No speaker applies.",
+        "outcome": "no_supported_value",
+    }
+    accepted = model.model_validate(contradictory_value)
+    assert accepted.metadata.speaker == "Jacques Derrida"
+    assert accepted.field_assessments.speaker.outcome == "uncertain"
+    assert accepted.field_assessments.speaker.needs_review is True
+    assert "no_supported_value" in accepted.field_assessments.speaker.reason
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["field_assessments"]["speaker"] = {"confidence": 0.5, "needs_review": False, "reason": "uncertain", "outcome": "uncertain"}
-    with pytest.raises(Exception, match="uncertain requires needs_review=true"):
-        model.model_validate(bad)
+    uncertain = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    uncertain["field_assessments"]["speaker"] = {
+        "confidence": 0.5,
+        "needs_review": False,
+        "reason": "uncertain",
+        "outcome": "uncertain",
+    }
+    accepted = model.model_validate(uncertain)
+    assert accepted.field_assessments.speaker.outcome == "uncertain"
+    assert accepted.field_assessments.speaker.needs_review is True
 
-    bad = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
-    bad["metadata"]["speaker"] = "Jacques Derrida"
-    bad["field_assessments"]["speaker"] = {"confidence": 0.95, "needs_review": False, "reason": "clear", "outcome": "supported_value"}
-    with pytest.raises(Exception, match="require at least one field_evidence block_id"):
-        model.model_validate(bad)
+    missing_evidence = json.loads(json.dumps({"metadata": fields, "field_assessments": assessments, "field_evidence": evidence}))
+    missing_evidence["metadata"]["speaker"] = "Jacques Derrida"
+    missing_evidence["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "clear",
+        "outcome": "supported_value",
+    }
+    # Structured-output validation preserves the usable family response. Evidence
+    # sufficiency is reconciled against current-record block IDs afterward, where
+    # this field becomes evidence_failed/reviewable instead of failing the whole call.
+    accepted = model.model_validate(missing_evidence)
+    assert accepted.metadata.speaker == "Jacques Derrida"
 
 
 def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
@@ -86,6 +216,176 @@ def test_the_built_in_schema_describes_the_same_fields_as_the_code_does_today():
     assert schema.attribution_fields() == set(ATTRIBUTION_EVIDENCE_FIELDS)
     assert set(schema.review_fields()) == set(REVIEW_METADATA_FIELDS)
     assert schema.review_fields()[:3] == list(ms.CORE_FIELDS)
+
+
+def test_default_schema_cardinality_is_explicit_and_semantic():
+    schema = ms.default_schema()
+    by_name = schema.by_name()
+    for name in (
+        "quoted_speaker",
+        "quoted_author",
+        "quoted_work",
+        "quoted_position_holder",
+        "quoted_addressee",
+        "quoted_referent",
+    ):
+        assert by_name[name].type == "text", name
+    for name in ("semantic_function", "quotation_chain", "topics", "concepts", "persons", "works_referenced"):
+        assert by_name[name].type == "list", name
+
+
+def test_legacy_cardinality_normalization_is_lossless_or_explicitly_ambiguous():
+    schema = ms.default_schema()
+    quoted_speaker = schema.by_name()["quoted_speaker"]
+    topics = schema.by_name()["topics"]
+
+    assert ms.normalize_legacy_cardinality(quoted_speaker, ["Levinas"]) == ("Levinas", False)
+    assert ms.normalize_legacy_cardinality(quoted_speaker, []) == (None, False)
+    assert ms.normalize_legacy_cardinality(
+        quoted_speaker, ["Levinas", "Heidegger"]
+    ) == (["Levinas", "Heidegger"], True)
+    assert ms.normalize_legacy_cardinality(topics, "hospitality") == (["hospitality"], False)
+    assert ms.normalize_legacy_cardinality(topics, ["hospitality"]) == (["hospitality"], False)
+
+
+@pytest.mark.parametrize(
+    ("factory", "schema_id", "field_namespace", "required_fields", "corpus_fields"),
+    [
+        (
+            fiction_schema,
+            FICTION_SCHEMA_ID,
+            "fiction",
+            {
+                "narrator",
+                "point_of_view",
+                "focalizers",
+                "characters_present",
+                "character_relationships",
+                "locations",
+                "setting_time",
+                "events",
+                "dialogue_speakers",
+                "themes",
+                "motifs",
+                "symbols",
+                "tone",
+                "literary_devices",
+            },
+            {"fiction_form", "fiction_genres"},
+        ),
+        (
+            nonfiction_schema,
+            NONFICTION_SCHEMA_ID,
+            "nonfiction",
+            {
+                "claim",
+                "claim_type",
+                "position_holder",
+                "is_direct_quote",
+                "quoted_speaker",
+                "quoted_work",
+                "quotation_chain",
+                "evidence_items",
+                "findings",
+                "sources_cited",
+                "statistics",
+                "methods_or_procedures",
+                "persons",
+                "organizations",
+                "places",
+                "dates",
+                "works_referenced",
+                "laws_or_policies",
+                "section_function",
+                "recommendations",
+                "conclusions",
+                "limitations",
+            },
+            {"nonfiction_genre", "subject_domains", "intended_audience"},
+        ),
+    ],
+)
+def test_domain_builtin_profiles_are_traceable_guided_and_schema_driven(
+    factory, schema_id, field_namespace, required_fields, corpus_fields
+):
+    schema = factory()
+    by_name = schema.by_name()
+
+    assert schema.id == schema_id
+    assert schema.group("discourse")
+    assert required_fields <= set(by_name)
+    assert corpus_fields <= set(by_name)
+    assert all(by_name[name].scope == "corpus" for name in corpus_fields)
+
+    for field in schema.fields:
+        assert field.instruction.strip(), field.name
+        assert field.evidence is True, field.name
+        assert field.assess is True, field.name
+        assert field.field_id.startswith(f"derridai.profile.{field_namespace}."), field.name
+
+    prompts = {
+        group.key: ms.build_group_prompt(schema, group.key, base_context=CONTEXT)
+        for group in schema.groups
+    }
+    for field in schema.fields:
+        assert field.name in prompts[field.group]
+
+
+def test_nonfiction_evidence_prompt_separates_attention_cues_from_metadata_values():
+    schema = nonfiction_schema()
+    by_name = schema.by_name()
+
+    assert schema.schema_version == "1.0.1"
+    for name in ("evidence_types", "evidence_items"):
+        assert by_name[name].pos_tags == []
+        assert by_name[name].ner_tags == []
+
+    evidence_prompt = prompt(schema, "evidence")
+    assert "supported_value requires a non-empty metadata value" in evidence_prompt
+    assert "no_supported_value requires null or []" in evidence_prompt
+    assert "never copy a candidate list into metadata" in evidence_prompt
+
+
+def test_default_schema_assigns_curated_pos_and_ner_hints_to_every_configurable_field():
+    schema = ms.default_schema()
+    expected = {
+        "region_author": (["PROPN"], ["PERSON", "ORG"]),
+        "speaker": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "position_holder": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "target": (
+            ["PROPN", "NOUN"],
+            ["PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "LANGUAGE", "WORK_OF_ART"],
+        ),
+        "stance": ([], []),
+        "proposition_status": ([], []),
+        "claim_scope": (["ADJ", "NOUN", "PROPN"], []),
+        "semantic_function": ([], []),
+        "is_direct_quote": ([], []),
+        "quoted_speaker": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "quoted_author": (["PROPN"], ["PERSON", "ORG"]),
+        "quoted_work": (["PROPN", "NOUN"], ["WORK_OF_ART", "LAW"]),
+        "quoted_position_holder": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "quoted_addressee": (["PRON", "PROPN", "NOUN"], ["PERSON", "ORG", "NORP"]),
+        "quoted_referent": (
+            ["PRON", "PROPN", "NOUN"],
+            ["PERSON", "ORG", "NORP", "GPE", "LOC", "EVENT", "LAW", "LANGUAGE", "WORK_OF_ART"],
+        ),
+        "quotation_chain": (["PROPN"], ["PERSON", "ORG", "WORK_OF_ART"]),
+        "topics": (
+            ["ADJ", "NOUN", "PROPN"],
+            ["EVENT", "GPE", "LOC", "NORP", "ORG", "LANGUAGE", "LAW"],
+        ),
+        "concepts": (["ADJ", "NOUN", "PROPN"], []),
+        "persons": (["PROPN"], ["PERSON"]),
+        "works_referenced": (["PROPN", "NOUN"], ["WORK_OF_ART", "LAW"]),
+    }
+
+    assert schema.schema_version == "2.0.0"
+    assert set(schema.by_name()) == set(expected)
+    for name, (pos_tags, ner_tags) in expected.items():
+        field = schema.by_name()[name]
+        assert field.pos_tags == pos_tags, name
+        assert field.ner_tags == ner_tags, name
 
 
 def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
@@ -99,11 +399,70 @@ def test_the_output_shape_is_generated_and_matches_the_hand_written_models():
         want -= {"language"}  # the document language is inherited, not asked of the model
         assert got == want, group
     quotation_fields = ("is_direct_quote", "quoted_speaker", "quoted_author", "quoted_work", "quoted_position_holder", "quoted_addressee", "quoted_referent", "quotation_chain")
+    scalar_quotation_fields = quotation_fields[1:-1]
     answer = ms.response_model_for(schema, "quotation").model_validate({
-        "metadata": {"is_direct_quote": None, **{n: [] for n in quotation_fields[1:]}},
-        "field_assessments": {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "no_supported_value"} for name in quotation_fields},
+        "metadata": {
+            "is_direct_quote": None,
+            **{name: None for name in scalar_quotation_fields},
+            "quotation_chain": [],
+        },
+        "field_assessments": {
+            name: {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "clear",
+                "outcome": "no_supported_value",
+                **({"assessed_value": None} if name == "is_direct_quote" else {}),
+            }
+            for name in quotation_fields
+        },
     })
     assert answer.metadata.is_direct_quote is None
+    assert answer.metadata.quoted_speaker is None
+    assert answer.metadata.quotation_chain == []
+
+    populated = ms.response_model_for(schema, "quotation").model_validate({
+        "metadata": {
+            "is_direct_quote": True,
+            "quoted_speaker": "Emmanuel Levinas",
+            **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
+            "quotation_chain": ["Derrida", "Levinas"],
+        },
+        "field_assessments": {
+            name: {
+                "confidence": 0.9,
+                "needs_review": False,
+                "reason": "clear",
+                "outcome": "supported_value"
+                if name in {"is_direct_quote", "quoted_speaker", "quotation_chain"}
+                else "no_supported_value",
+                **({"assessed_value": True} if name == "is_direct_quote" else {}),
+            }
+            for name in quotation_fields
+        },
+    })
+    assert populated.metadata.quoted_speaker == "Emmanuel Levinas"
+    with pytest.raises(Exception):
+        ms.response_model_for(schema, "quotation").model_validate({
+            "metadata": {
+                "is_direct_quote": True,
+                "quoted_speaker": ["Emmanuel Levinas"],
+                **{name: None for name in scalar_quotation_fields if name != "quoted_speaker"},
+                "quotation_chain": [],
+            },
+            "field_assessments": {
+                name: {
+                    "confidence": 0.9,
+                    "needs_review": False,
+                    "reason": "clear",
+                    "outcome": "supported_value"
+                    if name in {"is_direct_quote", "quoted_speaker"}
+                    else "no_supported_value",
+                    **({"assessed_value": True} if name == "is_direct_quote" else {}),
+                }
+                for name in quotation_fields
+            },
+        })
     generated = ms.response_model_for(schema, "discourse").model_json_schema()
     assert "field_assessments" in generated["required"]
 
@@ -121,6 +480,162 @@ def custom():
     )
 
 
+def repeatable_custom():
+    return ms.MetadataSchema(
+        name="Associated quotations",
+        groups=[
+            ms.SchemaGroup(key="discourse", label="Discourse", intro="Classify."),
+            ms.SchemaGroup(
+                key="quotations",
+                label="Quoted speaker",
+                intro="Extract associated quotations.",
+            ),
+        ],
+        fields=[
+            ms.SchemaField(
+                name="quotations",
+                label="Associated quotation",
+                type="repeatable",
+                group="quotations",
+                max_items=3,
+                members=[
+                    ms.SchemaMember(name="quoted_speaker", label="Quoted speaker"),
+                    ms.SchemaMember(name="quoted_work", label="Quoted work"),
+                ],
+            ),
+        ],
+    )
+
+
+def test_repeatable_field_schema_contract_is_stable_and_bounded():
+    schema = repeatable_custom()
+    field = schema.by_name()["quotations"]
+    assert schema.format_version == 3
+    assert field.max_items == 3
+
+    body = schema.model_dump(mode="json")
+    body["fields"][0]["max_items"] = None
+    with pytest.raises(ValidationError, match="needs members and max_items"):
+        MetadataSchema.model_validate(body)
+    body = schema.model_dump(mode="json")
+    body["fields"][0]["members"][1]["name"] = "quoted_speaker"
+    with pytest.raises(ValidationError, match="must be unique"):
+        MetadataSchema.model_validate(body)
+
+
+def test_repeatable_model_output_uses_instances_not_numbered_storage_keys():
+    model = ms.response_model_for(repeatable_custom(), "quotations")
+    parsed = model.model_validate(
+        {
+            "metadata": {
+                "quotations": [
+                    {
+                        "instance_id": "quote:levinas",
+                        "quoted_speaker": "Emmanuel Levinas",
+                        "quoted_work": "Totality and Infinity",
+                    },
+                    {
+                        "instance_id": "quote:heidegger",
+                        "quoted_speaker": "Martin Heidegger",
+                        "quoted_work": None,
+                    },
+                ]
+            }
+        }
+    )
+    assert parsed.metadata.quotations[0].instance_id == "quote:levinas"
+    properties = model.model_json_schema()["$defs"]["QuotationsMetadata"]["properties"]
+    assert set(properties) == {"quotations"}
+    assert "QUOTED_SPEAKER_1" not in json.dumps(model.model_json_schema())
+
+    duplicate = parsed.model_dump(mode="json")
+    duplicate["metadata"]["quotations"][1]["instance_id"] = "quote:levinas"
+    with pytest.raises(ValidationError, match="instance_id values must be unique"):
+        model.model_validate(duplicate)
+    too_many = parsed.model_dump(mode="json")
+    for number in (3, 4):
+        too_many["metadata"]["quotations"].append(
+            {
+                "instance_id": f"quote:item-{number}",
+                "quoted_speaker": None,
+                "quoted_work": None,
+            }
+        )
+    with pytest.raises(ValidationError, match="at most 3"):
+        model.model_validate(too_many)
+
+
+def test_repeatable_human_edit_model_preserves_associated_members():
+    class FixedEdit(BaseModel):
+        language: str | None = None
+
+    model = ms.edit_model(repeatable_custom(), FixedEdit)
+    parsed = model.model_validate(
+        {
+            "language": "en",
+            "quotations": [
+                {
+                    "instance_id": "quote:a",
+                    "quoted_speaker": "Husserl",
+                    "quoted_work": "Ideas I",
+                }
+            ],
+        }
+    )
+    assert parsed.quotations[0].quoted_work == "Ideas I"
+    assert "quoted_speaker" not in model.model_fields
+    with pytest.raises(ValidationError):
+        model.model_validate({"QUOTED_SPEAKER_1": "Husserl"})
+
+
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_v1_v2_v3_exports_remain_readable_as_v3(version):
+    schema = custom()
+    raw = schema.model_dump(mode="json", exclude={"id"})
+    raw["format_version"] = version
+    payload = {
+        "derridai_metadata_schema": version,
+        "schema": raw,
+        "sha256": ms.hashlib.sha256(
+            json.dumps(raw, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()[:16],
+    }
+    imported = ms.import_schema(payload)
+    assert imported.format_version == 3
+    assert imported.by_name()["ideas"].type == "list"
+    assert imported.fields_in("ideas")[0].name == "ideas"
+
+
+def test_retrieval_profile_migrates_abandoned_routing_fields_without_losing_metadata_disable():
+    profile = ms.RetrievalProfile.model_validate(
+        {
+            "enabled": True,
+            "scope": "all_reviewed",
+            "max_items": 4,
+            "min_similarity": 0.35,
+            "include_corrections": False,
+            "include_confirmed_absence": True,
+            "use_for_metadata_enrichment": False,
+            "use_for_response_memory": True,
+            "use_for_claim_memory": True,
+        }
+    )
+
+    assert profile.enabled is False
+    assert profile.max_items == 4
+    assert profile.min_similarity == 0.35
+    dumped = profile.model_dump(mode="json")
+    assert set(dumped) == {
+        "enabled",
+        "max_items",
+        "min_similarity",
+        "include_corrections",
+        "include_confirmed_absence",
+        "max_corrections",
+        "match_field_ids",
+    }
+
+
 def test_a_custom_schema_shapes_the_prompt_and_the_answer():
     schema = custom()
     text = prompt(schema, "discourse")
@@ -129,7 +644,16 @@ def test_a_custom_schema_shapes_the_prompt_and_the_answer():
     assert "Report region_type, primary_text, discourse_role, and mood.\n" in text  # the locked core is always assessed
     assert prompt(schema, "ideas").startswith("List the ideas.\n\n<<CONTEXT>>")
     model = ms.response_model_for(schema, "discourse")
-    assessments = {name: {"confidence": 0.9, "needs_review": False, "reason": "clear", "outcome": "supported_value"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
+    assessments = {
+        name: {
+            "confidence": 0.9,
+            "needs_review": False,
+            "reason": "clear",
+            "outcome": "supported_value",
+            **({"assessed_value": True} if name == "primary_text" else {}),
+        }
+        for name in ("region_type", "primary_text", "discourse_role", "mood")
+    }
     evidence = {name: {"block_ids": ["b1"], "confidence": 0.9, "reason": "clear"} for name in ("region_type", "primary_text", "discourse_role", "mood")}
     ok = model.model_validate({"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", "mood": "calm"}, "field_assessments": assessments, "field_evidence": evidence})
     assert ok.metadata.mood == "calm"
@@ -203,14 +727,17 @@ from app.metadata_schema_store import (  # noqa: E402
 )
 
 
-def test_the_built_in_schema_is_always_first_and_cannot_be_changed_or_deleted(tmp_path):
+def test_builtin_schemas_are_first_and_cannot_be_changed_or_deleted(tmp_path):
     store = SchemaStore(tmp_path)
     listing = store.list()
-    assert listing[0]["id"] == "default" and listing[0]["builtin"] is True and listing[0]["field_count"] >= 20
-    with pytest.raises(SchemaLocked):
-        store.save(custom(), "default")
-    with pytest.raises(SchemaLocked):
-        store.delete("default")
+    assert [item["id"] for item in listing[:3]] == ["default", "derridai-fiction", "derridai-nonfiction"]
+    assert all(item["builtin"] is True for item in listing[:3])
+    assert listing[0]["field_count"] >= 20
+    for schema_id in BUILTIN_SCHEMA_IDS:
+        with pytest.raises(SchemaLocked):
+            store.save(custom(), schema_id)
+        with pytest.raises(SchemaLocked):
+            store.delete(schema_id)
 
 
 def test_saving_gives_a_unique_id_and_survives_a_reload(tmp_path):
@@ -260,7 +787,7 @@ def test_a_damaged_file_does_not_hide_the_others(tmp_path):
     store = SchemaStore(tmp_path)
     store.save(custom())
     (store.dir / "broken.json").write_text("{not json")
-    assert [s["id"] for s in store.list()] == ["default", "reading-notes"]
+    assert [s["id"] for s in store.list()] == ["default", "derridai-fiction", "derridai-nonfiction", "reading-notes"]
 
 
 def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
@@ -275,9 +802,11 @@ def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.auth import auth_store
+    from app.routers import corpus as corpus_routes
 
-    monkeypatch.setattr(main, "metadata_schemas", SchemaStore(tmp_path))
-    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
+    monkeypatch.setattr(corpus_routes, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
@@ -293,7 +822,7 @@ def test_the_api_lists_saves_exports_imports_and_deletes(tmp_path, monkeypatch):
             return created, listing, exported, imported, bad, locked, gone, missing
 
     created, listing, exported, imported, bad, locked, gone, missing = asyncio.run(run())
-    assert created["id"] == "reading-notes" and [s["id"] for s in listing] == ["default", "reading-notes"]
+    assert created["id"] == "reading-notes" and [s["id"] for s in listing] == ["default", "derridai-fiction", "derridai-nonfiction", "reading-notes"]
     assert "attachment" in exported.headers["content-disposition"] and imported.json()["id"] == "reading-notes-2"
     assert bad.status_code == 422 and locked.status_code == 422 and gone.status_code == 200 and missing.status_code == 404
 
@@ -310,8 +839,9 @@ def test_the_preview_endpoint_shows_the_prompt_without_calling_a_model(tmp_path,
     except ModuleNotFoundError:
         sys.modules["chromadb"] = types.SimpleNamespace()
     from app import main
+    from app.auth import auth_store
 
-    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
+    monkeypatch.setattr(auth_store, "user_for_session", lambda cookie: types.SimpleNamespace(id=1, role="admin", username="a"))
 
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
@@ -322,3 +852,281 @@ def test_the_preview_endpoint_shows_the_prompt_without_calling_a_model(tmp_path,
     good, bad = asyncio.run(run())
     assert good.status_code == 200 and "A calm passage." in good.json()["prompt"] and good.json()["ran"] is False
     assert bad.status_code == 422
+
+
+def test_researcher_cannot_author_metadata_schemas(tmp_path, monkeypatch):
+    import asyncio
+    import sys
+    import types
+
+    import httpx
+
+    try:
+        import chromadb  # type: ignore  # noqa: F401
+    except ModuleNotFoundError:
+        sys.modules["chromadb"] = types.SimpleNamespace()
+    from app import main
+    from app.auth import auth_store
+    from app.routers import corpus as corpus_routes
+
+    monkeypatch.setattr(corpus_routes, "metadata_schemas", SchemaStore(tmp_path))
+    monkeypatch.setattr(
+        auth_store,
+        "user_for_session",
+        lambda cookie: types.SimpleNamespace(id=2, role="researcher", username="r"),
+    )
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://t") as c:
+            listing = await c.get("/api/pdf/metadata-schemas")
+            created = await c.post("/api/pdf/metadata-schemas", json=custom().model_dump(mode="json"))
+            return listing, created
+
+    listing, created = asyncio.run(run())
+    assert listing.status_code == 403 and created.status_code == 403
+
+
+
+def test_metadata_schema_accepts_complete_supported_pos_and_ner_vocabularies():
+    pos_tags = [
+        "ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM",
+        "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X",
+    ]
+    ner_tags = [
+        "CARDINAL", "DATE", "EVENT", "FAC", "GPE", "LANGUAGE", "LAW", "LOC",
+        "MONEY", "NORP", "ORDINAL", "ORG", "PERCENT", "PERSON", "PRODUCT",
+        "QUANTITY", "TIME", "WORK_OF_ART",
+    ]
+    schema = MetadataSchema(
+        name="NLP tags",
+        groups=[
+            SchemaGroup(
+                key="core",
+                label="Core",
+                intro="Infer core metadata.",
+            ),
+            SchemaGroup(
+                key="discourse",
+                label="Discourse",
+                intro="Infer discourse metadata.",
+            ),
+        ],
+        fields=[
+            SchemaField(
+                name="entities",
+                label="Entities",
+                group="discourse",
+                pos_tags=pos_tags,
+                ner_tags=ner_tags,
+            )
+        ],
+    )
+    field = schema.fields[0]
+    assert field.pos_tags == pos_tags
+    assert field.ner_tags == ner_tags
+
+
+
+def test_retrieval_match_conditions_must_name_another_known_field():
+    base = custom().model_dump(mode="json")
+    first, second = base["fields"][0], base["fields"][1]
+    first["retrieval_profile"] = {"match_field_ids": [second["field_id"]]}
+    assert MetadataSchema.model_validate(base).retrieval_profile_for(first["name"]).match_field_ids == [second["field_id"]]
+    first["retrieval_profile"] = {"match_field_ids": ["field-does-not-exist"]}
+    with pytest.raises(ValueError, match="unknown field"):
+        MetadataSchema.model_validate(base)
+    first["retrieval_profile"] = {"match_field_ids": [first["field_id"]]}
+    with pytest.raises(ValueError, match="itself"):
+        MetadataSchema.model_validate(base)
+
+
+
+def test_boolean_false_is_supported_value_not_missing_value():
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "quotation")
+    quotation_fields = [field.name for field in schema.fields_in("quotation")]
+    scalar_fields = [name for name in quotation_fields if name != "quotation_chain"]
+    payload = {
+        "metadata": {
+            **{name: None for name in scalar_fields},
+            "is_direct_quote": False,
+            "quotation_chain": [],
+        },
+        "field_assessments": {
+            name: {
+                "confidence": 0.95,
+                "needs_review": False,
+                "reason": "No direct quotation is present.",
+                "outcome": "no_supported_value",
+                **({"assessed_value": False} if name == "is_direct_quote" else {}),
+            }
+            for name in [field.name for field in schema.fields_in("quotation") if field.assess]
+        },
+        "field_evidence": {},
+        "review_reason": "",
+    }
+    parsed = response.model_validate(payload)
+    assert parsed.metadata.is_direct_quote is False
+    assert parsed.field_assessments.is_direct_quote.outcome == "supported_value"
+    assert "Structured-output contradiction" not in parsed.field_assessments.is_direct_quote.reason
+
+
+def test_boolean_assessment_echo_must_match_materialized_metadata_value():
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "quotation")
+    quotation_fields = [field.name for field in schema.fields_in("quotation")]
+    scalar_fields = [name for name in quotation_fields if name != "quotation_chain"]
+    assessments = {
+        name: {
+            "confidence": 0.98,
+            "needs_review": False,
+            "reason": "No supported quotation relation applies.",
+            "outcome": "no_supported_value",
+            **({"assessed_value": True} if name == "is_direct_quote" else {}),
+        }
+        for name in quotation_fields
+    }
+    assessments["is_direct_quote"].update(
+        reason="A direct quotation is clearly present.",
+        outcome="supported_value",
+    )
+    parsed = response.model_validate(
+        {
+            "metadata": {
+                **{name: None for name in scalar_fields},
+                "is_direct_quote": False,
+                "quotation_chain": [],
+            },
+            "field_assessments": assessments,
+            "field_evidence": {},
+            "review_reason": "",
+        }
+    )
+
+    assert parsed.metadata.is_direct_quote is False
+    assessment = parsed.field_assessments.is_direct_quote
+    assert assessment.assessed_value is True
+    assert assessment.outcome == "uncertain"
+    assert assessment.needs_review is True
+    assert "assessed_value=True" in assessment.reason
+    assert "metadata value=False" in assessment.reason
+
+
+def test_open_fields_reject_pos_ner_and_foreign_closed_vocabulary_leakage():
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "quotation")
+    quotation_fields = [field.name for field in schema.fields_in("quotation")]
+    metadata = {name: None for name in quotation_fields if name != "quotation_chain"}
+    metadata["quotation_chain"] = ["PROPN", "assertion", "Jacques Derrida"]
+    assessments = {
+        field.name: {
+            "confidence": 0.8,
+            "needs_review": False,
+            "reason": "candidate",
+            "outcome": "supported_value",
+            **({"assessed_value": None} if field.name == "is_direct_quote" else {}),
+        }
+        for field in schema.fields_in("quotation")
+        if field.assess
+    }
+    payload = {
+        "metadata": metadata,
+        "field_assessments": assessments,
+        "field_evidence": {},
+        "review_reason": "",
+    }
+    parsed = response.model_validate(payload)
+    assert parsed.metadata.quotation_chain == ["Jacques Derrida"]
+    assert parsed.field_assessments.quotation_chain.outcome == "uncertain"
+    assert parsed.field_assessments.quotation_chain.needs_review is True
+    assert "structured-vocabulary leakage" in parsed.field_assessments.quotation_chain.reason
+
+
+@pytest.mark.parametrize(
+    "leaked",
+    [
+        "no_supported_value",
+        "SUPPORTED_VALUE",
+        "true, no_supported_value, no_supported_value, no_supported_value",
+    ],
+)
+@pytest.mark.parametrize("valid_values", [[], ["responsibility"]])
+def test_assessment_states_cannot_populate_open_metadata_values(leaked, valid_values):
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "indexing")
+    field_names = [field.name for field in schema.fields_in("indexing")]
+    payload = {
+        "metadata": {
+            **{name: [] for name in field_names},
+            "concepts": [*valid_values, leaked],
+        },
+        "field_assessments": {
+            name: {
+                "confidence": 0.9, "needs_review": False, "reason": "candidate",
+                "outcome": "supported_value" if name == "concepts" else "no_supported_value",
+            }
+            for name in field_names
+        },
+        "review_reason": "",
+    }
+    parsed = response.model_validate(payload)
+    assert parsed.metadata.concepts == valid_values
+    assessment = parsed.field_assessments.concepts
+    assert assessment.outcome == "uncertain"
+    assert assessment.needs_review is True
+    assert leaked in assessment.reason
+
+
+def test_composite_assessment_states_cannot_populate_scalar_metadata():
+    schema = ms.default_schema()
+    response = ms.response_model_for(schema, "discourse", field_names={"speaker"})
+    leaked = "true, no_supported_value, no_supported_value"
+    parsed = response.model_validate({
+        "metadata": {
+            **{name: None for name in ms.CORE_FIELDS},
+            "speaker": leaked,
+        },
+        "field_assessments": {
+            **{
+                name: {
+                    "confidence": 0.9, "needs_review": False, "reason": "no candidate",
+                    "outcome": "no_supported_value",
+                    **({"assessed_value": None} if name == "primary_text" else {}),
+                }
+                for name in ms.CORE_FIELDS
+            },
+            "speaker": {
+                "confidence": 0.9, "needs_review": False, "reason": "candidate",
+                "outcome": "supported_value",
+            },
+        },
+        "field_evidence": {},
+        "review_reason": "",
+    })
+    assert parsed.metadata.speaker is None
+    assert parsed.field_assessments.speaker.outcome == "uncertain"
+    assert parsed.field_assessments.speaker.needs_review is True
+
+
+def test_schema_resolves_renamed_fields_by_semantic_compatibility_identity():
+    schema = ms.default_schema()
+    renamed = schema.model_copy(
+        update={
+            "fields": [
+                field.model_copy(
+                    update={"name": "interlocutor"}
+                    if field.name == "position_holder"
+                    else {}
+                )
+                for field in schema.fields
+            ]
+        }
+    )
+
+    assert renamed.fields_for_semantic_compatibility_id("derridai.position_holder") == [
+        "interlocutor"
+    ]
+    assert renamed.fields_for_semantic_compatibility_id("derridai.indexing.persons") == [
+        "persons"
+    ]
+    assert renamed.fields_for_semantic_compatibility_id("missing.semantic.role") == []

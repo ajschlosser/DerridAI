@@ -1,7 +1,26 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppIcon from "./AppIcon.vue";
 import OperationRow from "./OperationRow.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 import { useI18nStore } from "../stores/i18n";
 import {
   classifyOperations,
@@ -13,6 +32,7 @@ import {
   type OperationView,
   type OperationsBridge,
 } from "../domain/operationsPanel";
+import { FALLBACK_POLL_MS, realtimeFallback, realtimeStatus } from "../realtime";
 
 const props = withDefaults(
   defineProps<{ bridge: OperationsBridge; undoMs?: number; historyLimit?: number }>(),
@@ -21,7 +41,22 @@ const props = withDefaults(
 const i18n = useI18nStore();
 const locale = computed(() => i18n.locale || "en-US");
 
+// A quiet connection line, not an alert: transient reconnects must not interrupt anyone.
+const liveState = computed(() =>
+  realtimeFallback.value && realtimeStatus.value !== "connected" ? "offline" : realtimeStatus.value,
+);
+const liveLabel = computed(() => {
+  const state = liveState.value;
+  if (state === "idle") return "";
+  if (state === "offline")
+    return i18n.tf("operations.realtime.offline", { seconds: Math.round(FALLBACK_POLL_MS / 1000) });
+  return i18n.t(`operations.realtime.${state}`);
+});
+
 const views = ref<OperationView[]>(props.bridge.snapshot());
+const initialPending = ref(views.value.length === 0);
+const refreshing = ref(views.value.length > 0);
+const refreshError = ref("");
 const now = ref(Date.now());
 const filter = ref<OperationFilter>("all");
 const showAllHistory = ref(false);
@@ -63,7 +98,7 @@ async function commitPending() {
     await current.commit();
   } catch (error) {
     announce(
-      i18n.tf("operations.panel.removal_failed", "Could not remove: {error}", {
+      i18n.tf("operations.panel.removal_failed", {
         error: error instanceof Error ? error.message : String(error),
       }),
     );
@@ -75,32 +110,28 @@ function queueRemoval(message: string, ids: string[], commit: () => Promise<void
     void commitPending();
   }, props.undoMs);
   pending.value = { message, timer, ids, commit };
-  announce(
-    `${message} ${i18n.t("operations.panel.undo_hint", "Undo is available for a few seconds.")}`,
-  );
+  announce(`${message} ${i18n.t("operations.panel.undo_hint")}`);
 }
 function undo() {
   const current = pending.value;
   if (!current) return;
   window.clearTimeout(current.timer);
   pending.value = null;
-  announce(i18n.t("operations.panel.restored", "Restored."));
+  announce(i18n.t("operations.panel.restored"));
   void nextTick(() => root.value?.querySelector<HTMLElement>("[data-primary]")?.focus());
 }
 function removeOne(id: string) {
   const view = views.value.find((item) => item.id === id);
   if (!view) return;
-  queueRemoval(
-    i18n.tf("operations.panel.removed", "Removed {name}.", { name: view.label }),
-    [id],
-    () => props.bridge.remove(id),
+  queueRemoval(i18n.tf("operations.panel.removed", { name: view.label }), [id], () =>
+    props.bridge.remove(id),
   );
 }
 function clearFinished() {
   const ids = views.value.filter((view) => !isActive(view)).map((view) => view.id);
   if (!ids.length) return;
   queueRemoval(
-    i18n.tf("operations.panel.cleared", "Cleared {count} finished operation(s).", {
+    i18n.tf("operations.panel.cleared", {
       count: ids.length,
     }),
     ids,
@@ -173,6 +204,7 @@ onMounted(() => {
   unsubscribe = props.bridge.subscribe(onChange);
   restartClock();
   window.addEventListener("beforeunload", flushOnLeave);
+  void refreshPanel();
 });
 onBeforeUnmount(() => {
   unsubscribe?.();
@@ -185,9 +217,23 @@ function flushOnLeave() {
   void commitPending();
 }
 
-async function refresh() {
-  await props.bridge.refresh();
-  announce(i18n.t("operations.panel.announce_updated", "Operations updated."));
+async function refreshPanel(announceResult = false) {
+  const retained = views.value.length > 0;
+  if (retained) refreshing.value = true;
+  else initialPending.value = true;
+  refreshError.value = "";
+  try {
+    await props.bridge.refresh();
+    // Some bridges notify subscribers as part of refresh, but a direct snapshot keeps
+    // this component correct even when a transport refresh completes without emitting.
+    views.value = props.bridge.snapshot();
+    if (announceResult) announce(i18n.t("operations.panel.announce_updated"));
+  } catch (error) {
+    refreshError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    initialPending.value = false;
+    refreshing.value = false;
+  }
 }
 
 // ---- derived lists --------------------------------------------------------------------------
@@ -232,20 +278,24 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
     <header class="ops-head">
       <div class="ops-head-copy">
         <h2 id="ops-heading" ref="heading" tabindex="-1" class="ops-h2">
-          {{ i18n.t("operations.background", "Background operations") }}
+          {{ i18n.t("operations.background") }}
         </h2>
         <p class="ops-lede">
-          {{
-            i18n.t(
-              "operations.shared_queue",
-              "LLM, RAG, PDF corpus builds, and Chroma upserts share this queue",
-            )
-          }}
+          {{ i18n.t("operations.shared_queue") }}
+        </p>
+        <p v-if="liveLabel" class="ops-live" :data-state="liveState" data-testid="realtime-status">
+          <span class="ops-live-dot" aria-hidden="true"></span>{{ liveLabel }}
         </p>
       </div>
       <div class="ops-head-actions">
-        <button type="button" class="ops-btn" id="refreshJobs" @click="refresh">
-          <AppIcon name="refresh" />{{ i18n.t("ui.refresh", "Refresh") }}
+        <button
+          type="button"
+          class="ops-btn"
+          id="refreshJobs"
+          :disabled="initialPending || refreshing"
+          @click="refreshPanel(true)"
+        >
+          <AppIcon name="refresh" />{{ i18n.t("ui.refresh") }}
         </button>
         <button
           type="button"
@@ -254,16 +304,12 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
           :disabled="!canClear"
           @click="clearFinished"
         >
-          {{ i18n.t("operations.panel.clear_finished", "Clear finished") }}
+          {{ i18n.t("operations.panel.clear_finished") }}
         </button>
       </div>
     </header>
 
-    <div
-      class="ops-filters"
-      role="group"
-      :aria-label="i18n.t('operations.panel.filter_label', 'Show operations')"
-    >
+    <div class="ops-filters" role="group" :aria-label="i18n.t('operations.panel.filter_label')">
       <button
         v-for="[id, key, fallback] in FILTERS"
         :key="id"
@@ -280,29 +326,33 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
     <div v-if="pending" class="ops-undo" role="group" :aria-label="pending.message">
       <span>{{ pending.message }}</span>
       <button type="button" class="ops-btn is-primary" @click="undo">
-        {{ i18n.t("operations.panel.undo", "Undo") }}
+        {{ i18n.t("operations.panel.undo") }}
       </button>
     </div>
 
-    <div v-if="empty" class="ops-empty">
+    <UiLoadingState v-if="initialPending" variant="skeleton" :label="i18n.t('ui.loading')" />
+    <UiLoadingState v-else-if="refreshing" variant="inline" :label="i18n.t('loading.updating')" />
+    <div v-if="refreshError" class="ops-refresh-error" role="alert">
+      <span>{{ refreshError }}</span>
+      <button type="button" class="ops-btn" @click="refreshPanel()">
+        {{ i18n.t("ui.retry") }}
+      </button>
+    </div>
+
+    <div v-if="!initialPending && !refreshError && empty" class="ops-empty">
       <span class="ops-empty-art" aria-hidden="true"><AppIcon name="history" /></span>
-      <h3>{{ i18n.t("operations.panel.empty_title", "Nothing in flight") }}</h3>
+      <h3>{{ i18n.t("operations.panel.empty_title") }}</h3>
       <p>
-        {{
-          i18n.t(
-            "operations.panel.empty_body",
-            "Start a corpus build, install a language, or run a research question, and it will show up here.",
-          )
-        }}
+        {{ i18n.t("operations.panel.empty_body") }}
       </p>
     </div>
-    <p v-else-if="filterEmpty" class="ops-empty-inline">
-      {{ i18n.t("operations.panel.empty_filtered", "No operations match this filter.") }}
+    <p v-else-if="!initialPending && !refreshError && filterEmpty" class="ops-empty-inline">
+      {{ i18n.t("operations.panel.empty_filtered") }}
     </p>
 
     <section v-if="sections.attention.length" class="ops-section" aria-labelledby="ops-h-attention">
       <h3 id="ops-h-attention" class="ops-h3">
-        {{ i18n.t("operations.panel.section_attention", "Needs attention") }}
+        {{ i18n.t("operations.panel.section_attention") }}
         <span class="ops-count">{{ sections.attention.length }}</span>
       </h3>
       <TransitionGroup tag="ul" name="ops-row" class="ops-list">
@@ -322,7 +372,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 
     <section v-if="sections.active.length" class="ops-section" aria-labelledby="ops-h-active">
       <h3 id="ops-h-active" class="ops-h3">
-        {{ i18n.t("operations.panel.section_active", "In progress") }}
+        {{ i18n.t("operations.panel.section_active") }}
         <span class="ops-count">{{ sections.active.length }}</span>
       </h3>
       <TransitionGroup tag="ul" name="ops-row" class="ops-list">
@@ -342,7 +392,7 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
 
     <section v-if="sections.history.length" class="ops-section" aria-labelledby="ops-h-history">
       <h3 id="ops-h-history" class="ops-h3">
-        {{ i18n.t("operations.panel.section_history", "History") }}
+        {{ i18n.t("operations.panel.section_history") }}
         <span class="ops-count">{{ sections.history.length }}</span>
       </h3>
       <div v-for="group in historyGroups" :key="group.key" class="ops-day">
@@ -370,8 +420,8 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
       >
         {{
           showAllHistory
-            ? i18n.t("operations.panel.show_fewer", "Show fewer")
-            : i18n.tf("operations.panel.show_all_history", "Show all {count}", {
+            ? i18n.t("operations.panel.show_fewer")
+            : i18n.tf("operations.panel.show_all_history", {
                 count: sections.history.length,
               })
         }}
@@ -442,6 +492,29 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   font-size: 0.875rem;
   line-height: 1.45;
   max-width: 60ch;
+}
+.ops-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--ops-muted);
+  font-size: 0.75rem;
+}
+.ops-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ops-muted);
+  flex: none;
+}
+.ops-live[data-state="connected"] .ops-live-dot {
+  background: var(--tone-ok-edge);
+}
+.ops-live[data-state="degraded"] .ops-live-dot,
+.ops-live[data-state="reconnecting"] .ops-live-dot,
+.ops-live[data-state="offline"] .ops-live-dot {
+  background: var(--tone-warn-edge);
 }
 .ops-head-actions {
   display: flex;
@@ -563,6 +636,19 @@ const FILTERS: Array<[OperationFilter, string, string]> = [
   outline: 3px solid var(--ops-accent) !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 2px var(--ops-surface);
+}
+.ops-refresh-error {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--ops-danger-fg);
+  border-radius: 12px;
+  background: var(--ops-danger-bg);
+  color: var(--ops-danger-fg);
+  font-size: 0.875rem;
 }
 .ops-undo {
   display: flex;

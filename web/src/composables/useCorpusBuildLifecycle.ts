@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { computed, type Ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import type { ReviewQueue } from "../types/corpus";
@@ -7,6 +25,7 @@ export function useCorpusBuildLifecycle(
   currentBuild: Ref<CorpusBuild | null>,
   recordTotal: Ref<number>,
   reviewQueue: Ref<ReviewQueue>,
+  reviewRequested: Ref<boolean>,
 ) {
   const reviewQueueCounts = computed(() => currentBuild.value?.review_queue_counts || {});
   const reviewRemaining = computed(() =>
@@ -34,18 +53,34 @@ export function useCorpusBuildLifecycle(
     "enriching",
     "metadata_retry",
     "metadata_enrichment_rerun",
+    "finalizing_review",
   ]);
   const reviewLocked = computed(() =>
     Boolean(
       buildRunning.value && !reviewCompatibleStages.has(String(currentBuild.value?.stage || "")),
     ),
   );
+  const textReviewLocked = computed(
+    () =>
+      reviewLocked.value &&
+      !(
+        currentBuild.value?.text_review_available_at &&
+        currentBuild.value.topology_validation?.valid === true &&
+        ["constructing_records", "document_intelligence"].includes(
+          String(currentBuild.value.stage || ""),
+        )
+      ),
+  );
   const structuralReviewLocked = computed(
     () =>
       buildRunning.value &&
-      !["enriching", "metadata_retry", "metadata_enrichment_rerun", "review"].includes(
-        String(currentBuild.value?.stage || ""),
-      ),
+      ![
+        "enriching",
+        "metadata_retry",
+        "metadata_enrichment_rerun",
+        "finalizing_review",
+        "review",
+      ].includes(String(currentBuild.value?.stage || "")),
   );
   const canResume = computed(() =>
     Boolean(
@@ -111,9 +146,7 @@ export function useCorpusBuildLifecycle(
   const showReviewWorkspace = computed(() =>
     Boolean(
       hasRecordTopology.value &&
-        (!finishPhase.value ||
-          reviewQueue.value === "metadata" ||
-          reviewQueue.value === "rejected"),
+        (!finishPhase.value || reviewQueue.value !== "all" || reviewRequested.value),
     ),
   );
   return {
@@ -125,6 +158,7 @@ export function useCorpusBuildLifecycle(
     topologyIssueCount,
     buildRunning,
     reviewLocked,
+    textReviewLocked,
     structuralReviewLocked,
     canResume,
     segmentationNeedsReview,

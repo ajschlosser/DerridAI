@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { ProviderProfile } from "../api/system";
@@ -44,34 +62,36 @@ async function loadModels() {
     loadingModels.value = false;
   }
 }
+// Follow the resolved profile, not just the selected id: the profile list can arrive after the id is set, and the
+// model choices (and the current model) must load then too instead of waiting for another visit.
 watch(
-  () => props.modelValue,
+  () => [selected.value?.id, selected.value?.type, selected.value?.base_url, selected.value?.model],
   () => {
     void loadModels();
   },
   { immediate: true },
 );
+watch(
+  () => props.profiles,
+  (profiles) => {
+    if (!profiles.length) return;
+    if (!profiles.some((profile) => profile.id === props.modelValue)) {
+      emit("update:modelValue", profiles[0].id);
+    }
+  },
+  { immediate: true },
+);
 </script>
 <template>
-  <section
-    class="llm-execution"
-    role="group"
-    :aria-label="i18n.t('pdf_corpus.llm_execution', 'LLM execution')"
-  >
+  <section class="llm-execution" role="group" :aria-label="i18n.t('pdf_corpus.llm_execution')">
     <div class="llm-notice">
       <div>
-        <b>{{ i18n.t("pdf_corpus.llm_will_be_used", "This action uses an LLM") }}</b
-        ><small>{{
-          task ||
-          i18n.t(
-            "pdf_corpus.llm_choose_profile_help",
-            "Choose the provider profile that should perform this action.",
-          )
-        }}</small>
+        <b>{{ i18n.t("pdf_corpus.llm_will_be_used") }}</b
+        ><small>{{ task || i18n.t("pdf_corpus.llm_choose_profile_help") }}</small>
       </div>
     </div>
     <label
-      ><span>{{ i18n.t("pdf_corpus.provider_profile", "Provider profile") }}</span
+      ><span>{{ i18n.t("pdf_corpus.provider_profile") }}</span
       ><select
         class="control"
         :value="modelValue"
@@ -79,14 +99,14 @@ watch(
         @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
       >
         <option value="" disabled>
-          {{ i18n.t("pdf_corpus.choose_provider_profile", "Choose a provider profile…") }}
+          {{ i18n.t("pdf_corpus.choose_provider_profile") }}
         </option>
         <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
           {{ profile.name || profile.id }}
         </option>
       </select></label
     ><label v-if="selected"
-      ><span>{{ i18n.t("pdf_corpus.model_for_action", "Model for this operation") }}</span
+      ><span>{{ i18n.t("pdf_corpus.model_for_action") }}</span
       ><input
         class="control"
         :value="effectiveModel"
@@ -94,26 +114,20 @@ watch(
         :disabled="disabled"
         :placeholder="
           loadingModels
-            ? i18n.t('pdf_corpus.loading_models', 'Loading models…')
-            : i18n.t('pdf_corpus.custom_model_allowed', 'Choose or type a model ID')
+            ? i18n.t('pdf_corpus.loading_models')
+            : i18n.t('pdf_corpus.custom_model_allowed')
         "
         @input="emit('update:modelOverride', ($event.target as HTMLInputElement).value)"
       /><datalist :id="`llm-models-${selected.id}`">
         <option v-for="model in models" :key="model" :value="model" /></datalist
-      ><small>{{
-        i18n.t(
-          "pdf_corpus.model_override_help",
-          "Model discovery is optional. You can type a model ID even when the provider does not expose a model list.",
-        )
-      }}</small></label
+      ><small>{{ i18n.t("pdf_corpus.model_override_help") }}</small></label
     ><small v-if="modelError" class="model-error" role="status">{{ modelError }}</small>
     <p v-if="concurrencyRisk && selected?.type === 'ollama'" class="capacity-warning" role="status">
       {{
-        i18n.tf(
-          "pdf_corpus.ollama_concurrency_warning",
-          "This Ollama endpoint is already at or above its configured concurrency limit ({active}/{limit}). Starting another LLM action may slow or compete with metadata enrichment.",
-          { active: activeRequests ?? concurrencyLimit ?? 1, limit: concurrencyLimit ?? 1 },
-        )
+        i18n.tf("pdf_corpus.ollama_concurrency_warning", {
+          active: activeRequests ?? concurrencyLimit ?? 1,
+          limit: concurrencyLimit ?? 1,
+        })
       }}
     </p>
   </section>
@@ -128,6 +142,7 @@ watch(
   border: 1px solid var(--line);
   border-radius: 11px;
   background: var(--soft);
+  color: var(--text);
 }
 .llm-notice div,
 .llm-execution label {
@@ -151,8 +166,10 @@ watch(
   grid-column: 1/-1;
   margin: 0;
   padding: 9px 10px;
-  border: 1px solid var(--warning, #a16207);
+  border: 1px solid var(--tone-warn-border);
   border-radius: 8px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
   font-size: 0.8125rem;
   line-height: 1.45;
 }

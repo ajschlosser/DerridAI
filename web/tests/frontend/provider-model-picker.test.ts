@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -9,7 +27,11 @@ const models = [
   { name: "hf.co/x/Qwen3.6-14B:Q6_K", parameter_size: "14B", quantization_level: "Q6_K" },
   { name: "deepseek-r1:8b", parameter_size: "8B" },
 ];
-const mountPicker = (props = {}) => mount(ProviderModelPicker, { props: { profileName: "Local", modelValue: "qwen3.5:4b", models, ...props }, attachTo: document.body });
+const mountPicker = (props = {}) =>
+  mount(ProviderModelPicker, {
+    props: { profileName: "Local", modelValue: "qwen3.5:4b", models, ...props },
+    attachTo: document.body,
+  });
 
 describe("provider model picker", () => {
   beforeEach(() => setActivePinia(createPinia()));
@@ -52,7 +74,9 @@ describe("provider model picker", () => {
     expect(modelMatchesKind("qwen3.5:4b", "coding")).toBe(false);
     expect(modelMatchesKind("anything", "any")).toBe(true);
     const wrapper = mountPicker({ kind: "reasoning" });
-    expect(wrapper.findAll("datalist option").map(o => o.attributes("value"))).toEqual(["deepseek-r1:8b"]);
+    expect(wrapper.findAll("datalist option").map((o) => o.attributes("value"))).toEqual([
+      "deepseek-r1:8b",
+    ]);
     wrapper.unmount();
   });
 });

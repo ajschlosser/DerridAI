@@ -1,0 +1,32 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.35.5 — RAGety Anne: unified Research results, Response FAQ, and overlay order */
+.operation-progress-stack {
+  z-index: 11000 !important;
+}
+/* Response FAQ presentation moved to native scoped components. */
+
+/* 0.35.10 maintenance — copyable notifications and overlays above shell chrome */
+.operation-progress,
+.operation-progress-detail,
+.operation-toast-details,
+.operation-toast-grid,
+.operation-toast-events {
+  user-select: text;
+}

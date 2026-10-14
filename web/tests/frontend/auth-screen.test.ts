@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import AuthScreen from "../../src/components/AuthScreen.vue";
@@ -5,8 +23,8 @@ import pkg from "../../package.json";
 
 describe("AuthScreen", () => {
   it("never shows a version other than the package version", () => {
-    const text=mount(AuthScreen).text();
-    for(const found of text.match(/\d+\.\d+\.\d+/g)??[])expect(found).toBe(pkg.version);
+    const text = mount(AuthScreen).text();
+    for (const found of text.match(/\d+\.\d+\.\d+/g) ?? []) expect(found).toBe(pkg.version);
   });
 
   it("shows the copyright, package version, and build stamp", () => {
@@ -25,7 +43,11 @@ describe("AuthScreen lockout", () => {
     const wrapper = mount(AuthScreen);
     const auth = useAuthStore();
     auth.bootstrapRequired = false;
-    auth.login = (async () => { throw new ApiError("HTTP 429 · locked", 429, { detail: { code: "login_locked", retry_after_seconds: 125 } }); }) as never;
+    auth.login = (async () => {
+      throw new ApiError("HTTP 429 · locked", 429, {
+        detail: { code: "login_locked", retry_after_seconds: 125 },
+      });
+    }) as never;
     await wrapper.get("input[autocomplete=username]").setValue("scholar");
     await wrapper.get("input[type=password]").setValue("wrong-guess");
     await wrapper.get("form").trigger("submit");
@@ -33,18 +55,23 @@ describe("AuthScreen lockout", () => {
     expect(wrapper.text()).toContain("Try again in 3 minute(s)");
   });
 
-  it("shows other sign-in errors unchanged", async () => {
+  it("translates credential failures and announces them to assistive technology", async () => {
     const { flushPromises } = await import("@vue/test-utils");
     const { useAuthStore } = await import("../../src/stores/auth");
     const { ApiError } = await import("../../src/api/http");
     const wrapper = mount(AuthScreen);
     const auth = useAuthStore();
     auth.bootstrapRequired = false;
-    auth.login = (async () => { throw new ApiError("HTTP 401 · Invalid username or password.", 401); }) as never;
+    auth.login = (async () => {
+      throw new ApiError("HTTP 401 · Invalid username or password.", 401, {
+        detail: "Invalid username or password.",
+      });
+    }) as never;
     await wrapper.get("input[autocomplete=username]").setValue("scholar");
     await wrapper.get("input[type=password]").setValue("wrong-guess");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
-    expect(wrapper.text()).toContain("Invalid username or password.");
+    expect(wrapper.text()).toContain("The username or password is incorrect.");
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true);
   });
 });

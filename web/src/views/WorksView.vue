@@ -1,86 +1,252 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
+import { useVectorStore } from "../stores/workspace";
 import AppIcon from "../components/AppIcon.vue";
 import WorksOverviewCard from "../components/works/WorksOverviewCard.vue";
 import WorksLibraryCard from "../components/works/WorksLibraryCard.vue";
+import WorksLibraryList from "../components/works/WorksLibraryList.vue";
+import WorksCorpusContext from "../components/works/WorksCorpusContext.vue";
+import WorksLibraryToolbar from "../components/works/WorksLibraryToolbar.vue";
 import WorksWorkspaceHeader from "../components/works/WorksWorkspaceHeader.vue";
+import CreateSiteDialog from "../components/works/CreateSiteDialog.vue";
 import { useWorksWorkspace } from "../composables/useWorksWorkspace";
-import * as runtime from "../runtime/runtime.js";
-import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiDialog from "../components/ui/UiDialog.vue";
+import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
+import SemanticMapFrame from "../components/semantic/SemanticMapFrame.vue";
+import type { WorksDbStatusKind, WorksFilters, WorksSort, WorksViewMode } from "../types/works";
+import type { SemanticMapSource } from "../domain/semanticMap";
+import { corpusBuildsApi } from "../api/corpus";
+import { semanticMapService } from "../services/semanticMap";
+import {
+  sitesApi,
+  type SiteExportFormat,
+  type SiteExportOptions,
+  type SiteRecordProfile,
+  type SiteVectorStrategy,
+} from "../api/sites";
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
+const vector = useVectorStore();
 const works = useWorksWorkspace();
-const { snapshot, error } = works;
+const { snapshot, viewState, error } = works;
 const loading = ref(true);
-const query = ref("");
-const revealed = ref(0);
+const query = ref(viewState.value.query);
 let queryTimer = 0;
-let revealToken = 0;
+let bootRequest = 0;
 const page = ref<HTMLElement | null>(null);
+const createSiteOpen = ref(false);
+const createSiteBusy = ref(false);
+const createSiteError = ref("");
+const createSiteLanguages = ref<SiteExportOptions["languages"]>([]);
+const createSiteTransformers = ref<SiteExportOptions["transformers_runtime"] | undefined>();
+const createSiteBrowserEmbedding = ref<
+  SiteExportOptions["browser_embedding_profile"] | undefined
+>();
+const createSiteProgress = ref<{ file: string; received: number; total: number } | null>(null);
+
+async function openCreateSite() {
+  createSiteError.value = "";
+  try {
+    const options = await sitesApi.exportOptions();
+    createSiteLanguages.value = options.languages;
+    createSiteTransformers.value = options.transformers_runtime;
+    createSiteBrowserEmbedding.value = options.browser_embedding_profile;
+  } catch (cause) {
+    createSiteLanguages.value = [...i18n.languages];
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  }
+  createSiteOpen.value = true;
+}
+
+function closeCreateSite() {
+  if (createSiteBusy.value) return;
+  createSiteOpen.value = false;
+  createSiteError.value = "";
+}
+
+async function refreshTransformersRuntime() {
+  const options = await sitesApi.exportOptions();
+  createSiteTransformers.value = options.transformers_runtime;
+}
+
+async function runTransformersDownload() {
+  createSiteProgress.value = {
+    file: "Transformers.js",
+    received: 0,
+    total: createSiteTransformers.value?.download_bytes || 1,
+  };
+  try {
+    await sitesApi.downloadTransformersRuntime((event) => {
+      if (event.status === "error") return;
+      createSiteProgress.value = {
+        file: event.file || "Transformers.js",
+        received: Number(event.received_total || event.received || 0),
+        total: Number(event.total || createSiteTransformers.value?.download_bytes || 1),
+      };
+    });
+    await refreshTransformersRuntime();
+  } finally {
+    createSiteProgress.value = null;
+  }
+}
+
+async function downloadTransformersRuntime() {
+  if (createSiteBusy.value || createSiteTransformers.value?.cached) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    await runTransformersDownload();
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
+
+async function deleteTransformersRuntime() {
+  if (createSiteBusy.value) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    const result = await sitesApi.deleteTransformersRuntime();
+    createSiteTransformers.value = result.transformers_runtime;
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
+
+async function createSite(payload: {
+  title: string;
+  description: string;
+  works: string[];
+  export_format: SiteExportFormat;
+  record_profile: SiteRecordProfile;
+  languages: string[];
+  include_transformers: boolean;
+  vector_strategy: SiteVectorStrategy;
+  provider_proxy_upstream: string | null;
+}) {
+  if (!snapshot.value?.activeStore || createSiteBusy.value) return;
+  createSiteBusy.value = true;
+  createSiteError.value = "";
+  try {
+    if (!createSiteTransformers.value?.cached) await runTransformersDownload();
+    const download = await sitesApi.exportSite({
+      store: snapshot.value.activeStore,
+      works: payload.works,
+      title: payload.title,
+      description: payload.description,
+      locale: payload.languages.includes(i18n.locale)
+        ? i18n.locale
+        : payload.languages[0] || "en-US",
+      languages: payload.languages,
+      include_transformers: payload.include_transformers,
+      vector_strategy: payload.vector_strategy,
+      export_format: payload.export_format,
+      record_profile: payload.record_profile,
+      provider_proxy_upstream: payload.provider_proxy_upstream,
+    });
+    const url = URL.createObjectURL(download.blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = download.filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    createSiteOpen.value = false;
+  } catch (cause) {
+    createSiteError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    createSiteBusy.value = false;
+  }
+}
 
 const fileSignature = computed(() =>
   shell.snapshot.files.map((file) => `${file.id}:${file.count}:${file.dirty}`).join("|"),
 );
-const visibleWorks = computed(() => (snapshot.value?.works || []).slice(0, revealed.value));
-const sourceFileCount = computed(
-  () => new Set((snapshot.value?.works || []).flatMap((work) => work.files || [])).size,
+const libraryPage = ref(1);
+const libraryPageSize = computed(() => (snapshot.value?.viewMode === "list" ? 100 : 48));
+const libraryPageCount = computed(() =>
+  Math.max(1, Math.ceil((snapshot.value?.works.length || 0) / libraryPageSize.value)),
 );
-const showSkeleton = computed(() =>
-  Boolean(snapshot.value?.mode === "admin" && snapshot.value.works.length && revealed.value === 0),
+const visibleWorks = computed(() => {
+  const items = snapshot.value?.works || [];
+  const start = (libraryPage.value - 1) * libraryPageSize.value;
+  return items.slice(start, start + libraryPageSize.value);
+});
+const showLibraryPagination = computed(() =>
+  Boolean(snapshot.value?.works.length && libraryPageCount.value > 1),
 );
-const showAddCard = computed(() =>
-  Boolean(snapshot.value?.mode === "admin" && revealed.value >= (snapshot.value.works.length || 0)),
-);
-const loadingTitle = computed(() => i18n.t("works.loading", "Loading works"));
-const loadingDetail = computed(() =>
-  auth.isResearcher
-    ? i18n.t("works.checking_database", "Checking corpus database…")
-    : i18n.t("works.checking_database", "Checking vector database state…"),
-);
-
-function startReveal() {
-  const token = ++revealToken;
-  const total = snapshot.value?.works.length || 0;
-  revealed.value = 0;
-  if (!total || snapshot.value?.mode !== "admin") {
-    revealed.value = total;
-    return;
-  }
-  const step = () => {
-    if (token !== revealToken) return;
-    revealed.value = Math.min(total, (revealed.value || 0) + 12);
-    if (revealed.value < total) requestAnimationFrame(step);
-    else decorate();
+function setLibraryPage(pageNumber: number) {
+  libraryPage.value = Math.min(libraryPageCount.value, Math.max(1, pageNumber));
+}
+function resetLibraryPage() {
+  libraryPage.value = 1;
+}
+/** Inspector commands, bound to the selected work; the persistent pane and the dialog share them. */
+function inspectorHandlers(work: string) {
+  return {
+    onSearch: () => works.searchOverview(work),
+    onReview: () => works.reviewFlagged(work),
+    onEdit: () => works.editMetadata(work),
+    onPopulate: () => works.populateWork(work),
+    onAnnotations: () => works.openAnnotations(work),
+    onBrowse: () => works.browseResearcher(work),
+    onSemanticMap: () => openWorkSemanticMap(work),
+    onSync: () => works.syncWork(work),
+    onInspect: (field: string) => works.inspectMixed(work, field),
+    onInsight: works.searchInsight,
   };
-  requestAnimationFrame(step);
 }
-
-function decorate() {
-  void nextTick(() => {
-    if (page.value) runtime.decorateDisabledControls?.(page.value);
-  });
-}
+const loadingTitle = computed(() => i18n.t("works.loading"));
+const loadingDetail = computed(() => i18n.t("works.checking_database"));
 
 async function boot() {
-  loading.value = !snapshot.value;
-  await works.activate();
-  query.value = snapshot.value?.query || "";
-  loading.value = false;
-  startReveal();
-  decorate();
+  const current = ++bootRequest;
+  loading.value = true;
+  const previousQuery = query.value;
+  try {
+    await works.activate();
+    if (current !== bootRequest) return;
+    if (query.value === previousQuery) {
+      query.value = snapshot.value?.query ?? viewState.value.query;
+    }
+  } finally {
+    if (current === bootRequest) loading.value = false;
+  }
 }
 
 function reload() {
   works.load();
   query.value = snapshot.value?.query || "";
-  startReveal();
-  decorate();
 }
 
 function applyQuery(value: string) {
@@ -89,31 +255,149 @@ function applyQuery(value: string) {
   const delay = snapshot.value?.mode === "researcher" ? 150 : 180;
   queryTimer = window.setTimeout(() => {
     works.setQuery(value);
-    startReveal();
-    decorate();
+    resetLibraryPage();
   }, delay);
 }
 
 function selectWork(work: string) {
-  const y = window.scrollY;
   works.setOverview(work);
-  requestAnimationFrame(() => window.scrollTo(0, y));
-  decorate();
+}
+
+function openWorkRecords(work: string) {
+  if (snapshot.value?.mode === "researcher") works.browseResearcher(work);
+  else works.searchRecords(work);
+}
+
+async function closeInspector() {
+  const work = snapshot.value?.selectedWork || "";
+  works.setOverview("");
+  await nextTick();
+  // The persistent inspector has no dialog to restore focus, so return it to the work it described.
+  if (wide.value) {
+    page.value?.querySelector<HTMLElement>(`[data-select-work="${CSS.escape(work)}"]`)?.focus();
+  }
+}
+
+function applyView(patch: {
+  sort?: WorksSort;
+  needsReview?: boolean;
+  dbStatus?: WorksDbStatusKind | "";
+  author?: string;
+  viewMode?: WorksViewMode;
+}) {
+  works.setView(patch);
+  resetLibraryPage();
+}
+function applyFilters(patch: Partial<WorksFilters>) {
+  applyView(patch);
+}
+
+// The inspector sits beside the library when there is room, and opens in a dialog otherwise, so
+// selecting a work never pushes the library down the page.
+const wide = ref(true);
+let wideQuery: MediaQueryList | null = null;
+function syncWide() {
+  wide.value = wideQuery ? wideQuery.matches : true;
+}
+
+// --- semantic map dialog ----------------------------------------------------------------------------------------
+const semanticMapDialog = ref<HTMLDialogElement | null>(null);
+const semanticMapWork = ref("");
+const semanticMapLoading = ref(false);
+const semanticMapTab = ref<"graph" | "records" | "crossWorks">("graph");
+const semanticMapRecords = ref<Array<{ record_id: string; build_id: string }>>([]);
+const semanticMapRecordId = ref("");
+const semanticMapRecord = computed(
+  () =>
+    semanticMapRecords.value.find((item) => item.record_id === semanticMapRecordId.value) || null,
+);
+const semanticMapSources = ref<SemanticMapSource[]>([]);
+const semanticMapWorkSources = ref<SemanticMapSource[]>([]);
+const semanticMapFallbackSources = computed(() =>
+  semanticMapWorkSources.value.length
+    ? semanticMapWorkSources.value
+    : semanticMapSources.value.filter((source) => source.work === semanticMapWork.value),
+);
+
+async function openWorkSemanticMap(work: string) {
+  semanticMapWork.value = work;
+  semanticMapLoading.value = true;
+  semanticMapTab.value = "graph";
+  semanticMapRecords.value = [];
+  semanticMapRecordId.value = "";
+  semanticMapWorkSources.value = [];
+
+  // Keep the existing visual map available as an immediate local fallback, but
+  // prefer the persisted canonical projection. The server materializes it once
+  // after invalidation and subsequent opens are indexed System Data reads.
+  const allSources = semanticMapService.listSources();
+  semanticMapSources.value = allSources.records;
+  semanticMapDialog.value?.showModal();
+
+  try {
+    const projectionRequest =
+      typeof corpusBuildsApi.workSemanticMap === "function"
+        ? corpusBuildsApi.workSemanticMap(work)
+        : Promise.reject(new Error("Work semantic map endpoint unavailable"));
+    const [projectionResult, recordsResult] = await Promise.allSettled([
+      projectionRequest,
+      corpusBuildsApi.workSemanticMapRecords(work),
+    ]);
+    if (semanticMapWork.value !== work) return;
+
+    if (projectionResult.status === "fulfilled") {
+      semanticMapWorkSources.value = projectionResult.value.sources as SemanticMapSource[];
+    }
+    if (recordsResult.status === "fulfilled") {
+      semanticMapRecords.value = recordsResult.value.records;
+      semanticMapRecordId.value = recordsResult.value.records[0]?.record_id || "";
+    }
+  } finally {
+    if (semanticMapWork.value === work) semanticMapLoading.value = false;
+  }
+}
+function closeWorkSemanticMap() {
+  semanticMapDialog.value?.close();
 }
 
 async function changeStore(name: string) {
+  if (loading.value) return;
+  works.reset();
   loading.value = true;
   await works.setStore(name);
   query.value = snapshot.value?.query || "";
   loading.value = false;
-  startReveal();
-  decorate();
+  resetLibraryPage();
 }
 
+watch(
+  () => [snapshot.value?.works.length, snapshot.value?.viewMode],
+  () => setLibraryPage(libraryPage.value),
+);
+watch(
+  () => auth.user,
+  () => {
+    // Invalidate the view-level completion path as well as the composable read.
+    // Otherwise an older activation can clear the loading state while the new
+    // authorized identity is still hydrating.
+    bootRequest += 1;
+    works.reset();
+    if (auth.user) void boot();
+    else loading.value = false;
+  },
+  { deep: true },
+);
 watch(fileSignature, () => {
   if (loading.value || !snapshot.value) return;
   reload();
 });
+watch(
+  () => vector.presenceVersion,
+  () => {
+    if (loading.value || !snapshot.value || snapshot.value.mode !== "admin") return;
+    reload();
+  },
+);
 watch(
   () => shell.snapshot.activeStore,
   () => {
@@ -128,65 +412,103 @@ watch(
     reload();
   },
 );
-watch(visibleWorks, decorate);
 
 onMounted(() => {
+  wideQuery = window.matchMedia?.("(min-width: 1100px)") ?? null;
+  wideQuery?.addEventListener?.("change", syncWide);
+  syncWide();
   void boot();
 });
-onBeforeUnmount(() => window.clearTimeout(queryTimer));
+onBeforeUnmount(() => {
+  bootRequest += 1;
+  window.clearTimeout(queryTimer);
+  wideQuery?.removeEventListener?.("change", syncWide);
+});
 </script>
 
 <template>
-  <main ref="page" class="works-page" :aria-busy="loading">
-    <section v-if="loading" class="card view-loading-card">
-      <div class="view-loading-copy">
-        <span class="spinner"></span>
-        <div>
-          <b>{{ loadingTitle }}</b>
-          <p>{{ loadingDetail }}</p>
-        </div>
-      </div>
-      <div class="progressive-loading" role="status" aria-live="polite">
-        <div class="progressive-loading-head">
-          <span class="spinner small-spinner"></span><b>Loading cards</b>
-        </div>
-        <div class="progressive-skeleton-grid">
-          <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
-          <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
-          <div class="progressive-skeleton-card"><i></i><i></i><i></i></div>
-        </div>
-      </div>
+  <main ref="page" class="works-page">
+    <WorksWorkspaceHeader
+      :mode="snapshot?.mode || (auth.isResearcher ? 'researcher' : 'admin')"
+      :can-manage-corpus="snapshot?.capabilities.canManageCorpus ?? false"
+      :can-populate="snapshot?.capabilities.canPopulate ?? false"
+      :can-create-site="Boolean(snapshot?.activeStore && snapshot?.totalWorks)"
+      :corpus-manage-denied-reason="snapshot?.corpusManageDeniedReason || loadingTitle"
+      :populate-disabled-reason="snapshot?.populateDisabledReason || loadingTitle"
+      :create-site-disabled-reason="
+        !snapshot?.activeStore
+          ? i18n.t('site.create_requires_store')
+          : i18n.t('site.create_requires_works')
+      "
+      @choose-jsonl="works.chooseJsonl()"
+      @separate="works.separateWorks()"
+      @populate-all="works.populateAll()"
+      @create-site="openCreateSite"
+    />
+
+    <WorksLibraryToolbar
+      v-if="!snapshot"
+      :mode="auth.isResearcher ? 'researcher' : 'admin'"
+      :query="query"
+      :sort="viewState.sort"
+      :filters="viewState.filters"
+      :view-mode="viewState.viewMode"
+      :authors="[]"
+      :total-works="0"
+      :visible-works="0"
+      :total-review="0"
+      :pending="loading"
+      :unavailable="Boolean(error)"
+      @query="applyQuery"
+      @sort="applyView({ sort: $event })"
+      @filters="applyFilters"
+      @view-mode="applyView({ viewMode: $event })"
+    />
+
+    <section
+      v-if="loading && !snapshot"
+      id="worksGrid"
+      class="card view-loading-card works-library"
+      :aria-label="i18n.t('nav.works')"
+      aria-busy="true"
+      data-works-loading
+    >
+      <UiLoadingState
+        :label="loadingTitle"
+        :detail="loadingDetail"
+        variant="skeleton"
+        :skeleton-count="3"
+      />
     </section>
 
-    <div v-else-if="error" class="info error" role="alert">{{ error }}</div>
+    <div v-if="error" class="info error" role="alert">
+      <p v-if="snapshot">{{ i18n.t("loading.stale") }}</p>
+      {{ error }}
+      <button type="button" :disabled="loading" @click="boot">{{ i18n.t("ui.retry") }}</button>
+    </div>
 
-    <section v-else-if="snapshot?.mode === 'admin' && !snapshot.available" class="empty">
+    <section
+      v-if="!loading && !error && snapshot?.mode === 'admin' && !snapshot.available"
+      class="empty"
+    >
       <div class="drop">
         <div class="drop-icon"><AppIcon name="upload" aria-hidden="true" /></div>
         <h1>
           {{
             snapshot.shared
-              ? i18n.t("records.open_shared_workspace", "Open the shared corpus workspace")
-              : i18n.t("records.open_workspace", "Open a corpus workspace")
+              ? i18n.t("records.open_shared_workspace")
+              : i18n.t("records.open_workspace")
           }}
         </h1>
         <p>
           {{
             snapshot.shared
-              ? i18n.t(
-                  "records.shared_workspace_help",
-                  "This link preserves the table state and filters, while JSONL contents remain browser-local. Choose the same JSONL file to restore this shared view.",
-                )
-              : i18n.t(
-                  "records.open_workspace_help",
-                  "Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in its own tab and can be edited, compared, searched, exported, or sent to the corpus database.",
-                )
+              ? i18n.t("records.shared_workspace_help")
+              : i18n.t("records.open_workspace_help")
           }}
         </p>
         <button id="choose" type="button" class="btn primary" @click="works.chooseJsonl()">
-          <AppIcon name="upload" aria-hidden="true" />{{
-            i18n.t("records.choose_jsonl", "Choose JSONL files")
-          }}
+          <AppIcon name="upload" aria-hidden="true" />{{ i18n.t("records.choose_jsonl") }}
         </button>
       </div>
     </section>
@@ -194,212 +516,344 @@ onBeforeUnmount(() => window.clearTimeout(queryTimer));
     <section v-else-if="snapshot?.mode === 'researcher' && !snapshot.available" class="empty">
       <div class="drop">
         <div class="drop-icon"><AppIcon name="database" aria-hidden="true" /></div>
-        <h1>{{ i18n.t("research.no_database", "No corpus database available") }}</h1>
+        <h1>{{ i18n.t("research.no_database") }}</h1>
       </div>
     </section>
 
-    <template v-else-if="snapshot?.mode === 'admin' && snapshot.available">
-      <WorksWorkspaceHeader
+    <template v-if="snapshot?.available">
+      <UiLoadingState v-if="loading" variant="inline" :label="i18n.t('loading.updating')" />
+      <WorksCorpusContext
+        :mode="snapshot.mode"
         :stores="snapshot.stores"
         :active-store="snapshot.activeStore"
         :active-store-count="snapshot.activeStoreCount"
-        :total-works="snapshot.totalWorks"
+        :source-file-count="snapshot.sourceFileCount"
         :total-records="snapshot.totalRecords"
-        :source-file-count="sourceFileCount"
+        :index-freshness="snapshot.indexFreshness"
         :stores-empty-label="snapshot.storesEmptyLabel"
         :db-unavailable-reason="snapshot.dbUnavailableReason"
-        :can-manage-corpus="snapshot.capabilities.canManageCorpus"
-        :can-populate="snapshot.capabilities.canPopulate"
         :can-sync-all="snapshot.capabilities.canSyncAll"
-        :corpus-manage-denied-reason="snapshot.corpusManageDeniedReason"
-        :populate-disabled-reason="snapshot.populateDisabledReason"
         :sync-all-disabled-reason="snapshot.syncAllDisabledReason"
         @change-store="changeStore"
-        @choose-jsonl="works.chooseJsonl()"
-        @separate="works.separateWorks()"
-        @populate-all="works.populateAll()"
         @sync-all="works.syncAll()"
       />
 
-      <WorksOverviewCard
-        v-if="snapshot.selected"
-        :work="snapshot.selected"
-        mode="admin"
-        :citation-label="snapshot.citationLabel"
-        @search="works.searchOverview(snapshot.selected.work)"
-        @edit="works.editMetadata(snapshot.selected.work)"
-        @populate="works.populateWork(snapshot.selected.work)"
-        @annotations="works.openAnnotations(snapshot.selected.work)"
-        @inspect="works.inspectMixed(snapshot.selected.work, $event)"
-        @insight="works.searchInsight"
+      <WorksLibraryToolbar
+        :mode="snapshot.mode"
+        :query="query"
+        :sort="snapshot.sort"
+        :filters="snapshot.filters"
+        :view-mode="snapshot.viewMode"
+        :authors="snapshot.authors"
+        :total-works="snapshot.totalWorks"
+        :visible-works="snapshot.visibleWorks"
+        :total-review="snapshot.totalReview"
+        @query="applyQuery"
+        @sort="applyView({ sort: $event })"
+        @filters="applyFilters"
+        @view-mode="applyView({ viewMode: $event })"
       />
 
-      <div class="toolbar works-toolbar aligned-toolbar">
-        <div class="search">
-          <input
-            id="worksSearch"
-            :value="query"
-            :placeholder="i18n.t('works.filter_title', 'Filter works by title')"
-            @input="applyQuery(($event.target as HTMLInputElement).value)"
+      <div class="works-layout" :class="{ 'has-inspector': wide && snapshot.selected }">
+        <section
+          id="worksGrid"
+          class="works-library"
+          :class="{ list: snapshot.viewMode === 'list' }"
+          :aria-label="i18n.t('nav.works')"
+        >
+          <WorksLibraryList
+            v-if="snapshot.viewMode === 'list'"
+            :works="visibleWorks"
+            :mode="snapshot.mode"
+            :selected-work="snapshot.selectedWork"
+            :can-sync="snapshot.capabilities.canSync"
+            :sync-disabled-reason="snapshot.dbUnavailableReason"
+            @select="selectWork"
+            @sync="works.syncWork"
+            @populate="works.populateWork"
+            @edit="works.editMetadata"
+            @review="works.reviewFlagged"
+            @improve="works.autoImprove"
+            @remove="works.removeWork"
+            @records="openWorkRecords"
+            @flagged="(work) => works.searchRecords(work, true)"
+            @semantic-map="openWorkSemanticMap"
           />
-        </div>
-        <div class="tools">
-          <span class="note"
-            >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("works.shown", "shown") }} ·
-            {{ snapshot.totalWorks.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works", "works") }} ·
-            {{ snapshot.totalRecords.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.records", "records") }}</span
+          <template v-else>
+            <WorksLibraryCard
+              v-for="work in visibleWorks"
+              :key="work.work"
+              :work="work"
+              :mode="snapshot.mode"
+              :selected="snapshot.selectedWork === work.work"
+              :can-sync="snapshot.capabilities.canSync"
+              :sync-disabled-reason="snapshot.dbUnavailableReason"
+              @select="selectWork(work.work)"
+              @sync="works.syncWork(work.work)"
+              @populate="works.populateWork(work.work)"
+              @edit="works.editMetadata(work.work)"
+              @review="works.reviewFlagged(work.work)"
+              @improve="works.autoImprove(work.work)"
+              @remove="works.removeWork(work.work)"
+              @records="openWorkRecords(work.work)"
+              @flagged="works.searchRecords(work.work, true)"
+              @inspect="works.inspectMixed(work.work, $event)"
+              @semantic-map="openWorkSemanticMap(work.work)"
+            />
+          </template>
+          <p v-if="!snapshot.works.length" class="works-empty">
+            {{
+              snapshot.totalWorks
+                ? i18n.t("works.no_matches")
+                : snapshot.mode === "admin"
+                  ? i18n.t("works.add_jsonl_help")
+                  : i18n.t("research.no_works")
+            }}
+          </p>
+          <nav
+            v-if="showLibraryPagination"
+            class="works-library-pagination"
+            :aria-label="i18n.t('works.library_pagination')"
           >
-        </div>
+            <UiButton
+              size="small"
+              variant="ghost"
+              :label="i18n.t('ui.previous')"
+              :disabled="libraryPage <= 1"
+              @click="setLibraryPage(libraryPage - 1)"
+            />
+            <span>
+              {{
+                i18n.tf("dynamic.page_of_pages", {
+                  page: libraryPage,
+                  pages: libraryPageCount,
+                })
+              }}
+            </span>
+            <UiButton
+              size="small"
+              variant="ghost"
+              :label="i18n.t('ui.next')"
+              :disabled="libraryPage >= libraryPageCount"
+              @click="setLibraryPage(libraryPage + 1)"
+            />
+          </nav>
+        </section>
+
+        <aside
+          v-if="wide && snapshot.selected"
+          class="works-inspector-pane"
+          :aria-label="i18n.t('works.inspector_label')"
+        >
+          <WorksOverviewCard
+            :key="snapshot.selected.work"
+            :work="snapshot.selected"
+            :mode="snapshot.mode"
+            :citation-label="snapshot.citationLabel"
+            :can-sync="snapshot.capabilities.canSync"
+            :sync-disabled-reason="snapshot.dbUnavailableReason"
+            closable
+            v-bind="inspectorHandlers(snapshot.selected.work)"
+            @close="closeInspector"
+          />
+        </aside>
       </div>
 
-      <section
-        id="worksGrid"
-        class="works works-library-grid"
-        :aria-label="i18n.t('nav.works', 'Works')"
+      <UiDialog
+        v-if="!wide && snapshot.selected"
+        :title="snapshot.selected.work"
+        :close-label="i18n.t('ui.close')"
+        size="large"
+        @close="closeInspector"
       >
-        <div v-if="showSkeleton" class="progressive-loading" role="status" aria-live="polite">
-          <div class="progressive-loading-head">
-            <span class="spinner small-spinner"></span
-            ><b>{{
-              i18n.tf("works.loading_cards", "Loading {count} work cards", {
-                count: snapshot.works.length.toLocaleString(i18n.locale),
-              })
-            }}</b>
-          </div>
-          <div class="progressive-skeleton-grid">
-            <div
-              v-for="index in Math.min(4, snapshot.works.length)"
-              :key="index"
-              class="progressive-skeleton-card"
-            >
-              <i></i><i></i><i></i>
-            </div>
-          </div>
-        </div>
-        <WorksLibraryCard
-          v-for="work in visibleWorks"
-          :key="work.work"
-          :work="work"
-          :selected="snapshot.selectedWork === work.work"
+        <WorksOverviewCard
+          :key="snapshot.selected.work"
+          :work="snapshot.selected"
+          :mode="snapshot.mode"
+          :citation-label="snapshot.citationLabel"
           :can-sync="snapshot.capabilities.canSync"
           :sync-disabled-reason="snapshot.dbUnavailableReason"
-          @select="selectWork(work.work)"
-          @sync="works.syncWork(work.work)"
-          @populate="works.populateWork(work.work)"
-          @edit="works.editMetadata(work.work)"
-          @review="works.reviewFlagged(work.work)"
-          @improve="works.autoImprove(work.work)"
-          @remove="works.removeWork(work.work)"
-          @records="works.searchRecords(work.work)"
-          @flagged="works.searchRecords(work.work, true)"
-          @inspect="works.inspectMixed(work.work, $event)"
+          embedded
+          v-bind="inspectorHandlers(snapshot.selected.work)"
         />
-        <button
-          v-if="showAddCard"
-          id="worksAddJsonl"
-          type="button"
-          class="work-add-jsonl-card"
-          :disabled="!snapshot.capabilities.canManageCorpus"
-          :data-disabled-reason="
-            snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-          "
-          :title="
-            snapshot.capabilities.canManageCorpus ? undefined : snapshot.corpusManageDeniedReason
-          "
-          @click="works.chooseJsonl()"
-        >
-          <span class="work-add-jsonl-icon"><AppIcon name="plus" aria-hidden="true" /></span>
-          <span>
-            <b>{{ i18n.t("works.add_jsonl", "Add a JSONL file") }}</b>
-            <small>{{
-              i18n.t(
-                "works.add_jsonl_help",
-                "Open another corpus source and add its works to this workspace.",
-              )
-            }}</small>
-          </span>
-        </button>
-      </section>
+      </UiDialog>
     </template>
 
-    <template v-else-if="snapshot?.mode === 'researcher' && snapshot.available">
-      <UiPageHeader
-        :kicker="i18n.t('section.corpus', 'Corpus')"
-        :title="i18n.t('nav.works', 'Works')"
-        title-id="works-page-title"
-        :description="
-          i18n.t(
-            'research.works_menu_help',
-            'Browse works in the selected corpus database. Select a work for an overview, then browse its summarized records.',
-          )
-        "
-      />
+    <CreateSiteDialog
+      v-if="createSiteOpen && snapshot?.mode === 'admin'"
+      :works="snapshot.scopeWorks"
+      :store-name="snapshot.activeStore"
+      :initial-work="snapshot.selectedWork"
+      :languages="createSiteLanguages"
+      :transformers-runtime="createSiteTransformers"
+      :browser-embedding-profile="createSiteBrowserEmbedding"
+      :download-progress="createSiteProgress"
+      :busy="createSiteBusy"
+      :error="createSiteError"
+      @cancel="closeCreateSite"
+      @create="createSite"
+      @delete-runtime="deleteTransformersRuntime"
+      @download-runtime="downloadTransformersRuntime"
+    />
 
-      <WorksOverviewCard
-        v-if="snapshot.selected"
-        :work="snapshot.selected"
-        mode="researcher"
-        :citation-label="snapshot.citationLabel"
-        @browse="works.browseResearcher(snapshot.selected.work)"
-        @annotations="works.openAnnotations(snapshot.selected.work)"
+    <dialog
+      ref="semanticMapDialog"
+      class="works-semantic-map-dialog"
+      :aria-label="i18n.tf('works.semantic_map_dialog_title', { work: semanticMapWork })"
+      @cancel.prevent="closeWorkSemanticMap"
+    >
+      <header>
+        <h2>{{ i18n.tf("works.semantic_map_dialog_title", { work: semanticMapWork }) }}</h2>
+        <button type="button" :aria-label="i18n.t('ui.close')" @click="closeWorkSemanticMap">
+          ×
+        </button>
+      </header>
+      <UiLoadingState
+        v-if="semanticMapLoading"
+        :label="i18n.t('works.semantic_map_calculating', 'Calculating semantic map…')"
       />
-
-      <div class="toolbar works-toolbar">
-        <div class="search">
-          <input
-            id="worksSearch"
-            :value="query"
-            :placeholder="i18n.t('research.filter_works', 'Filter works by title')"
-            @input="applyQuery(($event.target as HTMLInputElement).value)"
+      <template v-else>
+        <div class="works-semantic-tabs" role="tablist" :aria-label="i18n.t('works.semantic_map')">
+          <button
+            type="button"
+            id="works-semantic-tab-graph"
+            role="tab"
+            aria-controls="works-semantic-panel-graph"
+            :aria-selected="semanticMapTab === 'graph'"
+            :class="{ on: semanticMapTab === 'graph' }"
+            @click="semanticMapTab = 'graph'"
+          >
+            {{ i18n.t("works.semantic_map_tab_graph") }}
+          </button>
+          <button
+            type="button"
+            id="works-semantic-tab-records"
+            role="tab"
+            aria-controls="works-semantic-panel-records"
+            :aria-selected="semanticMapTab === 'records'"
+            :class="{ on: semanticMapTab === 'records' }"
+            @click="semanticMapTab = 'records'"
+          >
+            {{ i18n.t("works.semantic_map_tab_records") }}
+          </button>
+          <button
+            type="button"
+            id="works-semantic-tab-cross-works"
+            role="tab"
+            aria-controls="works-semantic-panel-cross-works"
+            :aria-selected="semanticMapTab === 'crossWorks'"
+            :class="{ on: semanticMapTab === 'crossWorks' }"
+            @click="semanticMapTab = 'crossWorks'"
+          >
+            {{ i18n.t("works.semantic_map_tab_cross_works") }}
+          </button>
+        </div>
+        <div
+          v-if="semanticMapTab === 'graph'"
+          id="works-semantic-panel-graph"
+          role="tabpanel"
+          aria-labelledby="works-semantic-tab-graph"
+          tabindex="0"
+        >
+          <SemanticMapFrame
+            variant="page"
+            :sources="semanticMapFallbackSources"
+            :show-close="false"
           />
         </div>
-        <div class="tools">
-          <select
-            id="researchWorksStore"
-            class="control"
-            :value="snapshot.activeStore"
-            @change="changeStore(($event.target as HTMLSelectElement).value)"
-          >
-            <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
-              {{ store.name }}
-            </option>
-          </select>
-          <span class="note"
-            >{{ snapshot.works.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works", "works") }}</span
-          >
-        </div>
-      </div>
-
-      <section class="researcher-work-menu">
-        <button
-          v-for="work in snapshot.works"
-          :key="work.work"
-          type="button"
-          class="researcher-work-menu-card"
-          :class="{ active: snapshot.selectedWork === work.work }"
-          :data-research-work="work.work"
-          @click="selectWork(work.work)"
+        <SemanticMapFrame
+          v-if="semanticMapTab === 'crossWorks'"
+          variant="modal"
+          :sources="semanticMapSources"
+          focus-id=""
+          id="works-semantic-panel-cross-works"
+          role="tabpanel"
+          aria-labelledby="works-semantic-tab-cross-works"
+          tabindex="0"
+        />
+        <div
+          v-if="semanticMapTab === 'records'"
+          id="works-semantic-panel-records"
+          role="tabpanel"
+          aria-labelledby="works-semantic-tab-records"
+          tabindex="0"
         >
-          <img v-if="work.cover" class="researcher-work-cover" :src="work.cover" alt="" />
-          <span v-else class="work-book-icon"><AppIcon name="books" aria-hidden="true" /></span>
-          <span>
-            <b>{{ work.work }}</b>
-            <small>{{ work.subtitle }}</small>
-            <small
-              >{{ work.count.toLocaleString(i18n.locale) }}
-              {{ i18n.t("dynamic.records", "records") }}</small
-            >
-          </span>
-          <span class="work-menu-arrow">›</span>
-        </button>
-        <div v-if="!snapshot.works.length" class="llm-empty">
-          {{ i18n.t("research.no_works", "No works are available.") }}
+          <p v-if="!semanticMapRecords.length" class="note">
+            {{ i18n.t("works.semantic_map_no_records") }}
+          </p>
+          <template v-else>
+            <label class="works-semantic-record-pick">
+              <span>{{ i18n.t("works.semantic_map_pick_record") }}</span>
+              <select v-model="semanticMapRecordId" class="control">
+                <option
+                  v-for="item in semanticMapRecords"
+                  :key="item.record_id"
+                  :value="item.record_id"
+                >
+                  {{ item.record_id }}
+                </option>
+              </select>
+            </label>
+            <CorpusRecordSemanticMap
+              v-if="semanticMapRecord"
+              :key="semanticMapRecord.record_id"
+              id-prefix="works"
+              :build-id="semanticMapRecord.build_id"
+              :record="{ record_id: semanticMapRecord.record_id }"
+              @open-record="semanticMapRecordId = $event"
+            />
+          </template>
         </div>
-      </section>
-    </template>
+      </template>
+    </dialog>
   </main>
 </template>
+
+<style scoped>
+.works-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+.works-layout.has-inspector {
+  grid-template-columns: minmax(0, 1fr) minmax(24rem, 30rem);
+}
+.works-library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+.works-library.list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+.works-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--space-4);
+  color: var(--text-secondary);
+}
+.works-library-pagination {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: center;
+  padding-block: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+.works-inspector-pane {
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+</style>

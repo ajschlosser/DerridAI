@@ -1,4 +1,20 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 import { esc } from "./html";
 import {
@@ -32,7 +48,6 @@ type Helper =
   | "persistPrefs"
   | "removeFinishedJob"
   | "tr"
-  | "translateDynamicUiValue"
   | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
@@ -50,53 +65,14 @@ export function createOperationDock(deps: Deps) {
     persistPrefs,
     removeFinishedJob,
     tr,
-    translateDynamicUiValue,
     trf,
     uid,
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
   const document: Any = globalThis.document;
   let operationDockResizeWired = false;
-  function toast(message: Any, { tone = "auto", duration = null } = {}) {
-    let el = document.querySelector("#toast");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "toast";
-      el.className = "toast";
-      document.body.appendChild(el);
-    }
-    // Toast text is operational information: keep it selectable/copyable and
-    // pause dismissal while the user is interacting with it.
-    el.setAttribute("role", "status");
-    el.setAttribute("aria-live", "polite");
-    el.setAttribute("aria-atomic", "true");
-    el.tabIndex = 0;
-    const text = translateDynamicUiValue(String(message ?? ""));
-    // An explicit success tone wins: copied record text may itself contain words like "error".
-    const failed =
-      tone === "danger" ||
-      (tone !== "success" &&
-        (/\bHTTP\s+\d{3}\b/i.test(text) || /\b(failed|could not|error)\b/i.test(text)));
-    el.classList.toggle("failed", failed);
-    el.classList.toggle("success", tone === "success");
-    const httpIndex = text.search(/\bHTTP\s+\d{3}\b/i);
-    if (failed && httpIndex >= 0) {
-      el.innerHTML = `${esc(text.slice(0, httpIndex))}<strong>${esc(text.slice(httpIndex))}</strong>`;
-    } else {
-      el.textContent = text;
-    }
-    el.classList.add("show");
-    const dismissDelay = duration ?? (failed ? 8000 : 4200);
-    const pause = () => clearTimeout(el._timer);
-    const resume = () => {
-      clearTimeout(el._timer);
-      el._timer = setTimeout(() => el.classList.remove("show"), dismissDelay);
-    };
-    el.onpointerenter = pause;
-    el.onpointerleave = resume;
-    el.onfocusin = pause;
-    el.onfocusout = resume;
-    resume();
+  function operationDockIsDocked() {
+    return document.documentElement?.dataset?.operationsDockMode === "docked";
   }
   function applyOperationStackPosition(stack: Any) {
     if (!stack) return;
@@ -145,9 +121,7 @@ export function createOperationDock(deps: Deps) {
       toggle.setAttribute("aria-expanded", state.operationToastsMinimized ? "false" : "true");
       toggle.setAttribute(
         "aria-label",
-        state.operationToastsMinimized
-          ? tr("operations.expand", "Show operations")
-          : tr("operations.collapse", "Hide operations"),
+        state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"),
       );
     }
     applyOperationStackPosition(stack);
@@ -204,8 +178,37 @@ export function createOperationDock(deps: Deps) {
     const handle = stack?.querySelector("[data-operation-drag]");
     if (!handle || handle.dataset.dragWired) return;
     handle.dataset.dragWired = "1";
+    const dragTooltip = document.querySelector("#operationDragHelp") as HTMLElement | null;
+    const showDragHelp = () => {
+      if (!dragTooltip) return;
+      dragTooltip.hidden = false;
+      const rect = handle.getBoundingClientRect();
+      requestAnimationFrame(() => {
+        const box = dragTooltip.getBoundingClientRect();
+        const margin = 8;
+        const left = Math.min(
+          Math.max(margin, rect.left + rect.width / 2 - box.width / 2),
+          window.innerWidth - box.width - margin,
+        );
+        const below = rect.bottom + 6;
+        const top =
+          below + box.height <= window.innerHeight - margin
+            ? below
+            : Math.max(margin, rect.top - box.height - 6);
+        dragTooltip.style.left = `${Math.round(left)}px`;
+        dragTooltip.style.top = `${Math.round(top)}px`;
+      });
+    };
+    const hideDragHelp = () => {
+      if (dragTooltip) dragTooltip.hidden = true;
+    };
+    handle.addEventListener("pointerenter", showDragHelp);
+    handle.addEventListener("pointerleave", hideDragHelp);
+    handle.addEventListener("focus", showDragHelp);
+    handle.addEventListener("blur", hideDragHelp);
     handle.addEventListener("pointerdown", (event: Any) => {
-      if (event.button !== 0 || event.target.closest("button")) return;
+      hideDragHelp();
+      if (operationDockIsDocked() || event.button !== 0 || event.target.closest("button")) return;
       event.preventDefault();
       const rect = stack.getBoundingClientRect();
       const startX = event.clientX,
@@ -262,11 +265,14 @@ export function createOperationDock(deps: Deps) {
     });
     handle.addEventListener("dblclick", (event: Any) => {
       if (event.target.closest("button")) return;
-      state.operationStackPosition = null;
-      persistPrefs();
-      applyOperationStackPosition(stack);
+      globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
     });
     handle.addEventListener("keydown", (event: Any) => {
+      if ((event.key === "Enter" || event.key === " ") && !event.target.closest("button")) {
+        event.preventDefault();
+        globalThis.dispatchEvent(new CustomEvent("derridai:operation-mode-toggle"));
+        return;
+      }
       if (event.key === "Escape") {
         if (!state.operationToastsMinimized) {
           event.preventDefault();
@@ -274,6 +280,7 @@ export function createOperationDock(deps: Deps) {
         }
         return;
       }
+      if (operationDockIsDocked()) return;
       if (
         !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key) ||
         event.target.closest("button")
@@ -307,16 +314,28 @@ export function createOperationDock(deps: Deps) {
   function progressStack() {
     let stack = document.querySelector("#operationProgressStack");
     if (!stack) {
-      const dragHelp = tr("operations.drag_help", "Drag anywhere · double-click to recenter");
-      const title = tr("operations.title", "Operations");
+      const dragHelp = tr("operations.drag_help");
+      const title = tr("operations.title");
       stack = document.createElement("aside");
       stack.id = "operationProgressStack";
       stack.className = `operation-progress-stack${state.operationToastsMinimized ? " minimized" : ""}`;
       stack.dataset.surface = state.operationToastsMinimized ? "glass" : "overlay";
       stack.setAttribute("role", "complementary");
       stack.setAttribute("aria-label", title);
-      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" title="${esc(dragHelp)}"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand", "Show operations") : tr("operations.collapse", "Hide operations"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished", "Clear finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items"></div>`;
+      stack.innerHTML = `<div class="operation-stack-toolbar" data-operation-drag tabindex="0" role="group" aria-label="${esc(dragHelp)}" aria-describedby="operationDragHelp"><span class="operation-drag-grip" aria-hidden="true"></span><button type="button" class="operation-dock-toggle" id="operationStackToggle" aria-expanded="${state.operationToastsMinimized ? "false" : "true"}" aria-controls="operationStackItems" aria-label="${esc(state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"))}"><span class="operation-dock-dot" aria-hidden="true"></span><span class="operation-dock-copy"><b class="operation-dock-title">${esc(title)}</b><span id="operationStackCount"></span></span><span class="operation-dock-chevron" aria-hidden="true"></span></button><button type="button" class="btn tiny operation-dock-clear" id="operationStackClearFinished" hidden>${esc(tr("operations.clear_finished"))}</button></div><div id="operationStackLive" class="sr-only" aria-live="polite"></div><div id="operationStackItems" class="operation-stack-items" tabindex="0"></div>`;
       document.body.appendChild(stack);
+      const existingDragTooltip = document.querySelector(
+        "#operationDragHelp",
+      ) as HTMLElement | null;
+      const dragTooltip = (existingDragTooltip || document.createElement("span")) as HTMLElement;
+      if (!existingDragTooltip) {
+        dragTooltip.id = "operationDragHelp";
+        dragTooltip.className = "operation-drag-help";
+        dragTooltip.setAttribute("role", "tooltip");
+        dragTooltip.hidden = true;
+        document.body.appendChild(dragTooltip);
+      }
+      dragTooltip.textContent = dragHelp;
       wireOperationStackDrag(stack);
       applyOperationStackPosition(stack);
       stack
@@ -342,10 +361,37 @@ export function createOperationDock(deps: Deps) {
   }
   function updateOperationStackCount() {
     const stack = document.querySelector("#operationProgressStack");
-    if (!stack) return;
+    if (!stack) {
+      globalThis.dispatchEvent(
+        new CustomEvent("derridai:operation-summary", {
+          detail: {
+            visible: false,
+            title: "",
+            summary: "",
+            percent: null,
+            tone: "neutral",
+            expanded: false,
+          },
+        }),
+      );
+      return;
+    }
     const count = stack.querySelectorAll(".operation-progress").length;
     if (!shouldMountOperationDock(count)) {
       stack.remove();
+      document.querySelector("#operationDragHelp")?.remove();
+      globalThis.dispatchEvent(
+        new CustomEvent("derridai:operation-summary", {
+          detail: {
+            visible: false,
+            title: "",
+            summary: "",
+            percent: null,
+            tone: "neutral",
+            expanded: false,
+          },
+        }),
+      );
       return;
     }
     if (stack.dataset.fittedCount !== String(count)) {
@@ -364,7 +410,7 @@ export function createOperationDock(deps: Deps) {
     if (label) {
       label.textContent = trf(summary.key, summary.fallback, summary.values);
       // When there is nothing more specific to say, the summary falls back to the dock's own title; do not say it twice.
-      label.hidden = label.textContent === tr("operations.title", "Operations");
+      label.hidden = label.textContent === tr("operations.title");
     }
     stack.dataset.tone = summary.tone;
     if (summary.percent == null) stack.style.removeProperty("--operation-dock-progress");
@@ -380,11 +426,21 @@ export function createOperationDock(deps: Deps) {
       toggle.setAttribute("aria-expanded", state.operationToastsMinimized ? "false" : "true");
       toggle.setAttribute(
         "aria-label",
-        state.operationToastsMinimized
-          ? tr("operations.expand", "Show operations")
-          : tr("operations.collapse", "Hide operations"),
+        state.operationToastsMinimized ? tr("operations.expand") : tr("operations.collapse"),
       );
     }
+    globalThis.dispatchEvent(
+      new CustomEvent("derridai:operation-summary", {
+        detail: {
+          visible: true,
+          title: stack.querySelector(".operation-dock-title")?.textContent?.trim() || "",
+          summary: label?.textContent?.trim() || "",
+          percent: summary.percent,
+          tone: summary.tone,
+          expanded: !state.operationToastsMinimized,
+        },
+      }),
+    );
   }
   function showOperationProgress(title: Any, total: Any) {
     const id = uid();
@@ -409,6 +465,7 @@ export function createOperationDock(deps: Deps) {
     if (bar) bar.style.width = `${pct}%`;
     if (detailEl) detailEl.textContent = detail;
     state.operationProgress[id] = { ...(state.operationProgress[id] || {}), done, total, detail };
+    updateOperationStackCount();
   }
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for call-site compatibility
   function hideOperationProgress(id: Any, delay = 200) {
@@ -424,7 +481,7 @@ export function createOperationDock(deps: Deps) {
       const button = document.createElement("button");
       button.className = "btn tiny";
       button.dataset.dismissOperation = id;
-      button.textContent = tr("ui.dismiss", "Dismiss");
+      button.textContent = tr("ui.dismiss");
       button.onclick = () => {
         panel.remove();
         delete state.operationProgress[id];
@@ -461,16 +518,13 @@ export function createOperationDock(deps: Deps) {
       job.status === "cancelling" || job.cancel_requested
         ? cancellationDetail
         : job.status === "failed"
-          ? trf("operations.failed_help", "Failed · {detail}", {
+          ? trf("operations.failed_help", {
               detail: String(job.fatal_error || job.stage_detail || "Operation failed"),
             })
           : job.status === "completed"
-            ? tr("operations.completed_help", "Completed · open the result or dismiss")
+            ? tr("operations.completed_help")
             : job.status === "cancelled"
-              ? tr(
-                  "operations.cancelled_help",
-                  "Cancelled · partial results may still be available",
-                )
+              ? tr("operations.cancelled_help")
               : job.type === "rag"
                 ? `${job.stage_detail || job.stage || "Running RAG pipeline"}`
                 : job.type === "upsert"
@@ -489,22 +543,20 @@ export function createOperationDock(deps: Deps) {
       (job.type === "pdf_corpus" && ["completed", "blocked"].includes(job.status));
     const resultActionLabel =
       job.type === "pdf_corpus"
-        ? tr("pdf_corpus.open_build", "Open corpus build")
+        ? tr("pdf_corpus.open_build")
         : job.type === "llm_tool" && (job.tool === "rag_grade" || job.mode === "rag_grade")
-          ? tr("operations.view_grade", "View grade")
-          : tr("operations.open_result", "Open result");
+          ? tr("operations.view_grade")
+          : tr("operations.open_result");
     const statusLabel = tr(`operations.status.${job.status}`, job.status);
     const provider = jobProviderSummary(job);
     const pending = Number(job.pending_result_count || 0);
     const actions = [];
     if (active) {
       if (job.cancel_requested || job.status === "cancelling")
-        actions.push(
-          `<span class="cancel-pending">${esc(tr("operations.cancelling", "Cancelling…"))}</span>`,
-        );
+        actions.push(`<span class="cancel-pending">${esc(tr("operations.cancelling"))}</span>`);
       else
         actions.push(
-          `<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel", "Cancel"))}</button>`,
+          `<button type="button" class="btn tiny danger" data-toast-cancel-job="${job.id}">${esc(tr("ui.cancel"))}</button>`,
         );
     } else {
       if (canOpenResult)
@@ -513,14 +565,14 @@ export function createOperationDock(deps: Deps) {
         );
       if (job.type === "llm" && pending > 0)
         actions.push(
-          `<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available", "Review {count} available", { count: pending }))}</button>`,
+          `<button type="button" class="btn tiny primary" data-toast-review-results="${job.id}">${esc(trf("operations.review_available", { count: pending }))}</button>`,
         );
       actions.push(
-        `<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss", "Dismiss"))}</button>`,
+        `<button type="button" class="btn tiny" data-toast-dismiss-job="${job.id}">${esc(tr("ui.dismiss"))}</button>`,
       );
     }
     actions.push(
-      `<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details", "Full details"))}</button>`,
+      `<button type="button" class="btn tiny" data-toast-open-details="${job.id}">${esc(tr("operations.open_details"))}</button>`,
     );
     panel.innerHTML = `<div class="operation-progress-head"><div><b>${esc(jobLabel(job))}</b>${provider ? `<small class="operation-progress-provider">${esc(provider)}</small>` : ""}</div><span class="operation-status-badge" data-tone="${esc(tone)}"><span class="operation-status-dot" aria-hidden="true"></span>${esc(statusLabel)}</span></div><div class="operation-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(jobProgressText(job, "of"))}"><i style="width:${pct}%"></i></div><div class="operation-progress-detail">${detailHtml}</div><div class="operation-toast-actions">${actions.join("")}${active ? '<div class="spinner small-spinner"></div>' : ""}</div>`;
     panel
@@ -541,7 +593,6 @@ export function createOperationDock(deps: Deps) {
     updateOperationStackCount();
   }
   return {
-    toast,
     applyOperationStackPosition,
     setOperationDockMinimized,
     announceOperationDock,

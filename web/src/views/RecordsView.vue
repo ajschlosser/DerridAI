@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { useI18nStore } from "../stores/i18n";
@@ -12,6 +29,7 @@ import RecordsWorkspaceHeader from "../components/records/RecordsWorkspaceHeader
 import RecordsFileRail from "../components/records/RecordsFileRail.vue";
 import UiTableColumnsDialog from "../components/ui/UiTableColumnsDialog.vue";
 import RecordsSubsetDialog from "../components/records/RecordsSubsetDialog.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import { statusTone } from "../domain/status";
 import {
@@ -28,6 +46,10 @@ const i18n = useI18nStore();
 const shell = useShellStore();
 const records = useRecordsWorkspace();
 const { snapshot } = records;
+const hasLoadedFiles = computed(() => Boolean(snapshot.value?.files.length));
+const hydrationReady = computed(
+  () => hasLoadedFiles.value || (!records.loading.value && !records.error.value),
+);
 const query = ref("");
 const columnsDialog = ref<{ open: () => void; close: () => void } | null>(null);
 const draftColumns = ref<string[]>([]);
@@ -61,8 +83,8 @@ const filterCount = computed(
 );
 const rangeLabel = computed(() => {
   const snap = snapshot.value;
-  if (!snap?.matched) return i18n.t("records.no_matches", "No matching records");
-  return i18n.tf("records.range", "{start}–{end} of {matched}", {
+  if (!snap?.matched) return i18n.t("records.no_matches");
+  return i18n.tf("records.range", {
     start: (snap.start + 1).toLocaleString(i18n.locale),
     end: snap.end.toLocaleString(i18n.locale),
     matched: snap.matched.toLocaleString(i18n.locale),
@@ -219,14 +241,14 @@ function share() {
   navigator.clipboard.writeText(href).then(
     () =>
       notify(
-        i18n.tf("records.link_copied_value", "Copied a link that reopens this table view (file name, search, filters, sort, page and columns): {url}", {
+        i18n.tf("records.link_copied_value", {
           url: href,
         }),
         "success",
       ),
     (error: unknown) =>
       notify(
-        i18n.tf("records.link_copy_failed", "Could not copy the view link: {error}", {
+        i18n.tf("records.link_copy_failed", {
           error: error instanceof Error ? error.message : String(error),
         }),
         "danger",
@@ -247,7 +269,7 @@ async function createSubset(request: SubsetRequest) {
     const created = await records.createSubset(request);
     subsetDialog.value?.finish(created.count > 0);
     if (!created.count) {
-      notify(i18n.t("subset.no_matches", "No records match the filter."), "warning");
+      notify(i18n.t("subset.no_matches"), "warning");
       return;
     }
     shell.sync();
@@ -264,7 +286,7 @@ async function createSubset(request: SubsetRequest) {
   } catch (error) {
     subsetDialog.value?.finish(false);
     notify(
-      i18n.tf("subset.create_failed", "Could not create the subset file: {error}", {
+      i18n.tf("subset.create_failed", {
         error: error instanceof Error ? error.message : String(error),
       }),
       "danger",
@@ -330,8 +352,7 @@ function searchMeta(cell: RecordsCell) {
   records.searchMetadata(cell);
 }
 function cellText(cell: RecordsCell) {
-  if (cell.kind === "review")
-    return cell.text === "yes" ? i18n.t("record.needs_review", "Needs review") : "—";
+  if (cell.kind === "review") return cell.text === "yes" ? i18n.t("record.needs_review") : "—";
   if (cell.kind === "status") return statusLabel(cell.status_kind || "", cell.text);
   return cell.text;
 }
@@ -364,6 +385,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
 <template>
   <main class="records-page" aria-labelledby="records-page-title">
     <RecordsWorkspaceHeader
+      :ready="hydrationReady"
       :file-name="snapshot?.file?.name || ''"
       :matched="snapshot?.matched || 0"
       :total="snapshot?.total || 0"
@@ -374,30 +396,41 @@ onBeforeUnmount(() => tableObserver?.disconnect());
       @import="run('import')"
     />
 
+    <div v-if="records.error.value" class="records-hydration-error" role="alert">
+      <p>{{ i18n.tf("records.hydration_failed", { message: records.error.value }) }}</p>
+      <button
+        class="btn"
+        type="button"
+        :disabled="records.loading.value"
+        @click="records.activate()"
+      >
+        {{ i18n.t("ui.retry") }}
+      </button>
+    </div>
+    <div v-if="records.loading.value" class="records-hydration" :aria-busy="true">
+      <UiLoadingState
+        :variant="hasLoadedFiles ? 'inline' : 'skeleton'"
+        :label="i18n.t(hasLoadedFiles ? 'loading.updating' : 'records.hydration_loading')"
+      />
+    </div>
     <AccessibleEmptyState
-      v-if="!(snapshot?.files || []).length"
+      v-if="hydrationReady && !hasLoadedFiles"
       icon="upload"
       :title="
         snapshot?.shared
-          ? i18n.t('records.open_shared_workspace', 'Open the shared corpus workspace')
-          : i18n.t('records.open_workspace', 'Open a corpus workspace')
+          ? i18n.t('records.open_shared_workspace')
+          : i18n.t('records.open_workspace')
       "
       :description="
         snapshot?.shared
-          ? i18n.t(
-              'records.shared_workspace_help',
-              'This link preserves the table state and filters, while JSONL contents remain browser-local. Choose the same JSONL file to restore this shared view.',
-            )
-          : i18n.t(
-              'records.open_workspace_help',
-              'Drop one or more JSONL files anywhere on this page, or choose files manually. Each file stays in the local corpus list and can be edited, compared, searched, exported, or sent to the corpus database.',
-            )
+          ? i18n.t('records.shared_workspace_help')
+          : i18n.t('records.open_workspace_help')
       "
-      :action-label="i18n.t('records.choose_jsonl', 'Choose JSONL files')"
+      :action-label="i18n.t('records.choose_jsonl')"
       @action="run('import')"
     />
 
-    <div v-else-if="snapshot" class="records-layout">
+    <div v-else-if="snapshot && hasLoadedFiles" class="records-layout">
       <RecordsFileRail
         :files="snapshot.files"
         :can-manage="snapshot.capabilities.can_import"
@@ -410,26 +443,21 @@ onBeforeUnmount(() => tableObserver?.disconnect());
       />
       <div class="records-main">
         <template v-if="snapshot.available">
-          <section
-            class="records-command"
-            :aria-label="i18n.t('records.table_controls', 'Records table controls')"
-          >
+          <section class="records-command" :aria-label="i18n.t('records.table_controls')">
             <label class="records-search">
-              <span class="sr-only">{{
-                i18n.t("records.search_in_file", "Search text in this file")
-              }}</span>
+              <span class="sr-only">{{ i18n.t("records.search_in_file") }}</span>
               <AppIcon class="records-search-icon" name="search" />
               <input
                 type="search"
                 :value="query"
-                :placeholder="i18n.t('records.search_in_file', 'Search text in this file')"
+                :placeholder="i18n.t('records.search_in_file')"
                 autocomplete="off"
                 @input="applyQuery(($event.target as HTMLInputElement).value)"
               />
             </label>
             <p class="records-count">{{ rangeLabel }}</p>
             <label class="records-store">
-              <span>{{ i18n.t("search.corpus_database", "Corpus database") }}</span>
+              <span>{{ i18n.t("search.corpus_database") }}</span>
               <select
                 class="control"
                 :value="snapshot.active_store"
@@ -438,10 +466,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                 @change="changeStore(($event.target as HTMLSelectElement).value)"
               >
                 <option v-if="!snapshot.stores.length" value="">
-                  {{
-                    snapshot.db_unavailable_reason ||
-                    i18n.t("records.no_collection", "No corpus collection")
-                  }}
+                  {{ snapshot.db_unavailable_reason || i18n.t("records.no_collection") }}
                 </option>
                 <option v-for="store in snapshot.stores" :key="store.name" :value="store.name">
                   {{ store.name }} ({{ store.count.toLocaleString(i18n.locale) }})
@@ -451,16 +476,14 @@ onBeforeUnmount(() => tableObserver?.disconnect());
             <p v-if="!snapshot.stores.length" class="records-database-state" role="status">
               <AppIcon name="database" aria-hidden="true" />
               <span>
-                <strong>{{ i18n.t("records.no_collection", "No corpus collection") }}</strong>
+                <strong>{{ i18n.t("records.no_collection") }}</strong>
                 <small v-if="snapshot.db_unavailable_reason">{{
                   snapshot.db_unavailable_reason
                 }}</small>
               </span>
             </p>
             <label class="records-page-size">
-              <span class="sr-only">{{
-                i18n.t("search.results_per_page", "Results per page")
-              }}</span>
+              <span class="sr-only">{{ i18n.t("search.results_per_page") }}</span>
               <select
                 class="control"
                 :value="snapshot.page_size"
@@ -471,18 +494,14 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                 </option>
               </select>
             </label>
-            <div
-              class="records-density"
-              role="group"
-              :aria-label="i18n.t('records.density', 'Row density')"
-            >
+            <div class="records-density" role="group" :aria-label="i18n.t('records.density')">
               <button
                 type="button"
                 class="btn tiny"
                 :aria-pressed="density === 'comfortable'"
                 @click="density = 'comfortable'"
               >
-                {{ i18n.t("records.density_comfortable", "Comfortable") }}
+                {{ i18n.t("records.density_comfortable") }}
               </button>
               <button
                 type="button"
@@ -490,7 +509,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                 :aria-pressed="density === 'compact'"
                 @click="density = 'compact'"
               >
-                {{ i18n.t("records.density_compact", "Compact") }}
+                {{ i18n.t("records.density_compact") }}
               </button>
             </div>
             <details
@@ -498,11 +517,11 @@ onBeforeUnmount(() => tableObserver?.disconnect());
               :open="moreOpen"
               @toggle="moreOpen = ($event.currentTarget as HTMLDetailsElement).open"
             >
-              <summary class="btn">{{ i18n.t("records.more_actions", "More") }}</summary>
+              <summary class="btn">{{ i18n.t("records.more_actions") }}</summary>
               <div
                 class="records-more-menu"
                 role="group"
-                :aria-label="i18n.t('records.more_actions', 'More')"
+                :aria-label="i18n.t('records.more_actions')"
               >
                 <button
                   type="button"
@@ -510,13 +529,13 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   :disabled="!snapshot.capabilities.can_upsert"
                   @click="run('upsertFile')"
                 >
-                  <AppIcon name="database" />{{ i18n.t("records.upsert_file", "Upsert file") }}
+                  <AppIcon name="database" />{{ i18n.t("records.upsert_file") }}
                 </button>
                 <button type="button" class="btn" @click="records.selectMatches()">
                   <AppIcon name="check" />{{
                     filterCount || query
-                      ? i18n.t("records.select_matches", "Select matches")
-                      : i18n.t("records.select_all", "Select all")
+                      ? i18n.t("records.select_matches")
+                      : i18n.t("records.select_all")
                   }}
                 </button>
                 <button
@@ -525,7 +544,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   class="btn"
                   @click="records.clearFilters()"
                 >
-                  {{ i18n.t("records.clear_column_filters", "Clear column filters") }}
+                  {{ i18n.t("records.clear_column_filters") }}
                 </button>
                 <button
                   type="button"
@@ -533,7 +552,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   :disabled="!snapshot.capabilities.can_review"
                   @click="run('ocr')"
                 >
-                  <AppIcon name="broom" />{{ i18n.t("ui.clean_ocr", "Clean OCR Artifacts") }}
+                  <AppIcon name="broom" />{{ i18n.t("ui.clean_ocr") }}
                 </button>
                 <button
                   v-if="snapshot.flagged"
@@ -542,7 +561,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   @click="run('reviewFlagged')"
                 >
                   {{
-                    i18n.tf("records.review_flagged", "Review needs-review ({count})", {
+                    i18n.tf("records.review_flagged", {
                       count: snapshot.flagged.toLocaleString(i18n.locale),
                     })
                   }}
@@ -553,7 +572,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   class="btn"
                   @click="run('improveFlagged')"
                 >
-                  {{ i18n.t("records.auto_improve_flagged", "Auto-improve needs-review") }}
+                  {{ i18n.t("records.auto_improve_flagged") }}
                 </button>
               </div>
             </details>
@@ -574,7 +593,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
             class="records-upsert-selected"
           >
             <button type="button" class="btn" @click="run('upsertSelected')">
-              <AppIcon name="database" />{{ i18n.t("records.upsert_selected", "Upsert selected") }}
+              <AppIcon name="database" />{{ i18n.t("records.upsert_selected") }}
             </button>
           </div>
 
@@ -583,12 +602,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
             class="records-table-scroll ui-table-scroll"
             tabindex="0"
             role="region"
-            :aria-label="
-              i18n.t(
-                'records.table_scroll_label',
-                'Records table. Scroll horizontally to view additional columns.',
-              )
-            "
+            :aria-label="i18n.t('records.table_scroll_label')"
           >
             <table
               class="records-table ui-table"
@@ -625,7 +639,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                     <input
                       type="checkbox"
                       :checked="snapshot.page_selected"
-                      :aria-label="i18n.t('search.select_page', 'Select records on this page')"
+                      :aria-label="i18n.t('search.select_page')"
                       @change="togglePage(($event.target as HTMLInputElement).checked)"
                     />
                   </th>
@@ -645,7 +659,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       type="button"
                       class="records-sort"
                       :aria-label="
-                        i18n.tf('records.sort_column', 'Sort by {column}', {
+                        i18n.tf('records.sort_column', {
                           column: columnLabel(column.key, column.label),
                         })
                       "
@@ -659,7 +673,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                     <span v-else>{{ columnLabel(column.key, column.label) }}</span>
                   </th>
                   <th class="actions-col" scope="col">
-                    {{ i18n.t("research.record_actions", "Record actions") }}
+                    {{ i18n.t("research.record_actions") }}
                   </th>
                 </tr>
                 <tr class="filter-row">
@@ -673,7 +687,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                     :class="{ 'sticky-status ui-table-sticky-start': column.key === '__db_status' }"
                   >
                     <label class="sr-only" :for="`records-filter-${column.key}`">{{
-                      i18n.tf("records.filter_column", "Filter {column}", {
+                      i18n.tf("records.filter_column", {
                         column: columnLabel(column.key, column.label),
                       })
                     }}</label>
@@ -684,12 +698,12 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       :value="snapshot.filters[column.key] || ''"
                       @change="filterBy(column.key, ($event.target as HTMLSelectElement).value)"
                     >
-                      <option value="">{{ i18n.t("records.filter_all", "All") }}</option>
+                      <option value="">{{ i18n.t("records.filter_all") }}</option>
                       <option value="yes">
-                        {{ i18n.t("record.needs_review", "Needs review") }}
+                        {{ i18n.t("record.needs_review") }}
                       </option>
                       <option value="no">
-                        {{ i18n.t("records.filter_reviewed", "Reviewed") }}
+                        {{ i18n.t("records.filter_reviewed") }}
                       </option>
                     </select>
                     <input
@@ -697,7 +711,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       :id="`records-filter-${column.key}`"
                       class="column-filter"
                       :value="snapshot.filters[column.key] || ''"
-                      :placeholder="i18n.t('records.filter_placeholder', 'Filter…')"
+                      :placeholder="i18n.t('records.filter_placeholder')"
                       @input="filterBy(column.key, ($event.target as HTMLInputElement).value)"
                     />
                   </th>
@@ -712,13 +726,8 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                     <AccessibleEmptyState
                       icon="search"
                       icon-tone="neutral"
-                      :title="i18n.t('records.no_matches', 'No matching records')"
-                      :description="
-                        i18n.t(
-                          'records.no_matches_help',
-                          'Clear the text search or a column filter to see more of this file.',
-                        )
-                      "
+                      :title="i18n.t('records.no_matches')"
+                      :description="i18n.t('records.no_matches_help')"
                     />
                   </td>
                 </tr>
@@ -727,9 +736,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                   :key="row.key"
                   :class="{ selected: row.selected }"
                   tabindex="0"
-                  :aria-label="
-                    i18n.tf('records.open_named', 'Open {record}', { record: row.record_id })
-                  "
+                  :aria-label="i18n.tf('records.open_named', { record: row.record_id })"
                   @click="openRow(row, $event)"
                   @keydown="onRowKey(row, $event)"
                 >
@@ -738,7 +745,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       type="checkbox"
                       :checked="row.selected"
                       :aria-label="
-                        i18n.tf('search.select_record_named', 'Select {record}', {
+                        i18n.tf('search.select_record_named', {
                           record: row.record_id,
                         })
                       "
@@ -787,8 +794,8 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       >
                         {{
                           expandedText.has(row.key)
-                            ? i18n.t("records.collapse_text", "Collapse")
-                            : i18n.t("records.expand_text", "Expand")
+                            ? i18n.t("records.collapse_text")
+                            : i18n.t("records.expand_text")
                         }}
                       </button>
                     </template>
@@ -819,9 +826,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
                       >
                         <AppIcon :name="row.evidence_selected ? 'check' : 'plus'" />
                         {{
-                          row.evidence_selected
-                            ? i18n.t("ui.selected", "Selected")
-                            : i18n.t("ui.add_evidence", "Add evidence")
+                          row.evidence_selected ? i18n.t("ui.selected") : i18n.t("ui.add_evidence")
                         }}
                       </button>
                     </div>
@@ -831,12 +836,9 @@ onBeforeUnmount(() => tableObserver?.disconnect());
             </table>
           </div>
 
-          <nav
-            class="records-pagination"
-            :aria-label="i18n.t('records.pagination', 'Records pages')"
-          >
+          <nav class="records-pagination" :aria-label="i18n.t('records.pagination')">
             <button type="button" class="btn" :disabled="snapshot.page <= 1" @click="changePage(1)">
-              {{ i18n.t("records.first_page", "First") }}
+              {{ i18n.t("records.first_page") }}
             </button>
             <button
               type="button"
@@ -844,10 +846,10 @@ onBeforeUnmount(() => tableObserver?.disconnect());
               :disabled="snapshot.page <= 1"
               @click="changePage(snapshot.page - 1)"
             >
-              {{ i18n.t("common.previous", "Previous") }}
+              {{ i18n.t("common.previous") }}
             </button>
             <span class="records-page-status" aria-live="polite">{{
-              i18n.tf("search.page_of", "Page {page} of {pages}", {
+              i18n.tf("search.page_of", {
                 page: snapshot.page,
                 pages: snapshot.pages,
               })
@@ -858,7 +860,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
               :disabled="snapshot.page >= snapshot.pages"
               @click="changePage(snapshot.page + 1)"
             >
-              {{ i18n.t("common.next", "Next") }}
+              {{ i18n.t("common.next") }}
             </button>
             <button
               type="button"
@@ -866,7 +868,7 @@ onBeforeUnmount(() => tableObserver?.disconnect());
               :disabled="snapshot.page >= snapshot.pages"
               @click="changePage(snapshot.pages)"
             >
-              {{ i18n.t("records.last_page", "Last") }}
+              {{ i18n.t("records.last_page") }}
             </button>
           </nav>
         </template>
@@ -925,8 +927,12 @@ onBeforeUnmount(() => tableObserver?.disconnect());
   background: var(--surface-card);
 }
 .records-search-icon {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
   width: 1.125rem;
   height: 1.125rem;
+  max-inline-size: 1.125rem;
+  max-block-size: 1.125rem;
   flex: 0 0 1.125rem;
   display: block;
 }

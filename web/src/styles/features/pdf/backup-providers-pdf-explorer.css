@@ -1,0 +1,264 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Modern PDF Explorer */
+.pdf-document-header {
+  display: grid;
+  gap: 0;
+  margin-bottom: 10px;
+  padding: 0 !important;
+  overflow: visible !important;
+  position: relative;
+  z-index: 6;
+}
+.pdf-document-primary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 12px;
+}
+.pdf-document-title {
+  min-width: 0;
+}
+.pdf-document-title > span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.pdf-document-title h2 {
+  margin: 2px 0 1px;
+  font:
+    600 17px/1.15 Georgia,
+    serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdf-document-title p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdf-document-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pdf-document-status > span {
+  display: grid;
+  gap: 1px;
+  min-width: 70px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+.pdf-document-status b {
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+.pdf-command-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 43px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--soft);
+  position: relative;
+  z-index: 8;
+}
+.pdf-page-nav,
+.pdf-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.pdf-page-nav label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.pdf-page-nav .pdf-page-input {
+  width: 64px;
+  height: 29px;
+}
+.pdf-page-total {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.pdf-command-divider {
+  width: 1px;
+  align-self: stretch;
+  min-height: 25px;
+  background: var(--line);
+}
+.pdf-toolbar-menu {
+  position: relative;
+}
+.pdf-toolbar-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.pdf-toolbar-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.pdf-toolbar-menu[open] > summary {
+  background: var(--soft);
+  border-color: var(--tone-ok-edge);
+}
+.pdf-toolbar-menu-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  gap: 5px;
+  min-width: 230px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: 0 14px 38px rgba(20, 29, 24, 0.16);
+}
+.pdf-menu-context {
+  display: grid;
+  gap: 2px;
+  padding: 5px 5px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.pdf-menu-context b {
+  font-size: 0.8125rem;
+}
+.pdf-menu-context span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.pdf-context-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+}
+.pdf-context-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  font-size: 0.8125rem;
+}
+.pdf-context-pill span {
+  color: var(--muted);
+}
+.pdf-context-pill b {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pdf-viewer-head {
+  min-height: 42px;
+}
+.pdf-view-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 23px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 800;
+}
+.pdf-side-stack {
+  position: sticky;
+  top: 10px;
+  align-self: start;
+  max-height: calc(100vh - 130px);
+  overflow: auto;
+  padding-right: 2px;
+}
+.pdf-canvas-wrap {
+  min-height: calc(100vh - 230px);
+  max-height: calc(100vh - 160px);
+}
+
+@media (max-width: 1050px) {
+  .llm-tool-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .pdf-document-primary {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .pdf-document-status {
+    grid-column: 1/-1;
+  }
+  .pdf-command-row {
+    flex-wrap: wrap;
+  }
+  .pdfgrid-v2 {
+    grid-template-columns: 1fr !important;
+  }
+  .pdf-side-stack {
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 700px) {
+  .response-cache-kpis,
+  .llm-tool-grid {
+    grid-template-columns: 1fr;
+  }
+  .llm-tool-grid .field-wide {
+    grid-column: auto;
+  }
+  .pdf-document-primary {
+    grid-template-columns: 1fr;
+  }
+  .pdf-document-status {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .pdf-command-divider {
+    display: none;
+  }
+  .pdf-command-row {
+    align-items: flex-start;
+  }
+  .pdf-toolbar-menu-popover {
+    left: 0;
+    right: auto;
+  }
+}

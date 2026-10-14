@@ -1,22 +1,78 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { clearAllUpdates } from "../domain/sharedRecordEditing";
+import { toggleSidebar } from "../domain/sidebarToggle";
+import {
+  backupContainsCredentials,
+  deleteAllDerridaiBrowserState,
+  downloadFullBackup,
+  restoreFullBackup,
+} from "../domain/sharedBackup";
+import { applyAppearance } from "../domain/sharedAppearance";
+import {
+  getProviderProfilesForUi,
+  getDefaultProviderProfileId,
+} from "../domain/sharedProviderProfiles";
+import { navigateTo } from "../domain/sharedNavigation";
+import {
+  flushDomainPreferences,
+  persistJobPreferences,
+  persistLayoutPreferences,
+  persistListPreferences,
+} from "../domain/sharedWorkspaceStorage";
 import { apiRequest } from "../api/http";
-import type { ProviderProfile } from "../api/system";
+import { pipelinesApi } from "../api/pipelines";
+import {
+  systemApi,
+  type ProviderProfile,
+  type SystemAudioTranscription,
+  type SystemAudioTranscriptionStatus,
+  type SystemEmbeddingStatus,
+} from "../api/system";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import { useShellStore } from "../stores/shell";
+import { useJobsStore } from "../stores/jobs";
+import {
+  useConfigStore,
+  useLayoutStore,
+  useListsStore,
+  useStatusStore,
+  useUpsertProgressStore,
+} from "../stores/workspace";
+import { corpusState } from "../state/workspaceState";
 import LanguageFlag from "../components/LanguageFlag.vue";
 import UiButton from "../components/ui/UiButton.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
 import UiField from "../components/ui/UiField.vue";
-import UiHealthChip from "../components/ui/UiHealthChip.vue";
+import SettingsAccessPanel from "../components/settings/SettingsAccessPanel.vue";
+import SettingsDataPanel from "../components/settings/SettingsDataPanel.vue";
 import SettingsNav from "../components/settings/SettingsNav.vue";
-import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
+import SettingsOverview from "../components/settings/SettingsOverview.vue";
+import SettingsServicesPanel from "../components/settings/SettingsServicesPanel.vue";
+import SettingsTroubleshootingPanel from "../components/settings/SettingsTroubleshootingPanel.vue";
 import SettingsSearch, { type SettingsSearchHit } from "../components/settings/SettingsSearch.vue";
 import SettingsSection from "../components/settings/SettingsSection.vue";
+import PipelineConfigOverridesEditor from "../components/pipelines/PipelineConfigOverridesEditor.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import AppBuildInfo from "../components/AppBuildInfo.vue";
 import {
@@ -25,7 +81,7 @@ import {
   SETTINGS_SECTIONS,
   cloneJson,
   filterSettingsFields,
-  isSettingsSectionId,
+  resolveSettingsSectionId,
   normalizeAppearance,
   normalizeEmbedding,
   normalizeRag,
@@ -39,36 +95,43 @@ import {
   type SaveStatus,
   type SettingsSectionId,
 } from "../domain/settings";
+import { overridesForPipeline, withOverridesForPipeline } from "../domain/pipelineOverrides";
+import type { ResearchPipelineOptions } from "../types/pipelines";
 
-type RuntimeSettings = {
-  storageReady?: boolean;
-  appConfig: Record<string, unknown>;
-  ragConfig: Record<string, unknown>;
-  health?: {chroma?: {path?: string}} | null;
-  providerStatuses?: Record<string, {available?: boolean; checked_at?: string; error?: string}>;
-  files?: unknown[];
-  sidebarCollapsed?: boolean;
-  tableColumns?: Record<string, unknown>;
-  collapsedPanels?: Record<string, unknown>;
-  upsertIgnored?: Record<string, unknown>;
-  jobs?: Array<{status?: string}>;
+type ProviderStatus = {
+  available?: boolean;
+  checked_at?: string;
+  error?: string;
 };
-const workspace = runtime.state as RuntimeSettings;
+
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const shell = useShellStore();
+const jobs = useJobsStore();
+const config = useConfigStore();
+const layout = useLayoutStore();
+const lists = useListsStore();
+const status = useStatusStore();
+const upsertProgress = useUpsertProgressStore();
 const route = useRoute();
 const router = useRouter();
 
-const appearanceSaved = ref(normalizeAppearance(workspace.appConfig as unknown as AppearanceSettingsDraft));
+const appearanceSaved = ref(
+  normalizeAppearance(config.appConfig as unknown as AppearanceSettingsDraft),
+);
 const appearanceDraft = ref(cloneJson(appearanceSaved.value));
-const reviewSaved = ref(normalizeReview(workspace.appConfig as unknown as ReviewSettingsDraft));
+const reviewSaved = ref(normalizeReview(config.appConfig as unknown as ReviewSettingsDraft));
 const reviewDraft = ref(cloneJson(reviewSaved.value));
-const embeddingSaved = ref(normalizeEmbedding(workspace.appConfig as unknown as EmbeddingSettingsDraft));
+const embeddingSaved = ref(
+  normalizeEmbedding(config.appConfig as unknown as EmbeddingSettingsDraft),
+);
 const embeddingDraft = ref(cloneJson(embeddingSaved.value));
-const ragSaved = ref(normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft));
+const ragSaved = ref(normalizeRag(config.ragConfig as unknown as RagSettingsDraft));
 const ragDraft = ref(cloneJson(ragSaved.value));
-const notificationsOn = ref(Boolean(workspace.appConfig.desktop_notifications));
+const researchPipelineOptions = ref<ResearchPipelineOptions | null>(null);
+const researchPipelineError = ref("");
+const settingsOverridePipelineKey = ref("");
+const notificationsOn = ref(Boolean(config.appConfig.desktop_notifications));
 const nukePhrase = ref("");
 const query = ref("");
 const advancedOpen = ref(false);
@@ -76,155 +139,409 @@ const contentsOpen = ref(false);
 const liveMessage = ref("");
 const pageError = ref("");
 const ragErrors = ref<Record<string, string>>({});
-const groupStatus = ref<Record<string, SaveStatus>>({appearance: "saved", review: "saved", embedding: "saved", rag: "saved"});
-const confirm = ref<{kind: "backup" | "restore" | "updates" | "nuke" | "leave"; title: string; message: string} | null>(null);
+const groupStatus = ref<Record<string, SaveStatus>>({
+  appearance: "saved",
+  review: "saved",
+  embedding: "saved",
+  rag: "saved",
+});
+const confirm = ref<{
+  kind: "backup" | "restore" | "updates" | "nuke" | "leave";
+  title: string;
+  message: string;
+} | null>(null);
 const restoreFile = ref<File | null>(null);
-const restoreInput = ref<HTMLInputElement | null>(null);
 const routeGuardResolve = ref<((allow: boolean) => void) | null>(null);
 const busy = ref("");
 
 const isAdmin = computed(() => auth.isAdmin);
 const canAppearance = computed(() => auth.can("appearance.manage") || isAdmin.value);
-const chromaPath = computed(() => String(workspace.health?.chroma?.path || "/data/chroma"));
-const profiles = computed(() => (runtime.getProviderProfilesForUi?.() || []) as ProviderProfile[]);
-const defaultProfileId = computed(() => String(runtime.getDefaultProviderProfileId?.() || reviewDraft.value.default_provider_profile));
-const localeInfo = computed(() => i18n.languages.find(item => item.code === i18n.locale));
-const visibleSections = computed(() => {
-  const ids: SettingsSectionId[] = ["workspace", "language"];
-  if (isAdmin.value) ids.push("research", "review", "providers", "retrieval", "security", "system");
-  else ids.push("research");
-  return SETTINGS_SECTIONS.filter(section => ids.includes(section.id)).map(section => ({
-    id: section.id,
-    label: i18n.t(section.labelKey, section.labelFallback),
-    description: i18n.t(section.descriptionKey, section.descriptionFallback),
-  }));
-});
+const chromaPath = computed(() =>
+  String((status.health as { chroma?: { path?: string } } | null)?.chroma?.path || "/data/chroma"),
+);
+const providerStatuses = computed(() => status.providerStatuses as Record<string, ProviderStatus>);
+const profiles = computed(() => (getProviderProfilesForUi() || []) as ProviderProfile[]);
+const defaultProfileId = computed(() =>
+  String(getDefaultProviderProfileId() || reviewDraft.value.default_provider_profile),
+);
+const localeInfo = computed(() => i18n.languages.find((item) => item.code === i18n.locale));
+const visibleSections = computed(() =>
+  SETTINGS_SECTIONS.filter((item) => !item.adminOnly || isAdmin.value).map((item) => ({
+    id: item.id,
+    label: i18n.t(item.labelKey, item.labelFallback),
+    description: i18n.t(item.descriptionKey, item.descriptionFallback),
+    path: `/settings/${item.id}`,
+  })),
+);
 const section = computed<SettingsSectionId>({
   get() {
-    const raw = String(route.query.section || "workspace");
-    const requested = isSettingsSectionId(raw) ? raw : "workspace";
-    return visibleSections.value.some(item => item.id === requested) ? requested : visibleSections.value[0]?.id || "workspace";
+    const raw = String(route.params.section || "overview");
+    const requested = resolveSettingsSectionId(raw) || "overview";
+    return visibleSections.value.some((item) => item.id === requested) ? requested : "overview";
   },
-  set(id) { void router.replace({path: "/settings", query: {...route.query, section: id}}); },
+  set(id) {
+    void router.push({ name: "settings-section", params: { section: id }, query: route.query });
+  },
+});
+const overviewItems = computed(() => {
+  const reviewProfile = profiles.value.find(
+    (profile) => profile.id === reviewDraft.value.default_provider_profile,
+  );
+  const reviewPreset =
+    reviewDraft.value.default_review_preset === "attribution"
+      ? i18n.t("settings.preset_attribution")
+      : reviewDraft.value.default_review_preset === "semantic"
+        ? i18n.t("settings.preset_semantic")
+        : i18n.t("settings.preset_text");
+  const readyProviders = profiles.value.filter((profile) => providerReady(profile)).length;
+
+  return visibleSections.value
+    .filter((item) => item.id !== "overview")
+    .map((item) => {
+      if (item.id === "research") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: `${reviewProfile?.name || i18n.t("settings.not_configured")} · ${reviewPreset}`,
+        };
+      }
+      if (item.id === "retrieval") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: [
+            String(embeddingDraft.value.embedding_provider || ""),
+            String(embeddingDraft.value.embedding_model || ""),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        };
+      }
+      if (item.id === "services") {
+        return {
+          ...item,
+          path: `/settings/${item.id}`,
+          detail: profiles.value.length
+            ? `${readyProviders}/${profiles.value.length} ${i18n.t("settings.provider_ready")}`
+            : i18n.t("settings.no_providers"),
+          attention: profiles.value.length === 0 || readyProviders < profiles.value.length,
+        };
+      }
+      return { ...item, path: `/settings/${item.id}` };
+    });
 });
 const appearanceDirty = computed(() => !sameSettings(appearanceDraft.value, appearanceSaved.value));
 const reviewDirty = computed(() => !sameSettings(reviewDraft.value, reviewSaved.value));
+// Audio transcription has its own endpoint and key so it is never confused with a chat profile.
+const audio = ref<SystemAudioTranscription | null>(null);
+const audioDraft = ref({ base_url: "", model: "", api_key: "" });
+const audioStatus = ref<SystemAudioTranscriptionStatus | null>(null);
+const audioBusy = ref("");
+const audioMessage = ref("");
+async function loadAudio() {
+  if (!isAdmin.value) return;
+  try {
+    audio.value = await systemApi.audioTranscription();
+    audioDraft.value = { base_url: audio.value.base_url, model: audio.value.model, api_key: "" };
+  } catch (error) {
+    audioMessage.value = error instanceof Error ? error.message : String(error);
+  }
+}
+async function saveAudio(clearKey = false) {
+  audioBusy.value = "save";
+  audioMessage.value = "";
+  try {
+    audio.value = await systemApi.setAudioTranscription({
+      base_url: audioDraft.value.base_url,
+      model: audioDraft.value.model,
+      api_key: audioDraft.value.api_key || null,
+      clear_key: clearKey,
+    });
+    audioDraft.value.api_key = "";
+    audioMessage.value = i18n.t(clearKey ? "settings.audio_key_cleared" : "settings.audio_saved");
+    audioStatus.value = null;
+  } catch (error) {
+    audioMessage.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    audioBusy.value = "";
+  }
+}
+async function testAudio() {
+  audioBusy.value = "test";
+  try {
+    audioStatus.value = await systemApi.audioTranscriptionStatus();
+  } catch (error) {
+    audioStatus.value = {
+      reachable: false,
+      model: audioDraft.value.model,
+      base_url: audioDraft.value.base_url,
+      error: error instanceof Error ? error.message : String(error),
+      hint: "",
+    };
+  } finally {
+    audioBusy.value = "";
+  }
+}
+onMounted(loadAudio);
+watch(
+  () => String(route.params.section || "overview"),
+  (raw) => {
+    const resolved = resolveSettingsSectionId(raw);
+    if (resolved && resolved !== raw) {
+      void router.replace({
+        name: "settings-section",
+        params: { section: resolved },
+        query: route.query,
+      });
+    }
+  },
+  { immediate: true },
+);
+const embeddingProbe = ref<SystemEmbeddingStatus | null>(null);
+const embeddingProbing = ref(false);
+async function testEmbedding() {
+  if (!isAdmin.value) return;
+  embeddingProbing.value = true;
+  try {
+    embeddingProbe.value = await systemApi.embeddingStatus({
+      embedding_provider: embeddingDraft.value.embedding_provider,
+      embedding_model: embeddingDraft.value.embedding_model || null,
+    });
+  } catch (error) {
+    embeddingProbe.value = {
+      provider: embeddingDraft.value.embedding_provider,
+      model: embeddingDraft.value.embedding_model || null,
+      reachable: false,
+      dimension: null,
+      latency_ms: null,
+      error: error instanceof Error ? error.message : String(error),
+      hint: "",
+    };
+  } finally {
+    embeddingProbing.value = false;
+  }
+}
 const embeddingDirty = computed(() => !sameSettings(embeddingDraft.value, embeddingSaved.value));
-const ragDirty = computed(() => !sameSettings(ragDraft.value, ragSaved.value));
-const dirty = computed(() => appearanceDirty.value || reviewDirty.value || embeddingDirty.value || ragDirty.value);
-const pageStatus = computed<SaveStatus>(() => {
-  const values = Object.values(groupStatus.value);
-  if (values.includes("failed")) return "failed";
-  if (values.includes("saving")) return "saving";
-  if (values.includes("success")) return "success";
-  if (dirty.value) return "dirty";
-  return "saved";
+const settingsOverridePipeline = computed(() => {
+  const options = researchPipelineOptions.value?.pipelines || [];
+  if (settingsOverridePipelineKey.value) {
+    const split = settingsOverridePipelineKey.value.lastIndexOf("@");
+    const pipelineId =
+      split > 0
+        ? settingsOverridePipelineKey.value.slice(0, split)
+        : settingsOverridePipelineKey.value;
+    const version = split > 0 ? Number(settingsOverridePipelineKey.value.slice(split + 1)) : 0;
+    const selected = options.find(
+      (pipeline) => pipeline.pipeline_id === pipelineId && pipeline.version === version,
+    );
+    if (selected) return selected;
+  }
+  const assignment = researchPipelineOptions.value?.assignment;
+  return (
+    options.find(
+      (pipeline) =>
+        pipeline.pipeline_id === assignment?.pipeline_id &&
+        pipeline.version === assignment?.pipeline_version,
+    ) ||
+    options[0] ||
+    null
+  );
 });
+const settingsPipelineOverrideDraft = computed({
+  get() {
+    return overridesForPipeline(
+      ragDraft.value.pipeline_config_overrides,
+      settingsOverridePipeline.value,
+    );
+  },
+  set(value) {
+    const pipeline = settingsOverridePipeline.value;
+    if (!pipeline) return;
+    ragDraft.value.pipeline_config_overrides = withOverridesForPipeline(
+      ragDraft.value.pipeline_config_overrides,
+      pipeline,
+      value,
+    );
+  },
+});
+const settingsAssignedPipeline = computed(() => {
+  const assignment = researchPipelineOptions.value?.assignment;
+  return (researchPipelineOptions.value?.pipelines || []).find(
+    (pipeline) =>
+      pipeline.pipeline_id === assignment?.pipeline_id &&
+      pipeline.version === assignment?.pipeline_version,
+  );
+});
+async function loadResearchPipelineOptions() {
+  if (!isAdmin.value) return;
+  researchPipelineError.value = "";
+  try {
+    researchPipelineOptions.value = await pipelinesApi.researchOptions();
+  } catch (error) {
+    researchPipelineError.value = error instanceof Error ? error.message : String(error);
+  }
+}
+onMounted(loadResearchPipelineOptions);
+
+const ragDirty = computed(() => !sameSettings(ragDraft.value, ragSaved.value));
+const dirty = computed(
+  () => appearanceDirty.value || reviewDirty.value || embeddingDirty.value || ragDirty.value,
+);
+
 const searchHits = computed<SettingsSearchHit[]>(() => {
   const fields = filterSettingsFields(query.value, (key, fallback) => i18n.t(key, fallback));
-  const allowed = new Set(visibleSections.value.map(item => item.id));
-  return fields.filter(field => allowed.has(field.section)).map(field => ({
-    id: field.id,
-    section: field.section,
-    label: i18n.t(field.labelKey, field.labelFallback),
-    group: i18n.t(SETTINGS_SECTIONS.find(item => item.id === field.section)?.labelKey || "", field.section),
-  }));
+  const allowed = new Set(visibleSections.value.map((item) => item.id));
+  return fields
+    .filter((field) => allowed.has(field.section))
+    .map((field) => {
+      const group = SETTINGS_SECTIONS.find((item) => item.id === field.section);
+      return {
+        id: field.id,
+        section: field.section,
+        label: i18n.t(field.labelKey, field.labelFallback),
+        group: group ? i18n.t(group.labelKey, group.labelFallback) : field.section,
+        targetId: field.targetId,
+        advanced: field.advanced,
+      };
+    });
 });
 const backupCounts = computed(() => ({
-  files: Number(workspace.files?.length || 0),
-  jobs: (workspace.jobs || []).filter(job => ["queued", "running", "cancelling"].includes(String(job.status))).length,
+  files: Number(corpusState.files?.length || 0),
+  jobs: jobs.activeJobs.length,
 }));
 
 function persistKind(kind: "browser" | "readonly" | "link" | "backend") {
-  if (kind === "readonly") return i18n.t("settings.persist.readonly", "Read-only");
-  if (kind === "link") return i18n.t("settings.persist.link", "Managed elsewhere");
-  if (kind === "backend") return i18n.t("settings.persist.backend", "Server operation");
-  return i18n.t("settings.persist.browser", "Saved in this browser");
+  if (kind === "readonly") return i18n.t("settings.persist.readonly");
+  if (kind === "link") return i18n.t("settings.persist.link");
+  if (kind === "backend") return i18n.t("settings.persist.backend");
+  return i18n.t("settings.persist.browser");
 }
 function statusLabel(status: SaveStatus) {
-  if (status === "dirty") return i18n.t("settings.status.unsaved", "Unsaved changes");
-  if (status === "saving") return i18n.t("settings.status.saving", "Saving");
-  if (status === "success") return i18n.t("settings.status.saved_ok", "Save succeeded");
-  if (status === "failed") return i18n.t("settings.status.save_failed", "Save failed");
-  if (status === "readonly") return i18n.t("settings.status.readonly", "Read-only");
-  return i18n.t("settings.status.saved", "Saved");
+  if (status === "dirty") return i18n.t("settings.status.unsaved");
+  if (status === "saving") return i18n.t("settings.status.saving");
+  if (status === "success") return i18n.t("settings.status.saved_ok");
+  if (status === "failed") return i18n.t("settings.status.save_failed");
+  if (status === "readonly") return i18n.t("settings.status.readonly");
+  return i18n.t("settings.status.saved");
 }
-function announce(message: string) { liveMessage.value = message; }
-function mark(group: string, status: SaveStatus) { groupStatus.value = {...groupStatus.value, [group]: status}; }
-async function persistWorkspace() {
-  if (typeof runtime.flushWorkspacePrefs === "function") await runtime.flushWorkspacePrefs();
-  else runtime.persistPrefs();
+function announce(message: string) {
+  liveMessage.value = message;
+}
+function mark(group: string, status: SaveStatus) {
+  groupStatus.value = { ...groupStatus.value, [group]: status };
+}
+async function persistDomain(name: "settings" | "research") {
+  await flushDomainPreferences(name);
   shell.sync();
 }
-async function saveGroup(group: string, apply: () => void) {
+async function saveGroup(group: string, apply: () => void | Promise<void>) {
   pageError.value = "";
   mark(group, "saving");
-  announce(i18n.t("settings.status.saving", "Saving"));
-  const previousApp = cloneJson(workspace.appConfig);
-  const previousRag = cloneJson(workspace.ragConfig);
+  announce(i18n.t("settings.status.saving"));
+  const previousApp = cloneJson(config.appConfig);
+  const previousRag = cloneJson(config.ragConfig);
   const previousAppearance = cloneJson(appearanceSaved.value);
   const previousReview = cloneJson(reviewSaved.value);
   const previousEmbedding = cloneJson(embeddingSaved.value);
   const previousRagSaved = cloneJson(ragSaved.value);
   try {
-    apply();
-    await persistWorkspace();
+    await apply();
+    await persistDomain(group === "rag" ? "research" : "settings");
     mark(group, "success");
-    announce(i18n.t("settings.status.saved_ok", "Save succeeded"));
-    window.setTimeout(() => { if (groupStatus.value[group] === "success") mark(group, "saved"); }, 1600);
+    announce(i18n.t("settings.status.saved_ok"));
+    window.setTimeout(() => {
+      if (groupStatus.value[group] === "success") mark(group, "saved");
+    }, 1600);
   } catch (error) {
-    Object.assign(workspace.appConfig, previousApp);
-    Object.assign(workspace.ragConfig, previousRag);
+    Object.assign(config.appConfig, previousApp);
+    Object.assign(config.ragConfig, previousRag);
     appearanceSaved.value = previousAppearance;
     reviewSaved.value = previousReview;
     embeddingSaved.value = previousEmbedding;
     ragSaved.value = previousRagSaved;
     mark(group, "failed");
     pageError.value = error instanceof Error ? error.message : String(error);
-    announce(i18n.t("settings.status.save_failed", "Save failed"));
+    announce(i18n.t("settings.status.save_failed"));
   }
 }
 function saveAppearance() {
   void saveGroup("appearance", () => {
     appearanceDraft.value = normalizeAppearance(appearanceDraft.value);
-    runtime.applyAppearance(appearanceDraft.value);
-    Object.assign(workspace.appConfig, appearanceDraft.value);
+    applyAppearance(appearanceDraft.value);
+    Object.assign(config.appConfig, appearanceDraft.value);
     appearanceSaved.value = cloneJson(appearanceDraft.value);
   });
 }
 function saveReview() {
   void saveGroup("review", () => {
     reviewDraft.value = normalizeReview(reviewDraft.value);
-    const profile = profiles.value.find(item => item.id === reviewDraft.value.default_provider_profile);
-    workspace.appConfig.default_provider_profile = reviewDraft.value.default_provider_profile;
-    if (profile) workspace.appConfig.chat_provider = profile.type;
-    workspace.appConfig.default_review_preset = reviewDraft.value.default_review_preset;
-    workspace.appConfig.default_llm_run_mode = reviewDraft.value.default_llm_run_mode;
+    const profile = profiles.value.find(
+      (item) => item.id === reviewDraft.value.default_provider_profile,
+    );
+    config.appConfig.default_provider_profile = reviewDraft.value.default_provider_profile;
+    if (profile) config.appConfig.chat_provider = profile.type;
+    config.appConfig.default_review_preset = reviewDraft.value.default_review_preset;
+    config.appConfig.default_llm_run_mode = reviewDraft.value.default_llm_run_mode;
     reviewSaved.value = cloneJson(reviewDraft.value);
   });
 }
 function saveEmbedding() {
-  void saveGroup("embedding", () => {
+  void saveGroup("embedding", async () => {
     embeddingDraft.value = normalizeEmbedding(embeddingDraft.value);
-    Object.assign(workspace.appConfig, embeddingDraft.value);
-    embeddingSaved.value = cloneJson(embeddingDraft.value);
+    const saved = await systemApi.setEmbeddingDefaults({
+      embedding_provider: embeddingDraft.value.embedding_provider,
+      embedding_model: embeddingDraft.value.embedding_model || null,
+    });
+    const normalized = normalizeEmbedding({
+      embedding_provider: saved.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+      embedding_model: saved.embedding_model || "",
+    });
+    embeddingDraft.value = normalized;
+    Object.assign(config.appConfig, normalized);
+    embeddingSaved.value = cloneJson(normalized);
+    void testEmbedding();
   });
 }
 function saveRag() {
   ragDraft.value = normalizeRag(ragDraft.value);
   const errors = validateRag(ragDraft.value);
-  ragErrors.value = Object.fromEntries(errors.map(error => [error.field, i18n.t(error.messageKey, error.messageFallback)]));
+  ragErrors.value = Object.fromEntries(
+    errors.map((error) => [error.field, i18n.t(error.messageKey, error.messageFallback)]),
+  );
   if (errors.length) {
     mark("rag", "failed");
-    announce(i18n.t("settings.validation_summary", "Some retrieval defaults could not be saved."));
-    void nextTick(() => document.querySelector<HTMLElement>(".settings-section .ui-field.invalid input, .settings-section .ui-field.invalid select")?.focus());
+    announce(i18n.t("settings.validation_summary"));
+    void nextTick(() =>
+      document
+        .querySelector<HTMLElement>(
+          ".settings-section .ui-field.invalid input, .settings-section .ui-field.invalid select",
+        )
+        ?.focus(),
+    );
     return;
   }
   void saveGroup("rag", () => {
-    Object.assign(workspace.ragConfig, ragDraft.value);
+    Object.assign(config.ragConfig, ragDraft.value);
     ragSaved.value = cloneJson(ragDraft.value);
   });
 }
+function syncEmbeddingModelForProvider() {
+  const provider = String(embeddingDraft.value.embedding_provider || "");
+  if (provider === "chroma" || provider === "precomputed") {
+    embeddingDraft.value.embedding_model = "";
+    return;
+  }
+  if (provider.startsWith("profile:")) {
+    const profileId = provider.slice("profile:".length);
+    const profile = profiles.value.find((item) => item.id === profileId);
+    embeddingDraft.value.embedding_model = String(profile?.model || "");
+    return;
+  }
+  if (!embeddingDraft.value.embedding_model) {
+    embeddingDraft.value.embedding_model = "bge-m3:latest";
+  }
+}
+
 function resetAppearance() {
   appearanceDraft.value = cloneJson(APPEARANCE_DEFAULTS);
   saveAppearance();
@@ -235,85 +552,116 @@ function resetRag() {
 }
 async function setLocale(code: string) {
   await i18n.setLocale(code);
-  announce(i18n.tf("settings.language_changed", "Interface language is now {name}.", {name: i18n.languages.find(item => item.code === code)?.name || code}));
+  announce(
+    i18n.tf("settings.language_changed", {
+      name: i18n.languages.find((item) => item.code === code)?.name || code,
+    }),
+  );
 }
 function goSection(id: SettingsSectionId) {
   section.value = id;
   contentsOpen.value = false;
-  void nextTick(() => document.getElementById(`settings-section-${id}`)?.scrollIntoView({block: "start"}));
+  void nextTick(() =>
+    document.getElementById(`settings-section-${id}`)?.scrollIntoView({ block: "start" }),
+  );
 }
-function chooseSearch(hit: SettingsSearchHit) {
-  goSection(hit.section);
+async function chooseSearch(hit: SettingsSearchHit) {
+  if (hit.advanced) advancedOpen.value = true;
   query.value = "";
-  void nextTick(() => document.getElementById(`settings-field-${hit.id}`)?.focus?.() || document.getElementById(`settings-section-${hit.section}`)?.scrollIntoView({block: "start"}));
+  contentsOpen.value = false;
+  await router.push({
+    name: "settings-section",
+    params: { section: hit.section },
+    query: route.query,
+  });
+  await nextTick();
+  const target =
+    document.getElementById(hit.targetId || `settings-field-${hit.id}`) ||
+    document.getElementById(`settings-section-${hit.section}`);
+  target?.scrollIntoView({ block: "center" });
+  if (target instanceof HTMLElement && target.matches("input, select, textarea, button, a[href]")) {
+    target.focus();
+  }
 }
 function go(path: string, view?: string) {
-  if (view) runtime.navigateView(view);
-  else window.dispatchEvent(new CustomEvent("derridai:navigate-native", {detail: {path}}));
+  if (view) navigateTo(view);
+  else window.dispatchEvent(new CustomEvent("derridai:navigate-native", { detail: { path } }));
 }
 function providerReady(profile: ProviderProfile) {
-  const status = workspace.providerStatuses?.[profile.id];
-  return Boolean(status?.available);
-}
-function providerChecked(profile: ProviderProfile) {
-  const stamp = workspace.providerStatuses?.[profile.id]?.checked_at;
-  if (!stamp) return i18n.t("settings.not_checked", "Not checked yet");
-  const date = new Date(stamp);
-  return Number.isNaN(date.getTime()) ? stamp : date.toLocaleString(i18n.locale);
+  return Boolean(providerStatuses.value[profile.id]?.available);
 }
 async function saveNotifications() {
-  workspace.appConfig.desktop_notifications = notificationsOn.value;
-  await persistWorkspace();
-  announce(i18n.t("settings.notifications_saved", "Notification preference saved"));
+  config.appConfig.desktop_notifications = notificationsOn.value;
+  await persistDomain("settings");
+  announce(i18n.t("settings.notifications_saved"));
 }
 async function requestNotifications() {
   if (typeof Notification === "undefined") {
-    pageError.value = i18n.t("settings.notifications_unsupported", "Desktop notifications are not supported by this browser.");
+    pageError.value = i18n.t("settings.notifications_unsupported");
     return;
   }
   try {
     const permission = await Notification.requestPermission();
     notificationsOn.value = permission === "granted";
     await saveNotifications();
-    announce(permission === "granted" ? i18n.t("settings.notifications_enabled", "Desktop notifications enabled") : i18n.tf("settings.notifications_permission", "Notification permission: {status}", {status: permission}));
+    announce(
+      permission === "granted"
+        ? i18n.t("settings.notifications_enabled")
+        : i18n.tf("settings.notifications_permission", { status: permission }),
+    );
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : String(error);
   }
 }
-function resetColumns() { workspace.tableColumns = {}; runtime.persistPrefs(); announce(i18n.t("settings.columns_reset", "Table columns reset")); }
-function expandPanels() { workspace.collapsedPanels = {}; runtime.persistPrefs(); announce(i18n.t("settings.panels_expanded", "All UI panels expanded")); }
-function expandSidebar() {
-  if (workspace.sidebarCollapsed) runtime.toggleSidebar();
-  announce(i18n.t("settings.sidebar_expanded", "Navigation sidebar expanded"));
+function resetColumns() {
+  lists.tableColumns = {};
+  persistListPreferences();
+  announce(i18n.t("settings.columns_reset"));
 }
-function clearUpsertSuppressions() { workspace.upsertIgnored = {}; runtime.persistPrefs(); announce(i18n.t("settings.upsert_restored", "Removed upsert-queue items restored")); }
+function expandPanels() {
+  layout.collapsedPanels = {};
+  persistLayoutPreferences();
+  announce(i18n.t("settings.panels_expanded"));
+}
+function expandSidebar() {
+  if (layout.sidebarCollapsed) toggleSidebar();
+  announce(i18n.t("settings.sidebar_expanded"));
+}
+function clearUpsertSuppressions() {
+  upsertProgress.upsertIgnored = {};
+  persistJobPreferences();
+  announce(i18n.t("settings.upsert_restored"));
+}
 function openBackup() {
   confirm.value = {
     kind: "backup",
-    title: i18n.t("settings.backup_confirm_title", "Create full backup?"),
-    message: runtime.backupContainsCredentials?.()
-      ? i18n.t("settings.backup_keys_warning", "This full backup can contain provider API keys. Store the ZIP securely. Installed model files are not copied.")
-      : i18n.t("settings.backup_confirm_message", "Create a full backup of this workspace, records, configuration, and vector collections."),
+    title: i18n.t("settings.backup_confirm_title"),
+    message: backupContainsCredentials()
+      ? i18n.t("settings.backup_keys_warning")
+      : i18n.t("settings.backup_confirm_message"),
   };
 }
-function openRestore() { restoreInput.value?.click(); }
-function onRestoreFile(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0] || null;
-  input.value = "";
-  if (!file) return;
+function onRestoreFile(file: File) {
   restoreFile.value = file;
   confirm.value = {
     kind: "restore",
-    title: i18n.t("settings.restore_confirm_title", "Restore full DerridAI backup?"),
-    message: i18n.t("settings.restore_confirm_message", "This replaces the current browser workspace and every collection in the active Chroma database."),
+    title: i18n.t("settings.restore_confirm_title"),
+    message: i18n.t("settings.restore_confirm_message"),
   };
 }
 function openUpdates() {
-  confirm.value = {kind: "updates", title: i18n.t("settings.clear_updates_title", "Clear all update histories?"), message: i18n.t("settings.clear_updates_message", "This permanently removes local audit histories from loaded records.")};
+  confirm.value = {
+    kind: "updates",
+    title: i18n.t("settings.clear_updates_title"),
+    message: i18n.t("settings.clear_updates_message"),
+  };
 }
 function openNuke() {
-  confirm.value = {kind: "nuke", title: i18n.t("config.nuke.confirm_title", "Reset DerridAI to a fresh install?"), message: i18n.t("config.nuke.confirm_message", "This returns DerridAI to a first-run state: users, corpora, PDF builds, vector collections, provider profiles, annotations, jobs, and this browser workspace are deleted. You will create a new administrator account. Installed model files are not deleted.")};
+  confirm.value = {
+    kind: "nuke",
+    title: i18n.t("config.nuke.confirm_title"),
+    message: i18n.t("config.nuke.confirm_message"),
+  };
 }
 async function applyConfirm() {
   const kind = confirm.value?.kind;
@@ -321,12 +669,13 @@ async function applyConfirm() {
   busy.value = kind;
   pageError.value = "";
   try {
-    if (kind === "backup") await runtime.downloadFullBackup({confirmed: true});
-    else if (kind === "restore" && restoreFile.value) await runtime.restoreFullBackup(restoreFile.value, {confirmed: true});
-    else if (kind === "updates") await runtime.clearAllUpdates({confirmed: true});
+    if (kind === "backup") await downloadFullBackup({ confirmed: true });
+    else if (kind === "restore" && restoreFile.value)
+      await restoreFullBackup(restoreFile.value, { confirmed: true });
+    else if (kind === "updates") await clearAllUpdates({ confirmed: true });
     else if (kind === "nuke") {
-      await apiRequest("/api/admin/nuke", {method: "POST", body: "{}"});
-      await runtime.deleteAllDerridaiBrowserState();
+      await apiRequest("/api/admin/nuke", { method: "POST", body: "{}" });
+      await deleteAllDerridaiBrowserState();
       location.reload();
       return;
     } else if (kind === "leave") {
@@ -337,11 +686,14 @@ async function applyConfirm() {
       return;
     }
     confirm.value = null;
-    announce(i18n.t("settings.action_complete", "Action completed"));
+    announce(i18n.t("settings.action_complete"));
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : String(error);
-    if (kind === "nuke") pageError.value = i18n.tf("config.nuke.failed", "Nuke failed: {error}", {error: pageError.value});
-  } finally { busy.value = ""; }
+    if (kind === "nuke")
+      pageError.value = i18n.tf("config.nuke.failed", { error: pageError.value });
+  } finally {
+    busy.value = "";
+  }
 }
 function closeConfirm() {
   if (busy.value) return;
@@ -358,30 +710,83 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 }
 onBeforeRouteLeave(() => {
   if (!dirty.value) return true;
-  return new Promise<boolean>(resolve => {
+  return new Promise<boolean>((resolve) => {
     routeGuardResolve.value = resolve;
-    confirm.value = {kind: "leave", title: i18n.t("settings.leave_title", "Discard unsaved settings?"), message: i18n.t("settings.leave_message", "Your unsaved Settings changes will be lost if you leave this page.")};
+    confirm.value = {
+      kind: "leave",
+      title: i18n.t("settings.leave_title"),
+      message: i18n.t("settings.leave_message"),
+    };
   });
 });
-watch(appearanceDraft, value => runtime.applyAppearance(normalizeAppearance(value)), {deep: true});
+watch(appearanceDraft, (value) => applyAppearance(normalizeAppearance(value)), {
+  deep: true,
+});
 watch([appearanceDirty, reviewDirty, embeddingDirty, ragDirty], () => {
   if (appearanceDirty.value) mark("appearance", "dirty");
   if (reviewDirty.value) mark("review", "dirty");
   if (embeddingDirty.value) mark("embedding", "dirty");
   if (ragDirty.value) mark("rag", "dirty");
 });
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("beforeunload", onBeforeUnload);
-  appearanceSaved.value = normalizeAppearance(workspace.appConfig as unknown as AppearanceSettingsDraft);
+  appearanceSaved.value = normalizeAppearance(
+    config.appConfig as unknown as AppearanceSettingsDraft,
+  );
   appearanceDraft.value = cloneJson(appearanceSaved.value);
-  reviewSaved.value = normalizeReview(workspace.appConfig as unknown as ReviewSettingsDraft);
+  reviewSaved.value = normalizeReview(config.appConfig as unknown as ReviewSettingsDraft);
   reviewDraft.value = cloneJson(reviewSaved.value);
-  embeddingSaved.value = normalizeEmbedding(workspace.appConfig as unknown as EmbeddingSettingsDraft);
+
+  const browserEmbedding = normalizeEmbedding(
+    config.appConfig as unknown as EmbeddingSettingsDraft,
+  );
+  if (isAdmin.value) {
+    try {
+      const serverEmbedding = await systemApi.embeddingDefaults();
+      if (serverEmbedding.persisted) {
+        const normalized = normalizeEmbedding({
+          embedding_provider:
+            serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+          embedding_model: serverEmbedding.embedding_model || "",
+        });
+        Object.assign(config.appConfig, normalized);
+        embeddingSaved.value = normalized;
+      } else {
+        const migrateFrom =
+          browserEmbedding.embedding_provider === "ollama" &&
+          serverEmbedding.embedding_provider.startsWith("profile:")
+            ? normalizeEmbedding({
+                embedding_provider:
+                  serverEmbedding.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+                embedding_model: serverEmbedding.embedding_model || "",
+              })
+            : browserEmbedding;
+        const migrated = await systemApi.setEmbeddingDefaults({
+          embedding_provider: migrateFrom.embedding_provider,
+          embedding_model: migrateFrom.embedding_model || null,
+        });
+        embeddingSaved.value = normalizeEmbedding({
+          embedding_provider:
+            migrated.embedding_provider as EmbeddingSettingsDraft["embedding_provider"],
+          embedding_model: migrated.embedding_model || "",
+        });
+        Object.assign(config.appConfig, embeddingSaved.value);
+      }
+    } catch {
+      // The browser copy remains usable if the backend configuration endpoint is
+      // temporarily unavailable; save will surface a persistence error explicitly.
+      embeddingSaved.value = browserEmbedding;
+    }
+  } else {
+    embeddingSaved.value = browserEmbedding;
+  }
   embeddingDraft.value = cloneJson(embeddingSaved.value);
-  ragSaved.value = normalizeRag(workspace.ragConfig as unknown as RagSettingsDraft);
+  void testEmbedding();
+
+  ragSaved.value = normalizeRag(config.ragConfig as unknown as RagSettingsDraft);
   ragDraft.value = cloneJson(ragSaved.value);
-  notificationsOn.value = Boolean(workspace.appConfig.desktop_notifications);
-  runtime.applyAppearance(appearanceDraft.value);
+  notificationsOn.value = Boolean(config.appConfig.desktop_notifications);
+  applyAppearance(appearanceDraft.value);
 });
 onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
 </script>
@@ -390,311 +795,791 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   <main class="vue-native-page settings-page" aria-labelledby="settings-page-title">
     <div class="sr-only" aria-live="polite">{{ liveMessage }}</div>
     <UiPageHeader
-      :kicker="i18n.t('section.system', 'System')"
-      :title="i18n.t('context.config.title', 'Settings')"
+      :kicker="i18n.t('section.system')"
+      :title="i18n.t('context.config.title')"
       title-id="settings-page-title"
-      :description="
-        i18n.t(
-          'settings.page_help',
-          'Control workspace appearance, research defaults, and operational tools. Each group saves on its own; leaving with unsaved changes will ask for confirmation.',
-        )
-      "
-    >
-      <template #actions>
-        <SettingsSaveState :status="pageStatus" :label="statusLabel(pageStatus)" />
-      </template>
-    </UiPageHeader>
+      :description="i18n.t('settings.page_help')"
+    />
     <p v-if="pageError" class="info error" role="alert">{{ pageError }}</p>
     <div class="settings-toolbar">
       <SettingsSearch
         v-model="query"
         :results="searchHits"
-        :label="i18n.t('settings.search_label', 'Search settings')"
-        :placeholder="i18n.t('settings.search_placeholder', 'Find a setting')"
+        :label="i18n.t('settings.search_label')"
+        :placeholder="i18n.t('settings.search_placeholder')"
         described-by="settings-search-help"
-        :no-results="i18n.t('settings.search_empty', 'No settings match that search.')"
-        :result-count="i18n.tf(searchHits.length === 1 ? 'settings.search_count_one' : 'settings.search_count_many', searchHits.length === 1 ? '{count} matching setting' : '{count} matching settings', {count: searchHits.length})"
+        :no-results="i18n.t('settings.search_empty')"
+        :result-count="
+          i18n.tf(
+            searchHits.length === 1 ? 'settings.search_count_one' : 'settings.search_count_many',
+            searchHits.length === 1 ? '{count} matching setting' : '{count} matching settings',
+            { count: searchHits.length },
+          )
+        "
         @choose="chooseSearch"
       />
-      <p id="settings-search-help" class="note">{{ i18n.t("settings.search_help", "Search uses translated labels. Arrow keys move through matches; Enter opens the section.") }}</p>
-      <UiButton class="settings-contents-toggle" :label="i18n.t('settings.contents', 'Contents')" :pressed="contentsOpen" @click="contentsOpen = !contentsOpen" />
+      <p id="settings-search-help" class="note">{{ i18n.t("settings.search_help") }}</p>
+      <UiButton
+        class="settings-contents-toggle"
+        :label="i18n.t('settings.contents')"
+        :pressed="contentsOpen"
+        @click="contentsOpen = !contentsOpen"
+      />
     </div>
     <div class="settings-layout">
-      <aside class="settings-rail" :class="{open: contentsOpen}">
-        <SettingsNav v-model="section" :items="visibleSections" :tablist-label="i18n.t('settings.contents', 'Contents')" @select="goSection" />
+      <aside class="settings-rail" :class="{ open: contentsOpen }">
+        <SettingsNav
+          :model-value="section"
+          :items="visibleSections"
+          :nav-label="i18n.t('settings.contents')"
+          @select="goSection"
+        />
       </aside>
       <div class="settings-pane">
-        <div v-show="section === 'workspace'" id="settings-section-workspace" role="tabpanel" aria-labelledby="settings-nav-workspace">
-          <SettingsSection section-id="workspace" :title="i18n.t('settings.appearance', 'Appearance')" :description="i18n.t('settings.appearance_help', 'Choose the interface color theme for your workspace.')" :persistence="persistKind('browser')" :status="groupStatus.appearance" :status-label="statusLabel(groupStatus.appearance)">
+        <SettingsOverview
+          v-if="section === 'overview'"
+          :title="i18n.t('settings.nav.overview', 'Settings overview')"
+          :description="
+            i18n.t(
+              'settings.nav.overview_help',
+              'Find settings by task, review important defaults, and jump to related workspaces.',
+            )
+          "
+          :nav-label="i18n.t('settings.contents')"
+          :items="overviewItems"
+          @select="goSection"
+        >
+          <template #footer>
+            <div class="settings-about">
+              <h3>{{ i18n.t("about.title") }}</h3>
+              <AppBuildInfo :show-commit="isAdmin" />
+            </div>
+          </template>
+        </SettingsOverview>
+
+        <div v-show="section === 'preferences'" id="settings-section-workspace">
+          <SettingsSection
+            section-id="workspace"
+            :title="i18n.t('settings.appearance')"
+            :description="i18n.t('settings.appearance_help')"
+            :persistence="persistKind('browser')"
+            :status="groupStatus.appearance"
+            :status-label="statusLabel(groupStatus.appearance)"
+          >
             <fieldset v-if="canAppearance" class="theme-choice-grid" :disabled="!canAppearance">
-              <legend>{{ i18n.t("settings.color_theme", "Color theme") }}</legend>
-              <label v-for="theme in (['green','blue','slate'] as const)" :key="theme" class="theme-choice" :class="{selected: appearanceDraft.ui_color_theme === theme}">
-                <input type="radio" name="settingsTheme" :value="theme" v-model="appearanceDraft.ui_color_theme">
-                <span class="theme-swatch" :class="`theme-swatch-${theme}`" aria-hidden="true"><i></i><i></i><i></i></span>
-                <span><b>{{ i18n.t(`settings.theme_${theme}`, theme) }}</b><small>{{ theme === 'green' ? i18n.t('settings.theme_green_help', 'The original restrained green palette.') : theme === 'blue' ? i18n.t('settings.theme_blue_help', 'The blue palette used in the visual reference.') : i18n.t('settings.theme_slate_help', 'A neutral graphite-blue research palette.') }}</small></span>
+              <legend>{{ i18n.t("settings.color_theme") }}</legend>
+              <label
+                v-for="theme in ['green', 'blue', 'slate'] as const"
+                :key="theme"
+                class="theme-choice"
+                :class="{ selected: appearanceDraft.ui_color_theme === theme }"
+              >
+                <input
+                  type="radio"
+                  name="settingsTheme"
+                  :value="theme"
+                  v-model="appearanceDraft.ui_color_theme"
+                />
+                <span class="theme-swatch" :class="`theme-swatch-${theme}`" aria-hidden="true"
+                  ><i></i><i></i><i></i
+                ></span>
+                <span
+                  ><b>{{ i18n.t(`settings.theme_${theme}`, theme) }}</b
+                  ><small>{{
+                    theme === "green"
+                      ? i18n.t("settings.theme_green_help")
+                      : theme === "blue"
+                        ? i18n.t("settings.theme_blue_help")
+                        : i18n.t("settings.theme_slate_help")
+                  }}</small></span
+                >
               </label>
             </fieldset>
-            <p v-else class="note">{{ i18n.t("settings.appearance_unavailable", "Your role cannot change workspace appearance.") }}</p>
+            <p v-else class="note">{{ i18n.t("settings.appearance_unavailable") }}</p>
             <div class="config-grid">
-              <UiField :label="i18n.t('settings.color_scheme', 'Color scheme')" :hint="i18n.t('settings.color_scheme_help', 'Light, dark, or follow this device. Stored in this browser.')" :persistence="persistKind('browser')">
-                <select id="settings-field-scheme" class="control" v-model="appearanceDraft.ui_color_scheme">
-                  <option value="system">{{ i18n.t("settings.scheme_system", "Match device") }}</option>
-                  <option value="light">{{ i18n.t("settings.scheme_light", "Light") }}</option>
-                  <option value="dark">{{ i18n.t("settings.scheme_dark", "Dark") }}</option>
-                </select>
-              </UiField>
-              <UiField :label="i18n.t('settings.contrast', 'Contrast')" :hint="i18n.t('settings.contrast_help', 'Increase contrast for borders and muted text in this workspace.')">
-                <select id="settings-field-contrast" class="control" v-model="appearanceDraft.ui_contrast">
-                  <option value="system">{{ i18n.t("settings.contrast_system", "Match device") }}</option>
-                  <option value="more">{{ i18n.t("settings.contrast_more", "More contrast") }}</option>
+              <UiField
+                :label="i18n.t('settings.color_scheme')"
+                :hint="i18n.t('settings.color_scheme_help')"
+                :persistence="persistKind('browser')"
+              >
+                <select
+                  id="settings-field-scheme"
+                  class="control"
+                  v-model="appearanceDraft.ui_color_scheme"
+                >
+                  <option value="system">{{ i18n.t("settings.scheme_system") }}</option>
+                  <option value="light">{{ i18n.t("settings.scheme_light") }}</option>
+                  <option value="dark">{{ i18n.t("settings.scheme_dark") }}</option>
                 </select>
               </UiField>
             </div>
             <template #actions>
-              <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_appearance', 'Save appearance')" :disabled="!canAppearance || groupStatus.appearance === 'saving'" @click="saveAppearance" />
-              <UiButton :label="i18n.t('settings.reset_appearance', 'Reset appearance defaults')" :disabled="!canAppearance" @click="resetAppearance" />
+              <UiButton
+                variant="primary"
+                icon="check"
+                :label="i18n.t('settings.save_appearance')"
+                :disabled="!canAppearance || groupStatus.appearance === 'saving'"
+                @click="saveAppearance"
+              />
+              <UiButton
+                :label="i18n.t('settings.reset_appearance')"
+                :disabled="!canAppearance"
+                @click="resetAppearance"
+              />
+            </template>
+          </SettingsSection>
+        </div>
+
+        <div v-show="section === 'preferences'" id="settings-section-language">
+          <SettingsSection
+            section-id="language"
+            :title="i18n.t('settings.language_title')"
+            :description="i18n.t('settings.language_help')"
+            :persistence="persistKind('browser')"
+            :status="groupStatus.appearance"
+            :status-label="statusLabel(groupStatus.appearance)"
+          >
+            <UiField
+              :label="i18n.t('settings.interface_language')"
+              :hint="i18n.t('settings.interface_language_help')"
+            >
+              <div class="settings-locale-row">
+                <LanguageFlag
+                  :code="i18n.locale"
+                  :symbol="localeInfo?.flag"
+                  :label="localeInfo?.name"
+                  size="small"
+                />
+                <select
+                  id="settings-field-locale"
+                  class="control"
+                  :value="i18n.locale"
+                  :disabled="i18n.loading"
+                  :aria-busy="i18n.loading"
+                  @change="setLocale(($event.target as HTMLSelectElement).value)"
+                >
+                  <option
+                    v-for="language in i18n.languages"
+                    :key="language.code"
+                    :value="language.code"
+                  >
+                    {{ language.name }}
+                  </option>
+                </select>
+              </div>
+            </UiField>
+            <UiField :label="i18n.t('settings.contrast')" :hint="i18n.t('settings.contrast_help')">
+              <select
+                id="settings-field-contrast"
+                class="control"
+                v-model="appearanceDraft.ui_contrast"
+              >
+                <option value="system">{{ i18n.t("settings.contrast_system") }}</option>
+                <option value="more">{{ i18n.t("settings.contrast_more") }}</option>
+              </select>
+            </UiField>
+            <p class="note">{{ i18n.t("settings.a11y_note") }}</p>
+            <template #actions>
+              <UiButton
+                v-if="canAppearance"
+                variant="primary"
+                icon="check"
+                :label="i18n.t('settings.save_appearance')"
+                :disabled="groupStatus.appearance === 'saving'"
+                @click="saveAppearance"
+              />
+              <UiButton
+                v-if="isAdmin"
+                icon="language"
+                :label="i18n.t('language.manage')"
+                @click="go('/locale')"
+              />
             </template>
           </SettingsSection>
           <SettingsSection
-            section-id="about"
-            :title="i18n.t('about.title', 'About DerridAI')"
-            :description="i18n.t('about.help', 'Release version of this instance. The git commit is shown for administrators and on the sign-in screen.')"
+            v-if="isAdmin"
+            section-id="notifications"
+            :title="i18n.t('settings.desktop_notifications')"
+            :description="i18n.t('settings.notifications_help')"
+            :persistence="persistKind('browser')"
+          >
+            <UiField
+              :label="i18n.t('settings.desktop_notifications')"
+              :hint="i18n.t('settings.notifications_help')"
+            >
+              <select
+                id="settings-field-notifications"
+                class="control"
+                :value="notificationsOn ? 'on' : 'off'"
+                @change="
+                  notificationsOn = ($event.target as HTMLSelectElement).value === 'on';
+                  saveNotifications();
+                "
+              >
+                <option value="off">{{ i18n.t("settings.notifications_off") }}</option>
+                <option value="on">{{ i18n.t("settings.notifications_on") }}</option>
+              </select>
+            </UiField>
+            <template #actions>
+              <UiButton
+                :label="i18n.t('settings.request_notifications')"
+                @click="requestNotifications"
+              />
+            </template>
+          </SettingsSection>
+        </div>
+
+        <div v-show="section === 'research'" id="settings-section-research">
+          <SettingsSection
+            v-if="isAdmin"
+            section-id="research"
+            :title="i18n.t('settings.research_title')"
+            :description="i18n.t('settings.research_help')"
+            :persistence="persistKind('browser')"
+            :status="groupStatus.rag"
+            :status-label="statusLabel(groupStatus.rag)"
+          >
+            <UiField
+              :label="i18n.t('settings.rag_response_language')"
+              :hint="i18n.t('settings.rag_response_language_help')"
+            >
+              <select
+                id="settings-field-rag-response-language"
+                class="control"
+                v-model="ragDraft.response_language"
+              >
+                <option value="auto">{{ i18n.t("settings.lang_auto") }}</option>
+                <option value="en">{{ i18n.t("settings.lang_en") }}</option>
+                <option value="fr">{{ i18n.t("settings.lang_fr") }}</option>
+              </select>
+            </UiField>
+            <template #actions>
+              <UiButton
+                variant="primary"
+                :label="i18n.t('settings.save_research')"
+                @click="saveRag"
+              />
+              <UiButton icon="spark" :label="i18n.t('nav.rag')" @click="go('/rag', 'rag')" />
+            </template>
+          </SettingsSection>
+          <SettingsSection
+            v-else
+            section-id="research"
+            :title="i18n.t('settings.researcher_workspace')"
+            :description="i18n.t('settings.researcher_workspace_help')"
             :persistence="persistKind('readonly')"
             status="readonly"
             :status-label="statusLabel('readonly')"
           >
-            <AppBuildInfo :show-commit="isAdmin" />
-          </SettingsSection>
-        </div>
-
-        <div v-show="section === 'language'" id="settings-section-language" role="tabpanel" aria-labelledby="settings-nav-language">
-          <SettingsSection section-id="language" :title="i18n.t('settings.language_title', 'Language and accessibility')" :description="i18n.t('settings.language_help', 'The interface language applies immediately. Dictionaries are edited on the Languages page.')" :persistence="persistKind('browser')" status="saved" :status-label="statusLabel('saved')">
-            <UiField :label="i18n.t('settings.interface_language', 'Interface language')" :hint="i18n.t('settings.interface_language_help', 'Applies immediately to labels, dates, and numbers in this browser.')">
-              <div class="settings-locale-row">
-                <LanguageFlag :code="i18n.locale" :symbol="localeInfo?.flag" :label="localeInfo?.name" size="small" />
-                <select id="settings-field-locale" class="control" :value="i18n.locale" :disabled="i18n.loading" :aria-busy="i18n.loading" @change="setLocale(($event.target as HTMLSelectElement).value)">
-                  <option v-for="language in i18n.languages" :key="language.code" :value="language.code">{{ language.name }}</option>
-                </select>
-              </div>
-            </UiField>
-            <p class="note">{{ i18n.t("settings.a11y_note", "Focus indicators stay visible in every theme. Motion is reduced when this device requests it. High-contrast mode uses stronger borders rather than color alone.") }}</p>
-            <template v-if="isAdmin" #actions>
-              <UiButton icon="language" :label="i18n.t('language.manage', 'Manage languages')" @click="go('/languages')" />
-            </template>
-          </SettingsSection>
-        </div>
-
-        <div v-show="section === 'research'" id="settings-section-research" role="tabpanel" aria-labelledby="settings-nav-research">
-          <SettingsSection v-if="isAdmin" section-id="research" :title="i18n.t('settings.research_title', 'Research defaults')" :description="i18n.t('settings.research_help', 'Response language and evidence presentation defaults. Per-run generation still lives on Research.')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">
-            <UiField :label="i18n.t('settings.rag_response_language', 'Response language')" :hint="i18n.t('settings.rag_response_language_help', 'Guides generated answers. Source language tags on records are unchanged.')">
-              <select id="settings-field-rag-response-language" class="control" v-model="ragDraft.response_language">
-                <option value="auto">{{ i18n.t("settings.lang_auto", "Auto") }}</option>
-                <option value="en">{{ i18n.t("settings.lang_en", "English") }}</option>
-                <option value="fr">{{ i18n.t("settings.lang_fr", "French") }}</option>
-              </select>
-            </UiField>
-            <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_research', 'Save research defaults')" @click="saveRag" />
-              <UiButton icon="spark" :label="i18n.t('nav.rag', 'Research')" @click="go('/rag', 'rag')" />
-            </template>
-          </SettingsSection>
-          <SettingsSection v-else section-id="research" :title="i18n.t('settings.researcher_workspace', 'Research workspace')" :description="i18n.t('settings.researcher_workspace_help', 'Researcher accounts use summarized corpus text and do not expose database or source-management controls.')" :persistence="persistKind('readonly')" status="readonly" :status-label="statusLabel('readonly')">
             <div class="config-actions">
-              <UiButton v-if="auth.can('page.dashboard')" icon="dashboard" :label="i18n.t('nav.home', 'Home')" @click="go('/', 'home')" />
-              <UiButton v-if="auth.can('page.annotations')" icon="record" :label="i18n.t('nav.annotations', 'Annotations')" @click="go('/annotations', 'annotations')" />
-              <UiButton v-if="auth.can('page.research')" icon="spark" :label="i18n.t('nav.rag', 'Research')" @click="go('/rag', 'rag')" />
+              <UiButton
+                v-if="auth.can('page.dashboard')"
+                icon="dashboard"
+                :label="i18n.t('nav.home')"
+                @click="go('/', 'home')"
+              />
+              <UiButton
+                v-if="auth.can('page.annotations')"
+                icon="record"
+                :label="i18n.t('nav.annotations')"
+                @click="go('/annotations', 'annotations')"
+              />
+              <UiButton
+                v-if="auth.can('page.semantic_map')"
+                icon="map"
+                :label="i18n.t('nav.semantic_map')"
+                @click="go('/semantic-map', 'semanticmap')"
+              />
+              <UiButton
+                v-if="auth.can('page.research')"
+                icon="spark"
+                :label="i18n.t('nav.rag')"
+                @click="go('/rag', 'rag')"
+              />
             </div>
-            <p v-if="!auth.can('page.dashboard') && !auth.can('page.annotations') && !auth.can('page.research')" class="note">{{ i18n.t("permissions.no_workspace_shortcuts", "No additional workspace pages are enabled for this role.") }}</p>
-          </SettingsSection>
-        </div>
-
-        <div v-if="isAdmin" v-show="section === 'review'" id="settings-section-review" role="tabpanel" aria-labelledby="settings-nav-review">
-          <SettingsSection section-id="review" :title="i18n.t('settings.review_title', 'Review and AI behavior')" :description="i18n.t('settings.review_help', 'Provider choice, default review preset, and whether LLM review opens interactively or runs as a background job.')" :persistence="persistKind('browser')" :status="groupStatus.review" :status-label="statusLabel(groupStatus.review)">
-            <div class="config-grid">
-              <UiField :label="i18n.t('settings.default_provider', 'Default provider profile')" :hint="i18n.t('settings.default_provider_help', 'Used when a workflow does not pick a profile itself. Credentials stay on the Providers page.')">
-                <select id="settings-field-review-provider" class="control" v-model="reviewDraft.default_provider_profile">
-                  <option v-if="!profiles.length" value="">{{ i18n.t("settings.not_configured", "Not configured") }}</option>
-                  <option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{ profile.name || profile.id }} · {{ profile.type === "ollama" ? "Ollama" : i18n.t("settings.openai_compatible", "OpenAI-compatible") }}</option>
-                </select>
-              </UiField>
-              <UiField :label="i18n.t('settings.review_preset', 'Default review preset')">
-                <select id="settings-field-review-preset" class="control" v-model="reviewDraft.default_review_preset">
-                  <option value="text">{{ i18n.t("settings.preset_text", "OCR / text cleanup") }}</option>
-                  <option value="attribution">{{ i18n.t("settings.preset_attribution", "Attribution") }}</option>
-                  <option value="semantic">{{ i18n.t("settings.preset_semantic", "Semantics") }}</option>
-                </select>
-              </UiField>
-              <UiField :label="i18n.t('settings.run_mode', 'Default run mode')" :hint="i18n.t('settings.run_mode_help', 'Interactive review stays on screen. Background review is cancellable from Operations.')">
-                <select id="settings-field-review-mode" class="control" v-model="reviewDraft.default_llm_run_mode">
-                  <option value="foreground">{{ i18n.t("settings.run_foreground", "Interactive foreground") }}</option>
-                  <option value="background">{{ i18n.t("settings.run_background", "Background review") }}</option>
-                </select>
-              </UiField>
-              <label class="check-item field-full"><input id="settings-field-rag-auto-grade" type="checkbox" v-model="ragDraft.auto_grade"><span>{{ i18n.t("settings.rag_auto_grade", "Auto-grade the final research response after caching") }}<small>{{ i18n.t("settings.rag_auto_grade_help", "Choose the grading provider on Research. Self-grading is warned there.") }}</small></span></label>
-            </div>
-            <template #actions>
-              <UiButton variant="primary" icon="check" :label="i18n.t('settings.save_review', 'Save review behavior')" @click="saveReview(); if (ragDirty) saveRag()" />
-            </template>
-          </SettingsSection>
-        </div>
-
-        <div v-if="isAdmin" v-show="section === 'providers'" id="settings-section-providers" role="tabpanel" aria-labelledby="settings-nav-providers">
-          <SettingsSection section-id="providers" :title="i18n.t('settings.providers_title', 'Providers and models')" :description="i18n.t('settings.providers_help', 'Endpoints, credentials, models, concurrency limits, and warmups are configured on the dedicated Providers page. Secrets are never shown here.')" :persistence="persistKind('link')" status="readonly" :status-label="statusLabel('readonly')">
-            <ul v-if="profiles.length" class="providers-summary">
-              <li v-for="profile in profiles" :key="profile.id">
-                <UiHealthChip :available="providerReady(profile)" :label="String(profile.name || profile.id)" :detail="providerReady(profile) ? i18n.t('settings.provider_ready', 'Ready') : i18n.t('settings.provider_not_ready', 'Not ready')" />
-                <span>{{ profile.type === "ollama" ? i18n.t("settings.provider_ollama", "Ollama") : i18n.t("settings.openai_compatible", "OpenAI-compatible") }} · {{ i18n.tf("settings.max_concurrent", "max {count}", {count: Number(profile.max_concurrent_requests ?? 1)}) }} · {{ profile.model || i18n.t("language.model_not_set", "model not set") }}</span>
-                <small>{{ i18n.tf("settings.last_checked", "Last checked: {time}", {time: providerChecked(profile)}) }}</small>
-                <b v-if="profile.id === defaultProfileId">{{ i18n.t("ui.default", "Default") }}</b>
-              </li>
-            </ul>
-            <p v-else class="note">{{ i18n.t("settings.no_providers", "No LLM provider profiles are configured.") }}</p>
-            <template #actions>
-              <UiButton variant="primary" icon="spark" :label="i18n.t('settings.open_providers', 'Open LLM Providers')" @click="go('/providers', 'providers')" />
-            </template>
-          </SettingsSection>
-        </div>
-
-        <div v-if="isAdmin" v-show="section === 'retrieval'" id="settings-section-retrieval" role="tabpanel" aria-labelledby="settings-nav-retrieval">
-          <SettingsSection section-id="retrieval" :title="i18n.t('settings.vector_title', 'Vector database defaults')" :description="i18n.t('settings.vector_help', 'New collections default to Ollama embeddings with bge-m3:latest. Changing a collection that already contains records requires a new build.')" :persistence="persistKind('browser')" :status="groupStatus.embedding" :status-label="statusLabel(groupStatus.embedding)">
-            <div class="config-grid">
-              <UiField :label="i18n.t('settings.embedding_provider', 'Default embedding provider')">
-                <select id="settings-field-embedding-provider" class="control" v-model="embeddingDraft.embedding_provider">
-                  <option value="ollama">{{ i18n.t("settings.provider_ollama", "Ollama") }}</option>
-                  <option value="chroma">{{ i18n.t("vector.provider_chroma", "Chroma default") }}</option>
-                  <option value="precomputed">{{ i18n.t("vector.provider_precomputed", "Precomputed vectors") }}</option>
-                </select>
-              </UiField>
-              <UiField :label="i18n.t('settings.embedding_model', 'Default embedding model')">
-                <input id="settings-field-embedding-model" class="control" v-model="embeddingDraft.embedding_model">
-              </UiField>
-              <UiField wide :label="i18n.t('settings.chroma_path', 'Current Chroma path')" :hint="i18n.t('settings.chroma_path_help', 'Reported by the running API. Change the backend on Vector Stores.')" :persistence="persistKind('readonly')">
-                <input id="settings-field-chroma-path" class="control" :value="chromaPath" readonly>
-              </UiField>
-            </div>
-            <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_embedding', 'Save embedding defaults')" @click="saveEmbedding" />
-              <UiButton icon="database" :label="i18n.t('nav.vector', 'Vector Stores')" @click="go('/databases', 'vector')" />
-            </template>
-          </SettingsSection>
-          <SettingsSection section-id="rag" :title="i18n.t('settings.rag_title', 'RAG pipeline defaults')" :description="i18n.t('settings.rag_help', 'Retrieval, fusion, reranking, and evidence-budget defaults. These values are stored with each run so later audit can reproduce it.')" :persistence="persistKind('browser')" :status="groupStatus.rag" :status-label="statusLabel(groupStatus.rag)">
-            <p v-if="Object.keys(ragErrors).length" class="info error" role="alert">{{ i18n.t("settings.validation_summary", "Some retrieval defaults could not be saved.") }}</p>
-            <div class="config-grid">
-              <UiField :label="i18n.t('settings.rag_k', 'Retrieval k')" :hint="i18n.t('settings.rag_k_help', 'How many passages to keep after ranking. Typical scholarly runs use 24–64.')" :error="ragErrors.k">
-                <input id="settings-field-rag-k" class="control" type="number" min="1" max="500" v-model.number="ragDraft.k" :aria-invalid="Boolean(ragErrors.k)">
-              </UiField>
-              <UiField :label="i18n.t('settings.rag_top_n', 'Rerank top N')" :hint="i18n.t('settings.rag_top_n_help', 'How many candidates the reranker inspects.')">
-                <input id="settings-field-rag-top-n" class="control" type="number" min="1" max="500" v-model.number="ragDraft.rerank_top_n">
-              </UiField>
-              <UiField :label="i18n.t('settings.rag_reranker', 'Default reranker')">
-                <select id="settings-field-rag-reranker" class="control" v-model="ragDraft.reranker">
-                  <option value="cross_encoder">{{ i18n.t("settings.reranker_ce", "Cross-encoder") }}</option>
-                  <option value="lexical">{{ i18n.t("settings.reranker_lexical", "Lexical/vector") }}</option>
-                  <option value="none">{{ i18n.t("settings.reranker_none", "None") }}</option>
-                </select>
-              </UiField>
-              <UiField :label="i18n.t('settings.rag_record_chars', 'Max characters per evidence record')" :hint="i18n.t('settings.rag_record_chars_help', 'Caps each passage so the model cannot swallow an entire chapter as one evidence item.')">
-                <input id="settings-field-rag-record-chars" class="control" type="number" min="500" v-model.number="ragDraft.evidence_record_char_limit">
-              </UiField>
-              <UiField :label="i18n.t('settings.rag_total_chars', 'Total evidence characters')" :error="ragErrors.evidence_total_char_limit">
-                <input id="settings-field-rag-total-chars" class="control" type="number" min="5000" v-model.number="ragDraft.evidence_total_char_limit" :aria-invalid="Boolean(ragErrors.evidence_total_char_limit)">
-              </UiField>
-              <fieldset class="field field-full">
-                <legend>{{ i18n.t("settings.rag_locales", "Document languages") }}</legend>
-                <div class="language-checks">
-                  <label><input id="settings-field-rag-locale-en" type="checkbox" value="en" :checked="ragDraft.locales.includes('en')" @change="ragDraft.locales = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.locales, 'en'])] : ragDraft.locales.filter(code => code !== 'en')"><span>{{ i18n.t("settings.lang_en", "English") }}</span></label>
-                  <label><input id="settings-field-rag-locale-fr" type="checkbox" value="fr" :checked="ragDraft.locales.includes('fr')" @change="ragDraft.locales = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.locales, 'fr'])] : ragDraft.locales.filter(code => code !== 'fr')"><span>{{ i18n.t("settings.lang_fr", "French") }}</span></label>
-                </div>
-                <p v-if="ragErrors.locales" class="ui-field-error" role="alert">{{ ragErrors.locales }}</p>
-              </fieldset>
-              <fieldset class="field field-full">
-                <legend>{{ i18n.t("settings.rag_routes", "Retrieval routes") }}</legend>
-                <div class="language-checks">
-                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('similarity')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'similarity' as const])] : ragDraft.search_types.filter(item => item !== 'similarity')"><span>{{ i18n.t("research.similarity", "Similarity") }}</span></label>
-                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('lexical')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'lexical' as const])] : ragDraft.search_types.filter(item => item !== 'lexical')"><span>{{ i18n.t("settings.route_lexical", "Lexical (BM25)") }}</span></label>
-                  <label><input type="checkbox" :checked="ragDraft.search_types.includes('mmr')" @change="ragDraft.search_types = ($event.target as HTMLInputElement).checked ? [...new Set([...ragDraft.search_types, 'mmr' as const])] : ragDraft.search_types.filter(item => item !== 'mmr')"><span>{{ i18n.t("settings.route_mmr", "MMR") }}</span></label>
-                </div>
-                <p v-if="ragErrors.search_types" class="ui-field-error" role="alert">{{ ragErrors.search_types }}</p>
-              </fieldset>
-            </div>
-            <details class="settings-advanced" :open="advancedOpen" @toggle="advancedOpen = ($event.target as HTMLDetailsElement).open">
-              <summary>{{ i18n.t("settings.advanced_retrieval", "Advanced retrieval") }}</summary>
-              <div class="config-grid">
-                <UiField :label="i18n.t('settings.rag_fetch_k', 'MMR fetch_k')" :hint="i18n.t('settings.rag_fetch_k_help', 'Candidate pool size before diversity ranking. Must be at least retrieval k.')" :error="ragErrors.fetch_k">
-                  <input class="control" type="number" min="1" max="5000" v-model.number="ragDraft.fetch_k" :aria-invalid="Boolean(ragErrors.fetch_k)">
-                </UiField>
-                <UiField :label="i18n.t('settings.rag_lambda', 'MMR lambda')" :hint="i18n.t('settings.rag_lambda_help', '0 favors diversity; 1 favors relevance to the question.')">
-                  <input class="control" type="number" min="0" max="1" step="0.05" v-model.number="ragDraft.lambda_mult">
-                </UiField>
-                <UiField :label="i18n.t('settings.rag_rrf_k', 'RRF k')" :hint="i18n.t('settings.rag_rrf_k_help', 'Smoothing constant for reciprocal-rank fusion. 60 is a common default.')">
-                  <input class="control" type="number" min="1" v-model.number="ragDraft.rrf_k">
-                </UiField>
-                <UiField :label="i18n.t('settings.rag_cross_encoder', 'Cross-encoder model')">
-                  <input class="control" v-model="ragDraft.cross_encoder_model">
-                </UiField>
-                <UiField :label="i18n.t('settings.rag_decompose', 'Query-decomposition max tokens')" :hint="i18n.t('settings.rag_decompose_help', 'Upper bound for the optional query-split step before retrieval.')">
-                  <input class="control" type="number" min="64" v-model.number="ragDraft.query_decomposition_num_predict">
-                </UiField>
-              </div>
-            </details>
-            <template #actions>
-              <UiButton variant="primary" :label="i18n.t('settings.save_rag', 'Save RAG defaults')" @click="saveRag" />
-              <UiButton :label="i18n.t('settings.reset_rag', 'Reset retrieval defaults')" @click="resetRag" />
-              <UiButton icon="spark" :label="i18n.t('nav.rag', 'Research')" @click="go('/rag', 'rag')" />
-            </template>
-          </SettingsSection>
-        </div>
-
-        <div v-if="isAdmin" v-show="section === 'security'" id="settings-section-security" role="tabpanel" aria-labelledby="settings-nav-security">
-          <SettingsSection section-id="security" :title="i18n.t('settings.security_title', 'Security, users, and permissions')" :description="i18n.t('settings.security_help', 'Accounts and role capabilities are enforced by the API, not only this page.')" :persistence="persistKind('link')" status="readonly" :status-label="statusLabel('readonly')">
-            <p class="note">{{ i18n.t("roles.users_link_help", "Role capabilities are configured centrally and enforced by both navigation and API permissions.") }}</p>
-            <template #actions>
-              <UiButton icon="users" :label="i18n.t('nav.users', 'Users')" @click="go('/users')" />
-              <UiButton icon="roles" :label="i18n.t('nav.roles', 'Roles & permissions')" @click="go('/roles')" />
-            </template>
-          </SettingsSection>
-        </div>
-
-        <div v-if="isAdmin" v-show="section === 'system'" id="settings-section-system" role="tabpanel" aria-labelledby="settings-nav-system">
-          <SettingsSection section-id="backup" :title="i18n.t('settings.backup', 'Backup and restore')" :description="i18n.t('settings.backup_help', 'One portable archive of the browser workspace, loaded records, configuration, the current PDF, and Chroma collections with stored vectors.')" :persistence="persistKind('browser')">
-            <p class="info warn">{{ i18n.t("settings.backup_keys_warning", "This full backup can contain provider API keys. Store the ZIP securely. Installed model files are not copied.") }}</p>
-            <p class="backup-summary">
-              <span><b>{{ backupCounts.files.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.jsonl_tabs", "JSONL files") }}</span>
-              <span><b>{{ backupCounts.jobs.toLocaleString(i18n.locale) }}</b> {{ i18n.t("settings.active_jobs", "active operations") }}</span>
+            <p
+              v-if="
+                !auth.can('page.dashboard') &&
+                !auth.can('page.annotations') &&
+                !auth.can('page.research')
+              "
+              class="note"
+            >
+              {{ i18n.t("permissions.no_workspace_shortcuts") }}
             </p>
-            <input ref="restoreInput" type="file" accept=".zip,application/zip" hidden @change="onRestoreFile">
-            <template #actions>
-              <UiButton variant="primary" icon="download" :label="i18n.t('settings.download_backup', 'Download full backup')" @click="openBackup" />
-              <UiButton icon="upload" :label="i18n.t('settings.restore_backup', 'Load from backup')" @click="openRestore" />
-            </template>
           </SettingsSection>
-          <SettingsSection section-id="viewer" :title="i18n.t('settings.viewer_title', 'Viewer configuration')" :description="i18n.t('settings.viewer_help', 'Reset UI choices or remove audit history without deleting records.')" :persistence="persistKind('browser')">
-            <UiField :label="i18n.t('settings.desktop_notifications', 'Desktop notifications')" :hint="i18n.t('settings.notifications_help', 'Browser permission is required. Notifications are local to this browser.')">
-              <select id="settings-field-notifications" class="control" :value="notificationsOn ? 'on' : 'off'" @change="notificationsOn = ($event.target as HTMLSelectElement).value === 'on'; saveNotifications()">
-                <option value="off">{{ i18n.t("settings.notifications_off", "Off") }}</option>
-                <option value="on">{{ i18n.t("settings.notifications_on", "On when background operations finish") }}</option>
-              </select>
-            </UiField>
+        </div>
+
+        <div v-if="isAdmin" v-show="section === 'research'" id="settings-section-review">
+          <SettingsSection
+            section-id="review"
+            :title="i18n.t('settings.review_title')"
+            :description="i18n.t('settings.review_help')"
+            :persistence="persistKind('browser')"
+            :status="groupStatus.review"
+            :status-label="statusLabel(groupStatus.review)"
+          >
+            <div class="config-grid">
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.review_execution_title") }}</h3>
+                <p>{{ i18n.t("settings.review_execution_help") }}</p>
+              </div>
+              <UiField
+                :label="i18n.t('settings.default_provider')"
+                :hint="i18n.t('settings.default_provider_help')"
+              >
+                <select
+                  id="settings-field-review-provider"
+                  class="control"
+                  v-model="reviewDraft.default_provider_profile"
+                >
+                  <option v-if="!profiles.length" value="">
+                    {{ i18n.t("settings.not_configured") }}
+                  </option>
+                  <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
+                    {{ profile.name || profile.id }} ·
+                    {{
+                      profile.type === "ollama" ? "Ollama" : i18n.t("settings.openai_compatible")
+                    }}
+                  </option>
+                </select>
+              </UiField>
+              <UiField :label="i18n.t('settings.review_preset')">
+                <select
+                  id="settings-field-review-preset"
+                  class="control"
+                  v-model="reviewDraft.default_review_preset"
+                >
+                  <option value="text">{{ i18n.t("settings.preset_text") }}</option>
+                  <option value="attribution">{{ i18n.t("settings.preset_attribution") }}</option>
+                  <option value="semantic">{{ i18n.t("settings.preset_semantic") }}</option>
+                </select>
+              </UiField>
+              <UiField
+                :label="i18n.t('settings.run_mode')"
+                :hint="i18n.t('settings.run_mode_help')"
+              >
+                <select
+                  id="settings-field-review-mode"
+                  class="control"
+                  v-model="reviewDraft.default_llm_run_mode"
+                >
+                  <option value="foreground">{{ i18n.t("settings.run_foreground") }}</option>
+                  <option value="background">{{ i18n.t("settings.run_background") }}</option>
+                </select>
+              </UiField>
+              <div class="settings-group-label field-full">
+                <h3>{{ i18n.t("settings.evaluation_defaults_title") }}</h3>
+                <p>{{ i18n.t("settings.evaluation_defaults_help") }}</p>
+              </div>
+              <label class="check-item field-full"
+                ><input
+                  id="settings-field-rag-auto-grade"
+                  type="checkbox"
+                  v-model="ragDraft.auto_grade"
+                /><span
+                  >{{ i18n.t("settings.rag_auto_grade")
+                  }}<small>{{ i18n.t("settings.rag_auto_grade_help") }}</small></span
+                ></label
+              >
+            </div>
             <template #actions>
-              <UiButton :label="i18n.t('settings.request_notifications', 'Request notification permission')" @click="requestNotifications" />
-              <UiButton :label="i18n.t('settings.reset_columns', 'Reset table columns')" @click="resetColumns" />
-              <UiButton :label="i18n.t('settings.expand_panels', 'Expand all UI panels')" @click="expandPanels" />
-              <UiButton :label="i18n.t('settings.expand_sidebar', 'Expand navigation sidebar')" @click="expandSidebar" />
-              <UiButton :label="i18n.t('settings.restore_upsert', 'Restore removed upsert-queue items')" @click="clearUpsertSuppressions" />
-              <UiButton variant="danger" icon="history" :label="i18n.t('settings.clear_updates', 'Clear all record updates')" @click="openUpdates" />
-              <UiButton icon="dashboard" :label="i18n.t('nav.home', 'Home')" @click="go('/', 'home')" />
-            </template>
-          </SettingsSection>
-          <SettingsSection section-id="nuke" :title="i18n.t('config.nuke.title', 'Start from scratch')" :description="i18n.t('config.nuke.help', 'Deletes accounts, corpora, PDF builds, vector collections, provider profiles, annotations, job history, and this browser workspace so the next load is a first-run setup. Installed model files are not deleted.')" :persistence="persistKind('backend')" status="readonly">
-            <p class="info error">{{ i18n.t("config.nuke.irreversible", "This cannot be undone unless you have a full backup.") }}</p>
-            <UiField :label="i18n.t('config.nuke.type_to_enable', 'Type NUKE to enable')" :hint="i18n.t('config.nuke.type_to_enable_help', 'Type NUKE exactly to enable this destructive action.')">
-              <input id="settings-field-nuke" class="control" v-model="nukePhrase" autocomplete="off">
-            </UiField>
-            <template #actions>
-              <UiButton variant="danger" :label="i18n.t('config.nuke.button', 'NUKE DerridAI workspace')" :disabled="nukePhrase !== 'NUKE'" :disabled-reason="i18n.t('config.nuke.type_to_enable_help', 'Type NUKE exactly to enable this destructive action.')" @click="openNuke" />
+              <UiButton
+                variant="primary"
+                icon="check"
+                :label="i18n.t('settings.save_review')"
+                @click="
+                  saveReview();
+                  if (ragDirty) saveRag();
+                "
+              />
             </template>
           </SettingsSection>
         </div>
+
+        <SettingsServicesPanel
+          v-if="isAdmin && section === 'services'"
+          :profiles="profiles"
+          :default-profile-id="defaultProfileId"
+          :provider-statuses="providerStatuses"
+          :audio="audio"
+          :audio-draft="audioDraft"
+          :audio-status="audioStatus"
+          :audio-busy="audioBusy"
+          :audio-message="audioMessage"
+          @update-audio-draft="audioDraft = $event"
+          @test-audio="testAudio"
+          @save-audio="saveAudio(false)"
+          @clear-audio-key="saveAudio(true)"
+          @navigate="go"
+        />
+
+        <div v-if="isAdmin" v-show="section === 'retrieval'" id="settings-section-retrieval">
+          <SettingsSection
+            section-id="retrieval"
+            :title="i18n.t('settings.vector_title')"
+            :description="i18n.t('settings.vector_help')"
+            :persistence="persistKind('backend')"
+            :status="groupStatus.embedding"
+            :status-label="statusLabel(groupStatus.embedding)"
+          >
+            <div class="config-grid">
+              <UiField :label="i18n.t('settings.embedding_provider')">
+                <select
+                  id="settings-field-embedding-provider"
+                  class="control"
+                  v-model="embeddingDraft.embedding_provider"
+                  @change="syncEmbeddingModelForProvider"
+                >
+                  <option value="ollama">{{ i18n.t("settings.provider_ollama") }}</option>
+                  <option value="chroma">{{ i18n.t("vector.provider_chroma") }}</option>
+                  <option value="precomputed">{{ i18n.t("vector.provider_precomputed") }}</option>
+                  <option
+                    v-for="profile in profiles"
+                    :key="`embedding-${profile.id}`"
+                    :value="`profile:${profile.id}`"
+                  >
+                    {{ profile.name || profile.id }} ·
+                    {{ profile.model || i18n.t("language.model_not_set") }}
+                  </option>
+                </select>
+              </UiField>
+              <UiField :label="i18n.t('settings.embedding_model')">
+                <input
+                  id="settings-field-embedding-model"
+                  class="control"
+                  v-model="embeddingDraft.embedding_model"
+                  :disabled="
+                    embeddingDraft.embedding_provider === 'chroma' ||
+                    embeddingDraft.embedding_provider === 'precomputed'
+                  "
+                />
+              </UiField>
+              <UiField
+                wide
+                :label="i18n.t('settings.chroma_path')"
+                :hint="i18n.t('settings.chroma_path_help')"
+                :persistence="persistKind('readonly')"
+              >
+                <input
+                  id="settings-field-chroma-path"
+                  class="control"
+                  :value="chromaPath"
+                  readonly
+                />
+              </UiField>
+            </div>
+            <div
+              v-if="isAdmin"
+              class="embedding-probe"
+              :data-state="
+                embeddingProbing ? 'checking' : embeddingProbe?.reachable ? 'ok' : 'failed'
+              "
+              role="status"
+              aria-live="polite"
+            >
+              <strong v-if="embeddingProbing">{{ i18n.t("settings.embedding_checking") }}</strong>
+              <template v-else-if="embeddingProbe?.reachable">
+                <strong>{{ i18n.t("settings.embedding_reachable") }}</strong>
+                <span>{{
+                  i18n.tf("settings.embedding_reachable_detail", {
+                    provider: embeddingProbe.provider,
+                    model: embeddingProbe.model || "—",
+                    dimension: embeddingProbe.dimension ?? "—",
+                    ms: embeddingProbe.latency_ms ?? "—",
+                  })
+                }}</span>
+              </template>
+              <template v-else-if="embeddingProbe">
+                <strong>{{ i18n.t("settings.embedding_unreachable") }}</strong>
+                <span>{{ embeddingProbe.error }}</span>
+                <span v-if="embeddingProbe.hint">{{ embeddingProbe.hint }}</span>
+              </template>
+              <span v-else>{{ i18n.t("settings.embedding_untested") }}</span>
+              <span class="embedding-probe-scope">{{
+                i18n.t("settings.embedding_probe_scope")
+              }}</span>
+            </div>
+            <template #actions>
+              <UiButton
+                v-if="isAdmin"
+                :disabled="embeddingProbing"
+                :label="i18n.t('settings.embedding_test')"
+                @click="testEmbedding"
+              />
+              <UiButton
+                variant="primary"
+                :label="i18n.t('settings.save_embedding', 'Save embedding defaults')"
+                @click="saveEmbedding"
+              />
+              <UiButton
+                icon="database"
+                :label="i18n.t('nav.vector', 'Corpus Data')"
+                @click="go('/databases', 'vector')"
+              />
+            </template>
+          </SettingsSection>
+          <SettingsSection
+            section-id="rag"
+            :title="i18n.t('settings.rag_title')"
+            :description="i18n.t('settings.rag_help')"
+            :persistence="persistKind('browser')"
+            :status="groupStatus.rag"
+            :status-label="statusLabel(groupStatus.rag)"
+          >
+            <p v-if="Object.keys(ragErrors).length" class="info error" role="alert">
+              {{ i18n.t("settings.validation_summary") }}
+            </p>
+
+            <div
+              id="settings-field-pipeline-overrides"
+              class="settings-pipeline-overrides"
+              aria-labelledby="settings-pipeline-overrides-title"
+            >
+              <div class="settings-group-label">
+                <h3 id="settings-pipeline-overrides-title">
+                  {{ i18n.t("settings.pipeline_overrides_title", "Global pipeline overrides") }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "settings.pipeline_overrides_help",
+                      "Pipeline Studio defines the baseline configuration. Values enabled here override the named stage setting for this exact pipeline version. Research run overrides take precedence over these Settings values.",
+                    )
+                  }}
+                </p>
+              </div>
+
+              <div v-if="researchPipelineError" class="info error" role="alert">
+                {{ researchPipelineError }}
+              </div>
+              <template v-else-if="researchPipelineOptions">
+                <UiField
+                  :label="i18n.t('settings.pipeline_to_override', 'Pipeline to override')"
+                  :hint="
+                    i18n.t(
+                      'settings.pipeline_to_override_help',
+                      'Choose which immutable Research pipeline version these global overrides belong to. This does not change the Pipeline Studio assignment.',
+                    )
+                  "
+                  wide
+                >
+                  <select
+                    id="settings-field-pipeline-override-target"
+                    v-model="settingsOverridePipelineKey"
+                    class="control"
+                  >
+                    <option value="">
+                      {{
+                        settingsAssignedPipeline
+                          ? `${i18n.t("settings.pipeline_system_assignment", "System assignment")} · ${settingsAssignedPipeline.name} v${settingsAssignedPipeline.version}`
+                          : i18n.t("settings.pipeline_system_assignment", "System assignment")
+                      }}
+                    </option>
+                    <option
+                      v-for="pipeline in researchPipelineOptions.pipelines"
+                      :key="`${pipeline.pipeline_id}@${pipeline.version}`"
+                      :value="`${pipeline.pipeline_id}@${pipeline.version}`"
+                    >
+                      {{ pipeline.name }} · v{{ pipeline.version }}
+                    </option>
+                  </select>
+                </UiField>
+
+                <p v-if="settingsOverridePipeline" class="pipeline-override-identity">
+                  <span>{{
+                    i18n.t("settings.pipeline_baseline", "Pipeline Studio baseline")
+                  }}</span>
+                  <code>
+                    {{ settingsOverridePipeline.pipeline_id }}@{{
+                      settingsOverridePipeline.version
+                    }}
+                  </code>
+                </p>
+
+                <PipelineConfigOverridesEditor
+                  v-model="settingsPipelineOverrideDraft"
+                  :pipeline="settingsOverridePipeline"
+                  :strategies="researchPipelineOptions.strategies"
+                  layer="settings"
+                />
+
+                <UiButton
+                  icon="compare"
+                  :label="i18n.t('settings.open_pipeline_studio', 'Open Pipeline Studio')"
+                  @click="go('/pipelines', 'pipelines')"
+                />
+              </template>
+              <p v-else class="note" role="status">
+                {{ i18n.t("settings.pipeline_overrides_loading", "Loading Research pipelines…") }}
+              </p>
+            </div>
+
+            <div class="config-grid settings-request-defaults">
+              <div class="settings-group-label field-full">
+                <h3>
+                  {{
+                    i18n.t("settings.research_request_defaults_title", "Research request defaults")
+                  }}
+                </h3>
+                <p>
+                  {{
+                    i18n.t(
+                      "settings.research_request_defaults_help",
+                      "These are run inputs rather than Pipeline Studio stage configuration. They become the starting values for Research and may be changed for one run without altering Settings.",
+                    )
+                  }}
+                </p>
+              </div>
+              <UiField
+                :label="i18n.t('settings.rag_k')"
+                :tooltip="i18n.t('help.glossary.top_k.definition')"
+                :error="ragErrors.k"
+              >
+                <input
+                  id="settings-field-rag-k"
+                  v-model.number="ragDraft.k"
+                  class="control"
+                  type="number"
+                  min="1"
+                  max="500"
+                  :aria-invalid="Boolean(ragErrors.k)"
+                />
+              </UiField>
+              <UiField
+                :label="i18n.t('settings.rag_automatic_sizing', 'Automatic sizing')"
+                :hint="
+                  i18n.t(
+                    'settings.rag_automatic_sizing_help',
+                    'Adapt retrieval depth to Record size without changing Pipeline Studio stage configuration.',
+                  )
+                "
+              >
+                <label class="language-checks">
+                  <input
+                    id="settings-field-rag-automatic-sizing"
+                    v-model="ragDraft.automatic_sizing"
+                    type="checkbox"
+                  />
+                  <span>{{
+                    i18n.t(
+                      "settings.rag_automatic_sizing_control",
+                      "Adjust retrieval to Record size",
+                    )
+                  }}</span>
+                </label>
+              </UiField>
+              <fieldset id="settings-field-rag-locales" class="field field-full">
+                <legend>{{ i18n.t("settings.rag_locales") }}</legend>
+                <div class="language-checks">
+                  <label>
+                    <input
+                      id="settings-field-rag-locale-en"
+                      type="checkbox"
+                      value="en"
+                      :checked="ragDraft.locales.includes('en')"
+                      @change="
+                        ragDraft.locales = ($event.target as HTMLInputElement).checked
+                          ? [...new Set([...ragDraft.locales, 'en'])]
+                          : ragDraft.locales.filter((code) => code !== 'en')
+                      "
+                    />
+                    <span>{{ i18n.t("settings.lang_en") }}</span>
+                  </label>
+                  <label>
+                    <input
+                      id="settings-field-rag-locale-fr"
+                      type="checkbox"
+                      value="fr"
+                      :checked="ragDraft.locales.includes('fr')"
+                      @change="
+                        ragDraft.locales = ($event.target as HTMLInputElement).checked
+                          ? [...new Set([...ragDraft.locales, 'fr'])]
+                          : ragDraft.locales.filter((code) => code !== 'fr')
+                      "
+                    />
+                    <span>{{ i18n.t("settings.lang_fr") }}</span>
+                  </label>
+                </div>
+                <p v-if="ragErrors.locales" class="ui-field-error" role="alert">
+                  {{ ragErrors.locales }}
+                </p>
+              </fieldset>
+              <fieldset id="settings-field-rag-routes" class="field field-full">
+                <legend>{{ i18n.t("settings.rag_routes") }}</legend>
+                <div class="language-checks">
+                  <label>
+                    <input
+                      type="checkbox"
+                      :checked="ragDraft.search_types.includes('similarity')"
+                      @change="
+                        ragDraft.search_types = ($event.target as HTMLInputElement).checked
+                          ? [...new Set([...ragDraft.search_types, 'similarity' as const])]
+                          : ragDraft.search_types.filter((item) => item !== 'similarity')
+                      "
+                    />
+                    <span>{{ i18n.t("research.similarity") }}</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      :checked="ragDraft.search_types.includes('lexical')"
+                      @change="
+                        ragDraft.search_types = ($event.target as HTMLInputElement).checked
+                          ? [...new Set([...ragDraft.search_types, 'lexical' as const])]
+                          : ragDraft.search_types.filter((item) => item !== 'lexical')
+                      "
+                    />
+                    <span>{{ i18n.t("settings.route_lexical") }}</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      :checked="ragDraft.search_types.includes('mmr')"
+                      @change="
+                        ragDraft.search_types = ($event.target as HTMLInputElement).checked
+                          ? [...new Set([...ragDraft.search_types, 'mmr' as const])]
+                          : ragDraft.search_types.filter((item) => item !== 'mmr')
+                      "
+                    />
+                    <span>{{ i18n.t("settings.route_mmr") }}</span>
+                  </label>
+                </div>
+                <p v-if="ragErrors.search_types" class="ui-field-error" role="alert">
+                  {{ ragErrors.search_types }}
+                </p>
+              </fieldset>
+            </div>
+
+            <template #actions>
+              <UiButton variant="primary" :label="i18n.t('settings.save_rag')" @click="saveRag" />
+              <UiButton :label="i18n.t('settings.reset_rag')" @click="resetRag" />
+              <UiButton icon="spark" :label="i18n.t('nav.rag')" @click="go('/rag', 'rag')" />
+            </template>
+          </SettingsSection>
+        </div>
+
+        <SettingsAccessPanel v-if="isAdmin && section === 'access'" @navigate="go" />
+
+        <SettingsDataPanel
+          v-if="isAdmin && section === 'data'"
+          :backup-counts="backupCounts"
+          @backup="openBackup"
+          @restore-file="onRestoreFile"
+          @navigate="go"
+        />
+
+        <SettingsTroubleshootingPanel
+          v-if="isAdmin && section === 'troubleshooting'"
+          v-model="nukePhrase"
+          @reset-columns="resetColumns"
+          @expand-panels="expandPanels"
+          @expand-sidebar="expandSidebar"
+          @restore-upsert="clearUpsertSuppressions"
+          @clear-updates="openUpdates"
+          @open-nuke="openNuke"
+          @navigate="go"
+        />
       </div>
     </div>
 
@@ -703,16 +1588,26 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :open="Boolean(confirm)"
       :title="confirm.title"
       :description="confirm.message"
-      :close-label="i18n.t('common.close', 'Close')"
+      :close-label="i18n.t('common.close')"
       size="medium"
       @close="closeConfirm"
     >
       <p>{{ confirm.message }}</p>
       <template #footer>
-        <UiButton :label="i18n.t('common.cancel', 'Cancel')" :disabled="Boolean(busy)" @click="closeConfirm" />
+        <UiButton
+          :label="i18n.t('common.cancel')"
+          :disabled="Boolean(busy)"
+          @click="closeConfirm"
+        />
         <UiButton
           :variant="confirm.kind === 'backup' ? 'primary' : 'danger'"
-          :label="busy ? i18n.t('ui.working', 'Working…') : (confirm.kind === 'nuke' ? i18n.t('config.nuke.confirm_label', 'Delete everything') : i18n.t('common.yes', 'Yes'))"
+          :label="
+            busy
+              ? i18n.t('ui.working')
+              : confirm.kind === 'nuke'
+                ? i18n.t('config.nuke.confirm_label')
+                : i18n.t('common.yes')
+          "
           :disabled="Boolean(busy)"
           @click="applyConfirm"
         />
@@ -722,41 +1617,234 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 </template>
 
 <style scoped>
-.settings-page{display:grid;gap:var(--page-gap)}
-.settings-toolbar{display:grid;gap:8px}
-.settings-contents-toggle{display:none}
-.settings-layout{display:grid;grid-template-columns:minmax(196px,240px) minmax(0,1fr);gap:20px;align-items:start}
-.settings-rail{position:sticky;top:12px}
-.settings-pane{display:grid;gap:16px;min-width:0}
-.settings-locale-row{display:flex;align-items:center;gap:10px}
-.settings-locale-row .control{flex:1}
-.theme-choice-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0;padding:0;border:0}
-.theme-choice-grid legend{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
-.theme-choice{display:grid;grid-template-columns:54px minmax(0,1fr);gap:9px;align-items:center;min-height:44px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);cursor:pointer}
-.theme-choice.selected{background:var(--accent-soft);border-color:var(--accent)}
-.theme-choice input{position:absolute;opacity:0}
-.theme-choice b{display:block;font-size:.8125rem}
-.theme-choice small{display:block;margin-top:3px;color:var(--muted);font-size:.8125rem}
-.providers-summary{list-style:none;margin:0;padding:0;display:grid;gap:10px}
-.providers-summary li{display:grid;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
-.providers-summary span,.providers-summary small{color:var(--muted);font-size:.8125rem}
-.settings-advanced{border:1px solid var(--line);border-radius:12px;padding:8px 12px;background:var(--panel-2)}
-.settings-advanced summary{min-height:40px;display:flex;align-items:center;cursor:pointer;font-weight:750}
-.settings-advanced .config-grid{margin-top:10px}
-.backup-summary{display:flex;flex-wrap:wrap;gap:12px;margin:0;color:var(--muted)}
-.field-full{grid-column:1/-1}
-.ui-field-error{color:var(--danger);font-size:.8125rem;font-weight:700}
-@media (max-width:900px){
-  .settings-layout{grid-template-columns:1fr}
-  .settings-rail{position:static;display:none}
-  .settings-rail.open{display:block}
-  .settings-contents-toggle{display:inline-flex}
-  .theme-choice-grid{grid-template-columns:1fr}
+.settings-page {
+  display: grid;
+  gap: var(--page-gap);
 }
-@media (max-width:640px){
-  .config-grid{grid-template-columns:1fr}
+.settings-toolbar {
+  display: grid;
+  gap: 8px;
 }
-@media (prefers-reduced-motion: reduce){
-  .settings-page *{transition:none !important}
+.settings-contents-toggle {
+  display: none;
+}
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(196px, 240px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.settings-rail {
+  position: sticky;
+  top: 12px;
+}
+.settings-pane {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 1040px;
+  min-width: 0;
+}
+.settings-about {
+  display: grid;
+  gap: 6px;
+}
+.settings-about h3 {
+  margin: 0;
+  font-size: 0.875rem;
+}
+.settings-locale-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-locale-row .control {
+  flex: 1;
+}
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.theme-choice-grid legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.theme-choice {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.theme-choice.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.theme-choice input {
+  position: absolute;
+  opacity: 0;
+}
+.theme-choice b {
+  display: block;
+  font-size: 0.8125rem;
+}
+.theme-choice small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.providers-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.providers-summary li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.providers-summary span,
+.providers-summary small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.settings-pipeline-overrides {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--panel-2);
+}
+.pipeline-override-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.pipeline-override-identity code {
+  color: var(--text-primary);
+}
+.settings-request-defaults {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+.settings-advanced {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--panel-2);
+}
+.settings-advanced summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 750;
+}
+.settings-advanced .config-grid {
+  margin-top: 10px;
+}
+.field-full {
+  grid-column: 1/-1;
+}
+.settings-group-label {
+  display: grid;
+  gap: 4px;
+  padding-top: 8px;
+}
+.settings-group-label:not(:first-child) {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.settings-group-label h3,
+.settings-group-label p {
+  margin: 0;
+}
+.settings-group-label h3 {
+  font-size: 0.9375rem;
+}
+.settings-group-label p {
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.ui-field-error {
+  color: var(--danger);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+@media (max-width: 900px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-rail {
+    position: static;
+    display: none;
+  }
+  .settings-rail.open {
+    display: block;
+  }
+  .settings-contents-toggle {
+    display: inline-flex;
+  }
+  .theme-choice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-page * {
+    transition: none !important;
+  }
+}
+.embedding-probe {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.embedding-probe[data-state="ok"] {
+  border-color: var(--tone-ok-fg, var(--line));
+}
+.embedding-probe[data-state="failed"] {
+  border-color: var(--tone-warn-fg, var(--line));
+}
+.embedding-probe-scope {
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 </style>

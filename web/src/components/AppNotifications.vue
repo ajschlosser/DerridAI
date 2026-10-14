@@ -1,19 +1,57 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { useNotifications } from "../composables/notifications";
 import { useI18nStore } from "../stores/i18n";
 
-const { notifications, dismiss } = useNotifications();
+const { notifications, dismiss, pause, resume } = useNotifications();
 const i18n = useI18nStore();
+// A shape as well as a colour, so the tone is not carried by colour alone (WCAG 1.4.1).
+const toneIcons = { success: "✓", info: "ℹ", warning: "⚠", danger: "✕" } as const;
 </script>
 
 <template>
-  <section class="notifications" aria-live="polite" aria-atomic="true">
-    <div v-for="item in notifications" :key="item.id" class="notification" :data-tone="item.tone">
-      <span>{{ item.message }}</span>
+  <section
+    class="notifications"
+    :aria-label="i18n.t('ui.notifications')"
+    aria-live="polite"
+    aria-atomic="false"
+    aria-relevant="additions"
+  >
+    <div
+      v-for="item in notifications"
+      :key="item.id"
+      class="notification"
+      :data-tone="item.tone"
+      tabindex="0"
+      @pointerenter="pause(item.id)"
+      @pointerleave="resume(item.id)"
+      @focusin="pause(item.id)"
+      @focusout="resume(item.id)"
+      @keydown.esc="dismiss(item.id)"
+    >
+      <span class="notification-icon" aria-hidden="true">{{ toneIcons[item.tone] }}</span>
+      <span class="sr-only">{{ i18n.t(`ui.notification_${item.tone}`) }}:</span>
+      <span class="notification-message">{{ item.message }}</span>
       <button
         type="button"
-        :aria-label="i18n.t('ui.dismiss_notification', 'Dismiss notification')"
+        :aria-label="i18n.t('ui.dismiss_notification')"
         @click="dismiss(item.id)"
       >
         ×
@@ -45,14 +83,43 @@ const i18n = useI18nStore();
   box-shadow: var(--shadow-overlay);
   font-size: var(--fs-sm);
   line-height: var(--lh-normal);
+  user-select: text;
+}
+.notification:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 /* Long values (a citation, a link) wrap rather than widen the notification. */
-.notification span {
+.notification-message {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.notification-icon {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .notification[data-tone="success"] {
   border-left-color: var(--tone-ok-fg);
+}
+.notification[data-tone="success"] .notification-icon {
+  color: var(--tone-ok-fg);
+}
+.notification[data-tone="warning"] .notification-icon {
+  color: var(--tone-warn-fg);
+}
+.notification[data-tone="danger"] .notification-icon {
+  color: var(--tone-danger-fg);
 }
 .notification[data-tone="warning"] {
   border-left-color: var(--tone-warn-fg);

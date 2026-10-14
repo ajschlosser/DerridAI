@@ -1,10 +1,41 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // The Works workspace: describing each work, loading what the Works view needs, and the commands it sends (search,
 // overview, sync, metadata dialogs, review and remove actions). Moved verbatim from the legacy runtime; the runtime's
 // state object and helpers are passed in as dependencies.
 import { fullCitation } from "./citations";
-import { commonWorkValue, workCoverUrl } from "./workMetadata";
+import { currentFieldAssertions } from "./fieldAssertions";
+import { metadataSchemasApi, type MetadataSchema } from "../api/metadataSchemas";
+import { commonWorkValue, workCoverUrl, workMetadataPresentationRows } from "./workMetadata";
+import { WORK_METADATA_LLM_FIELDS } from "./runtimeConstants";
+import type { WorksDbStatusKind, WorksIndexFreshness, WorksViewState } from "../types/works";
+
+export const WORKS_SORTS = ["title-asc", "title-desc", "records-desc", "review-desc", "year-asc"];
+/** The stable `workDbStatus()` kinds a Works filter may name. */
+export const WORKS_DB_STATUSES: WorksDbStatusKind[] = [
+  "changed",
+  "synced",
+  "exists",
+  "absent",
+  "unknown",
+  "none",
+];
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -29,7 +60,10 @@ type Helper =
   | "openTouchup"
   | "openWorkMetadataEditor"
   | "openWorkMetadataLlmDialog"
-  | "persistPrefs"
+  | "persistAnnotationsPreferences"
+  | "persistSearchPreferences"
+  | "persistVectorPreferences"
+  | "persistWorksPreferences"
   | "providerProfiles"
   | "recordStores"
   | "refreshPresenceForRows"
@@ -41,7 +75,6 @@ type Helper =
   | "syncUrl"
   | "tr"
   | "uid"
-  | "uniqueWorkValues"
   | "upsertRows"
   | "workDbStatus"
   | "workIndex"
@@ -67,7 +100,10 @@ export function createWorksWorkspace(deps: Deps) {
     openTouchup,
     openWorkMetadataEditor,
     openWorkMetadataLlmDialog,
-    persistPrefs,
+    persistAnnotationsPreferences,
+    persistSearchPreferences,
+    persistVectorPreferences,
+    persistWorksPreferences,
     providerProfiles,
     recordStores,
     refreshPresenceForRows,
@@ -79,81 +115,268 @@ export function createWorksWorkspace(deps: Deps) {
     syncUrl,
     tr,
     uid,
-    uniqueWorkValues,
     upsertRows,
     workDbStatus,
     workIndex,
     workInsightMetrics,
     worksBiblioValue,
   } = deps;
-  function describeAdminWork(item: Any, { insights = false } = {}) {
+  const workSearchCache = new WeakMap<object, string>();
+  const workMetadataSchemaCache = new Map<string, MetadataSchema | null>();
+
+  function schemaIdForRows(rows: Any[]): string {
+    const ids = new Set<string>();
+    for (const row of rows || []) {
+      const explicit = String(row?.record?.schema_id || "").trim();
+      if (explicit) ids.add(explicit);
+      for (const assertion of currentFieldAssertions(row?.record || {})) {
+        const id = String(assertion.schema_id || "").trim();
+        if (id) ids.add(id);
+      }
+    }
+    return ids.size === 1 ? [...ids][0] : "";
+  }
+
+  function workMetadataSchema(rows: Any[]): MetadataSchema | null {
+    const schemaId = schemaIdForRows(rows);
+    return schemaId ? workMetadataSchemaCache.get(schemaId) || null : null;
+  }
+
+  async function preloadWorkMetadataSchemas(rows: Any[]) {
+    const ids = new Set<string>();
+    for (const row of rows || []) {
+      const explicit = String(row?.record?.schema_id || "").trim();
+      if (explicit) ids.add(explicit);
+      for (const assertion of currentFieldAssertions(row?.record || {})) {
+        const id = String(assertion.schema_id || "").trim();
+        if (id) ids.add(id);
+      }
+    }
+    await Promise.all(
+      [...ids].map(async (id) => {
+        if (workMetadataSchemaCache.has(id)) return;
+        try {
+          workMetadataSchemaCache.set(id, await metadataSchemasApi.get(id));
+        } catch {
+          // Imported/legacy publications may reference a schema that is no
+          // longer installed. Their FieldAssertion identities still provide
+          // the compatibility path in workMetadataPresentationRows.
+          workMetadataSchemaCache.set(id, null);
+        }
+      }),
+    );
+  }
+  const librarySearchFields = [
+    ...WORK_METADATA_LLM_FIELDS,
+    "canonical_work_id",
+    "original_language",
+  ];
+
+  function normalizeLibrarySearch(value: unknown): string {
+    return String(value ?? "")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase()
+      .trim();
+  }
+
+  function appendSearchValue(values: string[], value: unknown) {
+    if (Array.isArray(value)) {
+      for (const item of value) appendSearchValue(values, item);
+      return;
+    }
+    if (value === null || value === undefined || typeof value === "object") return;
+    const normalized = normalizeLibrarySearch(value);
+    if (normalized) values.push(normalized);
+  }
+
+  function adminWorkSearchText(item: Any): string {
+    if (item && typeof item === "object") {
+      const cached = workSearchCache.get(item);
+      if (cached !== undefined) return cached;
+    }
+    const values: string[] = [];
+    appendSearchValue(values, item?.work);
+    appendSearchValue(values, [...(item?.authors || [])]);
+    appendSearchValue(values, [...(item?.years || [])]);
+    for (const row of item?.rows || []) {
+      for (const field of librarySearchFields) appendSearchValue(values, row.record?.[field]);
+    }
+    const text = [...new Set(values)].join(" ");
+    if (item && typeof item === "object") workSearchCache.set(item, text);
+    return text;
+  }
+
+  function researcherWorkSearchText(item: Any): string {
+    const values: string[] = [];
+    appendSearchValue(values, item?.work);
+    for (const field of librarySearchFields) appendSearchValue(values, item?.[field]);
+    return [...new Set(values)].join(" ");
+  }
+
+  function worksSortValue() {
+    return WORKS_SORTS.includes(state.worksSort) ? String(state.worksSort) : "title-asc";
+  }
+
+  /**
+   * Return only the URL/persistence-owned control state. This is safe to read
+   * before corpus or database hydration and prevents a cold Works shell from
+   * inventing default controls that contradict the current deep link.
+   */
+  function getWorksViewState(): WorksViewState {
+    const dbStatus = String(state.worksDbStatus || "");
+    return {
+      query: String(state.worksSearch || ""),
+      sort: worksSortValue() as WorksViewState["sort"],
+      filters: {
+        needsReview: Boolean(state.worksNeedsReview),
+        dbStatus: WORKS_DB_STATUSES.includes(dbStatus as WorksDbStatusKind)
+          ? (dbStatus as WorksDbStatusKind)
+          : "",
+        author: String(state.worksAuthor || ""),
+      },
+      viewMode: ["list", "compact"].includes(String(state.worksView)) ? "list" : "cards",
+    };
+  }
+
+  /** The first four-digit year in a label, or null when the work has no defined year. */
+  function workYear(item: Any): number | null {
+    const match = String(item.year_label || "").match(/\d{4}/);
+    return match ? Number(match[0]) : null;
+  }
+  function sortWorkItems(items: Any[]) {
+    const byTitle = (a: Any, b: Any) => a.work.localeCompare(b.work);
+    const sort = worksSortValue();
+    const compare: (a: Any, b: Any) => number =
+      sort === "title-desc"
+        ? (a, b) => byTitle(b, a)
+        : sort === "records-desc"
+          ? (a, b) => b.count - a.count || byTitle(a, b)
+          : sort === "review-desc"
+            ? (a, b) => b.review - a.review || byTitle(a, b)
+            : sort === "year-asc"
+              ? (a, b) => {
+                  const ya = workYear(a);
+                  const yb = workYear(b);
+                  if (ya === null || yb === null)
+                    return ya === yb ? byTitle(a, b) : ya === null ? 1 : -1;
+                  return ya - yb || byTitle(a, b);
+                }
+              : byTitle;
+    return [...items].sort(compare);
+  }
+  function annotationCountsByWork() {
+    const counts = new Map<string, number>();
+    for (const annotation of allAnnotations()) {
+      const work = String(annotation.work || "");
+      if (!work) continue;
+      counts.set(work, (counts.get(work) || 0) + 1);
+    }
+    return counts;
+  }
+
+  function describeAdminWork(
+    item: Any,
+    {
+      detail = false,
+      annotationCounts = null,
+    }: { detail?: boolean; annotationCounts?: Map<string, number> | null } = {},
+  ) {
     const publisher = worksBiblioValue(item.rows, "publisher");
     const translator = worksBiblioValue(item.rows, "translator");
     const year = commonWorkValue(item.rows, "publication_year");
-    const metadataFields = [
-      "source_type",
-      "document_author",
-      "container_title",
-      "journal_title",
-      "volume",
-      "issue",
-      "pages",
-      "publisher",
-      "publication_year",
-      "edition",
-      "translator",
-      "editor",
-      "publication_place",
-      "isbn",
-      "doi",
-      "document_language",
-      "original_language",
-    ];
-    return {
+    const base = {
       work: item.work,
       count: item.count,
       review: item.review,
-      annotations: allAnnotations().filter(
-        (annotation: Any) => String(annotation.work || "") === String(item.work),
-      ).length,
+      annotations: Number(annotationCounts?.get(String(item.work)) || 0),
       files: [...item.files],
       authors: [...item.authors],
       years: [...item.years].map(String),
       cover: workCoverUrl(item.rows),
-      citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
       year_label: year.value ? String(year.value) : [...item.years].sort().join(", "),
       subtitle: "",
       publisher,
       translator,
-      metadata: metadataFields.map((field) => {
-        const value = commonWorkValue(item.rows, field);
-        return {
-          field,
-          field_label: label(field),
-          mixed: Boolean(value.mixed),
-          value: value.mixed ? "" : String(display(value.value)),
-          unique_count: value.mixed ? uniqueWorkValues(item.rows, field).length : 0,
-        };
-      }),
       status: workDbStatus(item.rows, item.work),
-      insights: insights
-        ? workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
-            id: metric.id,
-            field: metric.field,
-            title: metric.title,
-            heading: String(metric.title || "")
-              .replace(" in the work", "")
-              .replace(" mentioned in the work", ""),
-            type: metric.type === "pie" ? "pie" : "bars",
-            values: metric.values.map((value: Any) => ({
-              key: String(value.key),
-              value: Number(value.value || 0),
-              other: Boolean(value.other),
-            })),
-          }))
-        : [],
+      searchText: adminWorkSearchText(item),
+    };
+    if (!detail) return base;
+
+    const metadata = workMetadataPresentationRows(item.rows, workMetadataSchema(item.rows)).map(
+      (item) => ({
+        field_id: item.field_id,
+        field: item.field,
+        field_label: label(item.field),
+        mixed: item.mixed,
+        value: item.mixed ? "" : String(display(item.value)),
+        unique_count: item.unique_count,
+        empty: item.empty,
+      }),
+    );
+    return {
+      ...base,
+      citation: fullCitation(item.rows[0]?.record || { work: item.work }, { includePages: false }),
+      metadata,
+      insights: workInsightMetrics(item.rows, item.work).map((metric: Any) => ({
+        id: metric.id,
+        field: metric.field,
+        title: metric.title,
+        heading: metric.heading,
+        type: metric.type === "pie" ? "pie" : "bars",
+        values: metric.values.map((value: Any) => ({
+          key: String(value.key),
+          value: Number(value.value || 0),
+          other: Boolean(value.other),
+        })),
+      })),
     };
   }
+
+  function summarizeIndexFreshness(items: Any[]): WorksIndexFreshness {
+    const freshness: WorksIndexFreshness = {
+      state: "empty",
+      totalRecords: 0,
+      currentRecords: 0,
+      changedRecords: 0,
+      presentRecords: 0,
+      absentRecords: 0,
+      unknownRecords: 0,
+      unavailableRecords: 0,
+    };
+    for (const item of items) {
+      const count = Number(item.count || 0);
+      freshness.totalRecords += count;
+      switch (item.status?.kind as WorksDbStatusKind | undefined) {
+        case "synced":
+          freshness.currentRecords += count;
+          break;
+        case "changed":
+          freshness.changedRecords += count;
+          break;
+        case "exists":
+          freshness.presentRecords += count;
+          break;
+        case "absent":
+          freshness.absentRecords += count;
+          break;
+        case "unknown":
+          freshness.unknownRecords += count;
+          break;
+        default:
+          freshness.unavailableRecords += count;
+      }
+    }
+    if (!freshness.totalRecords) freshness.state = "empty";
+    else if (freshness.unavailableRecords === freshness.totalRecords)
+      freshness.state = "unavailable";
+    else if (freshness.changedRecords || freshness.absentRecords) freshness.state = "stale";
+    else if (freshness.presentRecords || freshness.unknownRecords || freshness.unavailableRecords)
+      freshness.state = "unknown";
+    else freshness.state = "current";
+    return freshness;
+  }
+
   function worksSnapshotBase(extra: Any) {
     const stores = recordStores().map((store: Any) => ({
       name: store.name,
@@ -163,27 +386,37 @@ export function createWorksWorkspace(deps: Deps) {
     const activeStoreInfo = stores.find((store: Any) => store.name === activeStore) || null;
     const noDbReason = dbUnavailableReason();
     return {
-      query: String(state.worksSearch || ""),
+      ...getWorksViewState(),
       selectedWork: String(state.workOverview || ""),
       stores,
       activeStore,
       activeStoreCount: Number(activeStoreInfo?.count || 0),
       dbUnavailableReason: noDbReason,
-      storesEmptyLabel: "No corpus Chroma collections",
+      storesEmptyLabel: tr("works.no_search_indexes"),
       citationLabel: label("full_citation"),
       populateDisabledReason: "",
-      syncAllDisabledReason:
-        noDbReason || tr("works.select_collection", "Select a corpus collection first."),
-      corpusManageDeniedReason: tr(
-        "permissions.corpus_manage_denied",
-        "Your role cannot load corpus files.",
-      ),
+      syncAllDisabledReason: noDbReason || tr("works.select_collection"),
+      corpusManageDeniedReason: tr("permissions.corpus_manage_denied"),
       hasProviderProfiles: providerProfiles().length > 0,
       shared: Boolean(new URLSearchParams(location.search).get("file")),
       error: "",
       ...extra,
     };
   }
+  function reconcileWorksOverviewSelection() {
+    const selected = String(state.workOverview || "");
+    if (!selected) return false;
+    const exists = isResearcher()
+      ? (state.storeWorkStats || []).some((item: Any) => String(item.work || "") === selected)
+      : workIndex().has(selected);
+    if (exists) return false;
+
+    state.workOverview = "";
+    persistWorksPreferences();
+    syncUrl({ replace: true });
+    return true;
+  }
+
   async function prepareWorksWorkspace() {
     if (isResearcher()) {
       try {
@@ -198,12 +431,19 @@ export function createWorksWorkspace(deps: Deps) {
       } catch {
         /* annotations are best-effort */
       }
+      reconcileWorksOverviewSelection();
       return { error: "" };
     }
     try {
       await refreshServerAnnotations();
     } catch {
       /* annotations are best-effort */
+    }
+    try {
+      const rows = [...workIndex().values()].flatMap((item) => item.rows || []);
+      await preloadWorkMetadataSchemas(rows);
+    } catch {
+      /* schema enrichment is best-effort; assertion identity fallback remains */
     }
     if (Date.now() - Number(state.storesLastFetchedAt || 0) > 5000) {
       try {
@@ -221,10 +461,11 @@ export function createWorksWorkspace(deps: Deps) {
     }
     try {
       const rows = [...workIndex().values()].slice(0, 24).flatMap((item) => item.rows.slice(0, 2));
-      refreshPresenceForRows(rows);
+      await refreshPresenceForRows(rows);
     } catch {
       /* presence is best-effort */
     }
+    reconcileWorksOverviewSelection();
     return { error: "" };
   }
   function getWorksWorkspaceSnapshot() {
@@ -232,18 +473,54 @@ export function createWorksWorkspace(deps: Deps) {
     const hasProfiles = providerProfiles().length > 0;
     if (isResearcher()) {
       const stores = recordStores();
-      const items = (state.storeWorkStats || []).filter(
-        (item: Any) =>
-          !query || String(item.work).toLocaleLowerCase().includes(query.toLocaleLowerCase()),
+      const all = state.storeWorkStats || [];
+      const researcherAuthor = String(state.worksAuthor || "");
+      const items = sortWorkItems(
+        all
+          .map((item: Any) => ({
+            ...describeResearcherWork(item, { selected: false }),
+            searchText: researcherWorkSearchText(item),
+            authors: item.document_author ? [String(item.document_author)] : [],
+          }))
+          .filter(
+            (item: Any) =>
+              (!query ||
+                String(item.searchText || item.work).includes(normalizeLibrarySearch(query))) &&
+              (!researcherAuthor || item.authors.includes(researcherAuthor)),
+          ),
       );
-      const selectedStat = items.find((item: Any) => item.work === state.workOverview) || null;
+      const selectedStat = all.find((item: Any) => item.work === state.workOverview) || null;
       return worksSnapshotBase({
         mode: "researcher",
         available: stores.length > 0,
-        works: items.map((item: Any) => describeResearcherWork(item, { selected: false })),
+        works: items,
+        scopeWorks: all.map((item: Any) => ({
+          work: String(item.work || ""),
+          count: Number(item.count || 0),
+          authors: item.document_author ? [String(item.document_author)] : [],
+          year_label: String(item.publication_year || item.year || ""),
+        })),
         selected: selectedStat ? describeResearcherWork(selectedStat, { selected: true }) : null,
-        totalWorks: items.length,
-        totalRecords: items.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        totalWorks: all.length,
+        visibleWorks: items.length,
+        totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        indexFreshness: {
+          state: "unavailable",
+          totalRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+          currentRecords: 0,
+          changedRecords: 0,
+          presentRecords: 0,
+          absentRecords: 0,
+          unknownRecords: 0,
+          unavailableRecords: all.reduce((sum: Any, item: Any) => sum + Number(item.count || 0), 0),
+        },
+        sourceFileCount: 0,
+        totalReview: 0,
+        authors: [
+          ...new Set<string>(
+            all.map((item: Any) => String(item.document_author || "").trim()).filter(Boolean),
+          ),
+        ].sort((a, b) => a.localeCompare(b)),
         capabilities: {
           canManageCorpus: false,
           canSync: false,
@@ -253,25 +530,52 @@ export function createWorksWorkspace(deps: Deps) {
       });
     }
     const map = workIndex();
-    if (state.workOverview && !map.has(state.workOverview)) state.workOverview = "";
-    const selectedItem = state.workOverview ? map.get(state.workOverview) : null;
-    const items = [...map.values()]
-      .filter((item) => !query || item.work.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-      .sort((a, b) => a.work.localeCompare(b.work));
-    const totalRecords = [...map.values()].reduce((sum, item) => sum + item.count, 0);
+    const selectedItem = state.workOverview ? map.get(state.workOverview) || null : null;
+    const needle = normalizeLibrarySearch(query);
+    const annotationCounts = annotationCountsByWork();
+    const described = [...map.values()].map((item) =>
+      describeAdminWork(item, { annotationCounts }),
+    );
+    const filters = {
+      needsReview: Boolean(state.worksNeedsReview),
+      dbStatus: String(state.worksDbStatus || ""),
+      author: String(state.worksAuthor || ""),
+    };
+    const items = sortWorkItems(
+      described.filter(
+        (item: Any) =>
+          (!query || String(item.searchText || item.work).includes(needle)) &&
+          (!filters.needsReview || item.review > 0) &&
+          (!filters.dbStatus || item.status.kind === filters.dbStatus) &&
+          (!filters.author || item.authors.includes(filters.author)),
+      ),
+    );
+    const totalRecords = described.reduce((sum: number, item: Any) => sum + item.count, 0);
     return worksSnapshotBase({
       mode: "admin",
       available: state.files.length > 0,
-      works: items.map((item) => describeAdminWork(item)),
-      selected: selectedItem ? describeAdminWork(selectedItem, { insights: true }) : null,
+      works: items,
+      scopeWorks: described.map((item: Any) => ({
+        work: String(item.work || ""),
+        count: Number(item.count || 0),
+        authors: [...(item.authors || [])],
+        year_label: String(item.year_label || ""),
+      })),
+      selected: selectedItem
+        ? describeAdminWork(selectedItem, { detail: true, annotationCounts })
+        : null,
       totalWorks: map.size,
+      visibleWorks: items.length,
       totalRecords,
+      indexFreshness: summarizeIndexFreshness(described),
+      sourceFileCount: new Set(described.flatMap((item: Any) => item.files)).size,
+      totalReview: described.reduce((sum: number, item: Any) => sum + item.review, 0),
+      authors: [
+        ...new Set<string>(described.flatMap((item: Any) => item.authors as string[])),
+      ].sort((a, b) => a.localeCompare(b)),
       populateDisabledReason: hasProfiles
-        ? tr("works.no_works_to_populate", "No works are available to populate.")
-        : tr(
-            "works.no_provider_profiles_help",
-            "Create an LLM provider profile before populating work metadata.",
-          ),
+        ? tr("works.no_works_to_populate")
+        : tr("works.no_provider_profiles_help"),
       capabilities: {
         canManageCorpus: canUse("manageCorpus"),
         canSync: hasCorpusDb(),
@@ -282,12 +586,30 @@ export function createWorksWorkspace(deps: Deps) {
   }
   function setWorksSearch(value: Any) {
     state.worksSearch = String(value || "");
-    persistPrefs();
+    persistWorksPreferences();
     syncUrl({ replace: true });
   }
   function setWorksOverview(work: Any) {
     state.workOverview = String(work || "");
-    persistPrefs();
+    persistWorksPreferences();
+    syncUrl({ replace: true });
+  }
+  /** Sort, filter and density are safe workspace state: they persist and ride in the Works URL. */
+  function setWorksView(patch: {
+    sort?: string;
+    needsReview?: boolean;
+    dbStatus?: string;
+    author?: string;
+    viewMode?: string;
+  }) {
+    if (patch.sort !== undefined)
+      state.worksSort = WORKS_SORTS.includes(patch.sort) ? patch.sort : "title-asc";
+    if (patch.needsReview !== undefined) state.worksNeedsReview = Boolean(patch.needsReview);
+    if (patch.dbStatus !== undefined) state.worksDbStatus = String(patch.dbStatus || "");
+    if (patch.author !== undefined) state.worksAuthor = String(patch.author || "");
+    if (patch.viewMode !== undefined)
+      state.worksView = ["list", "compact"].includes(String(patch.viewMode)) ? "list" : "cards";
+    persistWorksPreferences();
     syncUrl({ replace: true });
   }
   async function setWorksStore(name: Any) {
@@ -308,7 +630,7 @@ export function createWorksWorkspace(deps: Deps) {
   }
   async function syncAllWorks() {
     const rows = [...workIndex().values()].flatMap((item) => item.rows);
-    return upsertRows(rows, tr("works.all_records_label", "records across all works"));
+    return upsertRows(rows, tr("works.all_records_label"));
   }
   function searchWorkRecords(work: Any, { needsReview = false } = {}) {
     state.globalSearchMode = "traditional";
@@ -318,17 +640,14 @@ export function createWorksWorkspace(deps: Deps) {
       ...(needsReview ? [{ id: uid(), field: "needs_review", op: "eq", value: "true" }] : []),
     ];
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     navigateTo("global");
-  }
-  function searchWork(work: Any) {
-    searchWorkRecords(work);
   }
   function searchWorkOverview(work: Any) {
     state.globalSearch = "";
     state.globalFilters = [{ id: uid(), field: "work", op: "eq", value: String(work || "") }];
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     navigateTo("global");
   }
   function openWorkMetadataEditorForVue(work: Any) {
@@ -342,7 +661,7 @@ export function createWorksWorkspace(deps: Deps) {
   function openWorkAnnotations(work: Any) {
     state.annotationSearch = String(work || "");
     state.annotationView = "works";
-    persistPrefs();
+    persistAnnotationsPreferences();
     navigateTo("annotations");
   }
   function populateAllWorksMetadata() {
@@ -371,21 +690,23 @@ export function createWorksWorkspace(deps: Deps) {
     state.storeWork = String(work || state.workOverview || "");
     state.storeBrowseMode = "records";
     state.storePage = 1;
-    persistPrefs();
+    persistVectorPreferences();
     navigateTo("vector");
   }
   return {
     describeAdminWork,
+    getWorksViewState,
     worksSnapshotBase,
     prepareWorksWorkspace,
+    reconcileWorksOverviewSelection,
     getWorksWorkspaceSnapshot,
     setWorksSearch,
     setWorksOverview,
+    setWorksView,
     setWorksStore,
     syncWork,
     syncAllWorks,
     searchWorkRecords,
-    searchWork,
     searchWorkOverview,
     openWorkMetadataEditorForVue,
     openWorkMetadataLlmDialogForVue,

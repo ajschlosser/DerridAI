@@ -1,12 +1,29 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
 
 import copy
+import os
 import re
 import threading
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
+from .config import settings as app_settings
 from .locales.en_us import EN_US as DEFAULT_EN_US
 from .locales.fr_ca import FR_CA as DEFAULT_FR_CA
 from .persistence import SQLiteJobRepository, system_repository
@@ -56,8 +73,10 @@ class SystemStore:
     def _default(self) -> dict[str, Any]:
         return {
             "researcher_provider_profiles": [],
+            "settings": {},
             "annotations": [],
             "languages": {code: dict(language) for code, language in BUILT_IN_LANGUAGES.items()},
+            "vector_sync_suppressions": {},
         }
 
     def _ensure(self) -> None:
@@ -79,6 +98,21 @@ class SystemStore:
     def storage_info(self) -> dict[str, Any]:
         return self.repository.describe()
 
+    def vector_sync_suppressions(self, store_name: str) -> dict[str, str]:
+        with self._lock:
+            data = self._read()
+            values = data.get("vector_sync_suppressions", {}).get(store_name, {})
+            return dict(values) if isinstance(values, dict) else {}
+
+    def set_vector_sync_suppression(self, store_name: str, record_id: str, fingerprint: str) -> dict[str, str]:
+        with self._lock:
+            data = self._read()
+            all_values = data.setdefault("vector_sync_suppressions", {})
+            store_values = all_values.setdefault(store_name, {})
+            store_values[str(record_id)] = str(fingerprint)
+            self._write(data)
+            return dict(store_values)
+
     @staticmethod
     def _public_profile(profile: dict[str, Any]) -> dict[str, Any]:
         allowed = {
@@ -94,6 +128,14 @@ class SystemStore:
     def list_annotations(self, *, user_id: int | None = None) -> list[dict[str, Any]]:
         with self._lock:
             rows = copy.deepcopy(self.repository.list_annotations())
+        for row in rows:
+            row.setdefault("scope", "text" if row.get("quote") else "record")
+            row.setdefault("record_id", None)
+            row.setdefault("work", None)
+            row.setdefault("linked_record_ids", [])
+            row.setdefault("parent_id", None)
+            row.setdefault("thread_id", row.get("id"))
+            row.setdefault("deleted_at", None)
         if user_id is not None:
             rows = [row for row in rows if int(row.get("user_id") or 0) == int(user_id)]
         return rows
@@ -104,6 +146,17 @@ class SystemStore:
         item = copy.deepcopy(value if isinstance(value, dict) else {})
         item["id"] = str(item.get("id") or uuid.uuid4())
         item["created_at"] = str(item.get("created_at") or datetime.now(UTC).isoformat())
+        item["scope"] = str(item.get("scope") or ("text" if item.get("quote") else "record"))
+        item["record_id"] = str(item["record_id"]) if item.get("record_id") else None
+        item["work"] = str(item["work"]).strip() if item.get("work") else None
+        item["linked_record_ids"] = [
+            str(record_id).strip()
+            for record_id in item.get("linked_record_ids") or []
+            if str(record_id).strip()
+        ]
+        item["parent_id"] = str(item["parent_id"]).strip() if item.get("parent_id") else None
+        item["thread_id"] = str(item.get("thread_id") or item["id"])
+        item["deleted_at"] = str(item["deleted_at"]) if item.get("deleted_at") else None
         item["tags"] = [str(tag).strip() for tag in item.get("tags") or [] if str(tag).strip()]
         with self._lock:
             self.repository.put_annotation(item)
@@ -112,7 +165,357 @@ class SystemStore:
     def delete_annotation(self, annotation_id: str, *, user_id: int | None = None, admin: bool = False) -> bool:
         annotation_id = str(annotation_id or "").strip()
         with self._lock:
-            return self.repository.delete_annotation(annotation_id, user_id=user_id, admin=admin)
+            rows = self.repository.list_annotations()
+            target = next((row for row in rows if str(row.get("id") or "") == annotation_id), None)
+            if not target or (not admin and int(target.get("user_id") or 0) != int(user_id or -1)):
+                return False
+            target["deleted_at"] = datetime.now(UTC).isoformat()
+            target["note"] = ""
+            target["quote"] = ""
+            target["tags"] = []
+            self.repository.put_annotation(target)
+            return True
+
+    def get_adjudication_cache(self, cache_key: str) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_adjudication_cache(cache_key)
+
+    def put_adjudication_cache(
+        self,
+        cache_key: str,
+        record_id: str,
+        field: str,
+        cardinality: str,
+        text_hash: str,
+        payload: dict[str, Any],
+    ) -> None:
+        with self._lock:
+            self.repository.put_adjudication_cache(
+                cache_key, record_id, field, cardinality, text_hash, payload
+            )
+            self.repository.prune_adjudication_cache()
+
+    def clear_adjudication_cache(
+        self,
+        *,
+        record_id: str | None = None,
+        field: str | None = None,
+    ) -> int:
+        with self._lock:
+            return self.repository.clear_adjudication_cache(record_id=record_id, field=field)
+
+    def put_memory_binding(self, payload: dict[str, Any], *, enqueue_projection: bool = False) -> None:
+        with self._lock:
+            self.repository.put_memory_binding(payload, enqueue_projection=enqueue_projection)
+
+    def list_memory_bindings(self, **filters: Any) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_memory_bindings(**filters)
+
+    def mark_semantic_memory_dirty(self, projection: str, **kwargs: Any) -> str:
+        with self._lock:
+            return self.repository.mark_semantic_memory_dirty(projection, **kwargs)
+
+    def list_semantic_memory_dirty(
+        self,
+        projection: str | None = None,
+        *,
+        scope_id: str | None = None,
+        unscoped: bool = False,
+        after: tuple[str, str] | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_semantic_memory_dirty(
+                projection,
+                scope_id=scope_id,
+                unscoped=unscoped,
+                after=after,
+                limit=limit,
+            )
+
+    def semantic_memory_dirty_summary(self, projection: str) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.semantic_memory_dirty_summary(projection)
+
+    def resolve_semantic_memory_scope(self, item_ids: list[str], scope_id: str) -> None:
+        with self._lock:
+            self.repository.resolve_semantic_memory_scope(item_ids, scope_id)
+
+    def complete_semantic_memory_dirty(self, item_ids: list[str]) -> int:
+        with self._lock:
+            return self.repository.complete_semantic_memory_dirty(item_ids)
+
+    def put_generated_claim(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_generated_claim(payload)
+
+    def list_generated_claims(self, **filters: Any) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_generated_claims(**filters)
+
+    def put_response_memory(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_response_memory(payload)
+
+    def get_response_memory(self, response_id: str, *, owner: str | None = None) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_response_memory(response_id, owner=owner)
+
+    def record_response_memory_grade(self, response_id: str, grade: dict[str, Any]) -> bool:
+        with self._lock:
+            return self.repository.record_response_memory_grade(response_id, grade)
+
+    def list_response_memory(self, **filters: Any) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_response_memory(**filters)
+
+    def put_claim_support_binding(self, payload: dict[str, Any]) -> None:
+        with self._lock:
+            self.repository.put_claim_support_binding(payload)
+
+    def list_claim_support_bindings(self, claim_id: str, *, owner: str | None = None) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_claim_support_bindings(claim_id, owner=owner)
+
+    def list_claim_support_bindings_for_record(
+        self,
+        record_id: str,
+        *,
+        owner: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_claim_support_bindings_for_record(
+                record_id,
+                owner=owner,
+                limit=limit,
+            )
+
+    def get_generated_claim(
+        self,
+        claim_id: str,
+        *,
+        owner: str | None = None,
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_generated_claim(claim_id, owner=owner)
+
+    def get_generated_claims(
+        self,
+        claim_ids: list[str],
+        *,
+        owner: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            return self.repository.get_generated_claims(claim_ids, owner=owner)
+
+    def list_claim_support_bindings_for_claims(
+        self,
+        claim_ids: list[str],
+        *,
+        owner: str | None = None,
+    ) -> dict[str, list[dict[str, Any]]]:
+        with self._lock:
+            return self.repository.list_claim_support_bindings_for_claims(claim_ids, owner=owner)
+
+    def set_record_build_provenance(
+        self, record_id: str, build_id: str, *, work: str | None = None
+    ) -> None:
+        with self._lock:
+            self.repository.set_record_build_provenance(record_id, build_id, work=work)
+
+    def get_record_build_id(self, record_id: str) -> str | None:
+        with self._lock:
+            return self.repository.get_record_build_id(record_id)
+
+    def list_build_ids_for_work(self, work: str) -> list[str]:
+        with self._lock:
+            return self.repository.list_build_ids_for_work(work)
+
+    def list_records_for_work(self, work: str, limit: int = 200) -> list[dict[str, str]]:
+        with self._lock:
+            return self.repository.list_records_for_work(work, limit)
+
+    def semantic_map_state(self, build_id: str) -> dict[str, Any]:
+        with self._lock:
+            return self.repository.semantic_map_state(build_id)
+
+    def mark_semantic_map_dirty(self, build_id: str, *, reason: str = "changed") -> int:
+        with self._lock:
+            return self.repository.mark_semantic_map_dirty(build_id, reason=reason)
+
+    def mark_semantic_map_clean(self, build_id: str, generation: int) -> bool:
+        with self._lock:
+            return self.repository.mark_semantic_map_clean(build_id, generation)
+
+    def put_semantic_map_projection(
+        self,
+        scope_type: str,
+        scope_id: str,
+        build_id: str,
+        generation: int,
+        payload: dict[str, Any],
+        *,
+        work: str | None = None,
+        audience: str = "",
+    ) -> None:
+        with self._lock:
+            self.repository.put_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                generation,
+                payload,
+                work=work,
+                audience=audience,
+            )
+
+    def put_semantic_map_projections(self, rows: list[dict[str, Any]]) -> int:
+        with self._lock:
+            return self.repository.put_semantic_map_projections(rows)
+
+    def get_semantic_map_projection(
+        self,
+        scope_type: str,
+        scope_id: str,
+        build_id: str,
+        *,
+        audience: str = "",
+    ) -> dict[str, Any] | None:
+        with self._lock:
+            return self.repository.get_semantic_map_projection(
+                scope_type,
+                scope_id,
+                build_id,
+                audience=audience,
+            )
+
+    def list_semantic_map_projections_for_work(
+        self,
+        work: str,
+        *,
+        scope_type: str = "work",
+        audience: str = "",
+    ) -> list[dict[str, Any]]:
+        with self._lock:
+            return self.repository.list_semantic_map_projections_for_work(
+                work,
+                scope_type=scope_type,
+                audience=audience,
+            )
+
+    def embedding_defaults(self) -> dict[str, Any]:
+        with self._lock:
+            stored = self.repository.get_setting("embedding_defaults")
+        value = stored if isinstance(stored, dict) else {}
+        provider = str(value.get("embedding_provider") or app_settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
+        model = str(value.get("embedding_model") or "").strip() or None
+
+        # Before embedding defaults were server-owned, the browser Vector Store
+        # wizard interpreted the legacy "ollama" default as the first configured
+        # Ollama provider profile. Preserve that behavior for an unpersisted
+        # default so background/system projections use the same endpoint/model.
+        if not isinstance(stored, dict) and provider == "ollama":
+            profile = next(
+                (
+                    item
+                    for item in self.researcher_profiles(include_secrets=True)
+                    if str(item.get("type") or "").strip().lower() == "ollama"
+                    and str(item.get("id") or "").strip()
+                ),
+                None,
+            )
+            if profile:
+                provider = f"profile:{str(profile.get('id')).strip()}"
+                model = str(profile.get("model") or "").strip() or None
+
+        if provider == "ollama" and not model:
+            model = app_settings.ollama_embed_model
+        if provider.startswith("profile:") and not model:
+            profile_id = provider.split(":", 1)[1].strip()
+            profile = self.researcher_profile(profile_id)
+            model = str((profile or {}).get("model") or "").strip() or None
+        return {
+            "embedding_provider": provider,
+            "embedding_model": model,
+            "persisted": isinstance(stored, dict),
+        }
+
+    _AUDIO_SETTING = "audio_transcription"
+
+    def audio_transcription_settings(self, *, include_key: bool = False) -> dict[str, Any]:
+        """Settings for audio transcription, kept apart from chat/embedding provider profiles.
+
+        The API key is stored server-side and never returned unless ``include_key``.
+        Environment variables remain a fallback so existing deployments keep working.
+        """
+        with self._lock:
+            stored = self.repository.get_setting(self._AUDIO_SETTING)
+        value = stored if isinstance(stored, dict) else {}
+        key = str(value.get("api_key") or "").strip()
+        env_key = (os.getenv("OPENAI_API_KEY", "") or app_settings.openai_compat_api_key or "").strip()
+        result: dict[str, Any] = {
+            "base_url": str(value.get("base_url") or os.getenv("OPENAI_WHISPER_BASE_URL") or "https://api.openai.com/v1").rstrip("/"),
+            "model": str(value.get("model") or os.getenv("OPENAI_WHISPER_MODEL") or "whisper-1"),
+            "has_key": bool(key or env_key),
+            "key_source": "settings" if key else ("environment" if env_key else "none"),
+        }
+        if include_key:
+            result["api_key"] = key or env_key
+        return result
+
+    def set_audio_transcription_settings(
+        self, *, base_url: str, model: str, api_key: str | None = None, clear_key: bool = False,
+    ) -> dict[str, Any]:
+        base = str(base_url or "").strip().rstrip("/")
+        if not re.match(r"^https?://\S+$", base):
+            raise ValueError("The transcription base URL must be an http(s) address.")
+        chosen = str(model or "").strip()
+        if not chosen:
+            raise ValueError("Choose a transcription model.")
+        with self._lock:
+            current = self.repository.get_setting(self._AUDIO_SETTING)
+            current = current if isinstance(current, dict) else {}
+            key = "" if clear_key else (str(api_key).strip() if api_key else str(current.get("api_key") or ""))
+            self.repository.put_setting(self._AUDIO_SETTING, {"base_url": base, "model": chosen, "api_key": key})
+        return self.audio_transcription_settings()
+
+    def set_embedding_defaults(self, provider: str, model: str | None = None) -> dict[str, Any]:
+        normalized_provider = str(provider or "").strip()
+        if not normalized_provider.startswith("profile:"):
+            normalized_provider = normalized_provider.lower()
+        if normalized_provider not in {"ollama", "chroma", "precomputed"} and not normalized_provider.startswith("profile:"):
+            raise ValueError(
+                "Embedding provider must be ollama, chroma, precomputed, or profile:<provider-id>."
+            )
+
+        normalized_model = str(model or "").strip() or None
+        if normalized_provider == "ollama" and not normalized_model:
+            normalized_model = app_settings.ollama_embed_model
+        if normalized_provider.startswith("profile:"):
+            profile_id = normalized_provider.split(":", 1)[1].strip()
+            if not profile_id:
+                raise ValueError("Embedding provider profile ID cannot be empty.")
+            profile = self.researcher_profile(profile_id)
+            if not profile:
+                raise ValueError(f"Embedding provider profile {profile_id!r} was not found.")
+            if not normalized_model:
+                normalized_model = str(profile.get("model") or "").strip() or None
+            if not normalized_model:
+                raise ValueError("Select an embedding model for the provider profile.")
+        if normalized_provider in {"chroma", "precomputed"}:
+            normalized_model = None
+
+        payload = {
+            "embedding_provider": normalized_provider,
+            "embedding_model": normalized_model,
+        }
+        with self._lock:
+            self.repository.put_setting("embedding_defaults", payload)
+        return {**copy.deepcopy(payload), "persisted": True}
 
     def researcher_profiles(self, *, include_secrets: bool = False) -> list[dict[str, Any]]:
         with self._lock:
@@ -329,34 +732,90 @@ class SystemStore:
 
         Unlike the public profile API this intentionally includes provider
         secrets, because a full DerridAI backup is already documented as a
-        credential-bearing administrative artifact.
+        credential-bearing administrative artifact. Pipeline definitions and
+        traces live in focused tables in the same database, so they are folded
+        into the logical snapshot here rather than hidden from backup/restore.
         """
+        from .pipelines.store import PipelineStore
+
         with self._lock:
-            return copy.deepcopy(self._read())
+            payload = copy.deepcopy(self._read())
+        payload["pipelines"] = PipelineStore(self.path).snapshot()
+        return payload
 
     def reset_to_fresh_install(self) -> dict[str, Any]:
-        """Restore shipped locales and drop profiles, annotations, and job history."""
+        """Restore shipped locales and drop operational configuration/history."""
+        from .pipelines.store import PipelineStore
+
         with self._lock:
             self._write(self._default())
         cleared_jobs = SQLiteJobRepository(self.path).clear_all()
+        cleared_pipelines = PipelineStore(self.path).clear_all()
         return {
             "languages": ["en-US", "fr-CA"],
             "profiles": 0,
             "annotations": 0,
             "cleared_jobs": cleared_jobs,
+            "cleared_pipelines": cleared_pipelines,
         }
 
     def restore_snapshot(self, payload: dict[str, Any]) -> None:
-        """Restore a current-format server-owned configuration snapshot."""
+        """Restore server-owned configuration plus pipeline operational state.
+
+        Pipeline payloads are validated before general system configuration is
+        touched. If an unexpected persistence failure occurs after validation,
+        the prior logical system/pipeline snapshots are restored before the
+        exception is re-raised.
+        """
+        from .pipelines.store import PipelineStore
+
         if not isinstance(payload, dict):
             raise ValueError("System configuration backup is invalid.")
         profiles = payload.get("researcher_provider_profiles", [])
         languages = payload.get("languages", {})
         if not isinstance(profiles, list) or not isinstance(languages, dict):
             raise ValueError("System configuration backup is invalid.")
+
+        restored = copy.deepcopy(payload)
+        pipeline_snapshot = restored.pop("pipelines", None)
+        pipeline_store = PipelineStore(self.path)
+
+        # Reject malformed pipeline backups before replacing any system state.
+        if isinstance(pipeline_snapshot, dict):
+            pipeline_store.validate_snapshot(pipeline_snapshot)
+
         with self._lock:
-            self._write(copy.deepcopy(payload))
-            self._ensure()
+            previous_system = copy.deepcopy(self._read())
+        previous_pipelines = pipeline_store.snapshot()
+
+        try:
+            with self._lock:
+                self._write(restored)
+                self._ensure()
+
+            # A full restore replaces, rather than merges, operational state.
+            # Older backups predate pipeline tables and therefore restore an
+            # empty custom layer while code-owned built-ins remain available.
+            if isinstance(pipeline_snapshot, dict):
+                pipeline_store.restore_snapshot(pipeline_snapshot)
+            else:
+                pipeline_store.restore_snapshot(
+                    {
+                        "definitions": [],
+                        "assignments": [],
+                        "runs": [],
+                        "stages": [],
+                    }
+                )
+        except Exception:
+            # Best-effort cross-domain rollback. PipelineStore restoration is
+            # itself atomic; restoring the previous general system payload keeps
+            # a failed full backup from leaving half of the system replaced.
+            with self._lock:
+                self._write(previous_system)
+                self._ensure()
+            pipeline_store.restore_snapshot(previous_pipelines)
+            raise
 
 
 system_store = SystemStore()

@@ -1,0 +1,55 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.researcher-result-grid {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+}
+.researcher-search-result {
+  padding: 13px;
+  cursor: pointer;
+}
+.researcher-search-result:hover {
+  border-color: var(--ui-accent-border);
+  background: var(--card);
+}
+.researcher-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.researcher-result-head h3 {
+  margin: 2px 0 0;
+  font-size: 1rem;
+}
+.researcher-result-meta {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 7px 0;
+}
+.researcher-result-meta span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.researcher-summary-text {
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--text-2);
+}

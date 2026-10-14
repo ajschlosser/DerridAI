@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Human-editable primary_text and acceptance gating.
 
 Why: primary_text is a boolean where False is a real answer ("this is not primary
@@ -156,7 +172,72 @@ def test_accept_and_bulk_accept_block_any_incomplete_metadata(tmp_path: Path):
     assert result["blocked_record_ids"] == ["r1"]
 
 
+def test_update_record_updates_only_the_target_indexed_record(tmp_path: Path):
+    """The targeted persistence path must preserve neighboring records in SQLite."""
+    record_one = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "first",
+        "source_spans": [{"block_id": "b1", "page": 1}],
+    }
+    record_two = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "text": "second",
+        "source_spans": [{"block_id": "b1", "page": 1}],
+    }
+    repo, build = install_repo(tmp_path, record_one)
+    repo.save_records(build["build_id"], [record_one, record_two])
+    original_lines = repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines()
+
+    repo.update_record(
+        build["build_id"],
+        {
+            **record_two,
+            "record_revision": 2,
+            "text": "second, reviewed",
+        },
+    )
+
+    persisted = repo.load_records(build["build_id"])
+    assert persisted[0] == record_one
+    assert persisted[1]["text"] == "second, reviewed"
+    assert persisted[1]["record_revision"] == 2
+    assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines() == original_lines
+    assert repo.records_projection_dirty(build["build_id"])
+
+    repo.refresh_records_projection(build["build_id"])
+    assert not repo.records_projection_dirty(build["build_id"])
+    assert repo.build_records_path(build["build_id"]).read_text(encoding="utf-8").splitlines()[1] == json.dumps(
+        persisted[1], ensure_ascii=False
+    )
 
 
 
 
+def test_committed_record_update_notes_corpus_records_but_batch_save_does_not(tmp_path: Path):
+    from app import operation_events
+
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "first",
+        "source_spans": [{"block_id": "b1", "page": 1}],
+    }
+    repo, build = install_repo(tmp_path, record)
+    operation_events.drain()
+    repo.save_records(build["build_id"], [record])
+    assert "corpus_records" not in operation_events.drain().resources
+
+    repo.update_record(build["build_id"], {**record, "record_revision": 2, "text": "reviewed"})
+    assert "corpus_records" in operation_events.drain().resources
+
+
+def test_primary_text_review_completeness_rejects_malformed_boolean_values():
+    """Legacy strings and numeric lookalikes do not count as resolved metadata."""
+    from app.corpus_review_state import _metadata_value_missing
+
+    assert _metadata_value_missing("primary_text", True) is False
+    assert _metadata_value_missing("primary_text", False) is False
+    for value in (None, "true", "false", "", 0, 1, [], {"value": True}):
+        assert _metadata_value_missing("primary_text", value) is True

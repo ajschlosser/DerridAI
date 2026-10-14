@@ -1,4 +1,23 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Applying, clearing and restoring per-record edits, and the change history behind them. Moved verbatim from the legacy
 // runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -14,12 +33,12 @@ type Helper =
   | "cloneAuditValue"
   | "invalidateCorpusCache"
   | "label"
-  | "openMessageModal"
   | "persistFile"
   | "renderView"
   | "sameValue"
   | "shell"
-  | "toast"
+  | "tr"
+  | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -30,12 +49,12 @@ export function createRecordEditing(deps: Deps) {
     cloneAuditValue,
     invalidateCorpusCache,
     label,
-    openMessageModal,
     persistFile,
     renderView,
     sameValue,
     shell,
-    toast,
+    tr,
+    trf,
     uid,
   } = deps;
   // The legacy code queries the page freely; untyped, as it was written.
@@ -43,7 +62,13 @@ export function createRecordEditing(deps: Deps) {
     file: Any,
     index: Any,
     changes: Any,
-    { source = "manual", model = null, batchId = null, rationale = null }: Any = {},
+    {
+      source = "manual",
+      model = null,
+      batchId = null,
+      rationale = null,
+      deferCommit = false,
+    }: Any = {},
   ) {
     const current = file.records[index];
     if (!current) return 0;
@@ -80,32 +105,50 @@ export function createRecordEditing(deps: Deps) {
     next.updates = history;
     file.records[index] = next;
     file.dirty.add(index);
-    invalidateCorpusCache();
-    persistFile(file);
+    if (!deferCommit) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
     if (state.view === "record" && typeof window !== "undefined")
       window.dispatchEvent(new CustomEvent("derridai:record-updated"));
     return entries.length;
   }
+  function commitRecordFiles(files: Iterable<Any>) {
+    const unique = new Map<string, Any>();
+    for (const file of files || []) {
+      const id = String(file?.id || "");
+      if (id) unique.set(id, file);
+    }
+    for (const file of unique.values()) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
+  }
+
   async function clearRecordUpdates(file: Any, index: Any, { confirmFirst = true } = {}) {
     const record = file?.records?.[index];
     const count = Array.isArray(record?.updates) ? record.updates.length : 0;
     if (!record || !count) {
-      toast("This record has no updates history");
+      toast(tr("runtime.toast.no_updates_history"), { tone: "warning" });
       return false;
     }
     if (
       confirmFirst &&
-      !(await openMessageModal({
-        title: "Clear record update history?",
-        message: `Clear all ${count} updates entries from ${record.record_id || `record ${index + 1}`}? This history cannot be reconstructed automatically.`,
+      !(await openMessageDialog({
+        title: tr("record.clear_history_title"),
+        message: trf("record.clear_history_message", {
+          count,
+          record: record.record_id || `record ${index + 1}`,
+        }),
         tone: "danger",
-        confirmLabel: "Clear history",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("record.clear_history_confirm"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return false;
     file.records[index] = { ...record, updates: [] };
     file.dirty.add(index);
+    invalidateCorpusCache(file.id);
     persistFile(file);
     return true;
   }
@@ -113,29 +156,33 @@ export function createRecordEditing(deps: Deps) {
     const rows = allRows().filter(
       (row: Any) => Array.isArray(row.record.updates) && row.record.updates.length,
     );
-    if (!rows.length) return toast("No loaded records have updates history");
-    const entries = rows.reduce((sum: Any, row: Any) => sum + row.record.updates.length, 0);
+    if (!rows.length) return toast(tr("runtime.toast.no_loaded_updates"), { tone: "warning" });
     if (
       !confirmed &&
-      !(await openMessageModal({
-        title: "Clear all update histories?",
-        message: `Clear ${entries.toLocaleString()} updates entries from ${rows.length.toLocaleString()} loaded records? This permanently removes the local audit histories.`,
+      !(await openMessageDialog({
+        title: tr("settings.clear_updates_title"),
+        message: tr("settings.clear_updates_message"),
         tone: "danger",
-        confirmLabel: "Clear all histories",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("settings.clear_updates"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return;
-    const files = new Set();
+    const files = new Set<Any>();
     for (const row of rows) {
       row.file.records[row.index] = { ...row.record, updates: [] };
       row.file.dirty.add(row.index);
       files.add(row.file);
     }
-    for (const file of files) persistFile(file);
+    for (const file of files) {
+      invalidateCorpusCache(file.id);
+      persistFile(file);
+    }
     shell();
     renderView();
-    toast(`Cleared updates history from ${rows.length.toLocaleString()} records`);
+    toast(trf("dynamic.cleared_history_records", { count: rows.length.toLocaleString() }), {
+      tone: "success",
+    });
   }
   function historyVersionChanges(previous: Any, current: Any) {
     const keys = new Set([...Object.keys(previous || {}), ...Object.keys(current || {})]);
@@ -168,6 +215,7 @@ export function createRecordEditing(deps: Deps) {
   }
   return {
     applyRecordChanges,
+    commitRecordFiles,
     clearRecordUpdates,
     clearAllUpdates,
     historyVersionChanges,

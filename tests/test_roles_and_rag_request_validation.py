@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Role storage and RAG request validation fixes.
 
 Why: custom roles decide what non-admin users may do, and the RAG request schema is
@@ -160,6 +176,7 @@ def test_rag_request_defaults_keep_both_locales_and_hybrid_search():
     body = RAGRunRequest(prompt="What is a trace?")
     assert body.locales == ["en", "fr"]
     assert body.search_types == ["similarity", "lexical", "mmr"]
+    assert body.automatic_sizing is False
 
 
 def test_language_metadata_accepts_a_tuple_of_codes():

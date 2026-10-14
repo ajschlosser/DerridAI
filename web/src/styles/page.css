@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 /*
  * The page frame shared by every routed view: one maximum width, one inset, one vertical rhythm
  * and one heading style. Views lay out their own content inside the frame but do not set their
@@ -31,11 +48,17 @@
   line-height: var(--lh-tight);
 }
 
-/* Leave room for the operations dock so it never covers the end of the page. */
-body:has(#operationProgressStack.minimized) #appContent > * {
+/* Leave room only for the floating operations dock. The top-bar dock is part of shell chrome. */
+html[data-operations-dock-mode="floating"]
+  body:has(#operationProgressStack.minimized)
+  #appContent
+  > * {
   padding-bottom: 72px;
 }
-body:has(#operationProgressStack:not(.minimized)) #appContent > * {
+html[data-operations-dock-mode="floating"]
+  body:has(#operationProgressStack:not(.minimized))
+  #appContent
+  > * {
   padding-bottom: min(36vh, 280px);
 }
 
@@ -47,7 +70,10 @@ body:has(#operationProgressStack:not(.minimized)) #appContent > * {
   }
 }
 @media (max-width: 650px) {
-  body:has(#operationProgressStack.minimized) #appContent > * {
+  html[data-operations-dock-mode="floating"]
+    body:has(#operationProgressStack.minimized)
+    #appContent
+    > * {
     padding-bottom: 120px;
   }
 }

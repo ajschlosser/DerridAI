@@ -1,7 +1,113 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 # Changelog
 
 Release history for DerridAI, newest first. Each entry links to the full release note in [`docs/notes/`](docs/notes/). The README describes only the current release.
+
+## 0.82.0 — Gloucester
+
+Gloucester consolidates the rapid post-Fall River work into a release centered on
+progressive and concurrent Corpus Builder review, stricter metadata/evidence
+semantics, executable typed Pipeline Studio workflows, portable research-site
+publication and the TypeScript SDK, realtime/progressive loading, large-corpus
+review performance, semantic/Works/Settings/Help redesigns, cELF clarification,
+accessibility hardening, offline Gutenberg installation, and continued legacy
+frontend runtime retirement. See [0.82.0](docs/notes/0.82.0.md) for the complete
+release note.
+
+## 0.81.0 — Fall River
+
+Fall River is the first consolidated release after Exeter. It brings together
+evidence-aware review, whole-document intelligence and semantic maps, versioned
+Pipeline Studio execution, schema-driven metadata, safer source ingestion,
+stronger provenance gates, modernized navigation/help/accessibility,
+operational-retention controls, and threaded annotations. See
+[0.81.0](docs/notes/0.81.0.md) for the complete release note.
+
+## 0.80.7 — Exeter
+
+Exeter is a focused follow-up to Danvers: it aligns cELF terminology, improves
+Record Review and evidence workflows, fixes semantic metadata retrieval, and
+tightens publication/review behavior. See
+[0.80.7](docs/notes/0.80.7.md) for the complete release note.
+
+## 0.80.6 — Danvers
+
+Danvers consolidates the post-Cambridge Corpus Builder work: reliable
+Wikisource/Gutenberg acquisition and page detection, authoritative record
+sizing and source-unit policies, calmer evidence-aware review, bounded cELF
+traceability, provenance-preserving compressed publication ledgers, reviewed
+metadata precedents, validated Research memory, redesigned metadata schemas and
+memory surfaces, and continued Corpus Builder decomposition. See
+[0.80.6](docs/notes/0.80.6.md) for the complete release note.
+
+## 0.80.5 — Cambridge
+
+Cambridge completes the canonical FieldAssertion migration, tightens metadata
+review and Research prompt-metadata configuration, substantially decomposes and
+modernizes Corpus Builder, aligns `SPECIFICATION.md` with DERRIDAI Core
+Specification 1.0, and adds the first walkable DERRIDAI object-graph explorer.
+It also adds multilingual README coverage, AGPLv3 licensing, and stronger
+repository-format/handoff discipline. See
+[0.80.5](docs/notes/0.80.5.md) for the complete release note.
+
+## 0.80.0 — Beverly
+
+The release since 0.70.0 consolidates the canonical metadata and provenance
+migration, the continuing Corpus Builder and native Vue decomposition, and the
+application's system-data and research-workspace improvements. See
+[0.80.0](docs/notes/0.80.0.md) for the complete release note.
+
+- **Corpus Builder and ingestion:** decomposed build lifecycle, segmentation,
+  enrichment, review, publication, source-quality, and reviewer transport
+  responsibilities; added broader source-media ingestion; and improved
+  document-structure, record-quality, enrichment-rerun, and publication
+  readiness workflows.
+- **Canonical metadata assertions:** introduced durable `FieldAssertion`
+  records with independent derivation, evaluation, authority, value-state,
+  confidence, evidence, revision, and identity fields; migrated legacy
+  metadata lazily and idempotently while retaining compatibility projections;
+  preserved unresolved, invalid, confirmed-absent, model-inferred, and
+  human-confirmed states; and kept model derivation and confidence when a
+  reviewer confirms the assertion.
+- **Provenance, review, and retrieval:** integrated assertions with SQLite
+  persistence, enrichment, autonomous settlement, review state, publication,
+  provenance memory, evidence binding, and dynamic search facets; hardened
+  blind and second-opinion review; made custom fields first-class in RAG
+  evidence payloads and Search facets; and kept retrieval, vector indexes,
+  caches, and generated output separate from authoritative corpus records.
+- **Frontend and administration:** continued the native Vue migration across
+  core research surfaces and redesigned System Data into typed,
+  URL-addressable workspaces for databases, response caches, metadata
+  examples, and advanced administration. Built-in structural semantics remain
+  explicit where they govern segmentation and publication, while the Record
+  Inspector, touch-up workflow, Search, and Research evidence presentation now
+  discover schema-defined metadata through canonical assertions instead of
+  requiring each custom field to be added to presentation constants.
+- **Reliability and governance:** expanded API contracts, backend regression
+  coverage, typed frontend tests, parallel CI, Playwright/axe coverage,
+  accessibility and design-token checks, locale parity, backup/restore
+  coverage, authentication boundaries, and researcher access restrictions.
+
+## 0.70.0 — Amesbury
+
+A consolidation release covering the Vue/runtime and Corpus Builder decomposition, specification-aligned assertion status vocabulary, metadata-schema/review improvements, search/provider/theme/internationalization work, and related reliability changes. See [0.70.0](docs/notes/0.70.0.md).
 
 ## 0.62.19 — Configurable Chameleon
 

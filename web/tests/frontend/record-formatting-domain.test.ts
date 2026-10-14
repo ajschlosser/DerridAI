@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   highlight,
@@ -12,7 +29,9 @@ import {
   compactRecordHistory,
   normalizePdfLinkChanges,
   pdfLinks,
+  ragEvidenceRecordPayload,
   recordPayload,
+  touchupRecordPayload,
 } from "../../src/domain/recordPayloads";
 
 // These behaviors were checked against the original legacy runtime.js functions across a wide input matrix.
@@ -108,5 +127,54 @@ describe("record payloads", () => {
         { pdf_file: "g", pdf_page: 1 },
       ]),
     ).toThrow("multiple PDF files");
+  });
+  it("transports scholarly metadata without a built-in field whitelist", () => {
+    const scholarlyRecord = {
+      record_id: "r1",
+      work: "Of Grammatology",
+      text: "A passage.",
+      speaker: "Jacques Derrida",
+      renamed_position_holder: "Emmanuel Levinas",
+      conceptual_tension: ["presence", "absence"],
+      field_assertions: {
+        "field-renamed-position-holder": [
+          {
+            field_id: "field-renamed-position-holder",
+            field_name: "renamed_position_holder",
+            value: "Emmanuel Levinas",
+          },
+        ],
+        "field-conceptual-tension": [
+          {
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: ["presence", "absence"],
+          },
+        ],
+        "derridai.speaker": [
+          {
+            field_id: "derridai.speaker",
+            field_name: "speaker",
+            value: "Jacques Derrida",
+          },
+        ],
+      },
+      metadata_field_status: {
+        renamed_position_holder: { status: "human_confirmed" },
+      },
+      updates: [{ field_name: "speaker" }],
+    };
+
+    const touchup = touchupRecordPayload(scholarlyRecord);
+    const evidence = ragEvidenceRecordPayload(scholarlyRecord);
+
+    for (const payload of [touchup, evidence]) {
+      expect(payload.speaker).toBe("Jacques Derrida");
+      expect(payload.renamed_position_holder).toBe("Emmanuel Levinas");
+      expect(payload.conceptual_tension).toEqual(["presence", "absence"]);
+      expect(payload.field_assertions).toEqual(scholarlyRecord.field_assertions);
+      expect(payload).not.toHaveProperty("metadata_field_status");
+      expect(payload).not.toHaveProperty("updates");
+    }
   });
 });

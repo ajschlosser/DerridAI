@@ -1,0 +1,515 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { computed, ref, type Ref } from "vue";
+import {
+  corpusBuilderApi,
+  type DocumentLayoutPlan,
+  type GutenbergHit,
+  type WikisourceHit,
+  type GutenbergStatus,
+  type PdfAsset,
+  type PageDetectionRequest,
+  type SourceUnitPolicy,
+} from "../../../api/corpus";
+import { useI18nStore } from "../../../stores/i18n";
+
+type MessageTone = "error" | "notice";
+
+export interface SourceLanguagePrompt {
+  assetId: string;
+  filename: string;
+  suggestion: string | null;
+  confidence: number | null;
+  reason: string;
+  loading: boolean;
+  error: string;
+}
+
+export function useCorpusSourceConfiguration(
+  busy: Ref<string>,
+  setMessage: (message: string, tone?: MessageTone) => void,
+  providerProfileId: () => string = () => "",
+  /** The selected profile's connection (provider, model, endpoint, key), as a build request carries it. */
+  providerConnection: (profileId: string) => Record<string, unknown> | null = () => null,
+) {
+  const i18n = useI18nStore();
+  const assets = ref<PdfAsset[]>([]);
+  const selectedAssetId = ref("");
+  const sourceIllegibility = ref(0);
+  // Printed-page detection is automatic. Deterministic extraction runs first;
+  // a configured provider is supplied only as the bounded fallback.
+  function pageDetection(): PageDetectionRequest {
+    const profile = providerProfileId();
+    if (!profile) return { mode: "auto" };
+    const config = providerConnection(profile) || {};
+    const text = (value: unknown) => (typeof value === "string" && value ? value : undefined);
+    return {
+      mode: "auto_llm",
+      providerProfileId: profile,
+      connection: {
+        provider: text(config.provider),
+        model: text(config.model),
+        base_url: text(config.base_url),
+        api_key: text(config.api_key),
+      },
+    };
+  }
+  const sourceUrl = ref("");
+  const gutenbergQuery = ref("");
+  const gutenbergHits = ref<GutenbergHit[]>([]);
+  const wikisourceHits = ref<WikisourceHit[]>([]);
+  // Digital-library search state, shown inside the search dialog rather than behind it.
+  const wikisourceLanguage = ref(String(i18n.locale || "en").slice(0, 2) === "fr" ? "fr" : "en");
+  const librarySearched = ref<{ gutenberg: string; wikisource: string }>({
+    gutenberg: "",
+    wikisource: "",
+  });
+  const libraryError = ref("");
+  /** The result being imported: `gutenberg:<id>` or `wikisource:<url>`. */
+  const libraryImporting = ref("");
+  /** Increments after each successful library import, so the dialog can close. */
+  const libraryImported = ref(0);
+  let searchTicket = 0;
+  const gutenbergStatus = ref<GutenbergStatus | null>(null);
+  const lastIngestedAsset = ref<PdfAsset | null>(null);
+  const languagePrompt = ref<SourceLanguagePrompt | null>(null);
+  let languageTicket = 0;
+
+  const selectedAsset = computed(
+    () => assets.value.find((item) => item.asset_id === selectedAssetId.value) || null,
+  );
+
+  async function refreshAssets() {
+    assets.value = (await corpusBuilderApi.listAssets()).items;
+    if (
+      selectedAssetId.value &&
+      !assets.value.some((item) => item.asset_id === selectedAssetId.value)
+    )
+      selectedAssetId.value = "";
+  }
+
+  function rememberAsset(asset: PdfAsset, ingested = false) {
+    assets.value = assets.value.map((item) => (item.asset_id === asset.asset_id ? asset : item));
+    if (!assets.value.some((item) => item.asset_id === asset.asset_id)) assets.value.push(asset);
+    selectedAssetId.value = asset.asset_id;
+    if (ingested) lastIngestedAsset.value = asset;
+    if (ingested) void suggestLanguage(asset);
+  }
+
+  async function suggestLanguage(asset: PdfAsset) {
+    const initial = asset.initial_metadata || {};
+    if (initial.language || initial.language_status === "confirmed_absent") return;
+    const ticket = ++languageTicket;
+    languagePrompt.value = {
+      assetId: asset.asset_id,
+      filename: asset.filename,
+      suggestion: null,
+      confidence: null,
+      reason: "",
+      loading: true,
+      error: "",
+    };
+    const configured = providerConnection(providerProfileId()) || {};
+    const hasConfiguredFallback = ["provider", "model", "base_url", "api_key"].some((key) =>
+      Boolean(configured[key]),
+    );
+    if (!hasConfiguredFallback) {
+      languagePrompt.value = {
+        ...languagePrompt.value,
+        loading: false,
+        error: i18n.t("pdf_corpus.language_prompt_no_suggestion"),
+      };
+      return;
+    }
+    const connection = Object.fromEntries(
+      Object.entries(configured)
+        .filter(
+          ([key, value]) => ["provider", "model", "base_url", "api_key"].includes(key) && value,
+        )
+        .map(([key, value]) => [key, String(value)]),
+    );
+    try {
+      const result = await corpusBuilderApi.suggestAssetLanguage(asset.asset_id, connection);
+      if (ticket !== languageTicket || !languagePrompt.value) return;
+      languagePrompt.value = {
+        ...languagePrompt.value,
+        suggestion: result.language,
+        confidence: typeof result.confidence === "number" ? result.confidence : null,
+        reason: result.reason || "",
+        loading: false,
+        error: result.language ? "" : i18n.t("pdf_corpus.language_prompt_no_suggestion"),
+      };
+    } catch (cause) {
+      if (ticket !== languageTicket || !languagePrompt.value) return;
+      languagePrompt.value = {
+        ...languagePrompt.value,
+        loading: false,
+        error: cause instanceof Error ? cause.message : String(cause),
+      };
+    }
+  }
+
+  async function applyPageEstimate(wordsPerPage: number, oneRecordPerPage: boolean) {
+    const assetId = selectedAssetId.value;
+    if (!assetId) return;
+    busy.value = "page-estimate";
+    try {
+      const asset = await corpusBuilderApi.applyPageEstimate(
+        assetId,
+        wordsPerPage,
+        oneRecordPerPage,
+      );
+      rememberAsset(asset);
+      setMessage(i18n.t("pdf_corpus.page_estimate_saved"));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function saveSourceLanguage(language: string | null) {
+    const prompt = languagePrompt.value;
+    if (!prompt) return;
+    busy.value = "language";
+    try {
+      const asset = await corpusBuilderApi.updateAssetLanguage(prompt.assetId, language);
+      rememberAsset(asset);
+      languagePrompt.value = null;
+      setMessage(i18n.t("pdf_corpus.language_saved"));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function saveSourceMetadata(metadata: Record<string, unknown>, skipFields: string[] = []) {
+    if (!selectedAssetId.value) return;
+    busy.value = "metadata";
+    try {
+      const asset = await corpusBuilderApi.updateAssetMetadata(
+        selectedAssetId.value,
+        metadata,
+        skipFields,
+      );
+      rememberAsset(asset);
+      setMessage(i18n.t("pdf_corpus.metadata_saved"));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function saveVoiceAssignments(assignments: Record<string, string>) {
+    if (!selectedAssetId.value) return;
+    busy.value = "voice-assignments";
+    try {
+      const result = await corpusBuilderApi.updateVoiceAssignments(
+        selectedAssetId.value,
+        assignments,
+      );
+      rememberAsset(result.asset);
+      setMessage(i18n.tf("pdf_corpus.voice_assignments_saved", { count: result.records_updated }));
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : String(cause), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function upload(file?: File | null, options: { audioDiarization?: boolean } = {}) {
+    if (!file) return;
+    busy.value = "upload";
+    setMessage("");
+    try {
+      const asset = await corpusBuilderApi.uploadAsset(
+        file,
+        "auto",
+        sourceIllegibility.value,
+        pageDetection(),
+        options.audioDiarization !== false,
+      );
+      await refreshAssets();
+      rememberAsset(asset, true);
+      setMessage(
+        i18n.tf("pdf_corpus.source_ingested_blocks", {
+          blocks: asset.block_count,
+        }),
+      );
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  /** Switch the selected source to one whose evidence units follow `policy` (the original is kept). */
+  async function applyUnitPolicy(policy: SourceUnitPolicy) {
+    if (!selectedAssetId.value) return;
+    busy.value = "units";
+    setMessage("");
+    try {
+      const asset = await corpusBuilderApi.deriveUnits(selectedAssetId.value, policy);
+      await refreshAssets();
+      rememberAsset(asset);
+      setMessage(i18n.tf("pdf_corpus.units_applied", { count: asset.block_count }));
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function deleteAsset(assetId: string) {
+    if (!assetId) return;
+    setMessage("");
+    try {
+      const result = await corpusBuilderApi.deleteAsset(assetId);
+      await refreshAssets();
+      setMessage(i18n.tf("pdf_corpus.source_deleted", { count: result.builds_deleted }));
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    }
+  }
+
+  async function loadSourceUrl() {
+    const url = sourceUrl.value.trim();
+    if (!url) return;
+    busy.value = "upload";
+    setMessage("");
+    try {
+      const asset = await corpusBuilderApi.importUrl(
+        url,
+        sourceIllegibility.value,
+        pageDetection(),
+      );
+      await refreshAssets();
+      rememberAsset(asset, true);
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  /** Import a Wikisource work or part chosen in the search dialog; errors stay in the dialog. */
+  async function importLibraryUrl(url: string) {
+    if (!url || libraryImporting.value) return;
+    libraryImporting.value = `wikisource:${url}`;
+    libraryError.value = "";
+    busy.value = "upload";
+    try {
+      const asset = await corpusBuilderApi.importUrl(
+        url,
+        sourceIllegibility.value,
+        pageDetection(),
+      );
+      await refreshAssets();
+      rememberAsset(asset, true);
+      libraryImported.value += 1;
+    } catch (exc) {
+      libraryError.value = exc instanceof Error ? exc.message : String(exc);
+    } finally {
+      libraryImporting.value = "";
+      busy.value = "";
+    }
+  }
+
+  // Searches run as the reviewer types, so an older, slower answer must never replace a newer one.
+  async function searchGutenberg() {
+    const query = gutenbergQuery.value.trim();
+    const ticket = ++searchTicket;
+    libraryError.value = "";
+    if (!query) {
+      gutenbergHits.value = [];
+      librarySearched.value = { ...librarySearched.value, gutenberg: "" };
+      return;
+    }
+    busy.value = "gutenberg";
+    try {
+      const result = await corpusBuilderApi.searchGutenberg(query);
+      if (ticket !== searchTicket) return;
+      gutenbergHits.value = result.items || [];
+      librarySearched.value = { ...librarySearched.value, gutenberg: query };
+    } catch (exc) {
+      if (ticket === searchTicket)
+        libraryError.value = exc instanceof Error ? exc.message : String(exc);
+    } finally {
+      if (busy.value === "gutenberg") busy.value = "";
+    }
+  }
+
+  async function searchWikisource() {
+    const query = gutenbergQuery.value.trim();
+    const ticket = ++searchTicket;
+    libraryError.value = "";
+    if (!query) {
+      wikisourceHits.value = [];
+      librarySearched.value = { ...librarySearched.value, wikisource: "" };
+      return;
+    }
+    busy.value = "wikisource";
+    try {
+      const result = await corpusBuilderApi.searchWikisource(query, wikisourceLanguage.value);
+      if (ticket !== searchTicket) return;
+      wikisourceHits.value = result.items || [];
+      librarySearched.value = { ...librarySearched.value, wikisource: query };
+    } catch (exc) {
+      if (ticket === searchTicket)
+        libraryError.value = exc instanceof Error ? exc.message : String(exc);
+    } finally {
+      if (busy.value === "wikisource") busy.value = "";
+    }
+  }
+
+  async function refreshGutenbergStatus() {
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.gutenbergStatus();
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    }
+  }
+
+  async function refreshGutenbergCatalogue() {
+    busy.value = "gutenberg-catalogue";
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.refreshGutenbergCatalogue();
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function updateGutenbergArchive(action: "start" | "pause" | "resume" | "refetch") {
+    busy.value = "gutenberg-archive";
+    try {
+      gutenbergStatus.value = await corpusBuilderApi.gutenbergArchiveAction(action);
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function importGutenberg(etextId: number) {
+    if (libraryImporting.value) return;
+    libraryImporting.value = `gutenberg:${etextId}`;
+    libraryError.value = "";
+    busy.value = "upload";
+    try {
+      const asset = await corpusBuilderApi.importGutenberg(
+        etextId,
+        sourceIllegibility.value,
+        pageDetection(),
+      );
+      await refreshAssets();
+      rememberAsset(asset, true);
+      libraryImported.value += 1;
+    } catch (exc) {
+      libraryError.value = exc instanceof Error ? exc.message : String(exc);
+    } finally {
+      libraryImporting.value = "";
+      busy.value = "";
+    }
+  }
+
+  async function savePageLabels(labels: Record<number, string | null>) {
+    if (!selectedAssetId.value || !Object.keys(labels).length) return;
+    busy.value = "page-labels";
+    try {
+      const asset = await corpusBuilderApi.updatePageLabels(selectedAssetId.value, labels);
+      rememberAsset(asset, true);
+      setMessage(i18n.t("pdf_corpus.page_mapping_saved"));
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  async function saveDocumentLayout(plan: DocumentLayoutPlan) {
+    if (!selectedAssetId.value) return;
+    busy.value = "document-layout";
+    try {
+      const asset = await corpusBuilderApi.updateDocumentLayout(selectedAssetId.value, plan);
+      rememberAsset(asset);
+      const mapped = (asset.pages || []).filter(
+        (page) =>
+          Boolean(String(page.printed_page_label ?? "").trim()) ||
+          (page.logical_pages || []).some((item) =>
+            Boolean(String(item.printed_page_label ?? "").trim()),
+          ),
+      ).length;
+      const exceptions = (asset.pages || []).filter((page) =>
+        String(page.printed_page_label_source || "").includes("override"),
+      ).length;
+      setMessage(
+        i18n.tf("pdf_corpus.document_structure_saved_impact", {
+          mapped,
+          total: asset.page_count,
+          exceptions,
+        }),
+      );
+    } catch (exc) {
+      setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      busy.value = "";
+    }
+  }
+
+  return {
+    assets,
+    selectedAssetId,
+    selectedAsset,
+    sourceIllegibility,
+    sourceUrl,
+    gutenbergQuery,
+    gutenbergHits,
+    wikisourceHits,
+    wikisourceLanguage,
+    librarySearched,
+    libraryError,
+    libraryImporting,
+    libraryImported,
+    importLibraryUrl,
+    gutenbergStatus,
+    lastIngestedAsset,
+    languagePrompt,
+    saveSourceLanguage,
+    applyPageEstimate,
+    saveSourceMetadata,
+    saveVoiceAssignments,
+    refreshAssets,
+    upload,
+    applyUnitPolicy,
+    deleteAsset,
+    loadSourceUrl,
+    searchGutenberg,
+    searchWikisource,
+    refreshGutenbergStatus,
+    refreshGutenbergCatalogue,
+    updateGutenbergArchive,
+    importGutenberg,
+    savePageLabels,
+    saveDocumentLayout,
+  };
+}

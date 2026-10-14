@@ -1,7 +1,24 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { onBeforeRouteLeave, useRouter } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import {
   authApi,
   type AuthUser,
@@ -10,12 +27,18 @@ import {
   type UserRole,
 } from "../api/auth";
 import { expandPermissions, samePermissions } from "../domain/roles";
+import { queryClient, useDataQuery } from "../realtime/dataQuery";
+import { dataKey } from "../realtime/resourceKeys";
 import { useI18nStore } from "../stores/i18n";
+import { useAuthStore } from "../stores/auth";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
 import RolePermissionMatrix from "../components/RolePermissionMatrix.vue";
+import RoleSelector, { type RoleChoice } from "../components/RoleSelector.vue";
+import { localizedAuthError } from "../domain/authErrors";
 import { notify } from "../composables/notifications";
 import SettingsSaveState from "../components/settings/SettingsSaveState.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiDialog from "../components/ui/UiDialog.vue";
@@ -26,23 +49,75 @@ import type { SaveStatus } from "../domain/settings";
 type ConfirmKind = "delete" | "leave" | "switch";
 
 const i18n = useI18nStore();
+const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
-const roles = ref<RoleDefinition[]>([]);
-const capabilities = ref<CapabilityDefinition[]>([]);
-const users = ref<AuthUser[]>([]);
-const selectedRole = ref<UserRole>("researcher");
+// Server state lives in the query cache; realtime invalidation refreshes it (no manual reload).
+const scope = computed(() => [auth.user?.id ?? "anonymous", auth.user?.role ?? ""]);
+const enabled = computed(() => Boolean(auth.user));
+const rolesQuery = useDataQuery("roles", () => authApi.listRoles(), { detail: scope, enabled });
+const usersQuery = useDataQuery("users", () => authApi.listUsers(), { detail: scope, enabled });
+function denied(exc: unknown) {
+  return Boolean(
+    exc && typeof exc === "object" && "status" in exc && [401, 403].includes(Number(exc.status)),
+  );
+}
+const accessDenied = computed(
+  () => denied(rolesQuery.error.value) || denied(usersQuery.error.value),
+);
+// Account assignments are part of the role-delete safety check. Treat both datasets as one
+// snapshot so a partial response can never imply zero users.
+const snapshotLoaded = computed(
+  () =>
+    !accessDenied.value &&
+    rolesQuery.data.value !== undefined &&
+    usersQuery.data.value !== undefined,
+);
+const roles = computed<RoleDefinition[]>(() =>
+  snapshotLoaded.value ? (rolesQuery.data.value?.roles ?? []) : [],
+);
+const capabilities = computed<CapabilityDefinition[]>(() =>
+  snapshotLoaded.value ? (rolesQuery.data.value?.capabilities ?? []) : [],
+);
+const users = computed<AuthUser[]>(() =>
+  snapshotLoaded.value ? (usersQuery.data.value?.users ?? []) : [],
+);
+const dataCurrent = computed(
+  () => !accessDenied.value && rolesQuery.isSuccess.value && usersQuery.isSuccess.value,
+);
+const loading = computed(() => rolesQuery.isFetching.value || usersQuery.isFetching.value);
+function setRoles(next: { roles: RoleDefinition[]; capabilities: CapabilityDefinition[] }) {
+  queryClient.setQueryData(dataKey("roles", ...scope.value), {
+    roles: next.roles,
+    capabilities: next.capabilities,
+  });
+}
+function refetch() {
+  return Promise.all([rolesQuery.refetch(), usersQuery.refetch()]);
+}
+const selectedRole = ref<UserRole>(String(route.query.role || "researcher"));
 const permissions = ref<string[]>([]);
-const loading = ref(true);
 const saving = ref(false);
 const creating = ref(false);
 const deleting = ref(false);
-const error = ref("");
+const actionError = ref("");
+// The permission list the draft started from; a change from it is an unsaved edit.
+const draftBase = ref<string[]>([]);
+const error = computed(
+  () =>
+    actionError.value ||
+    (rolesQuery.error.value || usersQuery.error.value
+      ? localizedAuthError(rolesQuery.error.value || usersQuery.error.value, (key, fallback) =>
+          i18n.t(key, fallback),
+        )
+      : ""),
+);
 const liveMessage = ref("");
 const createOpen = ref(false);
 const roleName = ref("");
 const roleDescription = ref("");
 const cloneFrom = ref<UserRole>("researcher");
-const permissionFilter = ref("");
+const permissionFilter = ref(String(route.query.q || ""));
 const confirm = ref<{ kind: ConfirmKind; title: string; message: string } | null>(null);
 const pendingRole = ref<UserRole>("");
 const routeGuardResolve = ref<((allow: boolean) => void) | null>(null);
@@ -69,23 +144,31 @@ const saveStatus = computed<SaveStatus>(() => {
 const assignedCount = computed(
   () => users.value.filter((user) => user.role === selectedRole.value).length,
 );
+const roleChoices = computed<RoleChoice[]>(() =>
+  roles.value.map((item) => ({
+    id: item.id,
+    name: displayName(item),
+    kind: roleKind(item),
+    assigned: assignedCountLabel(users.value.filter((user) => user.role === item.id).length),
+  })),
+);
 
 function announce(message: string) {
   liveMessage.value = message;
 }
 
 function statusLabel(status: SaveStatus) {
-  if (status === "dirty") return i18n.t("settings.status.unsaved", "Unsaved changes");
-  if (status === "saving") return i18n.t("settings.status.saving", "Saving");
-  if (status === "failed") return i18n.t("settings.status.save_failed", "Save failed");
-  if (status === "readonly") return i18n.t("settings.status.readonly", "Read-only");
-  return i18n.t("settings.status.saved", "Saved");
+  if (status === "dirty") return i18n.t("settings.status.unsaved");
+  if (status === "saving") return i18n.t("settings.status.saving");
+  if (status === "failed") return i18n.t("settings.status.save_failed");
+  if (status === "readonly") return i18n.t("settings.status.readonly");
+  return i18n.t("settings.status.saved");
 }
 
 function roleKind(item: RoleDefinition) {
-  if (item.id === "admin") return i18n.t("roles.superuser", "Superuser");
-  if (item.builtin) return i18n.t("roles.default_role", "Default role");
-  return i18n.t("roles.custom_role", "Custom role");
+  if (item.id === "admin") return i18n.t("roles.superuser");
+  if (item.builtin) return i18n.t("roles.default_role");
+  return i18n.t("roles.custom_role");
 }
 
 function displayName(item: RoleDefinition) {
@@ -94,50 +177,83 @@ function displayName(item: RoleDefinition) {
   return item.name;
 }
 
+function displayDescription(item: RoleDefinition) {
+  if (item.id === "admin") {
+    return i18n.t("roles.admin_description", item.description);
+  }
+  if (item.id === "researcher") {
+    return i18n.t("roles.researcher_description", item.description);
+  }
+  return item.description;
+}
+
 function assignedLabel(count: number) {
-  if (count === 0) return i18n.t("roles.assigned_none", "No accounts use this role.");
-  if (count === 1)
-    return i18n.tf("roles.assigned_one", "{count} account uses this role.", { count });
-  return i18n.tf("roles.assigned_many", "{count} accounts use this role.", { count });
+  if (count === 0) return i18n.t("roles.assigned_none");
+  if (count === 1) return i18n.tf("roles.assigned_one", { count });
+  return i18n.tf("roles.assigned_many", { count });
 }
 
 function assignedCountLabel(count: number) {
-  if (count === 1) return i18n.tf("roles.accounts_one", "{count} account", { count });
-  return i18n.tf("roles.accounts_many", "{count} accounts", { count });
+  if (count === 1) return i18n.tf("roles.accounts_one", { count });
+  return i18n.tf("roles.accounts_many", { count });
 }
 
-function applyRole(id: UserRole) {
+function syncRouteState() {
+  void router.replace({
+    name: "roles",
+    query: {
+      ...route.query,
+      role: selectedRole.value || undefined,
+      q: permissionFilter.value || undefined,
+    },
+  });
+}
+
+function applyRole(
+  id: UserRole,
+  resetFilter = true,
+  snapshot: { roles: RoleDefinition[]; capabilities: CapabilityDefinition[] } = {
+    roles: roles.value,
+    capabilities: capabilities.value,
+  },
+) {
   selectedRole.value = id;
   permissions.value = expandPermissions(
-    roles.value.find((item) => item.id === id)?.permissions || [],
-    capabilityIds.value,
+    snapshot.roles.find((item) => item.id === id)?.permissions || [],
+    snapshot.capabilities.map((item) => item.id),
   );
-  permissionFilter.value = "";
+  draftBase.value = [...permissions.value];
+  if (resetFilter) permissionFilter.value = "";
+  syncRouteState();
 }
 
-async function refresh(preferred?: string) {
-  loading.value = true;
-  error.value = "";
-  try {
-    const [roleData, userData] = await Promise.all([
-      authApi.listRoles(),
-      authApi.listUsers().catch(() => ({ users: [] as AuthUser[] })),
-    ]);
-    roles.value = roleData.roles;
-    capabilities.value = roleData.capabilities;
-    users.value = userData.users;
-    const next = preferred || selectedRole.value;
+// A new snapshot (first load, a realtime refresh, a retry) keeps an unsaved draft for the role being
+// edited and otherwise re-reads the selected role, or the default when it is gone.
+watch(
+  roles,
+  (next) => {
+    if (!next.length) {
+      permissions.value = [];
+      draftBase.value = [];
+      if (!snapshotLoaded.value) {
+        createOpen.value = false;
+        confirm.value = null;
+      }
+      return;
+    }
+    const keepDraft =
+      !samePermissions(permissions.value, draftBase.value) &&
+      next.some((item) => item.id === selectedRole.value);
+    if (keepDraft) return;
     const fallback =
-      roles.value.find((item) => item.id === "researcher")?.id ||
-      roles.value[0]?.id ||
-      "researcher";
-    applyRole(roles.value.some((item) => item.id === next) ? next : fallback);
-  } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
-  } finally {
-    loading.value = false;
-  }
-}
+      next.find((item) => item.id === "researcher")?.id || next[0]?.id || "researcher";
+    applyRole(
+      next.some((item) => item.id === selectedRole.value) ? selectedRole.value : fallback,
+      false,
+    );
+  },
+  { immediate: true },
+);
 
 function requestSelect(id: UserRole) {
   if (id === selectedRole.value) return;
@@ -148,25 +264,29 @@ function requestSelect(id: UserRole) {
   pendingRole.value = id;
   confirm.value = {
     kind: "switch",
-    title: i18n.t("roles.switch_title", "Save permission changes first?"),
-    message: i18n.t("roles.switch_message", "This role has unsaved permission changes."),
+    title: i18n.t("roles.switch_title"),
+    message: i18n.t("roles.switch_message"),
   };
 }
 
 async function save() {
+  if (!dataCurrent.value) return false;
   if (role.value?.locked || !dirty.value) return true;
   saving.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
     const result = await authApi.updateRolePermissions(selectedRole.value, permissions.value);
-    roles.value = result.roles;
-    capabilities.value = result.capabilities;
-    permissions.value = expandPermissions(result.permissions, capabilityIds.value);
-    announce(i18n.t("roles.saved", "Role permissions saved."));
-    notify(i18n.t("roles.saved", "Role permissions saved."), "success");
+    permissions.value = expandPermissions(
+      result.permissions,
+      result.capabilities.map((item) => item.id),
+    );
+    draftBase.value = [...permissions.value];
+    setRoles(result);
+    announce(i18n.t("roles.saved"));
+    notify(i18n.t("roles.saved"), "success");
     return true;
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
     return false;
   } finally {
     saving.value = false;
@@ -179,6 +299,7 @@ function discard() {
 }
 
 function openCreate() {
+  if (!dataCurrent.value) return;
   roleName.value = "";
   roleDescription.value = "";
   cloneFrom.value = templates.value.some((item) => item.id === "researcher")
@@ -188,62 +309,58 @@ function openCreate() {
 }
 
 async function createRole() {
+  if (!dataCurrent.value) return;
   if (roleName.value.trim().length < 2) return;
   creating.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
     const result = await authApi.createRole({
       name: roleName.value.trim(),
       description: roleDescription.value.trim(),
       clone_from: cloneFrom.value,
     });
-    roles.value = result.roles;
-    capabilities.value = result.capabilities;
+    setRoles(result);
     createOpen.value = false;
-    applyRole(result.role.id);
-    announce(i18n.t("roles.created", "Role created."));
-    notify(i18n.t("roles.created", "Role created."), "success");
+    applyRole(result.role.id, true, result);
+    announce(i18n.t("roles.created"));
+    notify(i18n.t("roles.created"), "success");
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     creating.value = false;
   }
 }
 
 function openDelete() {
+  if (!dataCurrent.value) return;
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   if (assignedCount.value) {
-    error.value = i18n.t(
-      "roles.cannot_delete_assigned",
-      "Reassign users from this role before deleting it.",
-    );
+    actionError.value = i18n.t("roles.cannot_delete_assigned");
     return;
   }
   confirm.value = {
     kind: "delete",
-    title: i18n.t("roles.delete", "Delete role"),
-    message: i18n.tf(
-      "roles.delete_confirm_named",
-      "Delete the role “{name}”? Users must be reassigned first.",
-      { name: current.name },
-    ),
+    title: i18n.t("roles.delete"),
+    message: i18n.tf("roles.delete_confirm_named", { name: current.name }),
   };
 }
 
 async function deleteSelected() {
+  if (!dataCurrent.value) return;
   const current = role.value;
   if (!current || current.builtin || current.locked) return;
   deleting.value = true;
-  error.value = "";
+  actionError.value = "";
   try {
-    await authApi.deleteRole(current.id);
+    const result = await authApi.deleteRole(current.id);
     confirm.value = null;
-    announce(i18n.t("roles.deleted", "Role deleted."));
-    notify(i18n.t("roles.deleted", "Role deleted."), "success");
-    await refresh("researcher");
+    announce(i18n.t("roles.deleted"));
+    notify(i18n.t("roles.deleted"), "success");
+    applyRole("researcher", false, result);
+    setRoles(result);
   } catch (exc) {
-    error.value = exc instanceof Error ? exc.message : String(exc);
+    actionError.value = localizedAuthError(exc, (key, fallback) => i18n.t(key, fallback));
   } finally {
     deleting.value = false;
   }
@@ -314,96 +431,101 @@ onBeforeRouteLeave(() => {
     routeGuardResolve.value = resolve;
     confirm.value = {
       kind: "leave",
-      title: i18n.t("roles.leave_title", "Discard unsaved permission changes?"),
-      message: i18n.t(
-        "roles.leave_message",
-        "Your unsaved role permission changes will be lost if you leave this page.",
-      ),
+      title: i18n.t("roles.leave_title"),
+      message: i18n.t("roles.leave_message"),
     };
   });
 });
 
-onMounted(() => {
-  window.addEventListener("beforeunload", onBeforeUnload);
-  void refresh();
+watch(permissionFilter, () => syncRouteState());
+watch(
+  () => scope.value.join(":"),
+  () => {
+    permissions.value = [];
+    draftBase.value = [];
+    createOpen.value = false;
+    confirm.value = null;
+    actionError.value = "";
+  },
+);
+watch(
+  () => route.query.role,
+  (value) => {
+    const requested = String(value || "");
+    if (
+      !requested ||
+      requested === selectedRole.value ||
+      !roles.value.some((item) => item.id === requested)
+    )
+      return;
+    requestSelect(requested);
+  },
+);
+
+onMounted(() => window.addEventListener("beforeunload", onBeforeUnload));
+onBeforeUnmount(() => {
+  window.removeEventListener("beforeunload", onBeforeUnload);
 });
-onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload));
 </script>
 
 <template>
   <main class="vue-native-page roles-page" :aria-busy="loading" aria-labelledby="roles-page-title">
     <div class="sr-only" aria-live="polite">{{ liveMessage }}</div>
     <UiPageHeader
-      :kicker="i18n.t('section.system', 'System')"
-      :title="i18n.t('roles.title', 'Roles & permissions')"
+      :kicker="i18n.t('section.system')"
+      :title="i18n.t('roles.title')"
       title-id="roles-page-title"
-      :description="
-        i18n.t(
-          'roles.description',
-          'Create non-admin roles and define exactly which researcher-safe pages and features each role can use.',
-        )
-      "
-      :actions-label="i18n.t('roles.page_actions', 'Role actions')"
+      :description="i18n.t('roles.description')"
+      :actions-label="i18n.t('roles.page_actions')"
     >
       <template #actions>
-        <SettingsSaveState :status="saveStatus" :label="statusLabel(saveStatus)" />
-        <UiButton icon="users" :label="i18n.t('nav.users', 'Users')" @click="openUsers" />
+        <SettingsSaveState
+          v-if="snapshotLoaded"
+          :status="saveStatus"
+          :label="statusLabel(saveStatus)"
+        />
+        <UiButton icon="users" :label="i18n.t('nav.users')" @click="openUsers" />
         <UiButton
           variant="primary"
           icon="plus"
-          :label="i18n.t('roles.create', 'Create role')"
+          :label="i18n.t('roles.create')"
+          :disabled="!dataCurrent"
           @click="openCreate"
         />
       </template>
     </UiPageHeader>
-    <p v-if="error" class="info error" role="alert">{{ error }}</p>
-    <section v-if="loading && !roles.length" class="roles-loading" role="status">
-      <span class="spinner"></span>{{ i18n.t("roles.loading", "Loading roles…") }}
+    <UiLoadingState v-if="loading && snapshotLoaded" :label="i18n.t('loading.updating')" />
+    <div v-if="error" class="info error" role="alert">
+      <p v-if="snapshotLoaded && !dataCurrent">{{ i18n.t("loading.stale") }}</p>
+      <p>{{ error }}</p>
+      <UiButton
+        v-if="snapshotLoaded && !dataCurrent"
+        :label="i18n.t('ui.retry')"
+        :disabled="loading"
+        @click="refetch()"
+      />
+    </div>
+    <section v-if="loading && !snapshotLoaded" class="roles-loading">
+      <UiLoadingState :label="i18n.t('roles.loading')" />
     </section>
     <AccessibleEmptyState
       v-else-if="error && !roles.length"
       icon="roles"
       icon-tone="neutral"
-      :title="i18n.t('roles.title', 'Roles & permissions')"
+      :title="i18n.t('roles.title')"
       :description="error"
-      :action-label="i18n.t('ui.retry', 'Retry')"
-      @action="refresh()"
+      :action-label="i18n.t('ui.retry')"
+      @action="refetch()"
     />
     <div v-else class="roles-layout">
-      <UiCard
-        as="div"
-        class="roles-list"
-        role="navigation"
-        :padded="false"
-        :aria-label="i18n.t('roles.role_list', 'Roles')"
-      >
-        <p class="roles-list-head">{{ i18n.t("roles.role_list", "Roles") }}</p>
-        <div
-          class="roles-list-items"
-          role="listbox"
-          :aria-label="i18n.t('roles.role_list', 'Roles')"
-        >
-          <button
-            v-for="item in roles"
-            :key="item.id"
-            type="button"
-            class="role-list-item"
-            :class="{ active: selectedRole === item.id }"
-            role="option"
-            :aria-selected="selectedRole === item.id"
-            @click="requestSelect(item.id)"
-          >
-            <span>
-              <b>{{ displayName(item) }}</b>
-              <small
-                >{{ roleKind(item) }} ·
-                {{
-                  assignedCountLabel(users.filter((user) => user.role === item.id).length)
-                }}</small
-              >
-            </span>
-          </button>
-        </div>
+      <UiCard as="div" class="roles-list" :padded="false">
+        <RoleSelector
+          :label="i18n.t('roles.role_list')"
+          :choices="roleChoices"
+          :model-value="selectedRole"
+          :disabled="!dataCurrent"
+          @update:model-value="requestSelect"
+        />
       </UiCard>
       <UiCard
         as="section"
@@ -420,67 +542,52 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
                 :tone="role.locked ? 'warning' : role.builtin ? 'info' : 'success'"
               />
             </div>
-            <p class="role-editor-copy">{{ role.description }}</p>
+            <p class="role-editor-copy">{{ displayDescription(role) }}</p>
             <p class="note">{{ assignedLabel(assignedCount) }}</p>
           </div>
           <div class="role-editor-tools">
             <UiButton
               v-if="!role.locked && !role.builtin"
               variant="danger"
-              :label="i18n.t('roles.delete', 'Delete role')"
-              :disabled="assignedCount > 0"
-              :disabled-reason="
-                i18n.t(
-                  'roles.cannot_delete_assigned',
-                  'Reassign users from this role before deleting it.',
-                )
-              "
+              :label="i18n.t('roles.delete')"
+              :disabled="!dataCurrent || assignedCount > 0"
+              :disabled-reason="i18n.t('roles.cannot_delete_assigned')"
               @click="openDelete"
             />
             <UiButton
               v-if="!role.locked"
-              :label="i18n.t('roles.discard', 'Discard changes')"
-              :disabled="!dirty || saving"
+              :label="i18n.t('roles.discard')"
+              :disabled="!dataCurrent || !dirty || saving"
               @click="discard"
             />
             <UiButton
               v-if="!role.locked"
               variant="primary"
               icon="check"
-              :label="saving ? i18n.t('ui.saving', 'Saving…') : i18n.t('ui.save', 'Save')"
-              :disabled="saving || !dirty"
+              :label="saving ? i18n.t('ui.saving') : i18n.t('ui.save')"
+              :disabled="!dataCurrent || saving || !dirty"
               @click="save"
             />
           </div>
         </header>
         <div class="role-editor-body">
           <p v-if="role?.locked" class="info">
-            {{
-              i18n.t(
-                "roles.admin_locked_help",
-                "Administrator access is fixed to full application control so administrative access cannot be accidentally removed.",
-              )
-            }}
+            {{ i18n.t("roles.admin_locked_help") }}
           </p>
           <p v-else class="info">
-            {{
-              i18n.t(
-                "roles.non_admin_help",
-                "Researcher is the default non-admin role. Custom roles use the same protected non-admin data boundary, with the permissions you enable below.",
-              )
-            }}
+            {{ i18n.t("roles.non_admin_help") }}
           </p>
           <p class="note">
             {{
               role?.locked
-                ? i18n.t("roles.full_access", "Full access")
-                : i18n.tf("roles.enabled_count", "{count} enabled", { count: enabledCount })
+                ? i18n.t("roles.full_access")
+                : i18n.tf("roles.enabled_count", { count: enabledCount })
             }}
           </p>
           <UiField
             v-if="!role?.locked"
-            :label="i18n.t('roles.filter', 'Filter permissions')"
-            :hint="i18n.t('roles.filter_placeholder', 'Search pages and capabilities')"
+            :label="i18n.t('roles.filter')"
+            :hint="i18n.t('roles.filter_placeholder')"
           >
             <input
               id="role-permission-filter"
@@ -488,13 +595,13 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
               class="control"
               type="search"
               autocomplete="off"
-              :placeholder="i18n.t('roles.filter_placeholder', 'Search pages and capabilities')"
+              :placeholder="i18n.t('roles.filter_placeholder')"
             />
           </UiField>
           <RolePermissionMatrix
             v-model="permissions"
             :capabilities="capabilities"
-            :disabled="Boolean(role?.locked)"
+            :disabled="!dataCurrent || Boolean(role?.locked)"
             :filter="permissionFilter"
           />
         </div>
@@ -503,28 +610,14 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 
     <UiDialog
       :open="createOpen"
-      :title="i18n.t('roles.create', 'Create role')"
-      :description="
-        i18n.t(
-          'roles.create_help',
-          'Start from an existing non-admin role, then adjust its permissions.',
-        )
-      "
-      :close-label="i18n.t('ui.close', 'Close')"
+      :title="i18n.t('roles.create')"
+      :description="i18n.t('roles.create_help')"
+      :close-label="i18n.t('ui.close')"
       size="medium"
       @close="createOpen = false"
     >
       <form class="role-create-fields" @submit.prevent="createRole">
-        <UiField
-          :label="i18n.t('roles.name', 'Role name')"
-          :hint="
-            i18n.t(
-              'roles.create_name_help',
-              'Two to 80 characters. The role id is derived from this name.',
-            )
-          "
-          required
-        >
+        <UiField :label="i18n.t('roles.name')" :hint="i18n.t('roles.create_name_help')" required>
           <input
             id="newRoleName"
             v-model="roleName"
@@ -534,7 +627,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             required
           />
         </UiField>
-        <UiField :label="i18n.t('roles.role_description', 'Description')" wide>
+        <UiField :label="i18n.t('roles.role_description')" wide>
           <textarea
             id="newRoleDescription"
             v-model="roleDescription"
@@ -543,7 +636,7 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             maxlength="500"
           ></textarea>
         </UiField>
-        <UiField :label="i18n.t('roles.template', 'Start with permissions from')">
+        <UiField :label="i18n.t('roles.template')">
           <select id="newRoleTemplate" v-model="cloneFrom" class="control">
             <option v-for="item in templates" :key="item.id" :value="item.id">
               {{ displayName(item) }}
@@ -552,17 +645,11 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
         </UiField>
       </form>
       <template #footer>
-        <UiButton
-          :label="i18n.t('ui.cancel', 'Cancel')"
-          :disabled="creating"
-          @click="createOpen = false"
-        />
+        <UiButton :label="i18n.t('ui.cancel')" :disabled="creating" @click="createOpen = false" />
         <UiButton
           variant="primary"
           type="submit"
-          :label="
-            creating ? i18n.t('ui.working', 'Working…') : i18n.t('roles.create', 'Create role')
-          "
+          :label="creating ? i18n.t('ui.working') : i18n.t('roles.create')"
           :disabled="creating || roleName.trim().length < 2"
           @click="createRole"
         />
@@ -574,21 +661,21 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
       :open="Boolean(confirm)"
       :title="confirm.title"
       :description="confirm.message"
-      :close-label="i18n.t('ui.close', 'Close')"
+      :close-label="i18n.t('ui.close')"
       size="medium"
       @close="closeConfirm"
     >
       <p>{{ confirm.message }}</p>
       <template #footer>
         <UiButton
-          :label="i18n.t('ui.cancel', 'Cancel')"
+          :label="i18n.t('ui.cancel')"
           :disabled="deleting || saving"
           @click="closeConfirm"
         />
         <div class="roles-confirm-actions">
           <UiButton
             v-if="confirm.kind === 'switch'"
-            :label="i18n.t('roles.switch_discard', 'Discard & switch')"
+            :label="i18n.t('roles.switch_discard')"
             :disabled="deleting || saving"
             @click="discardConfirm"
           />
@@ -596,12 +683,12 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
             :variant="confirm.kind === 'delete' || confirm.kind === 'leave' ? 'danger' : 'primary'"
             :label="
               deleting || saving
-                ? i18n.t('ui.working', 'Working…')
+                ? i18n.t('ui.working')
                 : confirm.kind === 'delete'
-                  ? i18n.t('roles.delete', 'Delete role')
+                  ? i18n.t('roles.delete')
                   : confirm.kind === 'switch'
-                    ? i18n.t('roles.switch_save', 'Save & switch')
-                    : i18n.t('roles.discard', 'Discard changes')
+                    ? i18n.t('roles.switch_save')
+                    : i18n.t('roles.discard')
             "
             :disabled="deleting || saving"
             @click="applyConfirm"
@@ -634,53 +721,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
 .roles-list {
   position: sticky;
   top: 12px;
-}
-.roles-list-head {
-  margin: 0;
-  padding: 14px 14px 6px;
-  font-size: 0.8125rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.roles-list-items {
-  display: grid;
-  gap: 4px;
-  padding: 0 8px 10px;
-}
-.role-list-item {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  border-radius: var(--radius-control);
-  padding: 11px 12px;
-  text-align: left;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-.role-list-item:hover {
-  background: var(--surface-hover);
-}
-.role-list-item.active {
-  background: var(--surface-selected);
-  color: var(--accent-fg);
-}
-.role-list-item span {
-  display: grid;
-  gap: 2px;
-}
-.role-list-item b {
-  font-size: 0.875rem;
-}
-.role-list-item small {
-  font-size: 0.8125rem;
-  color: var(--text-tertiary);
-  line-height: 1.4;
-}
-.role-list-item:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
 }
 .role-editor-head {
   display: flex;
@@ -736,27 +776,6 @@ onBeforeUnmount(() => window.removeEventListener("beforeunload", onBeforeUnload)
   }
   .roles-list {
     position: static;
-  }
-  .roles-list-items {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 560px) {
-  .roles-list-items {
-    grid-template-columns: 1fr;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .roles-page * {
-    transition: none !important;
-  }
-}
-@media (forced-colors: active) {
-  .role-list-item:focus-visible {
-    outline-color: Highlight;
-  }
-  .role-list-item.active {
-    outline: 1px solid Highlight;
   }
 }
 </style>

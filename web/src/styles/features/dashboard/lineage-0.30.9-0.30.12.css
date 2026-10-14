@@ -1,0 +1,171 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Dashboard polish */
+.dashboard-record-meta {
+  align-items: baseline;
+}
+.dashboard-record-pages {
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-annotation-meta {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center !important;
+  gap: 5px 10px !important;
+}
+.dashboard-annotation-meta .dashboard-annotation-work {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem !important;
+  color: var(--text-2) !important;
+  font-weight: 750 !important;
+}
+.dashboard-annotation-meta .dashboard-annotation-pages,
+.dashboard-annotation-meta .dashboard-annotation-author {
+  font-size: 0.8125rem !important;
+  color: var(--muted) !important;
+  font-weight: 650 !important;
+  white-space: nowrap;
+}
+.dashboard-annotation-meta time {
+  margin-left: 0 !important;
+  white-space: nowrap;
+}
+.dashboard-annotation-meta small {
+  grid-column: 1/-1;
+  font-size: 0.8125rem !important;
+  color: var(--muted) !important;
+  font-weight: 500 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-metric-body {
+  min-height: 102px;
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+}
+.dashboard-pie-layout {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 106px;
+}
+.dashboard-pie {
+  width: 96px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(23, 35, 59, 0.08);
+  position: relative;
+}
+.dashboard-pie::after {
+  content: "";
+  position: absolute;
+  inset: 29%;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: 0 0 0 1px rgba(23, 35, 59, 0.04);
+}
+.dashboard-pie-legend {
+  display: grid;
+  gap: 3px;
+  max-height: 108px;
+  overflow: auto;
+  padding-right: 3px;
+}
+.dashboard-pie-legend button {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 36px 76px;
+  gap: 5px;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  text-align: left;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+.dashboard-pie-legend button:not(:disabled):hover span {
+  text-decoration: underline;
+}
+.dashboard-pie-legend i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+}
+.dashboard-pie-legend span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-pie-legend b {
+  text-align: right;
+  color: var(--text-2);
+}
+.dashboard-pie-legend small {
+  text-align: right;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 780px) {
+  .dashboard-annotation-meta {
+    grid-template-columns: 1fr auto !important;
+  }
+  .dashboard-annotation-meta .dashboard-annotation-author,
+  .dashboard-annotation-meta time {
+    grid-column: auto;
+  }
+  .dashboard-annotation-meta small {
+    grid-column: 1/-1;
+  }
+  .dashboard-pie-layout {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+  .dashboard-pie {
+    width: 82px;
+  }
+  .dashboard-pie-legend button {
+    grid-template-columns: 8px minmax(0, 1fr) 34px;
+  }
+  .dashboard-pie-legend small {
+    display: none;
+  }
+  .language-database-grid {
+    grid-template-columns: 1fr;
+  }
+  .researcher-provider-access-card > .cardhead {
+    grid-template-columns: 1fr !important;
+  }
+  .researcher-provider-access-card > .cardhead .btn {
+    justify-self: start;
+  }
+  .researcher-access-item {
+    grid-template-columns: 1fr;
+  }
+  .researcher-access-item small {
+    white-space: normal;
+  }
+}

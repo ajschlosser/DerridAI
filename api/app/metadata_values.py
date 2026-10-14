@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Values that are not answers: "null", "N/A", "the author of the current record".
 
 A model asked for a speaker or position holder sometimes describes the role instead of naming the
@@ -17,7 +32,7 @@ from typing import Any
 _NOTHING = {
     "null", "none", "nil", "undefined", "nan", "n/a", "na", "n.a.", "n.a", "unknown", "unspecified", "unnamed", "untitled",
     "not specified", "not stated", "not applicable", "not available", "not provided", "not given", "not mentioned",
-    "not identified", "not identifiable", "no value", "no author", "no speaker", "tbd", "todo", "empty", "blank", "-", "--", "—", "–", "?", "??",
+    "not identified", "not identifiable", "not established in source", "no value", "no author", "no speaker", "tbd", "todo", "empty", "blank", "-", "--", "—", "–", "?", "??",
 }
 _ROLES = (
     r"author|speaker|writer|narrator|person|record|text|passage|document|book|work|source|party|individual|figure|reader|interlocutor|"

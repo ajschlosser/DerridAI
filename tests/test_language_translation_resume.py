@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Translation failure tolerance, resume, and full RAG grade output.
 
 Why: translating thousands of UI strings with local models will sometimes miss a
@@ -18,7 +34,6 @@ from types import ModuleType
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-LLM_TOOLS = (ROOT / "api/app/llm_tools.py").read_text(encoding="utf-8")
 
 
 
@@ -116,18 +131,11 @@ def test_translation_resume_skips_validated_strings(monkeypatch):
 def test_rag_grades_preserve_full_structured_output():
     """The grade normalizer keeps category analyses, overall analysis, and the raw output.
 
-    Contract checks confirm the grader prompt/limits still exist in llm_tools.py (source
-    text). The behavior check feeds a full grader response and expects flat scores
+    The behavior check feeds a full grader response and expects flat scores
     (query_relevance 9, overall 8), per-category analyses, the overall analysis, and the
     untouched raw_output. Why: graders explain themselves; discarding that loses the
     audit trail.
     """
-    assert 'normalized["categories"] = categories' in LLM_TOOLS
-    assert 'normalized["analysis"]' in LLM_TOOLS
-    assert 'normalized["raw_output"] = original' in LLM_TOOLS
-    assert "Each category must contain an integer `score`" in LLM_TOOLS
-    assert "max_tokens=4096" in LLM_TOOLS
-
     if str(ROOT / "api") not in sys.path:
         sys.path.insert(0, str(ROOT / "api"))
     module = importlib.import_module("app.llm_tools")

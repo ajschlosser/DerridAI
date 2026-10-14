@@ -1,7 +1,25 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import type { MetadataSchema } from "../../api/metadataSchemas";
 import UiDialog from "../ui/UiDialog.vue";
 import {
   INSPECTOR_TABS,
@@ -15,12 +33,16 @@ import {
   type InspectorTabKey,
 } from "../../domain/inspectorLayout";
 
-const props = defineProps<{ layout: InspectorLayout }>();
+const props = defineProps<{
+  layout: InspectorLayout;
+  record?: Record<string, unknown>;
+  schema?: MetadataSchema | null;
+}>();
 const emit = defineEmits<{ apply: [layout: InspectorLayout]; reset: [] }>();
 const i18n = useI18nStore();
 const isOpen = ref(false);
 const tab = ref<InspectorTabKey>("overview");
-const draft = ref<InspectorLayout>(defaultInspectorLayout());
+const draft = ref<InspectorLayout>(defaultInspectorLayout(props.record, props.schema || null));
 const dragging = ref<number | null>(null);
 
 const tabLabels: Record<InspectorTabKey, [string, string]> = {
@@ -30,11 +52,16 @@ const tabLabels: Record<InspectorTabKey, [string, string]> = {
 };
 
 const rows = computed(() => draft.value[tab.value]);
-const unused = computed(() => unusedInspectorFields(tab.value, rows.value));
+const unused = computed(() =>
+  unusedInspectorFields(tab.value, rows.value, props.record, props.schema || null),
+);
 
 function fieldLabel(key: string) {
-  if (key === "__pages") return i18n.t("record.page", "Page");
-  return i18n.t(`field.${key}`, key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()));
+  if (key === "__pages") return i18n.t("record.page");
+  return i18n.t(
+    `field.${key}`,
+    key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
+  );
 }
 
 function open() {
@@ -51,14 +78,14 @@ function apply() {
   isOpen.value = false;
 }
 function reset() {
-  draft.value = defaultInspectorLayout();
+  draft.value = defaultInspectorLayout(props.record, props.schema || null);
   emit("reset");
 }
 function setRows(next: InspectorLayoutRow[]) {
   draft.value = { ...draft.value, [tab.value]: next };
 }
 function addHeading() {
-  setRows([...rows.value, createInspectorHeading(i18n.t("record.layout_heading", "Section"))]);
+  setRows([...rows.value, createInspectorHeading(i18n.t("record.layout_heading"))]);
 }
 function addField(name: string) {
   if (!name) return;
@@ -79,7 +106,9 @@ function onDrop(index: number) {
   dragging.value = null;
 }
 function updateHeading(index: number, label: string) {
-  setRows(rows.value.map((row, i) => (i === index && row.kind === "heading" ? { ...row, label } : row)));
+  setRows(
+    rows.value.map((row, i) => (i === index && row.kind === "heading" ? { ...row, label } : row)),
+  );
 }
 
 defineExpose({ open, close });
@@ -89,18 +118,13 @@ defineExpose({ open, close });
   <UiDialog
     :open="isOpen"
     size="medium"
-    :title="i18n.t('record.inspector_layout', 'Configure inspector fields')"
-    :description="
-      i18n.t(
-        'record.inspector_layout_help',
-        'Choose the fields shown in each inspector tab, their order, and category headings. Drag a row or use the move buttons.',
-      )
-    "
-    :close-label="i18n.t('common.close', 'Close')"
+    :title="i18n.t('record.inspector_layout')"
+    :description="i18n.t('record.inspector_layout_help')"
+    :close-label="i18n.t('common.close')"
     @close="close"
   >
     <div class="layout-editor">
-      <div class="layout-tabs" role="tablist" :aria-label="i18n.t('record.inspector_sections', 'Record inspector sections')">
+      <div class="layout-tabs" role="tablist" :aria-label="i18n.t('record.inspector_sections')">
         <button
           v-for="item in INSPECTOR_TABS"
           :key="item"
@@ -113,7 +137,7 @@ defineExpose({ open, close });
           {{ i18n.t(tabLabels[item][0], tabLabels[item][1]) }}
         </button>
       </div>
-      <ol class="layout-rows" :aria-label="i18n.t('record.layout_rows', 'Inspector field order')">
+      <ol class="layout-rows" :aria-label="i18n.t('record.layout_rows')">
         <li
           v-for="(row, index) in rows"
           :key="row.id"
@@ -125,37 +149,72 @@ defineExpose({ open, close });
           @drop.prevent="onDrop(index)"
         >
           <span class="layout-grip" aria-hidden="true"></span>
-          <span class="sr-only">{{ i18n.t("record.drag_handle", "Drag to reorder") }}</span>
+          <span class="sr-only">{{ i18n.t("record.drag_handle") }}</span>
           <template v-if="row.kind === 'heading'">
             <label class="layout-heading-field">
-              <span class="sr-only">{{ i18n.t("record.layout_heading", "Section") }}</span>
-              <input class="control" :value="row.label" @input="updateHeading(index, ($event.target as HTMLInputElement).value)" />
+              <span class="sr-only">{{ i18n.t("record.layout_heading") }}</span>
+              <input
+                class="control"
+                :value="row.label"
+                @input="updateHeading(index, ($event.target as HTMLInputElement).value)"
+              />
             </label>
           </template>
           <span v-else class="layout-field-label">{{ fieldLabel(row.field) }}</span>
           <div class="layout-row-actions">
-            <button type="button" class="btn tiny" :disabled="index === 0" :aria-label="i18n.t('record.move_up', 'Move up')" @click="move(index, -1)">↑</button>
-            <button type="button" class="btn tiny" :disabled="index === rows.length - 1" :aria-label="i18n.t('record.move_down', 'Move down')" @click="move(index, 1)">↓</button>
-            <button type="button" class="btn tiny danger" :aria-label="i18n.t('ui.remove', 'Remove')" @click="removeRow(index)">×</button>
+            <button
+              type="button"
+              class="btn tiny"
+              :disabled="index === 0"
+              :aria-label="i18n.t('record.move_up')"
+              @click="move(index, -1)"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="btn tiny"
+              :disabled="index === rows.length - 1"
+              :aria-label="i18n.t('record.move_down')"
+              @click="move(index, 1)"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              class="btn tiny danger"
+              :aria-label="i18n.t('ui.remove')"
+              @click="removeRow(index)"
+            >
+              ×
+            </button>
           </div>
         </li>
       </ol>
       <div class="layout-add">
-        <button type="button" class="btn" @click="addHeading">{{ i18n.t("record.add_heading", "Add heading") }}</button>
+        <button type="button" class="btn" @click="addHeading">
+          {{ i18n.t("record.add_heading") }}
+        </button>
         <label v-if="unused.length">
-          <span class="sr-only">{{ i18n.t("record.add_field", "Add field") }}</span>
-          <select class="control" @change="addField(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
-            <option value="">{{ i18n.t("record.add_field", "Add field") }}</option>
+          <span class="sr-only">{{ i18n.t("record.add_field") }}</span>
+          <select
+            class="control"
+            @change="
+              addField(($event.target as HTMLSelectElement).value);
+              ($event.target as HTMLSelectElement).value = '';
+            "
+          >
+            <option value="">{{ i18n.t("record.add_field") }}</option>
             <option v-for="name in unused" :key="name" :value="name">{{ fieldLabel(name) }}</option>
           </select>
         </label>
       </div>
-      <p class="note">{{ unused.length ? "" : i18n.t("record.layout_all_fields", "Every catalog field for this tab is already in the list.") }}</p>
+      <p class="note">{{ unused.length ? "" : i18n.t("record.layout_all_fields") }}</p>
     </div>
     <template #footer>
-      <button type="button" class="btn" @click="reset">{{ i18n.t("record.layout_reset", "Reset layout") }}</button>
-      <button type="button" class="btn" @click="close">{{ i18n.t("common.cancel", "Cancel") }}</button>
-      <button type="button" class="btn primary" @click="apply">{{ i18n.t("common.apply", "Apply") }}</button>
+      <button type="button" class="btn" @click="reset">{{ i18n.t("record.layout_reset") }}</button>
+      <button type="button" class="btn" @click="close">{{ i18n.t("common.cancel") }}</button>
+      <button type="button" class="btn primary" @click="apply">{{ i18n.t("common.apply") }}</button>
     </template>
   </UiDialog>
 </template>

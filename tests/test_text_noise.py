@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Language-agnostic text-noise scoring and raster DPI mapping.
 
 Why: OCR that still looks like letters (vEignes, C111.11.31.CS) used to miss the
@@ -16,10 +31,12 @@ sys.path.insert(0, str(ROOT / "api"))
 
 from app.models import PdfCorpusBuildCreate
 from app.raster_quality import noise_from_effective_dpi
+from app.source_quality import assess_extracted_source
 from app.text_noise import (
     DEFAULT_NOISE_THRESHOLD,
     annotate_records,
     blend_noise_scores,
+    raster_score_for_pages,
     score_text_noise,
     should_ask_llm,
 )
@@ -60,6 +77,17 @@ def test_bilingual_scholarly_prose_stays_legible() -> None:
 
 def test_llm_may_only_raise_noise() -> None:
     assert blend_noise_scores(80, llm_score=10, llm_confidence=0.99) == 80
+
+
+def test_record_raster_noise_uses_typical_page_quality_not_single_worst_page() -> None:
+    record = {"pdf_pages": [1, 2, 3]}
+    pages = [
+        {"pdf_page": 1, "raster": {"noise": 8}},
+        {"pdf_page": 2, "raster": {"noise": 12}},
+        {"pdf_page": 3, "raster": {"noise": 92}},
+    ]
+
+    assert raster_score_for_pages(record, pages) == 12
     assert blend_noise_scores(40, llm_score=70, llm_confidence=0.7) == 70
     assert blend_noise_scores(40, llm_score=70, llm_confidence=0.2) == 40
     assert should_ask_llm(10) is False
@@ -78,6 +106,20 @@ def test_low_embedded_dpi_is_noisy_high_dpi_is_clean() -> None:
 
 
 def test_build_request_defaults_keep_noise_tuning_off_the_llm() -> None:
+    assert PdfCorpusBuildCreate(asset_id="a").llm_assess_text_noise is False
+    assert PdfCorpusBuildCreate(asset_id="a").noise_unusable_threshold == DEFAULT_NOISE_THRESHOLD
+
+
+def test_extracted_source_is_scored_before_a_build() -> None:
+    """Page noise is available as soon as blocks exist, without constructing records."""
+    report = assess_extracted_source(
+        [{"page": 1, "text": GARBLED, "extraction_method": "ocr"}],
+        [{"pdf_page": 1, "image_count": 0}],
+    )
+    noise = report["extraction_noise"]
+    assert noise["unusable_page_count"] == 1
+    assert noise["exceeds_threshold"] is True
+    assert noise["deterministic"] is True
     request = PdfCorpusBuildCreate(asset_id="pdf-test")
     assert request.noise_unusable_threshold == 45
     assert request.llm_assess_text_noise is False

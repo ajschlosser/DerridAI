@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -91,6 +108,8 @@ function baseSnapshot() {
 const runtime = vi.hoisted(() => ({
   state: { view: "home" },
   getRecordsListSnapshot: vi.fn(),
+  refreshRecordsListPresence: vi.fn(async () => undefined),
+  ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   getShellSnapshot: vi.fn(() => ({ files: [] })),
   setRecordsListQuery: vi.fn(),
   recordsListCommand: vi.fn(async () => undefined),
@@ -133,7 +152,22 @@ const runtime = vi.hoisted(() => ({
   setTranslationDictionary: vi.fn(),
   sync: vi.fn(),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
+vi.mock("../../src/domain/appBootstrap", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedCorpusHydration", () => ({
+  ensureCorpusWorkspaceLoaded: () => runtime.ensureCorpusWorkspaceLoaded(),
+}));
+vi.mock("../../src/domain/sharedRecordsWorkspace", () => ({ recordsWorkspace: runtime }));
+vi.mock("../../src/domain/sharedFileLifecycle", () => ({ closeFile: runtime.closeWorkspaceFile }));
+vi.mock("../../src/domain/sharedRecordFileCommands", () => ({ ...runtime }));
+vi.mock("../../src/domain/workspaceActions", () => ({
+  activateFile: runtime.activateFile,
+  searchByMetadata: (field: string, value: unknown, options: { contains?: boolean }) =>
+    runtime.recordsListMetadataSearch(field, value, options.contains),
+}));
 
 import RecordsView from "../../src/views/RecordsView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
@@ -158,19 +192,78 @@ describe("RecordsView", () => {
     setActivePinia(createPinia());
     const snap = baseSnapshot();
     runtime.getRecordsListSnapshot.mockReturnValue(snap);
-    runtime.getShellSnapshot.mockReturnValue({ files: snap.files });
+    runtime.getShellSnapshot.mockReturnValue({ files: snap.files as never[] });
     useI18nStore().languages = [
       { code: "en-US", name: "English", flag: "" },
       { code: "fr-CA", name: "Français", flag: "" },
     ] as never;
-    useShellStore().snapshot.files = snap.files;
+    useShellStore().snapshot.files = snap.files as never;
+  });
+
+  it("shows placeholders without an empty-workspace claim during initial hydration", async () => {
+    let release!: () => void;
+    runtime.ensureCorpusWorkspaceLoaded.mockReturnValueOnce(
+      new Promise<undefined>((resolve) => {
+        release = () => resolve(undefined);
+      }),
+    );
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      files: [],
+      file: null,
+      rows: [],
+      total: 0,
+    });
+    const wrapper = await mountRecords();
+    expect(wrapper.find("#records-page-title").exists()).toBe(true);
+    expect(wrapper.find(".records-hydration .is-skeleton").exists()).toBe(true);
+    expect(wrapper.find(".records-stats").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Open a workspace");
+    release();
+    await flushPromises();
+    wrapper.unmount();
+  });
+
+  it("shows hydration failure and retries without claiming an empty workspace", async () => {
+    runtime.getRecordsListSnapshot.mockReturnValue({
+      ...baseSnapshot(),
+      files: [],
+      file: null,
+      rows: [],
+    });
+    runtime.ensureCorpusWorkspaceLoaded.mockRejectedValueOnce(new Error("Corpus unavailable"));
+    const wrapper = await mountRecords();
+    expect(wrapper.find(".records-hydration-error").text()).toContain("Corpus unavailable");
+    runtime.getRecordsListSnapshot.mockReturnValue(baseSnapshot());
+    await wrapper.find(".records-hydration-error button").trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".records-hydration-error").exists()).toBe(false);
+    expect(wrapper.text()).toContain("différance");
+    wrapper.unmount();
+  });
+
+  it("retains loaded rows while activation is pending and when it fails", async () => {
+    let reject!: (error: Error) => void;
+    runtime.ensureCorpusWorkspaceLoaded.mockReturnValueOnce(
+      new Promise<undefined>((_, no) => {
+        reject = no;
+      }),
+    );
+    const wrapper = await mountRecords();
+    const table = wrapper.find("table").element;
+    expect(wrapper.find(".records-hydration .is-inline").exists()).toBe(true);
+    reject(new Error("Unavailable"));
+    await flushPromises();
+    expect(wrapper.find("table").element).toBe(table);
+    expect(wrapper.find(".records-hydration-error").text()).toContain("Unavailable");
+    wrapper.unmount();
   });
 
   it("renders the loaded table and opens a record from the row", async () => {
     const wrapper = await mountRecords();
     expect(wrapper.get("#records-page-title").text()).toContain("Records");
     expect(wrapper.text()).toContain("Glas");
-    expect(wrapper.text()).toContain("Add evidence");
+    expect(wrapper.text()).toContain("Add to evidence");
     expect(wrapper.get(".actions-col").text()).not.toMatch(/Evider/);
     await wrapper.get("tbody tr").trigger("click");
     expect(runtime.openRecordsListRecord).toHaveBeenCalledWith(0);

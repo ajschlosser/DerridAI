@@ -1,12 +1,30 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
+import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { SchemaSummary } from "../../api/metadataSchemas";
 import type { SearchFilter } from "../../types/search";
 import type { SearchFilterFieldOption } from "../../domain/searchFilterSchema";
 
-defineProps<{
+const props = defineProps<{
   filters: SearchFilter[];
   fields: SearchFilterFieldOption[];
   schemas: SchemaSummary[];
@@ -31,19 +49,21 @@ const i18n = useI18nStore();
 function valueRequired(op: string) {
   return !["empty", "notempty"].includes(op);
 }
+const selectedField = computed(() => props.fields.find((item) => item.key === props.field) || null);
+const valueInput = computed(() => selectedField.value?.input || "text");
 </script>
 
 <template>
   <section class="search-rule-builder" aria-labelledby="search-rule-builder-title">
     <header class="search-rule-builder-head">
       <div>
-        <p class="section-label">{{ i18n.t("search.advanced_filters", "Advanced filters") }}</p>
+        <p class="section-label">{{ i18n.t("search.advanced_filters") }}</p>
         <h2 id="search-rule-builder-title">
-          {{ i18n.t("search.filter_match_all", "Match all of these conditions") }}
+          {{ i18n.t("search.filter_match_all") }}
         </h2>
       </div>
       <label class="search-rule-schema">
-        <span>{{ i18n.t("search.filter_schema", "Metadata schema") }}</span>
+        <span>{{ i18n.t("search.filter_schema") }}</span>
         <select
           class="control"
           :value="schemaId"
@@ -53,7 +73,7 @@ function valueRequired(op: string) {
             {{ schema.name
             }}{{
               schema.id === associatedSchemaId
-                ? ` · ${i18n.t("search.filter_schema_associated", "associated")}`
+                ? ` · ${i18n.t("search.filter_schema_associated")}`
                 : ""
             }}
           </option>
@@ -61,17 +81,12 @@ function valueRequired(op: string) {
       </label>
     </header>
     <p class="search-rule-help">
-      {{
-        i18n.t(
-          "search.advanced_filter_help",
-          "Use field-level conditions when the facet sidebar is not specific enough.",
-        )
-      }}
+      {{ i18n.t("search.advanced_filter_help") }}
     </p>
     <ol class="search-rule-list">
       <li v-for="(filter, index) in filters" :key="filter.id" class="search-rule-row is-applied">
         <span class="search-rule-join">{{
-          index === 0 ? i18n.t("search.filter_where", "Where") : i18n.t("search.filter_and", "And")
+          index === 0 ? i18n.t("search.filter_where") : i18n.t("search.filter_and")
         }}</span>
         <span class="search-rule-token">{{ filter.field_label }}</span>
         <span class="search-rule-token is-muted">{{ filter.op_label }}</span>
@@ -80,7 +95,7 @@ function valueRequired(op: string) {
           type="button"
           class="btn search-rule-remove"
           :aria-label="
-            i18n.tf('search.remove_condition_named', 'Remove condition {field} {op} {value}', {
+            i18n.tf('search.remove_condition_named', {
               field: filter.field_label,
               op: filter.op_label,
               value: filter.value,
@@ -93,12 +108,10 @@ function valueRequired(op: string) {
       </li>
       <li class="search-rule-row is-compose">
         <span class="search-rule-join">{{
-          filters.length
-            ? i18n.t("search.filter_and", "And")
-            : i18n.t("search.filter_where", "Where")
+          filters.length ? i18n.t("search.filter_and") : i18n.t("search.filter_where")
         }}</span>
         <label>
-          <span class="sr-only">{{ i18n.t("search.field", "Field") }}</span>
+          <span class="sr-only">{{ i18n.t("search.field") }}</span>
           <select
             class="control"
             :value="field"
@@ -113,7 +126,7 @@ function valueRequired(op: string) {
           </select>
         </label>
         <label>
-          <span class="sr-only">{{ i18n.t("search.condition", "Condition") }}</span>
+          <span class="sr-only">{{ i18n.t("search.condition") }}</span>
           <select
             class="control"
             :value="op"
@@ -125,27 +138,49 @@ function valueRequired(op: string) {
           </select>
         </label>
         <label>
-          <span class="sr-only">{{ i18n.t("search.value", "Value") }}</span>
+          <span class="sr-only">{{ i18n.t("search.value") }}</span>
+          <select
+            v-if="valueInput === 'select'"
+            class="control search-filter-value-control"
+            :value="value"
+            :disabled="!valueRequired(op)"
+            @change="emit('update:value', ($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">{{ i18n.t("search.filter_value_placeholder") }}</option>
+            <option v-for="item in suggestions" :key="item" :value="item">{{ item }}</option>
+          </select>
           <input
+            v-else-if="valueInput === 'number'"
+            class="control search-filter-value-control"
+            type="number"
+            step="any"
+            :value="value"
+            :disabled="!valueRequired(op)"
+            :placeholder="i18n.t('search.filter_value_placeholder')"
+            @input="emit('update:value', ($event.target as HTMLInputElement).value)"
+            @keydown.enter.prevent="emit('add')"
+          />
+          <input
+            v-else
             class="control"
             :value="value"
             :list="`search-suggestions-${field}`"
             :disabled="!valueRequired(op)"
-            :placeholder="i18n.t('search.filter_value_placeholder', 'Type or choose a value…')"
+            :placeholder="i18n.t('search.filter_value_placeholder')"
             @input="emit('update:value', ($event.target as HTMLInputElement).value)"
             @keydown.enter.prevent="emit('add')"
           />
-          <datalist :id="`search-suggestions-${field}`">
+          <datalist v-if="valueInput === 'text'" :id="`search-suggestions-${field}`">
             <option v-for="item in suggestions" :key="item" :value="item"></option>
           </datalist>
         </label>
         <button
           type="button"
           class="btn primary search-add-filter"
-          :disabled="valueRequired(op) && !value.trim()"
+          :disabled="!field || (valueRequired(op) && !value.trim())"
           @click="emit('add')"
         >
-          <AppIcon name="plus" />{{ i18n.t("research.add_filter", "Add filter") }}
+          <AppIcon name="plus" />{{ i18n.t("research.add_filter") }}
         </button>
       </li>
     </ol>
@@ -209,10 +244,9 @@ function valueRequired(op: string) {
 }
 .search-rule-row {
   display: grid;
-  grid-template-columns: 4.5rem minmax(8.5rem, 1.05fr) minmax(7.5rem, 0.85fr) minmax(
-      10rem,
-      1.4fr
-    ) auto;
+  grid-template-columns:
+    4.5rem minmax(8.5rem, 1.05fr) minmax(7.5rem, 0.85fr) minmax(10rem, 1.4fr)
+    auto;
   gap: var(--space-2);
   align-items: center;
   min-height: 48px;

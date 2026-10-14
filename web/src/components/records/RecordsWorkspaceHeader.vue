@@ -1,84 +1,91 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import UiPageHeader from "../ui/UiPageHeader.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = withDefaults(
   defineProps<{
+    ready?: boolean;
     fileName?: string;
     matched?: number;
     total?: number;
     flagged?: number;
     selected?: number;
   }>(),
-  { fileName: "", matched: 0, total: 0, flagged: 0, selected: 0 },
+  { ready: true, fileName: "", matched: 0, total: 0, flagged: 0, selected: 0 },
 );
 const emit = defineEmits<{ share: []; columns: []; import: [] }>();
 const i18n = useI18nStore();
-const copyLinkHelp = computed(() =>
-  i18n.t(
-    "records.copy_view_link_help",
-    "Copies a link that reopens this table exactly as shown: file name, search, column filters, sort, page and columns. Records stay on this device, so whoever opens the link must choose the same JSONL file.",
-  ),
-);
+const copyLinkHelp = computed(() => i18n.t("records.copy_view_link_help"));
 </script>
 <template>
   <UiPageHeader
     class="records-hero"
-    :kicker="i18n.t('section.corpus', 'Corpus')"
-    :title="i18n.t('nav.records', 'Records')"
-    :description="
-      i18n.t(
-        'records.page_help',
-        'Review loaded JSONL records, keep provenance visible, and act on a precise selection without crowding the table.',
-      )
-    "
+    :kicker="i18n.t('section.corpus')"
+    :title="i18n.t('nav.records')"
+    :description="i18n.t('records.page_help')"
     title-id="records-page-title"
-    :actions-label="i18n.t('records.view_actions', 'Records view actions')"
+    :actions-label="i18n.t('records.view_actions')"
   >
     <template #actions>
       <div class="records-hero-actions">
         <button type="button" class="btn" @click="emit('import')">
-          <AppIcon name="upload" />{{ i18n.t("records.choose_jsonl", "Choose JSONL files") }}
+          <AppIcon name="upload" />{{ i18n.t("records.choose_jsonl") }}
         </button>
         <button type="button" class="btn" @click="emit('columns')">
-          <AppIcon name="list" />{{ i18n.t("records.columns", "Columns") }}
+          <AppIcon name="list" />{{ i18n.t("records.columns") }}
         </button>
-        <button
-          type="button"
-          class="btn soft"
-          aria-describedby="records-copy-link-help"
-          @click="emit('share')"
+        <UiTooltip
+          :text="copyLinkHelp"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
         >
-          <AppIcon name="copy" />{{ i18n.t("records.copy_view_link", "Copy view link") }}
-        </button>
-        <span id="records-copy-link-help" class="sr-only">{{ copyLinkHelp }}</span>
+          <button type="button" class="btn soft" @click="emit('share')">
+            <AppIcon name="copy" />{{ i18n.t("records.copy_view_link") }}
+          </button>
+        </UiTooltip>
       </div>
     </template>
     <template #meta>
-      <ul
-        class="records-stats"
-        :aria-label="i18n.t('records.workspace_stats', 'Workspace statistics')"
-      >
+      <ul v-if="ready" class="records-stats" :aria-label="i18n.t('records.workspace_stats')">
         <li>
-          <b>{{ props.fileName || i18n.t("records.no_file", "No file") }}</b
-          ><span>{{ i18n.t("records.active_tab", "Active file") }}</span>
+          <b>{{ props.fileName || i18n.t("records.no_file") }}</b
+          ><span>{{ i18n.t("records.active_tab") }}</span>
         </li>
         <li>
           <b
             >{{ props.matched.toLocaleString(i18n.locale) }} /
             {{ props.total.toLocaleString(i18n.locale) }}</b
-          ><span>{{ i18n.t("records.visible_of_loaded", "Visible of loaded") }}</span>
+          ><span>{{ i18n.t("records.visible_of_loaded") }}</span>
         </li>
         <li>
           <b>{{ props.flagged.toLocaleString(i18n.locale) }}</b
-          ><span>{{ i18n.t("records.needs_review_count", "Need review") }}</span>
+          ><span>{{ i18n.t("records.needs_review_count") }}</span>
         </li>
         <li>
           <b>{{ props.selected.toLocaleString(i18n.locale) }}</b
-          ><span>{{ i18n.t("search.selected_records", "selected records") }}</span>
+          ><span>{{ i18n.t("search.selected_records") }}</span>
         </li>
       </ul>
     </template>

@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """LLM metadata values must arrive and auto-fill above the confidence threshold.
 
 Why: the response schema used to make `metadata` optional, so small models replied with
@@ -60,7 +75,7 @@ def test_confident_llm_value_is_auto_resolved_and_low_confidence_is_populated_fo
               "source_asset_id": "asset-elephant", "source_block_ids": ["b1"],
               "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
 
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         if schema_name == "derridai_record_discourse":
             evidence = {"block_ids": ["b1"], "confidence": 0.95, "reason": "explicit"}
             return {
@@ -115,7 +130,7 @@ def _enrich(tmp_path: Path, monkeypatch, record: dict, reply: dict):
     build = _install_minimal_build(repo)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
 
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         if schema_name == "derridai_record_discourse":
             return reply
         return {"metadata": {}, "field_evidence": {}, "field_assessments": {}, "review_reason": ""}
@@ -159,6 +174,42 @@ def test_middle_confidence_populates_but_does_not_bypass_calibrated_autofill(tmp
     assert status["reason_code"] == "autofill_not_approved"
 
 
+def test_high_confidence_uncertain_outcome_never_autofills(tmp_path: Path, monkeypatch):
+    """Structured uncertainty is a hard autofill stop even at very high confidence.
+
+    Boolean self-contradictions are normalized to outcome=uncertain by the response
+    validator, so this invariant prevents a contradictory value from becoming
+    auto-resolved if bounded consistency repair cannot fix the model response.
+    """
+    reply = _discourse_reply(
+        region_type="main_text",
+        primary_text=True,
+        discourse_role="analysis",
+        speaker="Jacques Derrida",
+    )
+    reply["field_assessments"]["speaker"] = {
+        "confidence": 0.99,
+        "needs_review": True,
+        "reason": "Conflicting attribution cues remain.",
+        "outcome": "uncertain",
+    }
+    reply["field_evidence"]["speaker"] = {
+        "block_ids": ["b1"],
+        "confidence": 0.99,
+        "reason": "The candidate is explicit but attribution is unresolved.",
+    }
+
+    record = _enrich(tmp_path, monkeypatch, _record(), reply)
+
+    status = record["metadata_field_status"]["speaker"]
+    assert record["speaker"] == "Jacques Derrida"
+    assert status["status"] == "unresolved"
+    assert status["reason_code"] == "ambiguous"
+    assert status["auto_populated"] is True
+    assert status["autofilled"] is False
+    assert status["verification_status"] == "pending_review"
+
+
 def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, monkeypatch):
     """An explicit confidence=null must not hide a valid model proposal."""
     reply = _discourse_reply(
@@ -178,6 +229,62 @@ def test_null_confidence_populates_value_but_keeps_it_in_review(tmp_path: Path, 
     assert status["autofilled"] is False
     assert status["verification_status"] == "pending_review"
     assert status["llm_checked"] is True
+
+
+
+def test_canonical_source_unit_ids_feed_evidence_prompt_and_deterministic_fallback(tmp_path: Path, monkeypatch):
+    """Evidence remains available when a Record carries canonical source_unit_ids only.
+
+    Regression: metadata enrichment still read the legacy source_block_ids key in two places.
+    Records using the canonical source_unit_ids therefore supplied no candidate blocks to the
+    prompt or evidence cascade, so valid proposals could complete with no evidence suggestion.
+    """
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = _record()
+    record["source_unit_ids"] = record.pop("source_block_ids")
+    prompts: list[str] = []
+
+    reply = _discourse_reply(
+        region_type="main_text",
+        primary_text=True,
+        discourse_role="analysis",
+        speaker="Derrida",
+    )
+    reply["field_evidence"] = {}
+    reply["field_assessments"]["speaker"] = {
+        "confidence": 0.95,
+        "needs_review": False,
+        "reason": "The name appears explicitly in the record.",
+        "outcome": "supported_value",
+    }
+
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
+        prompts.append(prompt)
+        if schema_name == "derridai_record_discourse":
+            return reply
+        return {"metadata": {}, "field_evidence": {}, "field_assessments": {}, "review_reason": ""}
+
+    monkeypatch.setattr(manager, "_chat_json", fake)
+    manager._enrich_record(
+        record,
+        {},
+        {"provider": "ollama", "model": "test-model"},
+        build_id=build["build_id"],
+    )
+
+    assert any("[b1] Derrida discusses hospitality." in prompt for prompt in prompts)
+    evidence = record["metadata_evidence"]["speaker"]
+    assert evidence["block_ids"] == ["b1"]
+    assert evidence["method"] == "deterministic-lexical-v1"
+    assert evidence["backfilled"] is True
+
+    # Persistence must retain the valid source-unit binding for the reviewer-facing record.
+    repo.save_records(build["build_id"], [record])
+    restored = repo.load_records(build["build_id"])[0]
+    assert restored["source_unit_ids"] == ["b1"]
+    assert restored["metadata_evidence"]["speaker"]["block_ids"] == ["b1"]
 
 
 def test_deterministic_structure_is_corroborated_by_a_matching_llm_value(tmp_path: Path, monkeypatch):

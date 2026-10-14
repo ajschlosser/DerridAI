@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Review actions during metadata enrichment.
 
 Why: enrichment of a book-length build takes a long time; reviewers must be able to
@@ -13,6 +29,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 try:
     import chromadb  # type: ignore  # noqa: F401
 except ModuleNotFoundError:
@@ -21,7 +39,10 @@ except ModuleNotFoundError:
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
+from app import corpus_review_actions as review_actions
 from app.config import APP_VERSION
+
+pytestmark = pytest.mark.usefixtures("isolated_metadata_projection")
 
 
 def install(tmp_path:Path):
@@ -61,6 +82,49 @@ def test_bulk_review_is_allowed_during_enrichment_and_marks_human_touch(tmp_path
     assert all(row['review_disposition']=='rejected' for row in rows)
     assert all('__review__' in row.get('human_touched_fields',[]) for row in rows)
 
+
+def test_bulk_accept_persists_promoted_metadata_memory(tmp_path:Path, monkeypatch):
+    """Bulk acceptance is a human confirmation and must feed semantic-memory projection."""
+
+    repo,build=install(tmp_path)
+    rows=repo.load_records(build['build_id'])
+    for row in rows:
+        # Keep the acceptance fixture structurally valid. The behavior under test
+        # is promotion of the model-inferred review field, not required-core blocking.
+        row['region_type']='main_text'
+        row['primary_text']=True
+        row['discourse_role']='analysis'
+        row['metadata_field_status']={
+            'region_type':{'status':'deterministic','method':'source_structure','confidence':1.0},
+            'primary_text':{'status':'deterministic','method':'source_structure','confidence':1.0},
+            'discourse_role':{'status':'model_inferred','method':'llm','confidence':0.9},
+        }
+        row['metadata_incomplete_fields']=[]
+        row['metadata_review_fields']=[]
+        row['metadata_complete']=True
+    repo.save_records(build['build_id'],rows)
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    persisted=[]
+    scheduled=[]
+    monkeypatch.setattr(
+        review_actions,
+        'persist_record_decision',
+        lambda **kwargs: persisted.append((kwargs['record']['record_id'],kwargs['field_name'],kwargs['value'])),
+    )
+    monkeypatch.setattr(
+        manager,
+        '_schedule_metadata_exemplar_projection',
+        lambda build_id: scheduled.append(build_id),
+    )
+
+    result=manager.bulk_disposition(build['build_id'],'accepted',record_ids=['r1','r2'])
+
+    assert result['changed']==2
+    assert persisted==[
+        ('r1','discourse_role','analysis'),
+        ('r2','discourse_role','analysis'),
+    ]
+    assert scheduled==[build['build_id']]
 
 
 

@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
 
 import os
@@ -6,7 +21,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_VERSION = "0.70.0"
+APP_VERSION = "0.82.0"
+APP_CODENAME = "Gloucester"
 
 
 _GIT_COMMIT_FILE = Path("/app/git-commit")
@@ -42,11 +58,17 @@ def resolve_git_commit() -> str:
 APP_GIT_COMMIT = resolve_git_commit()
 
 
-def app_version_label(version: str = APP_VERSION, commit: str = APP_GIT_COMMIT) -> str:
-    """UI/API display form: ``0.62.1`` or ``0.62.1 (abc1234)``."""
+def app_version_label(
+    version: str = APP_VERSION,
+    commit: str = APP_GIT_COMMIT,
+    codename: str = APP_CODENAME,
+) -> str:
+    """UI/API release identity: ``0.82.0 - Gloucester (abc1234)``."""
     version = str(version or "").strip() or APP_VERSION
+    codename = str(codename or "").strip()
     commit = str(commit or "").strip()
-    return f"{version} ({commit})" if commit else version
+    release = f"{version} - {codename}" if codename else version
+    return f"{release} ({commit})" if commit else release
 
 
 def _float_env(name: str, default: float) -> float:
@@ -92,10 +114,34 @@ class Settings:
     auth_login_max_failures: int = _int_env("AUTH_LOGIN_MAX_FAILURES", 5)
     auth_login_lockout_seconds: int = _int_env("AUTH_LOGIN_LOCKOUT_SECONDS", 300)
     system_db_path: str = os.getenv("SYSTEM_DB_PATH", "/data/.home/derridai-system.sqlite3")
+    gutenberg_archive_path: str = os.getenv("GUTENBERG_ARCHIVE_PATH", "/data/gutenberg/txt-files.tar.zip")
     researcher_text_max_chars: int = _int_env("RESEARCHER_TEXT_MAX_CHARS", 1600)
     pdf_max_upload_mb: int = _int_env("PDF_MAX_UPLOAD_MB", 500)
     # How many metadata-enrichment runs may work at once, across all builds. One model per run.
     enrichment_max_concurrent_runs: int = _int_env("ENRICHMENT_MAX_CONCURRENT_RUNS", 1)
+
+    # GraphQL is a read-only cELF query façade beside REST (docs/GRAPHQL.md). The
+    # IDE and introspection are development aids and stay off unless opted into.
+    graphql_ide_enabled: bool = _bool_env("GRAPHQL_IDE_ENABLED", False)
+    graphql_introspection_enabled: bool = _bool_env("GRAPHQL_INTROSPECTION_ENABLED", False)
+    graphql_max_depth: int = _int_env("GRAPHQL_MAX_DEPTH", 8)
+    graphql_max_aliases: int = _int_env("GRAPHQL_MAX_ALIASES", 20)
+    graphql_max_tokens: int = _int_env("GRAPHQL_MAX_TOKENS", 2000)
+    # Largest client-supplied Record snapshot accepted by record_graph, in bytes.
+    graphql_max_record_bytes: int = _int_env("GRAPHQL_MAX_RECORD_BYTES", 2_000_000)
+
+    # The WebSocket realtime plane only delivers notifications (docs/REALTIME.md);
+    # canonical state stays in REST/SQLite, so these bound memory, not durability.
+    realtime_enabled: bool = _bool_env("REALTIME_ENABLED", True)
+    realtime_max_client_message_bytes: int = _int_env("REALTIME_MAX_CLIENT_MESSAGE_BYTES", 65536)
+    realtime_max_queue_events: int = _int_env("REALTIME_MAX_QUEUE_EVENTS", 256)
+    realtime_replay_events: int = _int_env("REALTIME_REPLAY_EVENTS", 512)
+    realtime_progress_max_hz: float = _float_env("REALTIME_PROGRESS_MAX_HZ", 8.0)
+    realtime_heartbeat_seconds: float = _float_env("REALTIME_HEARTBEAT_SECONDS", 20.0)
+    realtime_idle_timeout_seconds: float = _float_env("REALTIME_IDLE_TIMEOUT_SECONDS", 60.0)
+    # Comma-separated browser origins allowed to open the socket in addition to the
+    # request's own host. Empty means same-origin only (non-browser clients send none).
+    realtime_allowed_origins: str = os.getenv("REALTIME_ALLOWED_ORIGINS", "").strip()
 
     ollama_base_url: str = os.getenv(
         "OLLAMA_BASE_URL",
@@ -103,6 +149,7 @@ class Settings:
     ).rstrip("/")
     ollama_model: str = os.getenv("OLLAMA_MODEL", "gemma4:e2b")
     ollama_embed_model: str = os.getenv("OLLAMA_EMBED_MODEL", "bge-m3:latest")
+    ollama_embed_batch_size: int = int(os.getenv("OLLAMA_EMBED_BATCH_SIZE", "256"))
 
     openai_compat_base_url: str = os.getenv(
         "OPENAI_COMPAT_BASE_URL",
@@ -144,7 +191,15 @@ class Settings:
         4096,
     )
     llm_max_fields: int = _int_env("LLM_MAX_FIELDS", 12)
+    # How a model-proposed value gets its source evidence: "with_value" (the model must cite blocks in the same
+    # answer) or "backfill" (the model proposes the value; deterministic suggestion attaches blocks afterwards,
+    # always pending review). See evidence_suggestions.evidence_mode.
+    metadata_evidence_mode: str = os.getenv("METADATA_EVIDENCE_MODE", "with_value").strip().lower()
     api_batch_size: int = _int_env("API_BATCH_SIZE", 128)
+
+    # Prior Research responses steer new answers only when graded at least this
+    # well (0-10 overall score). Ungraded responses never steer.
+    research_memory_min_grade: float = _float_env("RESEARCH_MEMORY_MIN_GRADE", 7.0)
 
     rag_default_k: int = _int_env("RAG_DEFAULT_K", 64)
     rag_default_fetch_k: int = _int_env("RAG_DEFAULT_FETCH_K", 500)
@@ -180,6 +235,24 @@ class Settings:
         "cross-encoder/ms-marco-MiniLM-L-6-v2",
     )
     rag_model_cache: str = os.getenv("RAG_MODEL_CACHE", "/data/models")
+    # Overlap independent, concurrency-safe pipeline branches (store-search hybrid legs).
+    pipeline_parallel_branches: bool = _bool_env("PIPELINE_PARALLEL_BRANCHES", False)
+    metadata_cross_encoder_enabled: bool = _bool_env(
+        "METADATA_CROSS_ENCODER_ENABLED",
+        True,
+    )
+    metadata_cross_encoder_top_k: int = min(
+        32,
+        _int_env("METADATA_CROSS_ENCODER_TOP_K", 8),
+    )
+    metadata_cross_encoder_timeout_seconds: float = _float_env(
+        "METADATA_CROSS_ENCODER_TIMEOUT_SECONDS",
+        15.0,
+    )
+    metadata_evidence_cascade_llm_enabled: bool = _bool_env(
+        "METADATA_EVIDENCE_CASCADE_LLM_ENABLED",
+        True,
+    )
 
 
 settings = Settings()

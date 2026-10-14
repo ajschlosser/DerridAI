@@ -1,12 +1,33 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it, vi } from "vitest";
 import { createAnnotationsWorkspace } from "../../src/domain/annotationsWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
+import { annotationsState, createAnnotationsState } from "../../src/state/workspaceState";
 
-// The rendered Annotations view is covered by the legacy baseline's annotations scenarios (recorded before this logic
-// moved); these pin the commands and the snapshot's shape.
+vi.mock("../../src/composables/notifications", () => ({ toast: vi.fn() }));
+
+// The modern Annotations Playwright workflow covers rendered interactions; these pin commands and snapshot shape.
 function setup(overrides: Record<string, unknown> = {}) {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  // The annotations fields are shared module state, so start each test from the defaults.
+  Object.assign(annotationsState, createAnnotationsState());
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const spies: Record<string, ReturnType<typeof vi.fn>> = {};
   const deps = new Proxy(
@@ -20,7 +41,11 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl" || name === "navigateTo")
+          if (
+            name === "persistAnnotationsPreferences" ||
+            name === "syncUrl" ||
+            name === "navigateTo"
+          )
             calls.push(name);
         });
         return spies[name];
@@ -43,11 +68,11 @@ describe("annotations workspace", () => {
     expect(state.annotationSearch).toBe("remains");
     expect(state.annotationView).toBe("works");
     expect(calls).toEqual([
-      "persistPrefs",
+      "persistAnnotationsPreferences",
       "syncUrl",
-      "persistPrefs",
+      "persistAnnotationsPreferences",
       "syncUrl",
-      "persistPrefs",
+      "persistAnnotationsPreferences",
       "syncUrl",
     ]);
   });
@@ -101,4 +126,62 @@ describe("annotations workspace", () => {
       ["Of Grammatology", 1],
     ]);
   });
+
+  it("removes a local annotation using the workspace item's stored file id", async () => {
+    const file = {
+      id: "f",
+      name: "a.jsonl",
+      records: [{ record_id: "r1", annotations: [{ id: "n1", note: "Remove me" }] }],
+      dirty: new Set<number>(),
+    };
+    const reviewKey = vi.fn((fileRef: { id: string }, index: number) => `${fileRef.id}::${index}`);
+    const applyRecordChanges = vi.fn(
+      (
+        target: typeof file,
+        index: number,
+        changes: { annotations: Array<{ id: string; note: string }> },
+      ) => {
+        target.records[index] = { ...target.records[index], ...changes };
+        return 1;
+      },
+    );
+    const persistFileNow = vi.fn(async () => undefined);
+    const { workspace } = setup({
+      reviewKey,
+      reviewItemFromKey: (key: string) =>
+        key === "f::0" ? { file, index: 0, record: file.records[0] } : null,
+      applyRecordChanges,
+      persistFileNow,
+      api: vi.fn(async () => ({ annotations: [] })),
+      isResearcher: () => false,
+      hasCapability: () => true,
+    });
+
+    await workspace.removeAnnotationsWorkspaceItem({
+      removable: true,
+      server: false,
+      local_file_id: "f",
+      local_index: 0,
+      local_annotation_index: 0,
+      shared_annotation_id: null,
+    });
+
+    expect(reviewKey).toHaveBeenCalledWith({ id: "f" }, 0);
+    expect(applyRecordChanges).toHaveBeenCalledWith(
+      file,
+      0,
+      { annotations: [] },
+      { source: "annotation-delete" },
+    );
+    expect(file.records[0].annotations).toEqual([]);
+    expect(persistFileNow).toHaveBeenCalledWith(file);
+  });
+});
+
+it("reports a workspace read failure while retaining the prior shared annotations", async () => {
+  const failure = new Error("Offline");
+  const { state, workspace } = setup({ api: vi.fn().mockRejectedValue(failure) });
+  state.serverAnnotations = [{ id: "retained" }];
+  await expect(workspace.loadAnnotationsWorkspace(true)).rejects.toThrow("Offline");
+  expect(state.serverAnnotations).toEqual([{ id: "retained" }]);
 });

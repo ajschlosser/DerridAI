@@ -1,0 +1,92 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.chart-legend i {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--accent);
+}
+.chart-grade line {
+  stroke: #e6e9e5;
+  stroke-width: 1;
+}
+.chart-grade text {
+  fill: var(--muted);
+  font-size: 0.8125rem;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+.chart-line.chart-series-0 {
+  stroke: var(--text-2);
+}
+.chart-dot.chart-series-0,
+.multi-chart-legend .chart-series-0 {
+  fill: var(--text-2);
+  background: #315f7a;
+}
+.chart-line.chart-series-1 {
+  stroke: var(--tone-danger-fg);
+}
+.chart-dot.chart-series-1,
+.multi-chart-legend .chart-series-1 {
+  fill: var(--tone-danger-fg);
+  background: #8b5b43;
+}
+.chart-line.chart-series-2 {
+  stroke: var(--tone-ok-fg);
+}
+.chart-dot.chart-series-2,
+.multi-chart-legend .chart-series-2 {
+  fill: var(--tone-ok-fg);
+  background: #4e7658;
+}
+.chart-line.chart-series-3 {
+  stroke: var(--tone-info-fg);
+}
+.chart-dot.chart-series-3,
+.multi-chart-legend .chart-series-3 {
+  fill: var(--tone-info-fg);
+  background: #79608e;
+}
+.chart-line.chart-series-4 {
+  stroke: var(--tone-warn-fg);
+}
+.chart-dot.chart-series-4,
+.multi-chart-legend .chart-series-4 {
+  fill: var(--tone-warn-fg);
+  background: #9a7a2f;
+}
+.multi-line-chart .chart-line {
+  fill: none;
+  stroke-width: 2;
+}
+.multi-line-chart .chart-dot {
+  stroke: var(--accent-on);
+  stroke-width: 0.7;
+}

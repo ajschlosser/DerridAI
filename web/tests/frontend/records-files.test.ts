@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   describeRecordsFile,
@@ -9,26 +26,38 @@ import {
 
 describe("records file origin", () => {
   it("treats a disk import as imported even when the content hash is present", () => {
-    expect(recordsFileOrigin({content_hash: "abc"})).toBe("imported");
-    expect(recordsFileOriginDetail({content_hash: "abc"})).toBe("");
+    expect(recordsFileOrigin({ content_hash: "abc" })).toBe("imported");
+    expect(recordsFileOriginDetail({ content_hash: "abc" })).toBe("");
   });
 
   it("keeps subset, merge, work-split, and Chroma export distinct", () => {
-    expect(recordsFileOrigin({subset: {source: "active", source_label: "glas.jsonl"}})).toBe("subset");
-    expect(recordsFileOriginDetail({subset: {source_label: "glas.jsonl"}})).toBe("glas.jsonl");
-    expect(recordsFileOrigin({merged_from: ["a.jsonl", "b.jsonl"]})).toBe("merge");
-    expect(recordsFileOriginDetail({merged_from: ["a.jsonl", "b.jsonl"]})).toBe("a.jsonl, b.jsonl");
+    expect(recordsFileOrigin({ subset: { source: "active", source_label: "glas.jsonl" } })).toBe(
+      "subset",
+    );
+    expect(recordsFileOriginDetail({ subset: { source_label: "glas.jsonl" } })).toBe("glas.jsonl");
+    expect(recordsFileOrigin({ merged_from: ["a.jsonl", "b.jsonl"] })).toBe("merge");
+    expect(recordsFileOriginDetail({ merged_from: ["a.jsonl", "b.jsonl"] })).toBe(
+      "a.jsonl, b.jsonl",
+    );
     expect(
-      recordsFileOrigin({derived_from: {type: "work_separation", source_file: "all.jsonl", work: "Glas"}}),
+      recordsFileOrigin({
+        derived_from: { type: "work_separation", source_file: "all.jsonl", work: "Glas" },
+      }),
     ).toBe("work_split");
     expect(
-      recordsFileOriginDetail({derived_from: {type: "work_separation", work: "Glas"}}),
+      recordsFileOriginDetail({ derived_from: { type: "work_separation", work: "Glas" } }),
     ).toBe("Glas");
-    expect(recordsFileOrigin({imported_from_chroma: "derrida-primary"})).toBe("chroma");
+    expect(recordsFileOrigin({ imported_from_chroma: "derrida-primary" })).toBe("chroma");
   });
 
   it("does not invent an origin when provenance fields are missing after restore", () => {
-    const described = describeRecordsFile({id: "f1", name: "old.jsonl", records: [{}, {}], dirty: [0], active: true});
+    const described = describeRecordsFile({
+      id: "f1",
+      name: "old.jsonl",
+      records: [{}, {}],
+      dirty: [0],
+      active: true,
+    });
     expect(described).toMatchObject({
       id: "f1",
       name: "old.jsonl",
@@ -44,16 +73,16 @@ describe("records file origin", () => {
     const saved = serializableRecordsFile({
       id: "subset-1",
       name: "subset.jsonl",
-      records: [{record_id: "r1"}],
+      records: [{ record_id: "r1" }],
       dirty: new Set([0]),
       imported_at: "2026-09-20T12:00:00.000Z",
-      subset: {source: "active", source_label: "glas.jsonl"},
+      subset: { source: "active", source_label: "glas.jsonl" },
       merged_from: null,
       derived_from: null,
       imported_from_chroma: null,
     });
-    expect(saved.subset).toEqual({source: "active", source_label: "glas.jsonl"});
+    expect(saved.subset).toEqual({ source: "active", source_label: "glas.jsonl" });
     expect(saved.dirty).toEqual([0]);
-    expect(describeRecordsFile({...saved, dirty: saved.dirty}, "other").origin).toBe("subset");
+    expect(describeRecordsFile({ ...saved, dirty: saved.dirty }, "other").origin).toBe("subset");
   });
 });

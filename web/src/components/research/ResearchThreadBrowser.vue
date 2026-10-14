@@ -1,0 +1,449 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<script setup lang="ts">
+import { computed, ref, watch, onBeforeUnmount, nextTick } from "vue";
+import { useQueryClient } from "@tanstack/vue-query";
+import { useI18nStore } from "../../stores/i18n";
+import ResearchThreadManageDialog from "./ResearchThreadManageDialog.vue";
+import { useAuthStore } from "../../stores/auth";
+import { researchThreadsApi } from "../../api/researchThreads";
+import { useDataQuery } from "../../realtime/dataQuery";
+import type { ResearchResultEvidence } from "../../types/research";
+import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
+import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
+import ResearchTurnComparison from "./ResearchTurnComparison.vue";
+import type { ResearchTurn } from "../../types/researchThreads";
+import { ApiError } from "../../api/http";
+import { downloadBlob } from "../../domain/sharedRecordScopes";
+import {
+  researchThreadExportName,
+  researchThreadMarkdown,
+} from "../../domain/researchThreadExport";
+
+const props = defineProps<{
+  threadId: string;
+  jobId: string;
+  retryDisabled?: boolean;
+  retryBusy?: boolean;
+  refreshKey?: number;
+  library?: boolean;
+  initialSearch?: string;
+  initialOffset?: number;
+  initialArchived?: boolean;
+}>();
+const emit = defineEmits<{
+  continuable: [value: boolean];
+  filters: [value: { search: string; offset: number; includeArchived: boolean }];
+  select: [id: string];
+  open: [turn: ResearchTurn];
+  new: [];
+  removed: [error?: string];
+  retryTurn: [turn: ResearchTurn];
+  followUp: [turn: ResearchTurn, evidence: ResearchResultEvidence | null];
+  openRecord: [item: ResearchResultEvidence];
+  openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
+}>();
+const auth = useAuthStore();
+const offset = ref(props.initialOffset || 0);
+const search = ref(props.initialSearch || "");
+const includeArchived = ref(Boolean(props.initialArchived));
+const inspectedTurnId = ref("");
+// Only one turn may own an expanded inspector, even in a long conversation.
+// Clear selection before a new thread/job/account can expose stale evidence.
+watch(
+  () => [props.threadId, props.jobId, auth.user?.id, auth.user?.role, auth.can("rag.run")],
+  () => {
+    inspectedTurnId.value = "";
+  },
+  { flush: "sync" },
+);
+
+watch(
+  () => [props.initialSearch, props.initialOffset, props.initialArchived],
+  () => {
+    // Route restoration is authoritative: do not treat it as a local filter
+    // edit and reset the page. A pending keystroke must not overwrite Back.
+    window.clearTimeout(searchTimer);
+    searchTimer = undefined;
+    search.value = props.initialSearch || "";
+    includeArchived.value = Boolean(props.initialArchived);
+    offset.value = props.initialOffset || 0;
+  },
+);
+watch([search, offset, includeArchived], () =>
+  emit("filters", {
+    search: search.value,
+    offset: offset.value,
+    includeArchived: includeArchived.value,
+  }),
+);
+const dialog = ref<"rename" | "delete" | null>(null);
+const busy = ref(false);
+const mutationError = ref("");
+const notice = ref("");
+const client = useQueryClient();
+// Bumped when a cached turn result changes, so in-thread search sees answers
+// as they load without requesting any itself.
+const answerCacheVersion = ref(0);
+const stopAnswerCache = client.getQueryCache().subscribe((event) => {
+  if (event.query.queryKey[0] === "research-turn-result") answerCacheVersion.value++;
+});
+onBeforeUnmount(stopAnswerCache);
+const answerText = computed(() => {
+  void answerCacheVersion.value;
+  return (turn: ResearchTurn): string | null => {
+    const cached = client.getQueriesData<{ result?: { answer?: string } }>({
+      queryKey: [
+        "research-turn-result",
+        auth.user?.id,
+        auth.user?.role,
+        turn.thread_id,
+        turn.turn_id,
+        turn.attempt,
+        turn.job_id,
+      ],
+    });
+    const answer = cached.find(([, data]) => typeof data?.result?.answer === "string")?.[1];
+    return answer?.result?.answer ?? null;
+  };
+});
+const i18n = useI18nStore();
+let operation = 0;
+let dialogTrigger: HTMLElement | null = null;
+function resetMutation() {
+  ++operation;
+  dialog.value = null;
+  busy.value = false;
+  mutationError.value = "";
+  notice.value = "";
+  dialogTrigger = null;
+}
+onBeforeUnmount(resetMutation);
+const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
+const scope = computed(() => [auth.user?.id, auth.user?.role, allowed.value]);
+const list = useDataQuery(
+  "research_threads",
+  () =>
+    researchThreadsApi.list({
+      offset: offset.value,
+      includeArchived: includeArchived.value,
+      ...(search.value ? { search: search.value } : {}),
+    }),
+  {
+    detail: () => [...scope.value, "list", offset.value, includeArchived.value, search.value],
+    enabled: allowed,
+  },
+);
+const detail = useDataQuery("research_threads", () => researchThreadsApi.get(props.threadId), {
+  detail: () => [...scope.value, "thread", props.threadId],
+  enabled: () => allowed.value && Boolean(props.threadId),
+});
+const selectedJobTurnId = computed(() =>
+  detail.data.value?.thread_id === props.threadId
+    ? detail.data.value.turns.find((turn) => turn.job_id && turn.job_id === props.jobId)?.turn_id
+    : undefined,
+);
+watch(
+  selectedJobTurnId,
+  (turnId) => {
+    if (turnId) inspectedTurnId.value = turnId;
+  },
+  { immediate: true },
+);
+// A retry is a separate audit attempt: never carry an open inspector onto it.
+const inspectedAttempt = computed(() => {
+  const turn = detail.data.value?.turns.find((item) => item.turn_id === inspectedTurnId.value);
+  return turn ? { turnId: turn.turn_id, key: `${turn.attempt}:${turn.job_id ?? ""}` } : null;
+});
+watch(inspectedAttempt, (next, previous) => {
+  if (next && previous?.turnId === next.turnId && previous.key !== next.key) {
+    inspectedTurnId.value = "";
+  }
+});
+function inspectTurn(turnId: string) {
+  if (
+    allowed.value &&
+    detail.data.value?.thread_id === props.threadId &&
+    detail.data.value.turns.some((turn) => turn.turn_id === turnId)
+  ) {
+    inspectedTurnId.value = turnId;
+  }
+}
+function closeTurnInspector(turnId: string) {
+  if (inspectedTurnId.value === turnId) inspectedTurnId.value = "";
+}
+watch(() => [props.threadId, ...scope.value], resetMutation);
+watch(
+  () => [props.refreshKey, props.jobId],
+  () => {
+    if (allowed.value) retry();
+  },
+);
+function retryTurn(turn: ResearchTurn) {
+  const thread = detail.data.value;
+  if (
+    !allowed.value ||
+    busy.value ||
+    props.retryDisabled ||
+    detail.isFetching.value ||
+    error.value ||
+    !thread ||
+    thread.archived_at ||
+    turn.thread_id !== props.threadId ||
+    !thread.turns.some(
+      (item) => item.turn_id === turn.turn_id && ["failed", "cancelled"].includes(item.status),
+    ) ||
+    thread.turns.some((item) => ["queued", "running"].includes(item.status))
+  )
+    return;
+  emit("retryTurn", turn);
+}
+// Only local filter edits reset pagination. Restoring a bookmarked/Back-Forward
+// URL must preserve its requested offset even when both filters also change.
+function commitSearch(value: string) {
+  if (search.value !== value) offset.value = 0;
+  search.value = value;
+}
+function updateArchived(value: boolean) {
+  if (includeArchived.value !== value) offset.value = 0;
+  includeArchived.value = value;
+}
+// Debounce typing so each keystroke does not issue a list request; clearing applies at once.
+let searchTimer: number | undefined;
+function updateSearch(value: string) {
+  window.clearTimeout(searchTimer);
+  searchTimer = undefined;
+  if (!value.trim()) {
+    commitSearch("");
+    return;
+  }
+  searchTimer = window.setTimeout(() => {
+    searchTimer = undefined;
+    commitSearch(value);
+  }, 250);
+}
+onBeforeUnmount(() => window.clearTimeout(searchTimer));
+const error = computed(() => {
+  const value = list.error.value || (props.threadId ? detail.error.value : null);
+  return value instanceof Error ? value.message : value ? String(value) : "";
+});
+const continuable = computed(() => {
+  const thread = detail.data.value;
+  return Boolean(
+    allowed.value &&
+      thread &&
+      thread.thread_id === props.threadId &&
+      !thread.archived_at &&
+      !detail.isFetching.value &&
+      !detail.error.value &&
+      !busy.value &&
+      !thread.turns.some((turn) => ["queued", "running"].includes(turn.status)),
+  );
+});
+watch(continuable, (value) => emit("continuable", value), { immediate: true });
+onBeforeUnmount(() => emit("continuable", false));
+// Revoked access/deletion must clear cached content; transient failures retain it.
+function inaccessible(value: unknown) {
+  return value instanceof ApiError && [401, 403, 404].includes(value.status);
+}
+watch(
+  () => inaccessible(detail.error.value) || inaccessible(list.error.value),
+  (denied) => {
+    if (denied) resetMutation();
+  },
+);
+function manage(action: "rename" | "delete") {
+  dialogTrigger = document.activeElement as HTMLElement | null;
+  mutationError.value = "";
+  notice.value = "";
+  dialog.value = action;
+}
+async function mutate(action: "rename" | "archive" | "pin" | "delete", title?: string) {
+  const thread = detail.data.value;
+  if (
+    busy.value ||
+    !allowed.value ||
+    !thread ||
+    inaccessible(detail.error.value) ||
+    inaccessible(list.error.value)
+  )
+    return;
+  if (action === "rename" && !title?.trim()) return;
+  const trigger = dialogTrigger;
+  const request = ++operation;
+  const key = ["data", "research_threads", ...scope.value];
+  busy.value = true;
+  mutationError.value = "";
+  notice.value = "";
+  try {
+    if (action === "delete") await researchThreadsApi.remove(thread.thread_id);
+    else
+      await researchThreadsApi.patch(
+        thread.thread_id,
+        action === "rename"
+          ? { title: title?.trim() ?? "" }
+          : action === "pin"
+            ? { pinned: !thread.pinned_at }
+            : { archived: !thread.archived_at },
+      );
+    if (request !== operation) return;
+    dialog.value = null;
+    if (action === "delete") {
+      // Deletion clears the selected workspace, while cached answers/provenance follow their existing retention policy.
+      client.setQueryData([...key, "thread", thread.thread_id], null);
+      emit("removed");
+    } else
+      notice.value = i18n.t(
+        action === "rename"
+          ? "research.thread_renamed"
+          : action === "pin"
+            ? thread.pinned_at
+              ? "research.thread_unpinned"
+              : "research.thread_pinned_saved"
+            : thread.archived_at
+              ? "research.thread_unarchived"
+              : "research.thread_archive_saved",
+      );
+    await client.invalidateQueries({ queryKey: key });
+  } catch (error) {
+    if (request !== operation) return;
+    mutationError.value = error instanceof Error ? error.message : String(error);
+    if (inaccessible(error)) {
+      // The server owns authorization; never retain deleted or revoked thread shells after a failed mutation.
+      client.setQueryData([...key, "thread", thread.thread_id], null);
+      dialog.value = null;
+      emit("removed", mutationError.value);
+      void client.invalidateQueries({ queryKey: key });
+    }
+  } finally {
+    if (request === operation) {
+      busy.value = false;
+      // The shared dialog unmounts while its trigger is still disabled during the save.
+      // Restore focus after the updated navigation controls become operable again.
+      if (action === "rename" && !dialog.value) {
+        await nextTick();
+        if (request === operation && trigger?.isConnected) trigger.focus({ preventScroll: true });
+      }
+    }
+  }
+}
+async function exportThread(format: "md" | "json") {
+  const thread = detail.data.value;
+  if (busy.value || !thread) return;
+  const request = ++operation;
+  busy.value = true;
+  mutationError.value = "";
+  notice.value = "";
+  try {
+    // The server assembles the export from owner-scoped runs; passage text is never included.
+    const data = await researchThreadsApi.exportThread(thread.thread_id);
+    if (request !== operation) return;
+    const text =
+      format === "md"
+        ? researchThreadMarkdown(data, i18n.tf)
+        : JSON.stringify(data, null, 2) + "\n";
+    const type = format === "md" ? "text/markdown" : "application/json";
+    downloadBlob(new Blob([text], { type }), researchThreadExportName(data, format));
+    notice.value = i18n.t("research.thread_exported");
+  } catch (error) {
+    if (request === operation)
+      mutationError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (request === operation) busy.value = false;
+  }
+}
+function retry() {
+  mutationError.value = "";
+  void list.refetch();
+  if (props.threadId) void detail.refetch();
+}
+</script>
+<template>
+  <ResearchThreadNavigation
+    v-if="allowed"
+    :threads="inaccessible(list.error.value) ? [] : list.data.value?.threads || []"
+    :has-more="!inaccessible(list.error.value) && Boolean(list.data.value?.has_more)"
+    :thread="threadId && !inaccessible(detail.error.value) ? detail.data.value : null"
+    :selected-thread-id="threadId"
+    :selected-job-id="jobId"
+    :offset="offset"
+    :search="search"
+    :show-preview="library || Boolean($slots.workspace)"
+    @search="updateSearch"
+    :loading="list.isFetching.value || (Boolean(threadId) && detail.isFetching.value)"
+    :error="error || (!dialog ? mutationError : '')"
+    :include-archived="includeArchived"
+    :busy="busy || retryBusy"
+    :notice="notice"
+    :retry-disabled="retryDisabled || Boolean(error)"
+    :answer-text="answerText"
+    @retry-turn="retryTurn"
+    @follow-up="emit('followUp', $event, null)"
+    @select="emit('select', $event)"
+    @open="emit('open', $event)"
+    @new="emit('new')"
+    @page="offset = $event"
+    @retry="retry"
+    @include-archived="updateArchived"
+    @rename="manage('rename')"
+    @archive="mutate('archive')"
+    @pin="mutate('pin')"
+    @remove="manage('delete')"
+    @export="exportThread"
+  >
+    <template #compare="{ turns, close }">
+      <ResearchTurnComparison :turns="turns" @close="close" />
+    </template>
+    <template #answer="{ turn }">
+      <ResearchThreadAnswer
+        :key="turn.turn_id"
+        :turn="turn"
+        :stream-live="turn.job_id !== jobId"
+        :inspect-requested="Boolean(jobId) && turn.job_id === jobId"
+        :inspector-open="inspectedTurnId === turn.turn_id"
+        :defer-load="(detail.data.value?.turns.length || 0) > 8 && turn.job_id !== jobId"
+        @inspect="inspectTurn"
+        @follow-up="(item, evidence) => emit('followUp', item, evidence)"
+        @close-inspector="closeTurnInspector"
+        @open-record="emit('openRecord', $event)"
+        @open-relationships="(item, mode) => emit('openRelationships', item, mode)"
+      />
+    </template>
+    <template v-if="$slots.workspace" #workspace>
+      <slot name="workspace" />
+    </template>
+  </ResearchThreadNavigation>
+  <ResearchThreadManageDialog
+    v-if="
+      allowed &&
+      dialog &&
+      detail.data.value &&
+      !inaccessible(detail.error.value) &&
+      !inaccessible(list.error.value)
+    "
+    :key="threadId + dialog"
+    :thread="detail.data.value"
+    :action="dialog"
+    :busy="busy"
+    :error="mutationError"
+    @close="dialog = null"
+    @save="mutate('rename', $event)"
+    @remove="mutate('delete')"
+  />
+</template>

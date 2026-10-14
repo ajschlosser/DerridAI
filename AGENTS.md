@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 # AGENTS.md
 
 Guidance for coding agents and contributors working on DerridAI. See [README.md](README.md) for the project overview, [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for feature behavior, and [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) for the scholarly rationale and which capabilities are implemented versus intended.
@@ -15,24 +32,27 @@ Copilot, Claude, Cursor/Grok, and ChatGPT/Codex may work on this repository conc
 
 ## What this project is
 
-DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts (Derrida in particular). PDFs become structured JSONL records via the Corpus Builder; records are reviewed with human and LLM input, stored in ChromaDB, and queried through an evidence-grounded RAG pipeline. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
+DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts (Derrida in particular). Corpus Builder accepts multiple source-media kinds (including PDF, text/RTF/DOCX, images, audio, URLs, and Project Gutenberg), preserves source/extractor provenance, and turns source spans into reviewable scholarly records. Canonical corpus/review state remains authoritative; Chroma collections, embeddings, caches, and semantic-memory indexes are derived/rebuildable projections used by Search, Research, and metadata enrichment. It is a research tool: correctness, provenance, and auditability matter more than cleverness.
 
 ## Layout
 
-- `api/app/` — FastAPI backend (Python 3.12). Key modules: `main.py` (routes), `corpus_builder.py` (PDF → records pipeline, very large), `chroma_store.py`, `rag.py`, `jobs.py` (background operations), `llm.py` / `llm_tools.py` (Ollama and OpenAI-compatible providers), `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py` (SQLite), `locales/` (`en_us.py`, `fr_ca.py`), `config.py` (env-driven settings).
-- `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (each with a `.stories.ts`), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (legacy feature renderers being migrated view by view), `types/`.
+- `api/app/` — FastAPI backend (Python 3.12). `main.py` is only the ASGI entrypoint; `application.py` builds the app and composes `routers/`. Corpus building is split across `corpus_builder.py` plus focused `corpus_*` and `source_*` modules. Background managers live in `job_llm.py`, `job_rag.py`, `job_tools.py`, and `job_upsert.py`; `jobs.py` is a compatibility export layer and `job_state.py` owns shared durable checkpoint/error behavior. Metadata memory/provenance lives in `metadata_*` and `provenance_memory.py`. `pipelines/` owns typed/versioned computational pipeline definitions, registered strategies, assignments, execution, traces, benchmarks, comparison, and feature adapters; `routers/pipelines.py` exposes the administrative API. `data_retention.py` defines operational-history retention and `services.py` wires its scheduler. `celf_queries/` holds transport-independent cELF reads shared by REST and the read-only GraphQL façade in `graphql/` (see `docs/GRAPHQL.md`); `realtime/` is the WebSocket notification plane (see `docs/REALTIME.md`). Other major boundaries include `chroma_store.py`, `rag.py`, `llm.py` / `llm_tools.py`, `auth.py`, `researcher_view.py`, `persistence.py` / `system_store.py`, `locales/`, and `config.py`.
+- `web/src/` — Vue 3 + TypeScript frontend: `views/`, `components/` (with Storybook coverage where applicable), `stores/` (Pinia), `router/`, `api/`, `composables/`, `domain/`, `runtime/` (remaining compatibility/runtime orchestration), `types/`.
 - `web/tests/frontend/` (Vitest + Vue Test Utils + happy-dom) and `web/tests/e2e/` (Playwright + axe-core).
 - `tests/` — Python regression suite; topical `test_<subject>.py` files (named for the behavior under test, not a release; see `tests/README.md`), and `tests/fixtures/`.
-- `docs/` — `USER_GUIDE.md`, design notes, and `docs/notes/<version>.md` release notes.
+- `docs/` — current architecture/domain contracts plus `docs/notes/<version>.md` historical release notes. Do not create one-off progress/status documents when an authoritative current document or release note can carry the information.
 - `data/` — runtime state (Chroma, SQLite, models), git-ignored except `.gitkeep`. Never commit its contents.
 - `docker-compose.yml`, `.env.example`, `scripts/` (diagnostics, and `migrate-css-tokens.py` for moving styles onto design tokens), `.github/workflows/frontend.yml` (CI).
 
 ## Commands
 
 ```bash
-pytest -q                                   # backend + release regression tests (from repo root)
+pytest -q -n auto --dist=worksteal         # backend + release regression tests (from repo root)
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
 python -m compileall -q api/app             # syntax check
+cd web && npm run format:repo:check         # repository-wide Prettier check
 cd web && npm run typecheck                 # vue-tsc
+cd web && npm run typecheck:tests           # test/config TypeScript
 cd web && npm run test:unit                 # Vitest
 cd web && npm run build                     # vue-tsc + Vite
 cd web && npm run build-storybook
@@ -49,7 +69,8 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Do not claim a build is release-ready unless the production frontend build, Storybook build, and Docker builds actually passed.
 - When cutting a release, bump the version everywhere it is declared: `web/package.json`, `api/app/config.py`, `web/index.html`, and the README's "Current version" line. The API constructor, backup manifest, AppBuildInfo (sign-in, user menu, and Settings), and AuthScreen read those values (and the build's git commit) rather than duplicating the string. `tests/test_release_consistency.py` checks that they agree and that `docs/notes/<version>.md` exists.
 - **Tag the same commit.** After the bump commit exists and `APP_VERSION` on that commit is the new version, create an annotated tag `v<version>` with the notes title (for example `v0.62.3` / `0.62.3 - Vigilant Viper`) and push it: `git tag -a "v$VERSION" -m "$VERSION - $NAME"` then `git push origin "v$VERSION"`. Do not skip the tag, do not retag a name that already exists, and do not point `vX.Y.Z` at a tree whose declared version is something else. Notes without a matching `v*` tag are not a finished release.
-- Update `docs/USER_GUIDE.md` when user-visible behavior changes; it describes the current release, not history.
+- Update `docs/USER_GUIDE.md` when user-visible behavior changes; it describes current behavior, not history.
+- Treat versioned design/status documents and `docs/notes/` as historical records. Current architecture and operating contracts belong in `AGENTS.md`, `docs/ARCHITECTURE.md`, `docs/USER_GUIDE.md`, `SPECIFICATION.md`, or a focused unversioned contract document. Do not create a new progress/status file when an existing authoritative document can be updated.
 
 ## Conventions
 
@@ -64,20 +85,67 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
   - Preserve edition, translation, and page information. Keep the corpus authoritative; vector stores are derived data.
 - **Provenance and LLM output:**
   - Keep deterministic and LLM values both, with confidence, reason, and whether the field was actually checked.
-  - LLM values above the 65% confidence threshold and schema-valid populate fields; lower-confidence values stay as `proposed_value` suggestions.
+  - Every schema-valid non-empty LLM value is populated so a reviewer can inspect it; population is not verification. Missing/low confidence can keep the field pending review, while `autofilled=true` is reserved for calibrated autofill (90% blended confidence by default, valid cited evidence, and no suspension from poor reviewer precision).
   - Reviewer-confirmed document structure is authoritative over manifest and LLM inference.
   - Validate LLM output against closed vocabularies at the backend boundary, and sanitize model wrappers (fences, separators) only when absent from the source.
+  - Route every LLM task that requires a JSON object through `structured_completion.complete_structured_json` (or `rag.structured_chat_complete`). Strict-parse first, repair only malformed-but-complete syntax locally, never repair truncation, run domain/schema validation before accepting the value, and use the shared failure-specific retry/token-budget policy rather than ad hoc `json.loads`/retry loops.
   - LLM output is untrusted until validated. Deterministic code owns IDs, citations, page lookup, exact-quote checks, schema checks, dedup, and embedding compatibility; prefer it over another LLM prompt.
   - Unresolved or uncertain results (segmentation, metadata, attribution, thin evidence) stay visible and marked for review. Never manufacture certainty, and never silently swallow errors that can affect correctness.
   - Segmentation must conserve text: no text lost, invented, duplicated, or reordered.
-  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (*not, without, if, only*) can carry the proposition.
+  - Preprocessing is conservative. Do not strip stopwords or aggressively normalize; negations and qualifiers (_not, without, if, only_) can carry the proposition.
   - Bump the contract or prompt version identifiers (for example `derrida-scholarly-v12`, `derridai-record-metadata-v9`) when their semantics change.
+- **Source ingestion and media fidelity:**
+  - Treat uploaded/remote source content as inert data. Never execute embedded document content, macros, scripts, fields, external relationships, or active objects.
+  - Enforce bounded bytes, decompression/expansion, image pixels, audio duration, probe/transcription time, nesting/depth, and supported-format/codec limits before expensive processing.
+  - Preserve immutable extracted source plus extractor/tool/version provenance. Human cleanup/transcription revisions are reviewable revisions, not silent rewrites of extraction history.
+  - Model evidence coordinates according to the source medium. PDFs may use physical/printed pages; audio uses time ranges/speakers; text, image, URL, and Gutenberg sources must not inherit meaningless PDF-only controls or page semantics.
+- **Document Intelligence and semantic content graphs:**
+  - Whole-document NLP (spaCy, BookNLP, or future providers) is derived/rebuildable annotation state. It may guide prompts and navigation but never constitutes documentary evidence, confirms a FieldAssertion, or establishes proposition ownership.
+  - Keep provider-native details behind `document_intelligence.py`; Records and metadata contracts must not become BookNLP-shaped. spaCy (in the API) is the universal baseline: small English, French, and Latin models are bundled so those languages work out of the box; Latin uses LatinCy for academic/classical morphology, lemmatization, POS, and NER. Additional spaCy languages are administrator-installed managed resources. The optional, English-only BookNLP worker is isolated from the API environment, loads only approved model artifacts, and never downloads weights itself. Additional models arrive only through administrator-installed language packs (`document_nlp_packs.py`): pinned HTTPS URLs, bounded sizes, and SHA-256 verification before a pack becomes active; corpus builds never trigger a download.
+  - Bind document/Record annotation projections to exact text digests. Reviewed-text changes invalidate text-bound projections; stale annotations must not feed the current semantic graph or metadata prompts.
+  - The Semantic Content Graph is distinct from the cELF Research Object Graph. Observational edges such as co-occurrence/dialogue proximity are weaker computational observations; do not present them as semantic relationships. Semantic edges projected from metadata must preserve assertion authority and evidence references.
+  - Aggregate graph authority conservatively: an unreviewed occurrence prevents a repeated relation from appearing wholly confirmed, and any disputed occurrence keeps the aggregate disputed.
+  - Keep `nlp_candidates` and `document_intelligence` out of canonical publication JSONL. Derived graph/index exports, when added, remain separate artifacts.
+  - Apply the same blind second-opinion projection rules before building reviewer-visible graphs; a graph must not become a side channel for sealed values.
+- **Metadata memory and progressive retrieval:**
+  - Canonical reviewed records/RecordRevisions, field assertions, review decisions, and bound evidence are authoritative. Metadata exemplars and their Chroma/embedding projection are derived and rebuildable.
+  - Never promote unresolved or unreviewed model output into trusted precedent. Corrections may preserve a rejected model value as negative evidence; reviewer-confirmed absence is reusable only when explicit reviewed source evidence is bound to the no-value decision.
+  - Metadata-schema retrieval policy is field/group scoped. The active contract is `enabled`, `max_items`, `min_similarity`, `include_corrections`, `include_confirmed_absence`, `max_corrections`, and `match_field_ids` (stable field identities; compared only on reviewed values, never guessed); do not revive migrated legacy routing flags or hard-code field names into retrieval.
+  - Metadata exemplar memory is separate from Research response/claim memory. Do not route one into the other merely because both use retrieval or a vector projection.
+  - Resolve precedent/support bindings against stable record/revision/source identities and surface stale or unresolvable bindings instead of silently substituting newer text.
+- **Pipeline execution and traceability:**
+  - Executable pipeline definitions are declarative data over a closed registry of server-owned strategies; never execute user-supplied code from a pipeline definition.
+  - Resolve an assigned pipeline to an immutable `pipeline_id` / version / content hash before execution and retain that identity in run and trace state. Editing creates a new version rather than changing historical execution identity.
+  - Migrated features must execute through their assigned pipeline instead of reintroducing direct mode branches or parallel ad-hoc retrieval/LLM paths. Keep feature-specific domain policy outside the pipeline when it is not a computational tuning decision.
+  - Pipeline settings may tune retrieval, reranking, selection, packing, provider role, or similar computation, but they must not weaken scholarly authority, provenance gates, evidence validation, reviewer decisions, source binding, or other non-negotiable domain invariants.
+  - Strategy degradation belongs in explicit `next` / fallback edges with traceable reasons. Do not silently swap computational strategies outside the resolved graph.
+  - Stage inputs are typed, named ports declared in `pipelines/contracts.py` (inputs, outputs, declared complexity for every strategy; a test fails if one is missing). `pipelines/wiring.py` resolves each port to exactly one source (an explicit binding, an edge, or a run input the purpose supplies) and validation rejects unbound required inputs, wrong types, several sources into a single-valued port, and bindings to stages that do not run first. Most runtime adapters take inputs from the graph edges, so for them a version whose explicit bindings change the wiring stays inspect-only (`bindings_changing_wiring`). An adapter that delivers from the resolved wiring declares `PurposeAdapter.honours_bindings`; only `vector_store_search` and `evidence_recovery` do so far (recovery routes on edges; a binding changes only which producer's output a stage receives, and cELF compliance is judged from the bound sources), and no other purpose may be claimed to run free-form wiring until it is migrated. A tuning port (`PortSpec.accepts_constant`: `limit` on top-K and MMR, `lambda_mult`, `rrf_k`, and `fetch_k` on the retrievers — retrieval arithmetic only, never a gate, threshold the purpose fixes, access rule or reviewer decision) may take a fixed number (`InputBinding.source="constant"`, bounded and range-checked); query, candidate and other data ports never accept a constant, and a constant may narrow but never raise what the request asked for. Strategies declare `concurrency` (`safe`, `provider_limited`, `exclusive`; undeclared means `exclusive`) and only the store-search executor overlaps independent branches, opt-in via `PIPELINE_PARALLEL_BRANCHES`, with results and trace order fixed by definition order. Every purpose that honours bindings must build its run trace warnings with `wiring.rewired_warnings`. Keep `inputs` (and a binding's absent `value`) out of the serialised form while empty so recorded pipeline hashes stay valid.
+  - Latency and complexity shown in Pipeline Studio are operational estimates: latency comes from recorded traces and always carries its sample size and basis (exact pipeline, same stage, strategy, none); complexity is declared per strategy and compared with, never replaced by, observed growth. Never present missing data as zero.
+  - Pipeline traces are bounded operational provenance, not scholarly truth. They may retain stage IDs, timings, counts, bounded candidate IDs/scores, provider/model identity, fallback/warning/failure state, and the resolved pipeline identity, but must not copy source text, prompt/response bodies, secrets, or sealed reviewer values.
 - **Roles:** Researcher accounts must never receive full corpus text or mutate data; enforce this in the API, not just the UI.
 - **Only send what is needed** in API requests, LLM prompts, and updates (for example, a PATCH carries only the changed field). Use operation-specific schemas rather than one giant record payload.
 - **Reproducibility:** RAG runs keep enough state to inspect and rerun them. Grades stay attached to their run and record the grader model; warn on self-grading.
-- **Background work:** long operations are cancellable jobs (`jobs.py`) with visible progress; respect per-provider concurrency limits. Job state is process-local.
+- **Transports:** REST owns commands and mutations; GraphQL is query-only (no Mutation/Subscription roots, every root field classified with a permission); the WebSocket only notifies and is never canonical state. Resolvers and routes share `celf_queries/`; job managers never import realtime code (emit through `job_realtime_summary`/`operation_events.py`). Keep realtime payloads bounded and free of source text, prompts, secrets and hidden reviewer values.
+- **Background work:** long operations are cancellable jobs with visible progress; respect per-provider concurrency limits. Active execution is process-local, but job snapshots/history are durably mirrored to SQLite. After restart, interrupted queued/running/cancelling work is marked failed rather than silently replayed. Keep job-specific behavior in the owning `job_*.py` manager instead of growing `jobs.py`.
+- **Operational data retention:**
+  - Retention is opt-in by registered operational store. Do not infer that data is retention-eligible merely because it is derived, cached, indexed, or rebuildable.
+  - Canonical scholarly state is never retention-managed: corpus records/sources, RecordRevisions, review decisions, FieldAssertions, bound evidence, validated claims, and other authoritative provenance remain intact. Metadata precedents/exemplars, response memory, pipeline definitions, benchmark cases, and user accounts are also intentionally outside the retention set even where some are derived or administrative.
+  - Current retention-eligible history is pipeline traces, pipeline benchmark results, finished job history, and saved Research responses in the Response Library cache. Keep pipeline traces/results distinct from pipeline definitions/benchmark cases, and keep the Response Library cache distinct from response/claim memory.
+  - Never remove active jobs or dependency-pinned records. A Research pipeline trace remains pinned while its Research job exists; if protected records alone exceed a cap, report the condition instead of deleting them.
+  - Delete through the owning store or manager when it maintains in-memory state, referential integrity, or persistence side effects. Do not replace those deletion paths with raw database deletes that can resurrect rows or leave dangling state.
 - **Chroma:** one writer per persistence path. The logical `_response_cache` collection is stored physically as `derridai_response_cache` and is a system cache, not a corpus store.
 - **Secrets:** `.env` is git-ignored. Backups and provider profiles can contain API keys; never log or commit them.
+
+## Before you push (avoids most CI failures)
+
+Run `sh scripts/install-git-hooks.sh` once per clone. The pre-commit hook checks only staged Prettier/Ruff/ESLint-owned files, in batches of at most 32 to stay below native Windows command-line limits. Every selected file is checked, and a failed batch blocks the commit. ESLint honours configured file ignores without treating ignored-file notices as lint failures; real warnings still block. Before opening or updating a PR, merge current `origin/master`, finish a coherent local batch, and run `scripts/preflight.sh`; pre-push invokes that same surface-aware plan automatically. Frontend unit tests are dependency-selected on a branch, SDK/package checks are separate from the production app build, and Storybook/browser catalogues run only for the surfaces that own them. Browser suites and publication browser/Docker acceptance are never run by the local hooks or preflight and are mandatory in CI when their owning paths change; merge-to-master runs restore exhaustive browser/a11y coverage. The plan is machine-readable with `python scripts/preflight_plan.py --format json <paths...>`. Do not use GitHub Actions as an interactive test runner by pushing after every small edit.
+
+- **Fresh branch.** CI tests your branch merged with `origin/master`. If master moved, merge it and re-run the tests before pushing; a green local run on a stale base proves little.
+- **Prettier on every file you touched**, including Markdown docs and `SPECIFICATION.md`. CI formats only changed files, so one unformatted doc fails `format-check`.
+- **Stage by path, not `git add -A`.** The working tree holds untracked build output and scratch files. Never commit `dist/`, `web/sdk/dist/`, `node_modules/`, caches, or test results (`tests/test_repo_hygiene.py` enforces this).
+- **Generated artifacts** (`web/src/api/graphql/schema.graphql`, `generated.ts`, `pipelineCatalogContract.json`) are regenerated only with the repo's scripts (`scripts/export_graphql_schema.py`, `scripts/export_pipeline_catalog_fixture.py`) in the project venv, and only when the API surface changed. Do not commit regenerated output from another toolchain.
+- **Legacy DOM baselines** (`web/tests/e2e/legacy-dom-baseline.spec.ts-snapshots/`) are characterization records of imperative UI. When you port a dialog to Vue, delete its baseline, add its scenario to `nonSnapshotScenarios` in `web/scripts/check-legacy-snapshots.mjs`, and assert behavior instead; do not regenerate a baseline to make a diff go away.
+- **Complete feedback before another push.** Wait for the current Actions run to finish, inspect the primary failed jobs rather than the aggregate `frontend` result, repair the complete failure set in one batch, merge `origin/master` again if it moved, and rerun preflight.
 
 ## Working style
 
@@ -85,21 +153,19 @@ Backend tests stub `chromadb` and put `api/` on `sys.path`; they do not need Doc
 - Make focused changes; do not refactor or add abstractions beyond the task. Prefer editing existing files.
 - Add a regression test for each behavior change, in a new or existing `tests/test_*.py` (and Vitest/Playwright tests for frontend behavior).
 - Test behavior, not text. Do not add tests that only assert a string appears in a doc or source file, and do not hard-code the release version in tests; version agreement is covered once in `tests/test_release_consistency.py`.
-- Run the relevant checks before reporting done, and report honestly which checks could not run.
+- Run the relevant checks before reporting done, and report honestly which checks could not run. For handoff/documentation work, keep README and CONTRIBUTING setup commands executable from a clean checkout and keep the repository-wide Prettier check green.
 - Commit as the repository owner: Aaron Schlosser, PhD <aaron@aaronschlosser.com>. Only commit when asked; never push or force-push without being asked.
 
 ## Saving tokens and execution time
 
 - Act on the first reasonable plan. Do not re-derive settled decisions or narrate options that will not be taken.
 - Prefer scripts and one combined command over repeated hand edits and small commands.
-- Limit command output with `tail`, `grep -E`, `cut -c1-160`, and `head`. Read large files by line range; `runtime.js` is about 9,000 lines.
+- Limit command output with `tail`, `grep -E`, `cut -c1-160`, and `head`. Read large files by line range and verify current sizes rather than relying on historical monolith counts.
 - Run long jobs in the background and poll once. Do not use short sleep-poll loops.
 - After an edit succeeds, do not re-read the entire file; inspect only when validation or an uncertain merge requires it.
 - Write tests once against the legacy behavior, then make a focused implementation change rather than iterating through avoidable failures.
 - Batch type-check fixes, preferably with one scripted transformation when signatures share the same cause.
-- Do not spawn subagents unless asked. Use Explore only for broad searches that cannot be handled with targeted local search.
-- If the work is consuming substantial context or tokens, ask whether to continue before starting another broad investigation.
-- When usage nears 85%, update `PROGRESS.md`, commit and push the progress, then stop.
+- If the work is consuming substantial context or tokens, preserve a concise hand-off in the relevant issue/PR or authoritative document instead of creating a repository-level progress log.
 
 ## Design and engineering principles
 

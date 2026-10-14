@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Segmentation review bookkeeping and "default to KEEP" behavior.
 
 Why: the builder asks an LLM whether adjacent blocks belong in the same record. A
@@ -15,6 +31,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app import corpus_segmentation_execution as cse
 
 
 def _blocks(n=12):
@@ -32,7 +49,7 @@ def test_boundary_review_does_not_mark_neighbor_records_needs_review():
     """
     records=[{"record_id":"r1","source_block_ids":["b0","b1"],"needs_review":False},{"record_id":"r2","source_block_ids":["b2","b3"],"needs_review":False}]
     review={"after_block_id":"b1","next_block_id":"b2","kind":"semantic_boundary_uncertain","reason":"test"}
-    cb.PdfCorpusBuildManager._mark_segmentation_review(records,[review])
+    cb._mark_segmentation_review(records,[review])
     assert records[0]["needs_review"] is False
     assert records[1]["needs_review"] is False
     assert records[0]["boundary_review_after"][0]["kind"]=="semantic_boundary_uncertain"
@@ -50,7 +67,7 @@ def test_failed_local_classifier_defaults_to_keep_without_unresolved_region(monk
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     build=repo.create_build({"asset_id":"a","source_sha256":"x","source_filename":"x.pdf","source_page_count":1,"source_block_count":12,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":6,"provider":"ollama","model":"test","request":{},"warnings":[]})
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":5,"protected":False}])
+    monkeypatch.setattr(cse, "_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":5,"protected":False}])
     monkeypatch.setattr(manager,"_segment_candidate_batch",lambda *args,**kwargs:({},"bad json"))
     boundaries=manager._segment(_blocks(),{}, {"provider":"ollama","model":"test"}, build["build_id"])
     refreshed=repo.get_build(build["build_id"])
@@ -69,7 +86,7 @@ def test_explicit_uncertain_defaults_to_keep_without_boundary_review(monkeypatch
     repo=cb.PdfCorpusRepository(tmp_path/"repo")
     build=repo.create_build({"asset_id":"a","source_sha256":"x","source_filename":"x.pdf","source_page_count":1,"source_block_count":12,"schema_version":cb.SCHEMA_VERSION,"profile_id":cb.PROFILE_VERSION,"profile_version":6,"provider":"ollama","model":"test","request":{},"warnings":[]})
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
-    monkeypatch.setattr(manager,"_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":5,"protected":False}])
+    monkeypatch.setattr(cse, "_deterministic_boundary_candidates",lambda blocks,profile:[{"after_block_id":"b5","next_block_id":"b6","signals":["quotation_frame_change"],"candidate_score":.5,"source":"test","index":5,"protected":False}])
     # Binary v6 adjudication cannot return uncertainty; omission is its operational equivalent and defaults to KEEP.
     monkeypatch.setattr(manager,"_segment_candidate_batch",lambda *args,**kwargs:({},None))
     boundaries=manager._segment(_blocks(),{}, {"provider":"ollama","model":"test"}, build["build_id"])

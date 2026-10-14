@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Profile identity, manifest normalization, and metadata-gated acceptance.
 
 Why: the profile and prompt version strings are part of a build's provenance; they
@@ -21,13 +37,16 @@ from app.models import PdfCorpusBuildCreate
 def test_profile_and_prompt_ids_are_pinned():
     """Pin the active corpus profile and prompt version identifiers.
 
-    What: profile "derrida-scholarly-v12", metadata prompt "derridai-record-metadata-v11",
-    exactly one registered profile, and review_metadata_fields matching the constant.
+    What: the profile, all corpus prompt contracts, publication schema, exactly one
+    registered profile, and review_metadata_fields matching the constant.
     Why: AGENTS.md requires bumping these when their semantics change; this test fails
     until the change is made on purpose (update the strings when you bump them).
     """
     assert cb.PROFILE_VERSION=='derrida-scholarly-v12'
-    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v11'
+    assert cb.DOCUMENT_PROMPT_VERSION=='derridai-document-manifest-v4'
+    assert cb.SEGMENTATION_PROMPT_VERSION=='derridai-local-boundaries-v9'
+    assert cb.METADATA_PROMPT_VERSION=='derridai-record-metadata-v16'
+    assert cb.PUBLICATION_SCHEMA_VERSION=='derridai-corpus-jsonl-v1'
     assert PdfCorpusBuildCreate(asset_id='a').profile_id=='derrida-scholarly-v12'
     assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
     assert cb.CORPUS_PROFILES[cb.PROFILE_VERSION]['review_metadata_fields']==list(cb.REVIEW_METADATA_FIELDS)

@@ -1,0 +1,84 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* v0.22.0: Response FAQ is scan-first; details are opt-in ------------------- */
+.faq-toolbar {
+  align-items: flex-start;
+}
+.faq-response-shell {
+  display: block;
+}
+.faq-response-shell > summary {
+  list-style: none;
+}
+.faq-response-shell > summary::-webkit-details-marker {
+  display: none;
+}
+.faq-response-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 15px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+.faq-response-summary:hover {
+  background: var(--card);
+}
+.faq-summary-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.faq-summary-copy > b {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+.faq-summary-copy > span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.faq-summary-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.faq-summary-chevron {
+  font-size: 1.0625rem;
+  line-height: 1;
+  color: var(--muted);
+  transition: transform 0.16s ease;
+}
+.faq-response-shell[open] .faq-summary-chevron {
+  transform: rotate(180deg);
+}
+.faq-response-body {
+  border-top: 1px solid var(--line);
+  padding: 14px 16px 16px;
+}
+.faq-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 10px;
+}

@@ -1,0 +1,69 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.history-version-nav {
+  padding: 10px;
+  background: color-mix(in srgb, var(--card) 98%, transparent);
+}
+.history-version-position b {
+  font-size: 0.8125rem;
+}
+.history-version-position span {
+  font-size: 0.8125rem;
+}
+.history-version-summary {
+  gap: 6px;
+}
+.history-version-summary span {
+  padding: 5px 8px;
+  font-size: 0.8125rem;
+}
+.history-version-diff > summary {
+  padding: 10px 12px;
+}
+.history-version-diff > summary b {
+  font-size: 0.8125rem;
+}
+.history-version-diff > summary span {
+  font-size: 0.8125rem;
+}
+.history-diff-values > div {
+  padding: 11px;
+}
+.history-diff-values small {
+  font-size: 0.8125rem;
+}
+.history-diff-values pre {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.history-record-preview > summary {
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+}
+.history-preview-meta {
+  padding: 10px 12px;
+}
+.history-preview-meta span {
+  font-size: 0.8125rem;
+}
+.history-preview-text {
+  padding: 12px;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}

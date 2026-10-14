@@ -1,10 +1,32 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
+import { computed } from "vue";
+import { hasPages, timeLabel } from "../domain/sourceMedia";
 import PdfEvidenceViewer from "./PdfEvidenceViewer.vue";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
 const props = withDefaults(
   defineProps<{
+    mediaKind?: string;
+    audioUrl?: string;
+    imageUrl?: string;
     pdfUrl?: string;
     page: number;
     pageCount?: number;
@@ -32,41 +54,55 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ openViewer: []; openPdfExplorer: []; previous: []; next: [] }>();
 const i18n = useI18nStore();
+const audioClipUrl = computed(() => {
+  if (!props.audioUrl || props.mediaKind !== "audio") return props.audioUrl || "";
+  const starts = props.blocks
+    .map((block) => block.start)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const ends = props.blocks
+    .map((block) => block.end)
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  if (!starts.length || !ends.length) return props.audioUrl;
+  const start = Math.max(0, Math.min(...starts));
+  const end = Math.max(start, Math.max(...ends));
+  return `${props.audioUrl}#t=${start},${end}`;
+});
 </script>
 <template>
   <section
     class="source-summary"
     :class="{ zoomable }"
-    :aria-label="i18n.t('pdf_corpus.source_context', 'Source context')"
+    :aria-label="i18n.t('pdf_corpus.source_context')"
   >
     <header class="source-summary-head">
       <div>
-        <b>{{ i18n.t("pdf_corpus.source_context", "Source context") }}</b
-        ><span>{{
+        <b>{{ i18n.t("pdf_corpus.source_context") }}</b
+        ><span v-if="hasPages(mediaKind)">{{
           pageCount
-            ? i18n.tf("pdf_corpus.pdf_page_of", "PDF page {page} of {total}", {
+            ? i18n.tf("pdf_corpus.pdf_page_of", {
                 page,
                 total: pageCount,
               })
-            : i18n.tf("pdf_corpus.pdf_page", "PDF page {page}", { page })
+            : i18n.tf("pdf_corpus.pdf_page", { page })
         }}</span>
       </div>
     </header>
     <div
-      v-if="pageCount > 1"
+      v-if="hasPages(mediaKind) && pageCount > 1"
       class="source-page-nav"
-      :aria-label="i18n.t('pdf_corpus.source_page_navigation', 'Source page navigation')"
+      :aria-label="i18n.t('pdf_corpus.source_page_navigation')"
     >
       <button type="button" class="btn small" :disabled="!canPrevious" @click="emit('previous')">
-        ← {{ i18n.t("ui.previous", "Previous") }}
+        ← {{ i18n.t("ui.previous") }}
       </button>
       <span aria-live="polite">{{ page }} / {{ pageCount }}</span>
       <button type="button" class="btn small" :disabled="!canNext" @click="emit('next')">
-        {{ i18n.t("ui.next", "Next") }} →
+        {{ i18n.t("ui.next") }} →
       </button>
     </div>
     <div v-if="pdfUrl" class="source-thumbnail">
       <PdfEvidenceViewer
+        v-if="pdfUrl"
         :pdf-url="pdfUrl"
         :page="page"
         :page-width="pageWidth"
@@ -76,27 +112,52 @@ const i18n = useI18nStore();
         :zoomable="zoomable"
       />
     </div>
+    <div v-else-if="!hasPages(mediaKind) || imageUrl">
+      <img v-if="imageUrl" :src="imageUrl" :alt="i18n.t('pdf_corpus.source_context')" />
+      <audio
+        v-if="audioUrl"
+        controls
+        preload="metadata"
+        :src="audioClipUrl"
+        :aria-label="i18n.t('pdf_corpus.media_kind.audio')"
+      />
+      <article v-for="block in blocks" :key="block.block_id">
+        <b>{{ timeLabel(block.start, block.end) }} {{ block.speaker }}</b>
+        <p>{{ block.text }}</p>
+      </article>
+    </div>
     <div v-else class="source-unavailable">
-      {{
-        i18n.t(
-          "pdf_corpus.source_loading_or_unavailable",
-          "Source blocks are loading or unavailable.",
-        )
-      }}
+      {{ i18n.t("pdf_corpus.source_loading_or_unavailable") }}
     </div>
     <div class="source-summary-actions">
       <button type="button" class="btn primary" @click="emit('openViewer')">
-        {{ i18n.t("pdf_corpus.open_source_viewer", "Open source viewer") }}
+        {{ i18n.t("pdf_corpus.open_source_viewer") }}
       </button>
-      <button v-if="showPdfExplorer" type="button" class="btn" @click="emit('openPdfExplorer')">
-        {{ i18n.t("pdf_corpus.open_pdf_explorer", "Open in PDF Explorer") }}
+      <button
+        v-if="showPdfExplorer && mediaKind !== 'audio' && pdfUrl"
+        type="button"
+        class="btn"
+        @click="emit('openPdfExplorer')"
+      >
+        {{ i18n.t("pdf_corpus.open_pdf_explorer") }}
       </button>
     </div>
   </section>
 </template>
 <style scoped>
+img,
+audio {
+  max-inline-size: 100%;
+}
+img {
+  display: block;
+  max-block-size: 42vh;
+  margin-inline: auto;
+  object-fit: contain;
+}
 .source-summary {
   min-width: 0;
+  overflow-wrap: anywhere;
   display: grid;
   gap: 10px;
   padding: 12px;

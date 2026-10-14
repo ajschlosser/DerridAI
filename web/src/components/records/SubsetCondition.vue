@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, useId } from "vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -37,9 +54,7 @@ function setOperator(next: string) {
     <select
       v-model="field"
       class="control"
-      :aria-label="
-        i18n.tf('subset.field_label', 'Field for {position}', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.field_label', { position: props.position })"
     >
       <option v-for="item in props.fields" :key="item.key" :value="item.key">
         {{ item.label }}
@@ -48,9 +63,7 @@ function setOperator(next: string) {
     <select
       class="control"
       :value="operator"
-      :aria-label="
-        i18n.tf('subset.operator_label', 'Comparison for {position}', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.operator_label', { position: props.position })"
       @change="setOperator(($event.target as HTMLSelectElement).value)"
     >
       <option v-for="item in SUBSET_OPERATORS" :key="item" :value="item">
@@ -62,13 +75,9 @@ function setOperator(next: string) {
       class="control"
       autocomplete="off"
       :disabled="valueless"
-      :placeholder="
-        valueless ? i18n.t('subset.no_value', 'No value required') : i18n.t('subset.value', 'Value')
-      "
+      :placeholder="valueless ? i18n.t('subset.no_value') : i18n.t('subset.value')"
       :list="suggested ? listId : undefined"
-      :aria-label="
-        i18n.tf('subset.value_label', 'Value for {position}', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.value_label', { position: props.position })"
     />
     <datalist v-if="suggested" :id="listId">
       <option v-for="item in props.suggestions" :key="item" :value="item" />
@@ -76,12 +85,10 @@ function setOperator(next: string) {
     <button
       type="button"
       class="btn danger"
-      :aria-label="
-        i18n.tf('subset.remove_condition_named', 'Remove {position}', { position: props.position })
-      "
+      :aria-label="i18n.tf('subset.remove_condition_named', { position: props.position })"
       @click="emit('remove')"
     >
-      {{ i18n.t("ui.remove", "Remove") }}
+      {{ i18n.t("ui.remove") }}
     </button>
   </div>
 </template>

@@ -1,22 +1,53 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import AppIcon from "../AppIcon.vue";
 import UiPageHeader from "../ui/UiPageHeader.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
 import { useI18nStore } from "../../stores/i18n";
 import { useDisabledReason } from "../../composables/useDisabledReason";
 import type { SearchScope } from "../../types/search";
 
 const props = withDefaults(
   defineProps<{
-    scope: SearchScope;
+    scope?: SearchScope | null;
     researcher?: boolean;
     totalLoaded?: number;
     databaseCount?: number;
     selectedEvidence?: number;
     canUseLoaded?: boolean;
+    /** Keep the page frame mounted while the first authoritative workspace read is unresolved. */
+    pending?: boolean;
+    /** Keep the frame visible after a failed first read without implying zero available data. */
+    unavailable?: boolean;
   }>(),
-  { researcher: false, totalLoaded: 0, databaseCount: 0, selectedEvidence: 0, canUseLoaded: true },
+  {
+    scope: null,
+    researcher: false,
+    totalLoaded: 0,
+    databaseCount: 0,
+    selectedEvidence: 0,
+    canUseLoaded: true,
+    pending: false,
+    unavailable: false,
+  },
 );
 const emit = defineEmits<{
   "update:scope": [scope: SearchScope];
@@ -25,77 +56,124 @@ const emit = defineEmits<{
   views: [];
 }>();
 const i18n = useI18nStore();
-const loadedDisabled = computed(() => props.researcher || !props.canUseLoaded);
-const loadedUnavailable = i18n.t(
-  "search.loaded_scope_unavailable",
-  "Loaded-record search is available to administrators with local JSONL records.",
+const controlsDisabled = computed(() => props.pending || props.unavailable);
+const loadedDisabled = computed(
+  () => controlsDisabled.value || props.researcher || !props.canUseLoaded,
 );
+const loadedUnavailable = i18n.t("search.loaded_scope_unavailable");
 const loadedDisabledReason = useDisabledReason(loadedDisabled, loadedUnavailable);
 </script>
 
 <template>
   <UiPageHeader
     class="search-workspace-header"
-    :kicker="i18n.t('search.kicker', 'Corpus exploration')"
-    :title="i18n.t('search.title', 'Search')"
-    :description="
-      i18n.t(
-        'search.subtitle',
-        'Explore loaded records or search the corpus database without losing the context of your query, filters, and evidence.',
-      )
-    "
+    :kicker="i18n.t('search.kicker')"
+    :title="i18n.t('search.title')"
+    :description="i18n.t('search.subtitle')"
     title-id="search-page-title"
-    :actions-label="i18n.t('search.view_actions', 'Search view actions')"
+    :actions-label="i18n.t('search.view_actions')"
+    :aria-busy="props.pending || undefined"
   >
     <template #actions>
       <div class="search-workspace-actions">
-        <button type="button" class="btn" @click="emit('views')">
-          <AppIcon name="history" />{{ i18n.t("search.saved_views", "Saved views") }}
-        </button>
-        <button type="button" class="btn" @click="emit('save')">
-          <AppIcon name="plus" />{{ i18n.t("search.save_view", "Save view") }}
-        </button>
-        <button type="button" class="btn soft" @click="emit('share')">
-          <AppIcon name="copy" />{{ i18n.t("search.copy_link", "Copy link") }}
-        </button>
+        <UiTooltip
+          :text="i18n.t('search.saved_views_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button type="button" class="btn" :disabled="controlsDisabled" @click="emit('views')">
+            <AppIcon name="history" />{{ i18n.t("search.saved_views") }}
+          </button>
+        </UiTooltip>
+        <UiTooltip
+          :text="i18n.t('search.save_view_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button type="button" class="btn" :disabled="controlsDisabled" @click="emit('save')">
+            <AppIcon name="plus" />{{ i18n.t("search.save_view") }}
+          </button>
+        </UiTooltip>
+        <UiTooltip
+          :text="i18n.t('search.copy_link_help')"
+          trigger-mode="content"
+          :content-focusable="false"
+          placement="bottom"
+        >
+          <button
+            type="button"
+            class="btn soft"
+            :disabled="controlsDisabled"
+            @click="emit('share')"
+          >
+            <AppIcon name="copy" />{{ i18n.t("search.copy_link") }}
+          </button>
+        </UiTooltip>
       </div>
     </template>
     <template #meta>
       <div class="search-scope-row">
-        <div
-          class="search-scope-switch"
-          role="group"
-          :aria-label="i18n.t('search.scope', 'Search scope')"
-        >
+        <div class="search-scope-switch" role="group" :aria-label="i18n.t('search.scope')">
+          <UiTooltip
+            v-if="loadedDisabledReason"
+            :text="loadedDisabledReason"
+            trigger-mode="content"
+            placement="bottom"
+          >
+            <button
+              type="button"
+              :class="{ active: scope === 'loaded' }"
+              :aria-pressed="scope === 'loaded'"
+              :disabled="loadedDisabled"
+              @click="emit('update:scope', 'loaded')"
+            >
+              <AppIcon name="list" />
+              <span>{{ i18n.t("search.loaded_records") }}</span>
+              <small>{{
+                controlsDisabled ? "—" : Number(totalLoaded || 0).toLocaleString(i18n.locale)
+              }}</small>
+            </button>
+          </UiTooltip>
           <button
+            v-else
             type="button"
             :class="{ active: scope === 'loaded' }"
             :aria-pressed="scope === 'loaded'"
-            :disabled="loadedDisabled"
-            :title="loadedDisabledReason || undefined"
+            :disabled="controlsDisabled"
             @click="emit('update:scope', 'loaded')"
           >
             <AppIcon name="list" />
-            <span>{{ i18n.t("search.loaded_records", "Loaded records") }}</span>
-            <small>{{ Number(totalLoaded || 0).toLocaleString(i18n.locale) }}</small>
+            <span>{{ i18n.t("search.loaded_records") }}</span>
+            <small>{{
+              controlsDisabled ? "—" : Number(totalLoaded || 0).toLocaleString(i18n.locale)
+            }}</small>
           </button>
           <button
             type="button"
             :class="{ active: scope === 'database' }"
             :aria-pressed="scope === 'database'"
+            :disabled="controlsDisabled"
             @click="emit('update:scope', 'database')"
           >
             <AppIcon name="database" />
-            <span>{{ i18n.t("search.corpus_database", "Corpus database") }}</span>
-            <small>{{ Number(databaseCount || 0).toLocaleString(i18n.locale) }}</small>
+            <span>{{ i18n.t("search.corpus_database") }}</span>
+            <small>{{
+              controlsDisabled ? "—" : Number(databaseCount || 0).toLocaleString(i18n.locale)
+            }}</small>
           </button>
         </div>
         <p class="search-workspace-stats" aria-live="polite">
-          <span
+          <span v-if="props.pending"><AppIcon name="spark" />{{ i18n.t("search.loading") }}</span>
+          <span v-else-if="props.unavailable"
+            ><AppIcon name="spark" />{{ i18n.t("loading.unavailable", "Unavailable") }}</span
+          >
+          <span v-else
             ><AppIcon name="spark" />{{
               Number(selectedEvidence || 0).toLocaleString(i18n.locale)
             }}
-            {{ i18n.t("dynamic.selected_evidence", "selected evidence") }}</span
+            {{ i18n.t("dynamic.selected_evidence") }}</span
           >
         </p>
       </div>

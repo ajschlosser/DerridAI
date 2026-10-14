@@ -1,10 +1,67 @@
-import type { Meta, StoryObj } from '@storybook/vue3-vite';
-import CorpusBoundaryAdjudication from './CorpusBoundaryAdjudication.vue';
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-const meta: Meta<typeof CorpusBoundaryAdjudication> = {title:'Corpus Builder/Boundary Adjudication',component:CorpusBoundaryAdjudication};
+import type { Meta, StoryObj } from "@storybook/vue3-vite";
+import type { CorpusRecord } from "../api/pdfCorpus";
+import CorpusBoundaryAdjudication from "./CorpusBoundaryAdjudication.vue";
+
+const meta: Meta<typeof CorpusBoundaryAdjudication> = {
+  title: "Corpus Builder/Boundary Adjudication",
+  component: CorpusBoundaryAdjudication,
+};
 export default meta;
-type Story=StoryObj<typeof CorpusBoundaryAdjudication>;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
-export const RecommendedMove:Story={args:{record:{record_id:'r-12',text:'Example',text_length:7,source_block_ids:['b12'],source_spans:[],boundary_llm_before:{decision:'keep',confidence:.91,reason:'The prior seam closes a complete argumentative unit.'},boundary_llm_after:{decision:'move_later',confidence:.82,reason:'The next paragraph completes the same quotation frame.',suggested_after_block_id:'b14'}} as any,canPrevious:true,canNext:true,busy:false}};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
-export const NotYetChecked:Story={args:{record:{record_id:'r-1',text:'Example',text_length:7,source_block_ids:['b1'],source_spans:[]} as any,canPrevious:false,canNext:true,busy:false}};
+type Story = StoryObj<typeof CorpusBoundaryAdjudication>;
+export const RecommendedMove: Story = {
+  args: {
+    record: {
+      record_id: "r-12",
+      text: "Example",
+      text_length: 7,
+      source_block_ids: ["b12"],
+      source_spans: [],
+      boundary_llm_before: {
+        decision: "keep",
+        confidence: 0.91,
+        reason: "The prior seam closes a complete argumentative unit.",
+      },
+      boundary_llm_after: {
+        decision: "move_later",
+        confidence: 0.82,
+        reason: "The next paragraph completes the same quotation frame.",
+        suggested_after_block_id: "b14",
+      },
+    } as CorpusRecord,
+    canPrevious: true,
+    canNext: true,
+    busy: false,
+  },
+};
+export const NotYetChecked: Story = {
+  args: {
+    record: {
+      record_id: "r-1",
+      text: "Example",
+      text_length: 7,
+      source_block_ids: ["b1"],
+      source_spans: [],
+    } as CorpusRecord,
+    canPrevious: false,
+    canNext: true,
+    busy: false,
+  },
+};

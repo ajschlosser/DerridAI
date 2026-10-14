@@ -7,6 +7,8 @@
 </div>
 <div class="ui-page-header-actions" role="group" aria-label="Search view actions">
 <div class="search-workspace-actions">
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" aria-describedby="ui-tooltip-<id>">
 <button type="button" class="btn">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M3 12a9 9 0 1 0 3-6.7L3 8">
@@ -14,11 +16,19 @@
 <path d="M3 3v5h5M12 7v5l3 2">
 </path>
 </svg>Saved views</button>
+</span>
+</span>
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" aria-describedby="ui-tooltip-<id>">
 <button type="button" class="btn">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M12 5v14M5 12h14">
 </path>
 </svg>Save view</button>
+</span>
+</span>
+<span class="ui-tooltip" data-trigger-mode="content">
+<span class="ui-tooltip-anchor" aria-describedby="ui-tooltip-<id>">
 <button type="button" class="btn soft">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <rect x="8" y="8" width="12" height="12" rx="2">
@@ -26,6 +36,8 @@
 <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2">
 </path>
 </svg>Copy link</button>
+</span>
+</span>
 </div>
 </div>
 <div class="ui-page-header-meta">
@@ -305,10 +317,85 @@
 </label>
 </div>
 </details>
+<details class="search-facet-group">
+<summary>
+<span>Page end</span>
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="3">3</span>
+<span class="search-facet-count">1</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="6">6</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Page start</span>
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="3">3</span>
+<span class="search-facet-count">1</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="4">4</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Record ID</span>
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="derrida-grammatology-00001">derrida-grammatology-00001</span>
+<span class="search-facet-count">1</span>
+</label>
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="derrida-grammatology-00002">derrida-grammatology-00002</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Review reason</span>
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="Quotation boundary uncertain">Quotation boundary uncertain</span>
+<span class="search-facet-count">1</span>
+</label>
+</div>
+</details>
+<details class="search-facet-group">
+<summary>
+<span>Year</span>
+</summary>
+<div class="search-facet-values">
+<label class="search-facet-option">
+<input type="checkbox">
+<span class="search-facet-label" title="1967">1967</span>
+<span class="search-facet-count">2</span>
+</label>
+</div>
+</details>
 </div>
 </aside>
 </div>
-<section class="search-results-panel" aria-labelledby="search-results-title">
+<section class="search-results-panel" aria-labelledby="search-results-title" aria-busy="false">
 <div class="search-results-toolbar">
 <div class="search-results-count">
 <span class="section-label">Results</span>
@@ -394,11 +481,11 @@
 <td class="search-actions-column ui-table-sticky-end">
 <div class="search-record-actions">
 <button type="button" class="btn tiny">Open</button>
-<button type="button" class="btn tiny">Evidence</button>
+<button type="button" class="btn tiny">Add to evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-5" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-5">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-<id>" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-<id>">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-5" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<div id="citation-v-<id>" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>
@@ -428,11 +515,11 @@
 <td class="search-actions-column ui-table-sticky-end">
 <div class="search-record-actions">
 <button type="button" class="btn tiny">Open</button>
-<button type="button" class="btn tiny">Evidence</button>
+<button type="button" class="btn tiny">Add to evidence</button>
 <span class="citation-menu-native">
-<button type="button" class="btn tiny" popovertarget="citation-v-6" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-6">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
+<button type="button" class="btn tiny" popovertarget="citation-v-<id>" aria-haspopup="menu" aria-expanded="false" aria-controls="citation-v-<id>">Get Citation<span class="citation-menu-chevron" aria-hidden="true">▾</span>
 </button>
-<div id="citation-v-6" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
+<div id="citation-v-<id>" class="citation-popover-native" popover="auto" role="menu" aria-label="Get Citation">
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Inline</button>
 <button type="button" role="menuitem" tabindex="-1" class="btn tiny">Full</button>
 </div>

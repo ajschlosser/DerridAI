@@ -1,10 +1,31 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-// Background jobs on the client: loading and polling the job list, cancelling, removing and clearing jobs, applying
-// finished upserts, submitting LLM jobs and the progress toasts and desktop notifications they raise. Moved verbatim from
-// the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
-import { icon } from "./html";
+// Background jobs on the client: loading the job list, following it live over the realtime socket (with fallback
+// polling), cancelling, removing and clearing jobs, applying finished upserts, submitting LLM jobs and the progress
+// toasts and desktop notifications they raise. The runtime's state object and helpers are passed in as dependencies.
 import { isActiveJobStatus, jobIdsToPruneFromDock } from "./operationsDock";
+import { FALLBACK_POLL_MS, realtime as defaultRealtime } from "../realtime";
+import type { RealtimeClient } from "../realtime/client";
+import { TERMINAL_JOB_STATUSES, type JobEvent } from "../realtime/protocol";
+import { toast } from "../composables/notifications";
+import { registerJobsActions } from "./jobsActions";
+import { registerJobsPause } from "./jobsPause";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -21,7 +42,8 @@ type Helper =
   | "jobProviderSummary"
   | "navigateTo"
   | "notifyOperationsChanged"
-  | "persistPrefs"
+  | "persistJobPreferences"
+  | "persistResearchPreferences"
   | "recordFingerprint"
   | "refreshCorpusBuildsHomeCardOnly"
   | "refreshOperationsPanelOnly"
@@ -30,14 +52,17 @@ type Helper =
   | "reviewItemFromKey"
   | "reviewKey"
   | "shell"
-  | "toast"
   | "touchupRecordPayload"
+  | "tr"
   | "trf"
-  | "updateDbStatusElements"
   | "updateOperationStackCount";
-type Deps = { state: Loose } & Record<Helper, Fn>;
+type Deps = { state: Loose; realtime?: RealtimeClient } & Record<Helper, Fn>;
+
+/** Legacy interval, used only when realtime has not been started at all. */
+const LEGACY_POLL_MS = 4000;
 
 export function createJobsWorkspace(deps: Deps) {
+  const realtime = deps.realtime ?? defaultRealtime;
   const {
     state,
     announceOperationDock,
@@ -47,7 +72,8 @@ export function createJobsWorkspace(deps: Deps) {
     jobProviderSummary,
     navigateTo,
     notifyOperationsChanged,
-    persistPrefs,
+    persistJobPreferences,
+    persistResearchPreferences,
     recordFingerprint,
     refreshCorpusBuildsHomeCardOnly,
     refreshOperationsPanelOnly,
@@ -56,56 +82,81 @@ export function createJobsWorkspace(deps: Deps) {
     reviewItemFromKey,
     reviewKey,
     shell,
-    toast,
     touchupRecordPayload,
+    tr,
     trf,
-    updateDbStatusElements,
     updateOperationStackCount,
   } = deps;
   // Which finished jobs already raised a notification, and the timers that hide their completion toasts.
   const jobCompletionNotified: Record<string, boolean> = {};
   const completedJobToastTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+  /**
+   * The single reconciliation path for job state. REST snapshots (bootstrap, resync, fallback polling,
+   * explicit refresh) and realtime job events both end here, so toasts, desktop notifications,
+   * upsert receipts and the Operations panel behave identically whichever transport delivered the change.
+   */
+  async function reconcileJobs(nextJobs: Any[], { rerender = false, fromSnapshot = false } = {}) {
+    const previousJobs = [...state.jobs];
+    const previous = new Map(previousJobs.map((job) => [job.id, job.status]));
+    state.jobs = nextJobs;
+    if (fromSnapshot) state.jobsLastFetched = Date.now();
+    const knownJobIds = new Set(state.jobs.map((job: Any) => job.id));
+    const disappearedRagIds = previousJobs
+      .filter((job) => job.type === "rag" && !knownJobIds.has(job.id))
+      .map((job) => job.id);
+    let jobBookkeepingChanged = false;
+    let researchPreferencesChanged = false;
+    if (disappearedRagIds.length && Array.isArray(state.ragConfig.run_history)) {
+      const removed = new Set(disappearedRagIds);
+      state.ragConfig.run_history = state.ragConfig.run_history.filter(
+        (item: Any) => !removed.has(item.job_id),
+      );
+      researchPreferencesChanged = true;
+      for (const id of disappearedRagIds) {
+        const pruned = pruneClientJobState(id, {
+          removeHistory: false,
+          persist: false,
+          publish: false,
+        });
+        jobBookkeepingChanged ||= pruned.jobPreferencesChanged;
+      }
+    }
+    for (const id of Object.keys(state.jobApplied || {}))
+      if (!knownJobIds.has(id)) {
+        delete state.jobApplied[id];
+        jobBookkeepingChanged = true;
+      }
+    for (const id of Object.keys(state.upsertJobApplied || {}))
+      if (!knownJobIds.has(id)) {
+        delete state.upsertJobApplied[id];
+        jobBookkeepingChanged = true;
+      }
+    if (jobBookkeepingChanged) persistJobPreferences();
+    if (researchPreferencesChanged) persistResearchPreferences();
+    for (const job of state.jobs) await syncUpsertJobReceipts(job);
+    syncJobProgressToasts(previous);
+    // Operations chrome renders from the jobs/operations projection. Reconciliation
+    // publishes state changes but never reaches into shell DOM directly.
+    notifyOperationsChanged();
+    if (rerender && state.view === "home") refreshCorpusBuildsHomeCardOnly();
+    if (state.view === "rag") refreshRagProgressPanel();
+    return state.jobs;
+  }
   async function refreshJobs({ rerender = false } = {}) {
     try {
       const payload = await api("/api/jobs");
-      const previousJobs = [...state.jobs];
-      const previous = new Map(previousJobs.map((job) => [job.id, job.status]));
-      state.jobs = payload.jobs || [];
-      state.jobsLastFetched = Date.now();
-      const knownJobIds = new Set(state.jobs.map((job: Any) => job.id));
-      const disappearedRagIds = previousJobs
-        .filter((job) => job.type === "rag" && !knownJobIds.has(job.id))
-        .map((job) => job.id);
-      if (disappearedRagIds.length && Array.isArray(state.ragConfig.run_history)) {
-        const removed = new Set(disappearedRagIds);
-        state.ragConfig.run_history = state.ragConfig.run_history.filter(
-          (item: Any) => !removed.has(item.job_id),
-        );
-        for (const id of disappearedRagIds) pruneClientJobState(id, { removeHistory: false });
-        persistPrefs();
-      }
-      for (const id of Object.keys(state.jobApplied || {}))
-        if (!knownJobIds.has(id)) delete state.jobApplied[id];
-      for (const id of Object.keys(state.upsertJobApplied || {}))
-        if (!knownJobIds.has(id)) delete state.upsertJobApplied[id];
-      for (const job of state.jobs) await syncUpsertJobReceipts(job);
-      syncJobProgressToasts(previous);
-      const operationsButton = document.querySelector("#operationsBtn");
-      if (operationsButton) {
-        const active = state.jobs.filter((job: Any) =>
-          ["queued", "running", "cancelling"].includes(job.status),
-        ).length;
-        operationsButton.classList.toggle("soft", active > 0);
-        operationsButton.innerHTML = `${icon("history")}Operations <span class="button-count">${active}</span>`;
-      }
-      notifyOperationsChanged();
-      if (rerender && state.view === "home") refreshCorpusBuildsHomeCardOnly();
-      if (state.view === "rag") refreshRagProgressPanel();
-      return state.jobs;
+      return await reconcileJobs(payload.jobs || [], { rerender, fromSnapshot: true });
     } catch (error) {
       console.warn("Could not refresh background jobs", error);
       return state.jobs;
     }
+  }
+  /** How long until the next REST poll, or null when no server-state polling should run. */
+  function pollDelay(): number | null {
+    if (realtime.live) return null; // healthy socket: events replace polling
+    if (realtime.fallbackActive) return FALLBACK_POLL_MS; // socket repeatedly unavailable
+    if (realtime.status === "idle") return LEGACY_POLL_MS; // realtime never started
+    return null; // briefly reconnecting: wait; a status change re-arms polling
   }
   function startJobPolling() {
     if (state.jobsPollTimer) return;
@@ -113,51 +164,136 @@ export function createJobsWorkspace(deps: Deps) {
     // restored server jobs; thereafter only known active jobs schedule polling.
     if (!state.jobs.some((job: Any) => ["queued", "running", "cancelling"].includes(job.status)))
       return;
+    const delay = pollDelay();
+    if (delay === null) return;
     const poll = async () => {
       state.jobsPollTimer = null;
       if (!state.jobs.some((job: Any) => ["queued", "running", "cancelling"].includes(job.status)))
         return;
+      if (pollDelay() === null) return;
       await refreshJobs({ rerender: state.view === "home" });
       const active = state.jobs.some((job: Any) =>
         ["queued", "running", "cancelling"].includes(job.status),
       );
-      if (active) state.jobsPollTimer = setTimeout(poll, 4000);
+      const next = pollDelay();
+      if (active && next !== null) state.jobsPollTimer = setTimeout(poll, next);
     };
-    state.jobsPollTimer = setTimeout(poll, 4000);
+    state.jobsPollTimer = setTimeout(poll, delay);
   }
-  function pauseRuntime() {
+  function stopJobPolling() {
     if (state.jobsPollTimer) {
       clearTimeout(state.jobsPollTimer);
       state.jobsPollTimer = null;
     }
   }
-  function pruneClientJobState(jobId: Any, { removeHistory = true } = {}) {
+  // ---- realtime ---------------------------------------------------------------------------------
+  let realtimeBound = false;
+  let resyncTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Coalesce bursts (terminal events, reconnects) into one authoritative REST snapshot. */
+  function scheduleJobsResync(delay = 250) {
+    if (resyncTimer) return;
+    resyncTimer = setTimeout(async () => {
+      resyncTimer = null;
+      await refreshJobs({ rerender: state.view === "home" });
+      startJobPolling();
+    }, delay);
+  }
+  async function applyJobEvent(event: JobEvent) {
+    const summary = event.payload.job;
+    const known = state.jobs.some((job: Any) => job.id === summary.id);
+    if (event.type === "job.removed" || !known) {
+      // Removal or a job this page has not loaded yet: fetch the owner-scoped REST snapshot.
+      scheduleJobsResync();
+      return;
+    }
+    const next = state.jobs.map((job: Any) =>
+      job.id === summary.id ? { ...job, ...summary } : job,
+    );
+    await reconcileJobs(next, { rerender: state.view === "home" });
+    // Terminal events carry only a summary; results, errors and pending proposals come from REST.
+    if (summary.status && TERMINAL_JOB_STATUSES.has(summary.status)) scheduleJobsResync();
+  }
+  /** Connect the realtime socket (after authentication) and follow the job feed. */
+  function startRealtime() {
+    if (!realtimeBound) {
+      realtimeBound = true;
+      realtime.subscribe("jobs", (event) => {
+        if (event.resource_type === "job") void applyJobEvent(event as JobEvent);
+      });
+      realtime.onResync(() => scheduleJobsResync(0));
+      realtime.onStatus((status) => {
+        if (status === "idle") return; // paused (logout/expiry): nothing may re-arm polling
+        if (realtime.live) stopJobPolling();
+        else startJobPolling();
+      });
+    }
+    realtime.start();
+  }
+  function pauseRuntime() {
+    stopJobPolling();
+    if (resyncTimer) {
+      clearTimeout(resyncTimer);
+      resyncTimer = null;
+    }
+    // Logout, session expiry and account switches all pause the runtime: close the socket too.
+    realtime.stop();
+  }
+  registerJobsPause(pauseRuntime);
+  function pruneClientJobState(
+    jobId: Any,
+    { removeHistory = true, persist = true, publish = true } = {},
+  ) {
+    const hadJobApplied = Object.prototype.hasOwnProperty.call(state.jobApplied || {}, jobId);
+    const hadUpsertApplied = Object.prototype.hasOwnProperty.call(
+      state.upsertJobApplied || {},
+      jobId,
+    );
+    const beforeHistory = Array.isArray(state.ragConfig.run_history)
+      ? state.ragConfig.run_history.length
+      : 0;
+
     state.jobs = state.jobs.filter((job: Any) => job.id !== jobId);
     delete state.jobApplied?.[jobId];
     delete state.upsertJobApplied?.[jobId];
     delete jobCompletionNotified[jobId];
     clearTimeout(completedJobToastTimers[jobId]);
     delete completedJobToastTimers[jobId];
-    document.querySelector(`[data-job-operation="${CSS.escape(jobId)}"]`)?.remove();
     if (removeHistory && Array.isArray(state.ragConfig.run_history)) {
       state.ragConfig.run_history = state.ragConfig.run_history.filter(
         (item: Any) => item.job_id !== jobId,
       );
     }
-    updateOperationStackCount();
+
+    const jobPreferencesChanged = hadJobApplied || hadUpsertApplied;
+    const researchPreferencesChanged =
+      removeHistory &&
+      Array.isArray(state.ragConfig.run_history) &&
+      state.ragConfig.run_history.length !== beforeHistory;
+    if (persist) {
+      if (jobPreferencesChanged) persistJobPreferences();
+      if (researchPreferencesChanged) persistResearchPreferences();
+    }
+
+    // Operation chrome derives from job state. Publish that state transition;
+    // do not reach into a rendered card from the job-data layer.
+    if (publish) {
+      notifyOperationsChanged();
+      updateOperationStackCount();
+    }
+    return { jobPreferencesChanged, researchPreferencesChanged };
   }
   async function removeFinishedJob(jobId: Any, { refresh = true } = {}) {
     try {
       await api(`/api/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
       pruneClientJobState(jobId);
-      persistPrefs();
       if (refresh) await refreshJobs({ rerender: state.view === "home" });
       else updateOperationStackCount();
     } catch (error) {
       toast(
-        trf("operations.remove_failed", "Could not remove the operation: {message}", {
+        trf("operations.remove_failed", {
           message: (error as Error).message,
         }),
+        { tone: "danger" },
       );
     }
   }
@@ -174,9 +310,10 @@ export function createJobsWorkspace(deps: Deps) {
       updateOperationStackCount();
     } catch (error) {
       toast(
-        trf("operations.clear_failed", "Could not clear jobs: {message}", {
+        trf("operations.clear_failed", {
           message: (error as Error).message,
         }),
+        { tone: "danger" },
       );
     }
   }
@@ -218,8 +355,8 @@ export function createJobsWorkspace(deps: Deps) {
       }
     }
     state.upsertJobApplied[job.id] = results.length;
-    persistPrefs();
-    updateDbStatusElements();
+    persistJobPreferences();
+    state.presenceVersion = Number(state.presenceVersion || 0) + 1;
     if (!["queued", "running", "cancelling"].includes(detail.status)) {
       try {
         await refreshStores();
@@ -242,22 +379,29 @@ export function createJobsWorkspace(deps: Deps) {
         if (state.view === "home") refreshOperationsPanelOnly();
         if (state.view === "rag") refreshRagProgressPanel();
       }
-      const cancellationMessage =
+      const cancellationDetail = tr(
         updated.type === "llm" || updated.type === "llm_tool"
-          ? "interrupting the active model stream"
+          ? "runtime.toast.cancel_detail_llm"
           : updated.type === "rag"
-            ? "interrupting model streaming or stopping at the next vector/rerank checkpoint"
+            ? "runtime.toast.cancel_detail_rag"
             : updated.type === "upsert"
-              ? "finishing the current Chroma batch, then stopping"
-              : "stopping at the next safe checkpoint";
+              ? "runtime.toast.cancel_detail_upsert"
+              : "runtime.toast.cancel_detail_default",
+      );
       toast(
         updated.status === "cancelled"
-          ? `${jobLabel(updated)} cancelled`
-          : `Cancellation requested for ${jobLabel(updated)} · ${cancellationMessage}.`,
+          ? trf("runtime.toast.job_cancelled", { label: jobLabel(updated) })
+          : trf("runtime.toast.cancellation_requested", {
+              label: jobLabel(updated),
+              detail: cancellationDetail,
+            }),
+        { tone: "info" },
       );
       return updated;
     } catch (error) {
-      toast(`Cancel failed: ${(error as Error).message}`);
+      toast(trf("runtime.toast.cancel_failed", { detail: (error as Error).message }), {
+        tone: "danger",
+      });
       return null;
     }
   }
@@ -293,7 +437,11 @@ export function createJobsWorkspace(deps: Deps) {
     syncJobProgressToasts();
     startJobPolling();
     toast(
-      `${mode === "auto" ? "Auto-improve" : "LLM review"} started in background · ${items.length} records`,
+      trf(
+        mode === "auto" ? "runtime.toast.auto_improve_started" : "runtime.toast.llm_review_started",
+        { count: items.length },
+      ),
+      { tone: "success" },
     );
     return job;
   }
@@ -332,9 +480,7 @@ export function createJobsWorkspace(deps: Deps) {
     for (const job of state.jobs) {
       if (isActiveJobStatus(job.status)) {
         if (previous.size && !previous.has(job.id)) {
-          announceOperationDock(
-            trf("operations.live_started", "{label} started", { label: jobLabel(job) }),
-          );
+          announceOperationDock(trf("operations.live_started", { label: jobLabel(job) }));
         }
         ensureJobProgressCard(job);
         continue;
@@ -360,14 +506,29 @@ export function createJobsWorkspace(deps: Deps) {
         }
         {
           const providerSummary = jobProviderSummary(job);
-          const unit =
+          const unit = tr(
             job.type === "rag"
-              ? " stages"
+              ? "runtime.toast.unit_stages"
               : job.type === "llm_tool" && (job.tool || job.mode) === "work_metadata"
-                ? " works"
-                : " records";
+                ? "dynamic.works"
+                : "dynamic.records",
+          );
           toast(
-            `${jobLabel(job)}${providerSummary ? ` · ${providerSummary}` : ""} ${job.status}: ${job.completed}/${job.total}${unit}`,
+            trf("runtime.toast.job_progress", {
+              label: `${jobLabel(job)}${providerSummary ? ` · ${providerSummary}` : ""}`,
+              status: tr(`operations.status.${job.status}`, job.status),
+              completed: job.completed,
+              total: job.total,
+              unit,
+            }),
+            {
+              tone:
+                job.status === "failed"
+                  ? "danger"
+                  : job.status === "completed"
+                    ? "success"
+                    : "info",
+            },
           );
         }
         const liveKey =
@@ -395,8 +556,11 @@ export function createJobsWorkspace(deps: Deps) {
     }
     updateOperationStackCount();
   }
-  return {
+  const actions = {
     refreshJobs,
+    reconcileJobs,
+    applyJobEvent,
+    startRealtime,
     startJobPolling,
     pauseRuntime,
     pruneClientJobState,
@@ -409,4 +573,6 @@ export function createJobsWorkspace(deps: Deps) {
     maybeDesktopNotify,
     syncJobProgressToasts,
   };
+  registerJobsActions(actions);
+  return actions;
 }

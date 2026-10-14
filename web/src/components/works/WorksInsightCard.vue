@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -43,13 +60,8 @@ function percent(value: number) {
     <h3>{{ props.insight.heading }}</h3>
     <template v-if="props.insight.type === 'pie'">
       <p v-if="!total" class="work-insight-empty">
-        <b>{{ i18n.t("works.no_indexed_values", "No populated metadata values yet.") }}</b>
-        <span>{{
-          i18n.t(
-            "works.no_indexed_values_help",
-            "This card counts non-empty values from loaded records. Enrich or edit records to fill this field.",
-          )
-        }}</span>
+        <b>{{ i18n.t("works.no_indexed_values") }}</b>
+        <span>{{ i18n.t("works.no_indexed_values_help") }}</span>
       </p>
       <div v-else class="work-insight-pie-layout">
         <div
@@ -81,13 +93,8 @@ function percent(value: number) {
     </template>
     <ol v-else>
       <li v-if="!props.insight.values.length" class="work-insight-empty">
-        <b>{{ i18n.t("works.no_indexed_values", "No populated metadata values yet.") }}</b>
-        <span>{{
-          i18n.t(
-            "works.no_indexed_values_help",
-            "This card counts non-empty values from loaded records. Enrich or edit records to fill this field.",
-          )
-        }}</span>
+        <b>{{ i18n.t("works.no_indexed_values") }}</b>
+        <span>{{ i18n.t("works.no_indexed_values_help") }}</span>
       </li>
       <li v-for="item in props.insight.values" :key="item.key">
         <button

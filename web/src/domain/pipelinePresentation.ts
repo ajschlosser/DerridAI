@@ -1,0 +1,378 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import type { PipelineDefinition, PipelineStrategy } from "../types/pipelines";
+
+export type PipelineTranslator = (key: string, fallback: string) => string;
+
+export function pipelineKey(pipeline: Pick<PipelineDefinition, "pipeline_id" | "version">) {
+  return `${pipeline.pipeline_id}@${pipeline.version}`;
+}
+
+/**
+ * Localized label for a purpose ID when no catalog is at hand. Prefer
+ * `purposeLabelFor` from pipelineWorkflows, which reads the server's contract;
+ * this follows the server's `pipelines.purpose.<id>.label` key convention.
+ */
+export function pipelinePurposeLabel(purpose: string, t: PipelineTranslator) {
+  const key = `pipelines.purpose.${purpose.replaceAll(".", "_").replaceAll("-", "_")}.label`;
+  // No fallback text, so the bundled English default applies before the raw ID.
+  const label = t(key, "");
+  return label && label !== key ? label : purpose;
+}
+
+export function pipelineDefinitionStatusLabel(
+  status: PipelineDefinition["status"],
+  t: PipelineTranslator,
+) {
+  const labels: Record<PipelineDefinition["status"], string> = {
+    draft: t("pipelines.status_draft", "Draft"),
+    active: t("pipelines.status_active", "Active"),
+    disabled: t("pipelines.status_disabled", "Disabled"),
+  };
+  return labels[status];
+}
+
+export function pipelineRunStatusLabel(status: string, t: PipelineTranslator) {
+  const labels: Record<string, string> = {
+    completed: t("pipelines.status_completed", "Completed"),
+    failed: t("pipelines.status_failed", "Failed"),
+    cancelled: t("pipelines.status_cancelled", "Cancelled"),
+    running: t("pipelines.status_running", "Running"),
+  };
+  return labels[status] || status;
+}
+
+export function formatPipelineDate(
+  value: string | null | undefined,
+  locale: string,
+  timeZone?: string,
+) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone,
+  }).format(date);
+}
+
+export function pipelineStageFamilyLabel(family: string | null | undefined, t: PipelineTranslator) {
+  const value = String(family || "");
+  const labels: Record<string, string> = {
+    query_transform: t("pipelines.family_query_transform", "Query transform"),
+    candidate_generation: t("pipelines.family_candidate_generation", "Candidate generation"),
+    filter: t("pipelines.family_filter", "Filter"),
+    normalization: t("pipelines.family_normalization", "Normalization"),
+    fusion: t("pipelines.family_fusion", "Fusion"),
+    rerank: t("pipelines.family_rerank", "Reranking"),
+    support_validation: t("pipelines.family_support_validation", "Support validation"),
+    diversity: t("pipelines.family_diversity", "Diversity"),
+    selection: t("pipelines.family_selection", "Selection"),
+    context_pack: t("pipelines.family_context_pack", "Context packing"),
+    llm: t("pipelines.family_llm", "LLM"),
+    evaluation: t("pipelines.family_evaluation", "Evaluation"),
+  };
+  return labels[value] || value || t("pipelines.family_unknown", "Unknown");
+}
+
+export function pipelineStageFamilyHelp(family: string | null | undefined, t: PipelineTranslator) {
+  const value = String(family || "");
+  const help: Record<string, string> = {
+    query_transform: t(
+      "pipelines.family_query_transform_help",
+      "Prepares the research question before searching. It may preserve the question as written or derive a more structured search representation.",
+    ),
+    candidate_generation: t(
+      "pipelines.family_candidate_generation_help",
+      "Finds possible records or passages worth considering. These are candidates, not yet claims that DerridAI has accepted as evidence.",
+    ),
+    filter: t(
+      "pipelines.family_filter_help",
+      "Removes candidates that fall outside the required scope, schema, language, or other explicit constraints.",
+    ),
+    normalization: t(
+      "pipelines.family_normalization_help",
+      "Translates scores from different retrieval systems into a more comparable relevance meaning before they are combined.",
+    ),
+    fusion: t(
+      "pipelines.family_fusion_help",
+      "Combines two or more ranked candidate lists into one ranking while preserving where each candidate came from.",
+    ),
+    rerank: t(
+      "pipelines.family_rerank_help",
+      "Reorders an existing candidate set using a stronger or more focused relevance method. It does not normally search the whole corpus again.",
+    ),
+    support_validation: t(
+      "pipelines.family_support_validation_help",
+      "Checks whether evidence, provenance, citation, or support requirements are satisfied before the result is trusted or passed onward.",
+    ),
+    diversity: t(
+      "pipelines.family_diversity_help",
+      "Balances relevance with breadth so the final evidence is not needlessly repetitive or concentrated in one source.",
+    ),
+    selection: t(
+      "pipelines.family_selection_help",
+      "Keeps a bounded subset of candidates according to an already established order, quota, or selection rule.",
+    ),
+    context_pack: t(
+      "pipelines.family_context_pack_help",
+      "Assembles selected evidence into the bounded, citation-aware context that a later model step can read.",
+    ),
+    llm: t(
+      "pipelines.family_llm_help",
+      "Calls a generative language model for a bounded task such as answering, structured extraction, or closed-choice selection.",
+    ),
+    evaluation: t(
+      "pipelines.family_evaluation_help",
+      "Assesses a completed result after the main generation step, for example by grading an answer against its evidence.",
+    ),
+  };
+  return (
+    help[value] ||
+    t(
+      "pipelines.family_unknown_help",
+      "This label groups stages that perform a similar kind of operation.",
+    )
+  );
+}
+
+export function pipelineEdgeKindLabel(kind: string, t: PipelineTranslator) {
+  const labels: Record<string, string> = {
+    next: t("pipelines.then", "then"),
+    empty: t("pipelines.on_empty", "On empty"),
+    unavailable: t("pipelines.on_unavailable", "On unavailable"),
+    timeout: t("pipelines.on_timeout", "On timeout"),
+    error: t("pipelines.on_error", "On error"),
+  };
+  return labels[kind] || kind;
+}
+
+export function pipelineStrategyLabel(
+  strategy: PipelineStrategy | null | undefined,
+  t: PipelineTranslator,
+) {
+  if (!strategy) return "";
+  return strategy.label_key ? t(strategy.label_key, strategy.label) : strategy.label;
+}
+
+export function pipelineStrategyDescription(
+  strategy: PipelineStrategy | null | undefined,
+  t: PipelineTranslator,
+) {
+  if (!strategy) return "";
+  return strategy.description_key
+    ? t(strategy.description_key, strategy.description)
+    : strategy.description;
+}
+
+export function pipelineConfigLabel(key: string, t: PipelineTranslator) {
+  const labels: Record<string, string> = {
+    fetch_k: t("pipelines.config.fetch_k.label", "Candidate pool size"),
+    lambda_mult: t("pipelines.config.lambda_mult.label", "Relevance vs. variety"),
+    limit: t("pipelines.config.limit.label", "Maximum items"),
+    rrf_k: t("pipelines.config.rrf_k.label", "Rank-fusion constant"),
+    top_k: t("pipelines.config.top_k.label", "Items to keep"),
+    model: t("pipelines.config.model.label", "Reranking model"),
+    timeout_seconds: t("pipelines.config.timeout_seconds.label", "Time limit (seconds)"),
+    record_char_limit: t("pipelines.config.record_char_limit.label", "Text limit per record"),
+    total_char_limit: t("pipelines.config.total_char_limit.label", "Total evidence text limit"),
+    char_budget: t("pipelines.config.char_budget.label", "Prompt packet text budget"),
+    num_predict: t("pipelines.config.num_predict.label", "Maximum query-analysis tokens"),
+    semantic_weight: t("pipelines.config.semantic_weight.label", "Semantic-search weight"),
+    lexical_weight: t("pipelines.config.lexical_weight.label", "Word-match weight"),
+    min_score: t("pipelines.config.min_score.label", "Minimum support score"),
+    min_similarity: t("pipelines.config.min_similarity.label", "Minimum similarity"),
+    provider_role: t("pipelines.config.provider_role.label", "Provider"),
+    attempts: t("pipelines.config.attempts.label", "Attempts"),
+    candidate_scope: t("pipelines.config.candidate_scope.label", "Candidate scope"),
+    candidate_limit: t("pipelines.config.candidate_limit.label", "Candidate limit"),
+  };
+  return labels[key] || key.replaceAll("_", " ");
+}
+
+export function pipelineConfigHelp(key: string, t: PipelineTranslator) {
+  const help: Record<string, string> = {
+    fetch_k: t(
+      "pipelines.config.fetch_k.help",
+      "Technical name: fetch_k. This is how many possible matches the stage gathers before later stages narrow the list. A larger pool can improve recall, but it uses more time and memory.",
+    ),
+    lambda_mult: t(
+      "pipelines.config.lambda_mult.help",
+      "Technical name: lambda_mult. This controls the trade-off between relevance and variety. Values nearer 1 favor the most relevant passages; lower values allow more diverse sources into the result.",
+    ),
+    limit: t(
+      "pipelines.config.limit.help",
+      "Technical name: limit. This is the maximum number of items this stage may pass onward.",
+    ),
+    rrf_k: t(
+      "pipelines.config.rrf_k.help",
+      "Technical name: rrf_k. Reciprocal-rank fusion combines several ranked lists. This constant controls how strongly differences near the top of each list matter; changing it alters the fusion mathematics, not the number of results.",
+    ),
+    top_k: t(
+      "pipelines.config.top_k.help",
+      "Technical name: top_k. After this stage scores or orders candidates, only this many are retained for the next step.",
+    ),
+    model: t(
+      "pipelines.config.model.help",
+      "The technical model identifier used by this stage. For a cross-encoder, the model reads the query and each candidate together and gives each pair a relevance score.",
+    ),
+    timeout_seconds: t(
+      "pipelines.config.timeout_seconds.help",
+      "How long DerridAI waits for this stage before treating it as timed out. A configured timeout fallback can take over when this limit is reached.",
+    ),
+    record_char_limit: t(
+      "pipelines.config.record_char_limit.help",
+      "Maximum text characters taken from any one evidence record when building the model's context. This prevents a single long record from crowding out the rest.",
+    ),
+    total_char_limit: t(
+      "pipelines.config.total_char_limit.help",
+      "Maximum combined text characters in the evidence packet sent to the answer-generation model.",
+    ),
+    char_budget: t(
+      "pipelines.config.char_budget.help",
+      "Technical name: char_budget. This is the maximum amount of precedent text that may be packed into the metadata-enrichment prompt. It limits prompt size; it does not change which reviewed values are authoritative.",
+    ),
+    num_predict: t(
+      "pipelines.config.num_predict.help",
+      "Maximum number of tokens the model may generate while analyzing or decomposing the research question before retrieval begins.",
+    ),
+    semantic_weight: t(
+      "pipelines.config.semantic_weight.help",
+      "How strongly the combined precedent score should depend on semantic similarity: similarity in meaning, even when the wording is different. Semantic and word-match weights are treated as relative weights and normalized together.",
+    ),
+    lexical_weight: t(
+      "pipelines.config.lexical_weight.help",
+      "How strongly the combined precedent score should depend on lexical similarity: overlap in words or phrases. Semantic and word-match weights are treated as relative weights and normalized together.",
+    ),
+    min_score: t(
+      "pipelines.config.min_score.help",
+      "The lowest support score a candidate may have and still pass this validation stage.",
+    ),
+    min_similarity: t(
+      "pipelines.config.min_similarity.help",
+      "Technical name: min_similarity. Candidates below this semantic-similarity threshold are not allowed through the retrieval stage. Raising it makes memory more selective; lowering it admits looser analogies.",
+    ),
+    provider_role: t(
+      "pipelines.config.provider_role.help",
+      "Technical name: provider_role. Which of the build's configured model providers runs this stage: the primary provider, the separately configured review provider, or (in evidence recovery) the primary provider followed by the review provider. A stage whose provider the build does not configure is reported as unavailable.",
+    ),
+    attempts: t(
+      "pipelines.config.attempts.help",
+      "Technical name: attempts. How many times this provider is asked when its answer does not validate. Each retry names the validation problem and allows a larger answer. A timed-out request is not retried.",
+    ),
+    candidate_scope: t(
+      "pipelines.config.candidate_scope.help",
+      "Technical name: candidate_scope. In evidence recovery, 'Upstream shortlist, otherwise all' asks the model only about ranked upstream candidates when they exist and falls back to the Record's source units when retrieval produced no shortlist.",
+    ),
+    candidate_limit: t(
+      "pipelines.config.candidate_limit.help",
+      "Technical name: candidate_limit. Maximum upstream candidates shown to the closed-choice evidence model. This bounds model context; it does not make ranking scores evidentiary support.",
+    ),
+  };
+  return (
+    help[key] ||
+    t(
+      "pipelines.config.generic_help",
+      "This is a server-declared technical setting for the selected strategy. Changing it changes how this stage behaves; validation checks its allowed type and range before the pipeline can be used.",
+    )
+  );
+}
+
+export function pipelineDataTypeHelp(value: string, t: PipelineTranslator) {
+  const help: Record<string, string> = {
+    query: t(
+      "pipelines.data_type.query_help",
+      "A research question or search expression before candidate passages have been retrieved.",
+    ),
+    candidate_set: t(
+      "pipelines.data_type.candidate_set_help",
+      "A working list of possible records or passages. Later stages can reorder, filter, validate, or reduce this list.",
+    ),
+    context_packet: t(
+      "pipelines.data_type.context_packet_help",
+      "A bounded evidence bundle prepared for a language model, including the text and provenance needed for citation-aware generation.",
+    ),
+    model_output: t(
+      "pipelines.data_type.model_output_help",
+      "Text or structured content produced by a language model.",
+    ),
+    evaluation: t(
+      "pipelines.data_type.evaluation_help",
+      "A grading or assessment result produced after the main answer.",
+    ),
+  };
+  return (
+    help[value] ||
+    t(
+      "pipelines.data_type.generic_help",
+      "This is the technical data shape passed between pipeline stages.",
+    )
+  );
+}
+
+export function pipelineConfigOptionLabel(key: string, value: string, t: PipelineTranslator) {
+  const labels: Record<string, Record<string, string>> = {
+    provider_role: {
+      primary: t("pipelines.config.provider_role.primary", "Primary provider"),
+      review: t("pipelines.config.provider_role.review", "Review provider"),
+      chain: t("pipelines.config.provider_role.chain", "Primary, then review provider"),
+    },
+    candidate_scope: {
+      all: t("pipelines.config.candidate_scope.all", "All Record source units"),
+      input_or_all: t(
+        "pipelines.config.candidate_scope.input_or_all",
+        "Upstream shortlist, otherwise all",
+      ),
+    },
+  };
+  return labels[key]?.[value] || value;
+}
+
+export function pipelineDataTypeLabel(value: string, t: PipelineTranslator) {
+  const labels: Record<string, string> = {
+    query: t("pipelines.data_type.query_label", "Query"),
+    candidate_set: t("pipelines.data_type.candidate_set_label", "Candidate set"),
+    context_packet: t("pipelines.data_type.context_packet_label", "Context packet"),
+    model_output: t("pipelines.data_type.model_output_label", "Model output"),
+    evaluation: t("pipelines.data_type.evaluation_label", "Evaluation"),
+    number: t("pipelines.data_type.number_label", "Number"),
+    any: t("pipelines.data_type.any_label", "Any input"),
+  };
+  return labels[value] || value;
+}
+
+/** Capability IDs come from the strategy registry; unknown ones show as-is. */
+export function pipelineCapabilityLabel(value: string, t: PipelineTranslator) {
+  const key = `pipelines.capability.${value}`;
+  const label = t(key, "");
+  return label && label !== key ? label : value.replaceAll("_", " ");
+}
+
+export function pipelineComputationLabel(
+  value: "deterministic" | "learned" | "generative",
+  t: PipelineTranslator,
+) {
+  const labels = {
+    deterministic: t("pipelines.deterministic", "Deterministic"),
+    learned: t("pipelines.learned_model", "Learned model"),
+    generative: t("pipelines.computation_generative", "Generative model"),
+  };
+  return labels[value];
+}

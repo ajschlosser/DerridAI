@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Apparatus constraints, editorial memory, and provider switching.
 
 Why: three behaviors keep long builds correct: apparatus regions imply certain
@@ -92,6 +108,38 @@ def test_editorial_memory_retrieves_only_human_confirmed_examples(tmp_path:Path)
     assert {item['record_id'] for item in examples}<={'r1','r2'}
     assert examples and examples[0]['value']=='reported_position'
     assert 'discourse_role' not in (memory.get('pass_learning') or {}).get('prior_pass', {}).get('inferred_conventions', {})
+
+
+
+def test_editorial_memory_field_filter_limits_precedents_to_scheduled_fields(tmp_path:Path):
+    rows=[
+        {
+            'record_id':'r1',
+            'text':'Derrida reports Heidegger on sovereignty.',
+            'discourse_role':'reported_position',
+            'position_holder':'Heidegger',
+            'metadata_field_status':{
+                'discourse_role':{'status':'human_confirmed'},
+                'position_holder':{'status':'human_confirmed'},
+            },
+        },
+        {
+            'record_id':'r2',
+            'text':'Heidegger is presented as holding a proposition.',
+            'metadata_field_status':{},
+        },
+    ]
+    repo,build=make_build(tmp_path,rows)
+    manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
+    memory=manager._editorial_memory(
+        build['build_id'],
+        rows[1],
+        exclude_record_id='r2',
+        field_filter={'discourse_role'},
+    )
+    assert set(memory['examples']) <= {'discourse_role'}
+    assert set(memory['conventions']) <= {'discourse_role'}
+
 
 
 def test_provider_profile_switch_is_secret_safe_and_audited(tmp_path:Path):

@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { apiRequest } from "./http";
 import type { JobSummary } from "./jobs";
 
@@ -6,16 +24,59 @@ export interface ProviderProfile {
   name: string;
   type: "ollama" | "openai";
   model?: string;
+  available?: boolean;
+  availability_error?: string;
   model_mode?: string;
   base_url?: string;
   max_concurrent_requests?: number;
   [key: string]: unknown;
 }
 
-export interface LanguageInfo { code: string; name: string; flag: string; content_policy_ready?: boolean }
+export interface SystemAudioTranscription {
+  base_url: string;
+  model: string;
+  has_key: boolean;
+  key_source: "settings" | "environment" | "none";
+}
+
+export interface SystemAudioTranscriptionStatus {
+  reachable: boolean;
+  model: string;
+  base_url: string;
+  error: string;
+  hint: string;
+}
+
+export interface SystemEmbeddingStatus {
+  provider: string;
+  model: string | null;
+  reachable: boolean;
+  dimension: number | null;
+  latency_ms: number | null;
+  error: string;
+  hint: string;
+}
+
+export interface SystemEmbeddingDefaults {
+  embedding_provider: string;
+  embedding_model: string | null;
+  persisted?: boolean;
+}
+
+export interface LanguageInfo {
+  code: string;
+  name: string;
+  flag: string;
+  content_policy_ready?: boolean;
+}
 export interface LanguageContentPolicy {
   target_language?: string;
-  generation_report?: { attempts: number; removed_as_wrong_language: number; categories?: Record<string, number>; short_categories?: string[] };
+  generation_report?: {
+    attempts: number;
+    removed_as_wrong_language: number;
+    categories?: Record<string, number>;
+    short_categories?: string[];
+  };
   code?: string;
   status?: string;
   blocked_terms?: string[];
@@ -50,23 +111,338 @@ export interface LanguageTranslationReport {
   failed_count?: number;
   fallback_count?: number;
   failed_keys?: string[];
-  failures?: Array<{key?:string;reason?:string}>;
+  failures?: Array<{ key?: string; reason?: string }>;
   translated_count?: number;
   key_count?: number;
 }
-export interface LanguageDictionary extends LanguageInfo { dictionary: Record<string, string>; translation_report?: LanguageTranslationReport }
+export interface LanguageDictionary extends LanguageInfo {
+  dictionary: Record<string, string>;
+  translation_report?: LanguageTranslationReport;
+}
+export interface SystemDataColumn {
+  name: string;
+  type?: string;
+  nullable?: boolean;
+  default?: unknown;
+  primary_key?: number;
+  sensitive?: boolean;
+}
+export interface SystemDataOperations {
+  insert: boolean;
+  update: boolean;
+  delete: boolean;
+}
+export interface SystemDataTable {
+  name: string;
+  columns: SystemDataColumn[];
+  row_count: number;
+  writable?: boolean;
+  operations?: SystemDataOperations;
+}
+export interface SystemDataDatabase {
+  name: string;
+  backend: string;
+  path?: string;
+  size_bytes?: number;
+  tables: SystemDataTable[];
+}
+
+export interface SystemMetadataExemplar {
+  exemplar_id: string;
+  scope_id: string;
+  record_id: string;
+  record_revision?: number | null;
+  source_document_id?: string;
+  field_name: string;
+  field_value: unknown;
+  kind: string;
+  assertion_status?: string;
+  schema_id?: string;
+  schema_version?: string;
+  language?: string;
+  region_type?: string;
+  evidence_hash?: string;
+  evidence_block_ids?: string[];
+  context_text?: string;
+}
+export interface SystemMetadataExemplarFacets {
+  fields: string[];
+  kinds: string[];
+  languages: string[];
+  scopes: string[];
+  schemas: string[];
+}
+export interface SystemMetadataExemplarPage {
+  /** Reviewed metadata still waiting to be indexed, with the latest failure per build. */
+  projection_backlog?: { dirty: number; scopes: string[]; errors: Record<string, string> };
+  exists: boolean;
+  count: number;
+  limit: number;
+  offset: number;
+  rows: SystemMetadataExemplar[];
+  facets: SystemMetadataExemplarFacets;
+}
+export interface SystemChromaCollection {
+  name: string;
+  count: number;
+  derived?: boolean;
+  role?: string;
+}
+export interface SystemResponseCachePage {
+  exists?: boolean;
+  records: Array<Record<string, unknown>>;
+  count?: number;
+  total: number;
+  limit: number;
+  offset: number;
+  query?: string;
+}
+export interface SystemChromaCommandResult {
+  valid: boolean;
+  verb: "get" | "query";
+  collection: string;
+  options: Record<string, unknown>;
+  embedding_provider?: string;
+  embedding_model?: string | null;
+  explanation: string;
+  result?: Record<string, unknown>;
+}
+
+export interface SystemMetadataExemplarFilters {
+  limit?: number;
+  offset?: number;
+  field?: string;
+  kind?: string;
+  language?: string;
+  scope_id?: string;
+  schema_id?: string;
+  record_id?: string;
+}
+
+export type RetentionMode = "inherit" | "keep" | "max_age_days" | "max_size_gb";
+
+export type RetentionRule = { mode: RetentionMode; value: number | null };
+
+export type RetentionPolicy = { default: RetentionRule; stores: Record<string, RetentionRule> };
+
+export type RetentionStore = {
+  store_id: string;
+  kind: "pipeline_traces" | "pipeline_benchmark_runs" | "job_history" | "response_cache";
+  feature: string | null;
+  rule: RetentionRule;
+  effective_rule: RetentionRule;
+  count?: number;
+  bytes?: number;
+  pinned_count?: number;
+  oldest_at?: string | null;
+  remove_count?: number;
+  remove_bytes?: number;
+  removed_count?: number;
+  warnings?: string[];
+  error?: string;
+};
+
+export type RetentionOverview = {
+  policy: RetentionPolicy;
+  evaluated_at: string;
+  applied: boolean;
+  stores: RetentionStore[];
+};
 
 export const systemApi = {
-  researcherProviders: () => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers"),
-  setResearcherProviders: (profiles: ProviderProfile[]) => apiRequest<{profiles: ProviderProfile[]}>("/api/system/researcher-providers", {method: "PUT", body: JSON.stringify({profiles})}),
-  researcherProviderStatus: (payload: Record<string, unknown>) => apiRequest<{available: boolean; models?: Array<{name: string; [key: string]: unknown}>; error?: string}>("/api/system/researcher-providers/status", {method: "POST", body: JSON.stringify(payload)}),
-  languages: () => apiRequest<{languages: LanguageInfo[]}>("/api/i18n/languages"),
-  language: (code: string) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`),
-  updateLanguage: (code: string, payload: Omit<LanguageDictionary, "code">) => apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "PUT", body: JSON.stringify(payload)}),
-  installLanguage: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_dictionary", language: payload, label: `Languages · ${String(payload.code || "dictionary")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
-  deleteLanguage: (code: string) => apiRequest<{deleted: string}>(`/api/i18n/languages/${encodeURIComponent(code)}`, {method: "DELETE"}),
+  researcherProviders: () =>
+    apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers"),
+  embeddingDefaults: () => apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults"),
+  dataRetention: () => apiRequest<RetentionOverview>("/api/system/data-retention"),
+  setDataRetention: (policy: RetentionPolicy) =>
+    apiRequest<RetentionOverview>("/api/system/data-retention", {
+      method: "PUT",
+      body: JSON.stringify(policy),
+    }),
+  applyDataRetention: (storeIds: string[] | null = null) =>
+    apiRequest<RetentionOverview>("/api/system/data-retention/apply", {
+      method: "POST",
+      body: JSON.stringify({ store_ids: storeIds }),
+    }),
+  reclaimDataRetentionSpace: () =>
+    apiRequest<{ bytes_before: number; bytes_after: number }>(
+      "/api/system/data-retention/reclaim",
+      { method: "POST" },
+    ),
+  audioTranscription: () => apiRequest<SystemAudioTranscription>("/api/system/audio-transcription"),
+  setAudioTranscription: (payload: {
+    base_url: string;
+    model: string;
+    api_key?: string | null;
+    clear_key?: boolean;
+  }) =>
+    apiRequest<SystemAudioTranscription>("/api/system/audio-transcription", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  audioTranscriptionStatus: () =>
+    apiRequest<SystemAudioTranscriptionStatus>("/api/system/audio-transcription/status", {
+      method: "POST",
+    }),
+  /** Embeds one short probe string with the given draft (or the saved default). */
+  embeddingStatus: (draft?: { embedding_provider: string; embedding_model: string | null }) =>
+    apiRequest<SystemEmbeddingStatus>("/api/system/embedding-defaults/status", {
+      method: "POST",
+      body: draft ? JSON.stringify(draft) : undefined,
+    }),
+  setEmbeddingDefaults: (payload: SystemEmbeddingDefaults) =>
+    apiRequest<SystemEmbeddingDefaults>("/api/system/embedding-defaults", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  setResearcherProviders: (profiles: ProviderProfile[]) =>
+    apiRequest<{ profiles: ProviderProfile[] }>("/api/system/researcher-providers", {
+      method: "PUT",
+      body: JSON.stringify({ profiles }),
+    }),
+  researcherProviderStatus: (payload: Record<string, unknown>) =>
+    apiRequest<{
+      available: boolean;
+      models?: Array<{ name: string; [key: string]: unknown }>;
+      error?: string;
+    }>("/api/system/researcher-providers/status", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  researcherProviderAvailability: (id: string) =>
+    apiRequest<{
+      available: boolean;
+      model_available: boolean;
+      configured_model?: string;
+      error?: string;
+    }>(`/api/system/researcher-providers/availability`, {
+      method: "POST",
+      body: JSON.stringify({ id }),
+    }),
+  llmStatus: (payload: Record<string, unknown>) =>
+    apiRequest<{
+      available: boolean;
+      models?: Array<{ name: string; [key: string]: unknown }>;
+      error?: string;
+    }>("/api/llm/status", { method: "POST", body: JSON.stringify(payload) }),
+  languages: () => apiRequest<{ languages: LanguageInfo[] }>("/api/i18n/languages"),
+  language: (code: string) =>
+    apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`),
+  updateLanguage: (code: string, payload: Omit<LanguageDictionary, "code">) =>
+    apiRequest<LanguageDictionary>(`/api/i18n/languages/${encodeURIComponent(code)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  installLanguage: (payload: Record<string, unknown>) =>
+    apiRequest<JobSummary>("/api/jobs/llm-tool", {
+      method: "POST",
+      body: JSON.stringify({
+        task: "language_dictionary",
+        language: payload,
+        label: `Languages · ${String(payload.code || "dictionary")}`,
+        provider_profile_id: String(payload.provider_profile_id || "") || null,
+        max_concurrent_requests: Number(payload.max_concurrent_requests || 1),
+      }),
+    }),
+  deleteLanguage: (code: string) =>
+    apiRequest<{ deleted: string }>(`/api/i18n/languages/${encodeURIComponent(code)}`, {
+      method: "DELETE",
+    }),
   contentPolicyMirror: () => apiRequest<ResearcherContentPolicyMirror>("/api/i18n/content-policy"),
-  languageContentPolicy: (code: string) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`),
-  updateLanguageContentPolicy: (code: string, payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">) => apiRequest<LanguageContentPolicy>(`/api/i18n/languages/${encodeURIComponent(code)}/content-policy`, {method: "PUT", body: JSON.stringify(payload)}),
-  generateLanguageContentPolicy: (payload: Record<string, unknown>) => apiRequest<JobSummary>("/api/jobs/llm-tool", {method: "POST", body: JSON.stringify({task: "language_content_policy", language: payload, label: `Languages · ${String(payload.code || "policy")}`, provider_profile_id: String(payload.provider_profile_id || "") || null, max_concurrent_requests: Number(payload.max_concurrent_requests || 1)})}),
+  languageContentPolicy: (code: string) =>
+    apiRequest<LanguageContentPolicy>(
+      `/api/i18n/languages/${encodeURIComponent(code)}/content-policy`,
+    ),
+  updateLanguageContentPolicy: (
+    code: string,
+    payload: Pick<LanguageContentPolicy, "blocked_terms" | "contextual_terms">,
+  ) =>
+    apiRequest<LanguageContentPolicy>(
+      `/api/i18n/languages/${encodeURIComponent(code)}/content-policy`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    ),
+  generateLanguageContentPolicy: (payload: Record<string, unknown>) =>
+    apiRequest<JobSummary>("/api/jobs/llm-tool", {
+      method: "POST",
+      body: JSON.stringify({
+        task: "language_content_policy",
+        language: payload,
+        label: `Languages · ${String(payload.code || "policy")}`,
+        provider_profile_id: String(payload.provider_profile_id || "") || null,
+        max_concurrent_requests: Number(payload.max_concurrent_requests || 1),
+      }),
+    }),
+  systemData: () => apiRequest<{ databases: SystemDataDatabase[] }>("/api/system/data"),
+  responseCacheRecords: (limit = 25, offset = 0, query = "") => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset),
+    });
+    if (query.trim()) params.set("query", query.trim());
+    return apiRequest<SystemResponseCachePage>(`/api/response-cache/records?${params}`);
+  },
+  clearResponseCache: () =>
+    apiRequest<{ deleted: number }>("/api/system/data/response-cache-records", {
+      method: "DELETE",
+    }),
+  systemChromaCollections: () =>
+    apiRequest<{ collections: SystemChromaCollection[] }>("/api/system/chroma/collections"),
+  validateSystemChroma: (command: string) =>
+    apiRequest<SystemChromaCommandResult>("/api/system/chroma/validate", {
+      method: "POST",
+      body: JSON.stringify({ command }),
+    }),
+  querySystemChroma: (command: string) =>
+    apiRequest<SystemChromaCommandResult>("/api/system/chroma/query", {
+      method: "POST",
+      body: JSON.stringify({ command }),
+    }),
+
+  systemMetadataExemplars: (filters: SystemMetadataExemplarFilters = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null || String(value).trim() === "") continue;
+      query.set(key, String(value));
+    }
+    const queryString = query.toString();
+    const suffix = queryString ? `?${queryString}` : "";
+    return apiRequest<SystemMetadataExemplarPage>(`/api/system/data/metadata-exemplars${suffix}`);
+  },
+  systemDataRows: (database: string, table: string, limit = 50, offset = 0) =>
+    apiRequest<
+      SystemDataTable & {
+        database: string;
+        rows: Array<Record<string, unknown>>;
+        offset: number;
+        limit: number;
+      }
+    >(
+      `/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}?limit=${limit}&offset=${offset}`,
+    ),
+  insertSystemDataRow: (database: string, table: string, values: Record<string, unknown>) =>
+    apiRequest<Record<string, unknown>>(
+      `/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`,
+      { method: "POST", body: JSON.stringify(values) },
+    ),
+  updateSystemDataRow: (
+    database: string,
+    table: string,
+    key: Record<string, unknown>,
+    values: Record<string, unknown>,
+  ) =>
+    apiRequest<Record<string, unknown>>(
+      `/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`,
+      { method: "PATCH", body: JSON.stringify({ key, values }) },
+    ),
+  deleteSystemDataRow: (database: string, table: string, key: Record<string, unknown>) =>
+    apiRequest<Record<string, unknown>>(
+      `/api/system/data/${encodeURIComponent(database)}/${encodeURIComponent(table)}`,
+      { method: "DELETE", body: JSON.stringify({ key }) },
+    ),
+  deleteSystemResponseCacheRecord: (recordId: string) =>
+    apiRequest<Record<string, unknown>>(
+      `/api/system/data/response-cache-records/${encodeURIComponent(recordId)}`,
+      { method: "DELETE" },
+    ),
 };

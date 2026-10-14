@@ -1,12 +1,40 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AccessibleEmptyState from "../components/AccessibleEmptyState.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import ResearchThreadBrowser from "../components/research/ResearchThreadBrowser.vue";
+import type { ResearchTurn } from "../types/researchThreads";
 import ResearchComposer from "../components/research/ResearchComposer.vue";
+import type { ResearchFilterChange } from "../components/research/ResearchFilterEditor.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
 import ResearchRunsDrawer from "../components/research/ResearchRunsDrawer.vue";
-import ResearchThreadList from "../components/research/ResearchThreadList.vue";
+import ResearchPipelineBar from "../components/research/ResearchPipelineBar.vue";
+import { useResearchDraft } from "../features/research/useResearchDraft";
+import {
+  loadResearchComposerDraft,
+  saveResearchComposerDraft,
+} from "../features/research/researchComposerDraft";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import type {
@@ -14,24 +42,175 @@ import type {
   ResearchJob,
   ResearchProfile,
   ResearchWorkspaceSnapshot,
+  ResearchResultEvidence,
 } from "../types/research";
-import * as runtime from "../runtime/runtime.js";
+import type { PipelineConfigOverrideSet } from "../types/pipelines";
+import * as researchActions from "../domain/researchActions";
+import { annotationsWorkspace } from "../domain/sharedAnnotations";
+import { pipelinesApi } from "../api/pipelines";
+import { normalizedResearchConfig } from "../domain/researchPayloads";
+import { overridesForPipeline, setStageOverride } from "../domain/pipelineOverrides";
+import { getResearchJob } from "../domain/sharedResearchJobs";
+import { openDatabaseCreationFromResearch } from "../domain/databaseCreationRequest";
+import { followResource } from "../realtime/follow";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
-import { inferResearchPreset } from "../components/research/researchPreset";
 
 const route = useRoute();
+const newQuestionRequested = ref(false);
+const threadContinuable = ref(false);
+const currentThreadId = computed(() => String(route.query.thread || ""));
+// Explicit follow-up context scope; null keeps the server's automatic selection.
+const contextScope = ref<Array<{ turn_id: string; ordinal: number; question: string }> | null>(
+  null,
+);
+watch(currentThreadId, (next, previous) => {
+  threadContinuable.value = false;
+  contextScope.value = null;
+  switchComposerDraft(previous, next);
+});
+// Thread-list search, page and archive filters live in the URL beside the
+// selection, so reloads and Back/Forward restore the same list.
+const routeText = (value: unknown) =>
+  Array.isArray(value) ? String(value[0] ?? "") : String(value ?? "");
+function listQuery(extra: Record<string, string> = {}) {
+  const query: Record<string, string> = {};
+  for (const key of ["thread_q", "thread_offset", "thread_archived"]) {
+    const value = routeText(route.query[key]);
+    if (value) query[key] = value;
+  }
+  return { ...query, ...extra };
+}
+function threadListFilters(value: { search: string; offset: number; includeArchived: boolean }) {
+  const next: Record<string, string | undefined> = {
+    thread_q: value.search || undefined,
+    thread_offset: value.offset ? String(value.offset) : undefined,
+    thread_archived: value.includeArchived ? "true" : undefined,
+  };
+  if (Object.entries(next).every(([key, item]) => (item ?? "") === routeText(route.query[key])))
+    return;
+  void router.replace({ path: "/rag", query: { ...route.query, ...next } });
+}
+async function selectThread(id: string) {
+  await router.push({ path: "/rag", query: listQuery({ thread: id }) });
+}
+async function openThreadTurn(turn: ResearchTurn) {
+  if (turn.job_id)
+    await router.push({
+      path: "/rag",
+      query: listQuery({ thread: turn.thread_id, job: turn.job_id }),
+    });
+}
+async function followUpFrom(turn: ResearchTurn, evidence: ResearchResultEvidence | null) {
+  if (turn.thread_id !== currentThreadId.value) return;
+  contextScope.value = [
+    { turn_id: turn.turn_id, ordinal: turn.ordinal, question: turn.user_question },
+  ];
+  // The run's own deterministic citation label names the passage; it is editable text.
+  const citation = String(evidence?.inline_citation || "").trim();
+  if (citation && !prompt.value.trim())
+    prompt.value = i18n.tf("research.context_scope_regarding", { citation });
+  await nextTick();
+  document.getElementById("researchQuestion")?.focus();
+}
+function removeContextTurn(turnId: string) {
+  contextScope.value = (contextScope.value || []).filter((item) => item.turn_id !== turnId);
+}
+async function onThreadRemoved(error?: string) {
+  await newThread();
+  if (error) toast(error, { tone: "danger" });
+}
+async function newThread() {
+  newQuestionRequested.value = true;
+  const fromThread = Boolean(currentThreadId.value);
+  await router.push({ path: "/rag", query: listQuery() });
+  activeJob.value = null;
+  // Leaving a thread restores the new-question draft; "New question" from the
+  // new-question view starts over.
+  if (!fromThread) {
+    prompt.value = "";
+    instructions.value = "";
+    persistDraft();
+  }
+  await nextTick();
+  document.getElementById("researchQuestion")?.focus();
+}
+function evidenceTarget(index: number) {
+  const item = activeResult.value?.evidence?.[index];
+  const recordId = String(item?.record?.record_id || "").trim();
+  const store = String(item?.collection || "").trim();
+  return recordId ? { recordId, store } : null;
+}
+function openThreadEvidenceRecord(item: { record?: Record<string, unknown>; collection?: string }) {
+  const recordId = String(item.record?.record_id || "");
+  if (recordId)
+    annotationsWorkspace.openAnnotationsWorkspaceRecord({
+      server: true,
+      source: item.collection || "",
+      record_id: recordId,
+    });
+}
+function openThreadEvidenceRelationships(
+  item: { record?: Record<string, unknown>; collection?: string },
+  mode: "trace" | "model",
+) {
+  const recordId = String(item.record?.record_id || "");
+  if (recordId)
+    void router.push({
+      name: "relationships",
+      query: { record: recordId, store: item.collection || "", mode },
+    });
+}
+function openEvidenceRecord(index: number) {
+  const target = evidenceTarget(index);
+  if (!target) return;
+  annotationsWorkspace.openAnnotationsWorkspaceRecord({
+    server: true,
+    source: target.store,
+    record_id: target.recordId,
+  });
+}
+function openEvidenceRelationships(index: number, mode: "trace" | "model") {
+  const target = evidenceTarget(index);
+  if (!target) return;
+  void router.push({
+    name: "relationships",
+    query: { record: target.recordId, store: target.store, mode },
+  });
+}
 const router = useRouter();
 const auth = useAuthStore();
 const i18n = useI18nStore();
 const isNativeResearch = computed(() => route.name === "rag");
 const loading = ref(false);
 const noDatabase = ref(false);
+const workspaceError = ref("");
+const answerLoading = ref(false);
+const answerError = ref("");
+const runsLoading = ref(false);
+const runsError = ref("");
+const pipelinesLoading = ref(false);
+const pipelinesError = ref("");
+let runsRequest = 0;
+let pipelinesRequest = 0;
+let workspaceRequest = 0;
+let answerRequest = 0;
+let disposed = false;
 const canCreateDatabase = computed(() => auth.can("page.vector"));
 const starting = ref(false);
 const workspace = ref<ResearchWorkspaceSnapshot | null>(null);
 const config = ref<ResearchConfig | null>(null);
+const runPipelineOverrides = ref<PipelineConfigOverrideSet | null>(null);
 const prompt = ref("");
 const instructions = ref("");
+const filterExpression = ref("");
+// True once the researcher confirmed a phrase interpreted from the instructions.
+const filterFromInstructions = ref<false | "deterministic_natural_language" | "model_assisted">(
+  false,
+);
+watch(filterExpression, (value) => {
+  if (!value.trim()) filterFromInstructions.value = false;
+});
+const filterState = ref<ResearchFilterChange>({ plan: null, valid: true });
 const preset = ref("balanced");
 const model = ref("");
 const discoveredModels = ref<string[]>([]);
@@ -39,21 +218,88 @@ const generation = ref<Record<string, unknown>>({});
 const jobs = ref<ResearchJob[]>([]);
 const activeJob = ref<ResearchJob | null>(null);
 const sessionJobIds = ref<Set<string>>(new Set());
+const threadRefreshKey = ref(0);
+const retryFocusJob = ref("");
+let submissionRequest = 0;
 const activeEvidenceIndex = ref(0);
-// While a run is open the composer shrinks to one line so the answer leads.
-const composerExpanded = ref(false);
-const composerCompact = computed(() => Boolean(activeJob.value) && !composerExpanded.value);
-const settingsDrawer = ref<{ open: () => void } | null>(null);
+const settingsDrawer = ref<{
+  open: (
+    section?: "pipeline" | "retrieval" | "evidence" | "generation",
+    focusPromptMetadata?: boolean,
+  ) => void;
+} | null>(null);
 const runsDrawer = ref<{ open: () => void; close: () => void } | null>(null);
-let pollTimer: number | undefined;
+const researchDraft = useResearchDraft();
+// One realtime follower per live Research job; its events (or the socket-down fallback) refresh state.
+const jobFollowers = new Map<string, () => void>();
 let draftTimer: number | undefined;
+let composerDraftLoaded = false;
+let composerDraftLoad: Promise<void> | null = null;
+let composerDraftEpoch = 0;
 
 const selectedEvidence = computed(() => workspace.value?.selected_evidence || []);
 const profiles = computed(() => workspace.value?.profiles || []);
 const stores = computed(() => workspace.value?.stores || []);
+const effectivePipeline = computed(() => {
+  const options = workspace.value?.pipeline_options || [];
+  const configuredId = String(config.value?.pipeline_id || "").trim();
+  const configuredVersion = Number(config.value?.pipeline_version || 0);
+  if (configuredId) {
+    const explicit = options.find(
+      (pipeline) => pipeline.pipeline_id === configuredId && pipeline.version === configuredVersion,
+    );
+    if (explicit) return explicit;
+  }
+  const assignment = workspace.value?.pipeline_assignment;
+  return (
+    options.find(
+      (pipeline) =>
+        pipeline.pipeline_id === assignment?.pipeline_id &&
+        pipeline.version === assignment?.pipeline_version,
+    ) || null
+  );
+});
+const pipelineOverrideActive = computed(() =>
+  Boolean(String(config.value?.pipeline_id || "").trim()),
+);
+const settingsPipelineOverrides = computed(() =>
+  overridesForPipeline(config.value?.pipeline_config_overrides, effectivePipeline.value),
+);
+const metadataFields = computed(() => {
+  const fields = new Set<string>();
+  const selectedStore = stores.value.find(
+    (store) => store.name === config.value?.source_collection,
+  );
+  for (const field of selectedStore?.filter_fields || []) fields.add(String(field));
+  for (const item of selectedEvidence.value) {
+    for (const assertion of item.assertions || []) {
+      if (assertion.field_name) fields.add(assertion.field_name);
+      else if (assertion.field_id) fields.add(assertion.field_id);
+    }
+    for (const field of Object.keys(item.metadata || {})) fields.add(field);
+  }
+  for (const scope of ["evidence", "context", "record"] as const) {
+    for (const field of config.value?.prompt_metadata?.[scope] || []) fields.add(field);
+  }
+  for (const field of [
+    "speaker",
+    "quoted_speaker",
+    "quoted_author",
+    "quoted_work",
+    "quoted_position_holder",
+    "position_holder",
+    "stance",
+    "proposition_status",
+    "target",
+    "discourse_role",
+  ]) {
+    fields.add(field);
+  }
+  return [...fields]
+    .filter((field) => field && !field.startsWith("_"))
+    .sort((a, b) => a.localeCompare(b));
+});
 const activeResult = computed(() => activeJob.value?.result || null);
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- SA-13: preserve legacy setup binding until its owning workflow is extracted.
-const resultEvidence = computed(() => activeResult.value?.evidence || []);
 const selectedProfile = computed(
   () =>
     profiles.value.find((profile) => profile.id === config.value?.provider_profile_id) ||
@@ -61,28 +307,24 @@ const selectedProfile = computed(
     null,
 );
 const canManageRuns = computed(
-  () => Boolean(workspace.value?.can_manage_jobs && auth.can("rag.jobs.own")) || auth.isAdmin,
+  () =>
+    Boolean(workspace.value) &&
+    (Boolean(workspace.value?.can_manage_jobs && auth.can("rag.jobs.own")) || auth.isAdmin),
 );
 const canConfigureResearch = computed(() =>
   Boolean(workspace.value?.can_run && auth.can("rag.run")),
 );
 const canGrade = computed(() => auth.isAdmin);
 const runDisabledReason = computed(() => {
-  if (!workspace.value?.can_run || !auth.can("rag.run"))
-    return i18n.t("permissions.rag_denied", "Your role cannot run Research pipelines.");
-  if (!prompt.value.trim()) return i18n.t("research.prompt_required", "Enter a research question.");
-  if (!profiles.value.length)
-    return i18n.t("research.no_profile_configured", "No Research LLM profile is available.");
+  if (currentThreadId.value && !threadContinuable.value)
+    return i18n.t("research.thread_followup_unavailable");
+  if (!workspace.value?.can_run || !auth.can("rag.run")) return i18n.t("permissions.rag_denied");
+  if (!prompt.value.trim()) return i18n.t("research.prompt_required");
+  if (!profiles.value.length) return i18n.t("research.no_profile_configured");
   if (preset.value === "evidence" && !selectedEvidence.value.length)
-    return i18n.t(
-      "research.evidence_required",
-      "Select at least one evidence record for evidence-only research.",
-    );
+    return i18n.t("research.evidence_required");
   if (preset.value !== "evidence" && !config.value?.source_collection && !stores.value.length)
-    return i18n.t(
-      "research.database_required",
-      "A corpus database or selected evidence is required.",
-    );
+    return i18n.t("research.database_required");
   return "";
 });
 const canRun = computed(() => !runDisabledReason.value);
@@ -112,12 +354,32 @@ function profileModel(profile: ResearchProfile | null) {
     ? "auto"
     : String(profile.model || "");
 }
-const inferPreset = (cfg: ResearchConfig) => inferResearchPreset(cfg);
+function inferPreset(cfg: ResearchConfig) {
+  if (cfg.skip_retrieval) return "evidence";
+  if (cfg.k === 40 && cfg.fetch_k === 320 && cfg.rerank_top_n === 16) return "precision";
+  if (cfg.k === 96 && cfg.fetch_k === 1000 && cfg.rerank_top_n === 32) return "recall";
+  if (
+    cfg.k === 64 &&
+    cfg.fetch_k === 500 &&
+    cfg.rerank_top_n === 24 &&
+    Math.abs(Number(cfg.lambda_mult) - 0.7) < 0.001
+  )
+    return "balanced";
+  return "custom";
+}
 function hydrate(
   snapshot: ResearchWorkspaceSnapshot,
   { preserveDraft = false, preserveActive = true } = {},
 ) {
-  workspace.value = snapshot;
+  workspace.value = workspace.value
+    ? {
+        ...snapshot,
+        pipeline_assignment: workspace.value.pipeline_assignment,
+        pipeline_options: workspace.value.pipeline_options,
+        pipeline_strategies: workspace.value.pipeline_strategies,
+        pipeline_override_allowed: workspace.value.pipeline_override_allowed,
+      }
+    : snapshot;
   const snapshotJobs = snapshot.jobs || [];
   if (snapshot.can_manage_jobs || auth.isAdmin) {
     jobs.value = snapshotJobs;
@@ -158,45 +420,146 @@ function hydrate(
   }
 }
 async function loadWorkspace(refresh = true) {
-  if (!isNativeResearch.value) return;
+  if (!isNativeResearch.value || disposed) return;
+  const request = ++workspaceRequest;
+  ++runsRequest;
+  ++pipelinesRequest;
   loading.value = true;
+  workspaceError.value = "";
   try {
-    const snapshot = (await runtime.getResearchWorkspaceSnapshot({
+    const snapshot = (await researchActions.getResearchWorkspaceSnapshot({
       refresh,
+      includeJobs: false,
+      includePipelines: false,
+      strictCollections: true,
     })) as ResearchWorkspaceSnapshot;
-    const requestedJobId = String(route.query.job || "").trim();
-    // Explain the missing prerequisite in place; do not toast and bounce the
-    // user into an unrelated dialog or away from the page they chose.
+    if (disposed || request !== workspaceRequest || !isNativeResearch.value) return;
     noDatabase.value = !(snapshot.stores || []).length;
-    if (noDatabase.value) return;
-    hydrate(snapshot, { preserveDraft: Boolean(workspace.value), preserveActive: true });
+    hydrate(snapshot, {
+      preserveDraft: Boolean(workspace.value) || Boolean(prompt.value || instructions.value),
+      preserveActive: true,
+    });
+    restoreComposerDraft(prompt.value, instructions.value);
+    if (canManageRuns.value) void refreshRuns();
+    void loadPipelines();
+    const requestedJobId = String(route.query.job || "").trim();
     if (requestedJobId) {
-      activeJob.value = (await runtime.getResearchJob(requestedJobId)) as ResearchJob;
-      if (!jobs.value.some((job) => job.id === activeJob.value?.id))
-        jobs.value = [activeJob.value, ...jobs.value];
-      activeEvidenceIndex.value = 0;
+      void loadAnswer({ id: requestedJobId, status: "completed" } as ResearchJob);
     } else if (activeJob.value?.status === "completed" && !activeJob.value.result) {
-      activeJob.value = (await runtime.getResearchJob(activeJob.value.id)) as ResearchJob;
+      void loadAnswer(activeJob.value);
     }
     schedulePoll();
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    if (!disposed && request === workspaceRequest)
+      workspaceError.value = error instanceof Error ? error.message : String(error);
   } finally {
-    loading.value = false;
+    if (!disposed && request === workspaceRequest) loading.value = false;
   }
+}
+async function loadAnswer(job: ResearchJob) {
+  const request = ++answerRequest;
+  // Different answers must never retain the previous answer's text or evidence.
+  const sameJob = activeJob.value?.id === job.id;
+  if (!sameJob) activeJob.value = { ...job, result: undefined };
+  activeEvidenceIndex.value = 0;
+  answerLoading.value = true;
+  answerError.value = "";
+  try {
+    const answer =
+      job.status === "completed" ? ((await getResearchJob(job.id)) as ResearchJob) : job;
+    if (disposed || request !== answerRequest || !isNativeResearch.value) return;
+    activeJob.value = answer;
+    if (!jobs.value.some((item) => item.id === answer.id)) jobs.value = [answer, ...jobs.value];
+    runsDrawer.value?.close?.();
+    schedulePoll();
+  } catch (error) {
+    if (!disposed && request === answerRequest)
+      answerError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (!disposed && request === answerRequest) answerLoading.value = false;
+  }
+}
+function restoreComposerDraft(expectedPrompt: string, expectedInstructions: string) {
+  if (composerDraftLoaded || composerDraftLoad) return;
+  const epoch = composerDraftEpoch;
+  composerDraftLoad = (async () => {
+    const saved = await loadResearchComposerDraft(currentThreadId.value);
+    if (disposed || epoch !== composerDraftEpoch || !isNativeResearch.value) return;
+    composerDraftLoaded = true;
+    if (saved && prompt.value === expectedPrompt && instructions.value === expectedInstructions) {
+      prompt.value = saved.prompt;
+      instructions.value = saved.instructions;
+    }
+  })().finally(() => {
+    if (epoch === composerDraftEpoch) composerDraftLoad = null;
+  });
+}
+
+// Each thread (and the new-question view) owns its own draft. On a switch, the
+// pending draft is written to the scope it was typed in before the next loads.
+let draftScopeRequest = 0;
+function switchComposerDraft(previous: string, next: string) {
+  if (previous === next) return;
+  const request = ++draftScopeRequest;
+  if (draftTimer !== undefined) {
+    window.clearTimeout(draftTimer);
+    draftTimer = undefined;
+    void saveResearchComposerDraft(
+      { prompt: prompt.value, instructions: instructions.value },
+      previous,
+    );
+  }
+  prompt.value = "";
+  instructions.value = "";
+  if (!composerDraftLoaded) return;
+  const epoch = composerDraftEpoch;
+  void loadResearchComposerDraft(next).then((saved) => {
+    if (disposed || request !== draftScopeRequest || epoch !== composerDraftEpoch) return;
+    if (saved && !prompt.value && !instructions.value) {
+      prompt.value = saved.prompt;
+      instructions.value = saved.instructions;
+    }
+  });
 }
 function persistDraft() {
   if (!config.value) return;
   window.clearTimeout(draftTimer);
-  draftTimer = window.setTimeout(
-    () => runtime.updateResearchConfig({ prompt: prompt.value, instructions: instructions.value }),
-    250,
-  );
+  draftTimer = window.setTimeout(() => {
+    draftTimer = undefined;
+    void saveResearchComposerDraft(
+      { prompt: prompt.value, instructions: instructions.value },
+      currentThreadId.value,
+    );
+  }, 250);
 }
 function updateConfig(patch: Partial<ResearchConfig>) {
   if (!config.value) return;
+  // Controls on Research are a one-run draft. Settings owns persisted defaults.
   config.value = { ...config.value, ...patch };
-  config.value = runtime.updateResearchConfig(patch) as ResearchConfig;
+}
+function applyPresetStageOverrides(values: {
+  fetchK: number;
+  lambdaMult: number;
+  rrfK: number;
+  rerankTopN: number;
+}) {
+  const pipeline = effectivePipeline.value;
+  if (!pipeline) return;
+  let overrides = runPipelineOverrides.value;
+  for (const stage of pipeline.stages) {
+    if (
+      stage.strategy === "retrieve.chroma_similarity" ||
+      stage.strategy === "retrieve.lexical_bm25"
+    )
+      overrides = setStageOverride(pipeline, overrides, stage.id, "fetch_k", values.fetchK);
+    else if (stage.strategy === "select.mmr")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "lambda_mult", values.lambdaMult);
+    else if (stage.strategy === "fusion.rrf")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "rrf_k", values.rrfK);
+    else if (stage.strategy === "rerank.cross_encoder")
+      overrides = setStageOverride(pipeline, overrides, stage.id, "top_k", values.rerankTopN);
+  }
+  runPipelineOverrides.value = overrides;
 }
 function applyPreset(value: string) {
   preset.value = value;
@@ -209,31 +572,26 @@ function applyPreset(value: string) {
     updateConfig({ skip_retrieval: true });
     return;
   }
+  if (value === "hybrid" && !selectedEvidence.value.length) {
+    preset.value = "balanced";
+    return;
+  }
+  // Hybrid = balanced retrieval plus the researcher's pinned evidence. Presets
+  // now express stage tuning as one-run overrides rather than mutating Settings.
   const common = {
     skip_retrieval: false,
-    reranker: "cross_encoder",
     search_types: ["similarity", "lexical", "mmr"],
   };
-  if (value === "balanced")
-    updateConfig({ ...common, k: 64, fetch_k: 500, lambda_mult: 0.7, rrf_k: 60, rerank_top_n: 24 });
-  else if (value === "precision")
-    updateConfig({
-      ...common,
-      k: 40,
-      fetch_k: 320,
-      lambda_mult: 0.82,
-      rrf_k: 60,
-      rerank_top_n: 16,
-    });
-  else if (value === "recall")
-    updateConfig({
-      ...common,
-      k: 96,
-      fetch_k: 1000,
-      lambda_mult: 0.58,
-      rrf_k: 60,
-      rerank_top_n: 32,
-    });
+  if (value === "balanced" || value === "hybrid") {
+    updateConfig({ ...common, k: 64 });
+    applyPresetStageOverrides({ fetchK: 500, lambdaMult: 0.7, rrfK: 60, rerankTopN: 24 });
+  } else if (value === "precision") {
+    updateConfig({ ...common, k: 40 });
+    applyPresetStageOverrides({ fetchK: 320, lambdaMult: 0.82, rrfK: 60, rerankTopN: 16 });
+  } else if (value === "recall") {
+    updateConfig({ ...common, k: 96 });
+    applyPresetStageOverrides({ fetchK: 1000, lambdaMult: 0.58, rrfK: 60, rerankTopN: 32 });
+  }
 }
 function changeProfile(id: string) {
   updateConfig({ provider_profile_id: id });
@@ -242,39 +600,107 @@ function changeProfile(id: string) {
   generation.value = profileGeneration(profile);
   discoveredModels.value = profile?.model ? [String(profile.model)] : [];
 }
-async function runResearch() {
-  if (!config.value || !canRun.value || starting.value) return;
-  if (route.query.job) await router.replace({ path: "/rag" });
+function filterPlanForRun() {
+  const plan = filterState.value.plan;
+  if (!plan) return null;
+  return filterFromInstructions.value
+    ? {
+        ...plan,
+        source: filterFromInstructions.value,
+        original_text: instructions.value,
+      }
+    : { ...plan, source: "explicit", original_text: filterExpression.value };
+}
+async function runResearch(turn?: ResearchTurn) {
+  if (!config.value || starting.value || !workspace.value?.can_run || !auth.can("rag.run")) return;
+  if (turn) {
+    if (turn.thread_id !== currentThreadId.value || !["failed", "cancelled"].includes(turn.status))
+      return;
+  } else {
+    if (!canRun.value) return;
+    if (!filterState.value.valid) {
+      answerError.value = i18n.t("research.filters.blocked");
+      return;
+    }
+    if (route.query.job)
+      await router.replace({
+        path: "/rag",
+        query: listQuery(currentThreadId.value ? { thread: currentThreadId.value } : {}),
+      });
+  }
+  const request = ++submissionRequest;
+  ++answerRequest;
+  answerLoading.value = false;
+  answerError.value = "";
   starting.value = true;
+  newQuestionRequested.value = false;
   try {
     persistDraft();
-    const job = (await runtime.startResearchRun({
-      prompt: prompt.value,
-      instructions: instructions.value,
+    const job = (await researchActions.startResearchRun({
+      prompt: turn?.user_question ?? prompt.value,
+      instructions: turn ? turn.user_instructions || "" : instructions.value,
+      filter_plan: turn ? null : filterPlanForRun(),
+      thread_id: turn ? undefined : currentThreadId.value || undefined,
+      context_turn_ids:
+        !turn && currentThreadId.value && contextScope.value
+          ? contextScope.value.map((item) => item.turn_id)
+          : undefined,
+      retry_thread_id: turn?.thread_id,
+      retry_turn_id: turn?.turn_id,
       provider_profile_id: config.value.provider_profile_id,
       model: model.value,
       generation: generation.value,
       skip_retrieval: preset.value === "evidence" || config.value.skip_retrieval,
+      // Pinned evidence participates only in the two presets that say it does.
+      // Ordinary retrieval presets must not inherit stale workspace selections.
+      include_selected_evidence: preset.value === "hybrid" || preset.value === "evidence",
       config: { ...config.value, prompt: prompt.value, instructions: instructions.value },
+      settings_pipeline_overrides: settingsPipelineOverrides.value,
+      run_pipeline_overrides: runPipelineOverrides.value,
     })) as ResearchJob;
+    if (disposed || request !== submissionRequest) return;
     sessionJobIds.value.add(job.id);
+    if (!turn) {
+      // The submitted question now lives in its turn; a retry never touches the draft.
+      window.clearTimeout(draftTimer);
+      draftTimer = undefined;
+      prompt.value = "";
+      instructions.value = "";
+      contextScope.value = null;
+      void saveResearchComposerDraft({ prompt: "", instructions: "" }, currentThreadId.value);
+    }
     activeJob.value = job;
     activeEvidenceIndex.value = 0;
-    composerExpanded.value = false;
     jobs.value = [job, ...jobs.value.filter((item) => item.id !== job.id)];
     schedulePoll(true);
+    if (turn) retryFocusJob.value = job.id;
+    if (job.thread_id) {
+      await router.push({
+        path: "/rag",
+        query: listQuery({ thread: job.thread_id, job: job.id }),
+      });
+    }
+    await nextTick();
+    document
+      .querySelector("#research-selected-run .research-answer-workspace")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    if (request === submissionRequest)
+      toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   } finally {
-    starting.value = false;
+    if (request === submissionRequest) {
+      starting.value = false;
+      if (turn || currentThreadId.value) ++threadRefreshKey.value;
+    }
   }
 }
-async function poll() {
-  pollTimer = undefined;
-  if (!isNativeResearch.value) return;
+async function refreshLiveJobs() {
+  if (!isNativeResearch.value || disposed) return;
+  const request = answerRequest;
   try {
     if (canManageRuns.value) {
-      const refreshed = (await runtime.refreshResearchJobs()) as ResearchJob[];
+      const refreshed = (await researchActions.refreshResearchJobs()) as ResearchJob[];
+      if (disposed || request !== answerRequest || !isNativeResearch.value) return;
       jobs.value = refreshed;
       if (activeJob.value) {
         const summary = refreshed.find((job) => job.id === activeJob.value?.id);
@@ -284,8 +710,11 @@ async function poll() {
             ...summary,
             result: activeJob.value.result || summary.result,
           };
-          if (["completed", "failed", "cancelled"].includes(summary.status))
-            activeJob.value = (await runtime.getResearchJob(summary.id)) as ResearchJob;
+          if (["completed", "failed", "cancelled"].includes(summary.status)) {
+            const completed = (await getResearchJob(summary.id)) as ResearchJob;
+            if (!disposed && request === answerRequest && activeJob.value?.id === summary.id)
+              activeJob.value = completed;
+          }
         }
       }
     } else {
@@ -299,8 +728,9 @@ async function poll() {
       );
       if (activeSessionJobs.length) {
         const refreshed = await Promise.all(
-          activeSessionJobs.map((job) => runtime.getResearchJob(job.id) as Promise<ResearchJob>),
+          activeSessionJobs.map((job) => getResearchJob(job.id) as Promise<ResearchJob>),
         );
+        if (disposed || request !== answerRequest || !isNativeResearch.value) return;
         const byId = new Map(refreshed.map((job) => [job.id, job]));
         jobs.value = jobs.value.map((job) => byId.get(job.id) || job);
         if (activeJob.value && byId.has(activeJob.value.id))
@@ -308,107 +738,160 @@ async function poll() {
       }
     }
   } catch (error) {
-    console.warn("Research polling failed", error);
+    if (!disposed && request === answerRequest)
+      runsError.value = error instanceof Error ? error.message : String(error);
   }
   schedulePoll();
 }
+const LIVE_STATUSES = ["queued", "running", "cancelling"];
 function schedulePoll(force = false) {
-  window.clearTimeout(pollTimer);
-  const active =
-    Boolean(
-      activeJob.value && ["queued", "running", "cancelling"].includes(activeJob.value.status),
-    ) || jobs.value.some((job) => ["queued", "running", "cancelling"].includes(job.status));
-  if ((force || active) && isNativeResearch.value) pollTimer = window.setTimeout(poll, 3000);
+  const live = new Set<string>();
+  if (isNativeResearch.value) {
+    for (const job of [activeJob.value, ...jobs.value])
+      if (job && LIVE_STATUSES.includes(job.status)) live.add(job.id);
+    // A just-started run is followed even before its first status is known.
+    if (force && activeJob.value) live.add(activeJob.value.id);
+  }
+  for (const [id, stop] of jobFollowers) {
+    if (live.has(id)) continue;
+    stop();
+    jobFollowers.delete(id);
+  }
+  for (const id of live) {
+    if (jobFollowers.has(id)) continue;
+    jobFollowers.set(
+      id,
+      followResource({
+        topic: `job:${id}`,
+        refresh: refreshLiveJobs,
+        // Token events are consumed by useResearchDraft. Refreshing the entire
+        // job snapshot for each token burst adds REST and reactive churn without
+        // making the authoritative job state any fresher.
+        onEvent: (event) => event.type !== "llm.token",
+        minIntervalMs: 1000,
+      }),
+    );
+  }
+}
+function stopJobFollowers() {
+  for (const stop of jobFollowers.values()) stop();
+  jobFollowers.clear();
 }
 async function openJob(job: ResearchJob) {
-  try {
-    activeJob.value =
-      job.status === "completed" ? ((await runtime.getResearchJob(job.id)) as ResearchJob) : job;
-    activeEvidenceIndex.value = 0;
-    composerExpanded.value = false;
-    runsDrawer.value?.close();
-    // The URL is the thread's address, so it can be reloaded or shared. The
-    // route watcher skips reloading when the active job already matches.
-    if (route.query.job !== job.id) await router.replace({ path: "/rag", query: { job: job.id } });
-  } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
-  }
+  if (route.query.job)
+    await router.replace({
+      path: "/rag",
+      query: listQuery(currentThreadId.value ? { thread: currentThreadId.value } : {}),
+    });
+  await loadAnswer(job);
 }
 async function cancelJob(job: ResearchJob) {
   try {
-    const updated = (await runtime.cancelResearchJob(job.id)) as ResearchJob;
+    const updated = (await researchActions.cancelResearchJob(job.id)) as ResearchJob;
     if (activeJob.value?.id === job.id) activeJob.value = updated;
     await refreshRuns();
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function removeJob(job: ResearchJob) {
-  if (
-    !window.confirm(
-      i18n.t("research.remove_run_confirm", "Remove this retained Research run and its result?"),
-    )
-  )
-    return;
+  if (!window.confirm(i18n.t("research.remove_run_confirm"))) return;
   try {
-    await runtime.deleteResearchJob(job.id);
+    await researchActions.deleteResearchJob(job.id);
     if (activeJob.value?.id === job.id) activeJob.value = null;
     await refreshRuns();
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function refreshRuns() {
-  jobs.value = (await runtime.refreshResearchJobs()) as ResearchJob[];
-  schedulePoll();
+  const request = ++runsRequest;
+  runsLoading.value = true;
+  runsError.value = "";
+  try {
+    const refreshed = (await researchActions.refreshResearchJobs()) as ResearchJob[];
+    if (disposed || request !== runsRequest || !isNativeResearch.value) return;
+    jobs.value = refreshed;
+    if (!activeJob.value && !currentThreadId.value && !newQuestionRequested.value) {
+      const candidate =
+        refreshed.find((job) => ["queued", "running", "cancelling"].includes(job.status)) ||
+        refreshed.find((job) => job.status === "completed");
+      if (candidate) void loadAnswer(candidate);
+    }
+    schedulePoll();
+  } catch (error) {
+    if (!disposed && request === runsRequest)
+      runsError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (!disposed && request === runsRequest) runsLoading.value = false;
+  }
 }
-function expandComposer() {
-  composerExpanded.value = true;
-  void nextTick(() => document.querySelector<HTMLTextAreaElement>("#researchQuestion")?.focus());
-}
-function newQuestion() {
-  if (route.query.job) void router.replace({ path: "/rag" });
-  activeJob.value = null;
-  activeEvidenceIndex.value = 0;
-  void nextTick(() => {
-    const field = document.querySelector<HTMLTextAreaElement>("#researchQuestion");
-    field?.scrollIntoView({ behavior: "smooth", block: "center" });
-    field?.focus();
-  });
+async function loadPipelines() {
+  const request = ++pipelinesRequest;
+  pipelinesLoading.value = true;
+  pipelinesError.value = "";
+  try {
+    const options = await pipelinesApi.researchOptions();
+    if (disposed || request !== pipelinesRequest || !workspace.value || !isNativeResearch.value)
+      return;
+    const configuredId = String(config.value?.pipeline_id || "").trim();
+    const configuredVersion = Number(config.value?.pipeline_version || 0);
+    if (
+      configuredId &&
+      !options.pipelines.some(
+        (pipeline) =>
+          pipeline.pipeline_id === configuredId && pipeline.version === configuredVersion,
+      )
+    ) {
+      updateConfig({ pipeline_id: "", pipeline_version: null });
+    }
+    workspace.value = {
+      ...workspace.value,
+      pipeline_assignment: options.assignment,
+      pipeline_options: options.pipelines,
+      pipeline_strategies: options.strategies,
+      pipeline_override_allowed: options.override_allowed,
+    };
+  } catch (error) {
+    if (!disposed && request === pipelinesRequest)
+      pipelinesError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (!disposed && request === pipelinesRequest) pipelinesLoading.value = false;
+  }
 }
 function loadHistory(item: Record<string, unknown>) {
   prompt.value = String(item.prompt || "");
   instructions.value = String(item.instructions || "");
   persistDraft();
-  runtime.notifyToast(i18n.t("research.question_restored", "Recent question restored"), {
+  toast(i18n.t("research.question_restored"), {
     tone: "success",
   });
 }
 function removeEvidence(key: string) {
   try {
-    const evidence = runtime.removeResearchEvidence(key);
+    const evidence = researchActions.removeResearchEvidence(key);
     if (workspace.value) workspace.value = { ...workspace.value, selected_evidence: evidence };
     if (!evidence.length && preset.value === "evidence") applyPreset("balanced");
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 function clearEvidence() {
   try {
-    runtime.clearResearchEvidence();
+    researchActions.clearResearchEvidence();
     if (workspace.value) workspace.value = { ...workspace.value, selected_evidence: [] };
     if (config.value) config.value = { ...config.value, skip_retrieval: false };
     if (preset.value === "evidence") preset.value = "balanced";
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 async function copyAnswer() {
   try {
     await navigator.clipboard.writeText(activeResult.value?.answer || "");
-    runtime.notifyToast(i18n.t("research.answer_copied", "Answer copied"), { tone: "success" });
+    toast(i18n.t("research.answer_copied"), { tone: "success" });
   } catch {
-    runtime.notifyToast(i18n.t("research.clipboard_failed", "Could not access the clipboard"), {
+    toast(i18n.t("research.clipboard_failed"), {
       tone: "danger",
     });
   }
@@ -425,16 +908,19 @@ function focusEvidence(index: number) {
 async function gradeAnswer() {
   if (!activeJob.value) return;
   try {
-    await runtime.gradeResearchJob(activeJob.value.id);
+    await researchActions.gradeResearchJob(activeJob.value.id);
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 function prepareRerun() {
   if (!activeJob.value) return;
-  if (route.query.job) void router.replace({ path: "/rag" });
-  const next = runtime.prepareResearchRerun(activeJob.value) as ResearchConfig;
+  newQuestionRequested.value = true;
+  if (route.query.job || currentThreadId.value)
+    void router.replace({ path: "/rag", query: listQuery() });
+  const next = researchActions.prepareResearchRerun(activeJob.value) as ResearchConfig;
   config.value = { ...next };
+  runPipelineOverrides.value = next.run_pipeline_overrides || null;
   prompt.value = next.prompt || "";
   instructions.value = next.instructions || "";
   preset.value = inferPreset(next);
@@ -443,7 +929,7 @@ function prepareRerun() {
   model.value = profileModel(profile || null);
   generation.value = profileGeneration(profile || null);
   activeJob.value = null;
-  runtime.notifyToast(i18n.t("research.rerun_loaded", "Run parameters loaded into the composer"), {
+  toast(i18n.t("research.rerun_loaded"), {
     tone: "success",
   });
   void nextTick(() => document.querySelector<HTMLTextAreaElement>("#researchQuestion")?.focus());
@@ -451,169 +937,340 @@ function prepareRerun() {
 async function discoverModels() {
   if (!config.value) return;
   try {
-    discoveredModels.value = (await runtime.discoverResearchModels(
+    discoveredModels.value = (await researchActions.discoverResearchModels(
       config.value.provider_profile_id,
     )) as string[];
-    runtime.notifyToast(
-      `${discoveredModels.value.length} ${i18n.t("research.models_found", "models found")}`,
-      { tone: "success" },
-    );
+    toast(`${discoveredModels.value.length} ${i18n.t("research.models_found")}`, {
+      tone: "success",
+    });
   } catch (error) {
-    runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
+    toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
 }
 function applySettings(payload: {
   config: Partial<ResearchConfig>;
   generation: Record<string, unknown>;
   model: string;
+  runPipelineOverrides: PipelineConfigOverrideSet | null;
 }) {
   updateConfig(payload.config);
+  runPipelineOverrides.value = payload.runPipelineOverrides;
   generation.value = { ...payload.generation };
   model.value = payload.model || profileModel(selectedProfile.value);
   preset.value = "custom";
-  runtime.notifyToast(i18n.t("research.settings_applied", "Research settings applied"), {
+  toast(i18n.t("research.settings_applied"), {
     tone: "success",
   });
 }
 
 watch(prompt, persistDraft);
 watch(instructions, persistDraft);
+// Follow the running job's streamed answer only while it has no authoritative result yet;
+// any other state (finished, failed, cancelled, or nothing selected) drops the draft.
 watch(
-  () => [route.name, route.query.job],
-  ([name, job]) => {
-    if (name === "rag" && job && job === activeJob.value?.id) return;
-    window.clearTimeout(pollTimer);
+  activeJob,
+  (job) => {
+    const live = Boolean(
+      job && !job.result && ["queued", "running", "cancelling"].includes(job.status),
+    );
+    if (live && job && researchDraft.draft.value?.jobId !== job.id) researchDraft.follow(job.id);
+    else if (!live) researchDraft.clear();
+  },
+  { immediate: true },
+);
+watch(
+  () => [route.name, route.query.job, route.query.thread],
+  ([name]) => {
+    if (String(route.query.job || "") !== retryFocusJob.value) retryFocusJob.value = "";
+    ++submissionRequest;
+    starting.value = false;
+    ++answerRequest;
+    activeJob.value = null;
+    answerLoading.value = false;
+    answerError.value = "";
+    stopJobFollowers();
     if (name === "rag") void loadWorkspace(true);
+  },
+);
+// Route hydration can temporarily remove the result region; focus it only once the new attempt is rendered.
+watch(
+  () => [activeJob.value?.id, answerLoading.value, answerError.value, workspace.value],
+  () => {
+    if (
+      !retryFocusJob.value ||
+      activeJob.value?.id !== retryFocusJob.value ||
+      String(route.query.job || "") !== retryFocusJob.value ||
+      answerLoading.value ||
+      answerError.value
+    )
+      return;
+    const region = currentThreadId.value
+      ? document.querySelector<HTMLElement>(".research-thread-conversation")
+      : document.getElementById("research-selected-run");
+    if (region) {
+      region.focus();
+      retryFocusJob.value = "";
+    }
+  },
+  { flush: "post" },
+);
+// Account/capability changes invalidate every pending read and visible research artifact.
+watch(
+  () => [auth.user?.id, auth.user?.role, auth.can("rag.run")],
+  () => {
+    retryFocusJob.value = "";
+    ++submissionRequest;
+    starting.value = false;
+    ++workspaceRequest;
+    ++answerRequest;
+    ++runsRequest;
+    ++pipelinesRequest;
+    activeJob.value = null;
+    jobs.value = [];
+    sessionJobIds.value = new Set();
+    workspace.value = null;
+    config.value = null;
+    window.clearTimeout(draftTimer);
+    draftTimer = undefined;
+    composerDraftEpoch += 1;
+    composerDraftLoaded = false;
+    composerDraftLoad = null;
+    prompt.value = "";
+    instructions.value = "";
+    answerError.value = "";
+    answerLoading.value = false;
+    stopJobFollowers();
+    researchDraft.clear();
+    if (auth.user && auth.can("rag.run") && isNativeResearch.value) void loadWorkspace(true);
   },
 );
 onMounted(() => {
   if (isNativeResearch.value) void loadWorkspace(true);
 });
 onBeforeUnmount(() => {
-  window.clearTimeout(pollTimer);
-  window.clearTimeout(draftTimer);
+  ++submissionRequest;
+  disposed = true;
+  ++workspaceRequest;
+  ++answerRequest;
+  ++runsRequest;
+  ++pipelinesRequest;
+  stopJobFollowers();
+  if (draftTimer !== undefined) {
+    window.clearTimeout(draftTimer);
+    void saveResearchComposerDraft(
+      { prompt: prompt.value, instructions: instructions.value },
+      currentThreadId.value,
+    );
+    draftTimer = undefined;
+  }
+  researchDraft.clear();
 });
 </script>
 
 <template>
   <main class="vue-native-page research-native-page" aria-labelledby="research-page-title">
-    <div v-if="loading && !workspace" class="research-loading" role="status">
-      <span class="spinner"></span
-      >{{ i18n.t("research.loading_workspace", "Loading Research workspace…") }}
+    <UiPageHeader
+      :kicker="i18n.t('research.page_kicker')"
+      :title="i18n.t('research.page_title')"
+      title-id="research-page-title"
+      :description="i18n.t('research.page_subtitle')"
+      :actions-label="i18n.t('research.page_state')"
+    >
+      <template v-if="workspace" #actions>
+        <div class="research-page-state">
+          <span
+            ><i></i
+            >{{
+              i18n.tf(
+                stores.length === 1
+                  ? "research.database_count_one"
+                  : "research.database_count_other",
+                { count: stores.length.toLocaleString(i18n.locale) },
+              )
+            }}</span
+          ><span>{{
+            i18n.tf(
+              selectedEvidence.length === 1
+                ? "research.selected_evidence_count_one"
+                : "research.selected_evidence_count_many",
+              { count: selectedEvidence.length },
+            )
+          }}</span>
+        </div>
+      </template>
+    </UiPageHeader>
+    <div v-if="workspaceError" class="info error research-workspace-status" role="alert">
+      <p>
+        <template v-if="workspace">{{ i18n.t("loading.stale") }} </template>{{ workspaceError }}
+      </p>
+      <button type="button" class="btn" @click="loadWorkspace()">{{ i18n.t("ui.retry") }}</button>
     </div>
+    <UiLoadingState
+      v-if="loading"
+      variant="inline"
+      :label="i18n.t(workspace ? 'loading.updating' : 'research.loading_workspace')"
+    />
+
     <AccessibleEmptyState
-      v-else-if="noDatabase"
+      v-if="noDatabase"
       icon="database"
-      :title="i18n.t('research.empty_state_title', 'Research needs a corpus database')"
+      :title="i18n.t('research.empty_state_title')"
       :description="
         canCreateDatabase
-          ? i18n.t(
-              'research.empty_state_help',
-              'Create a vector collection from your loaded works, then return here to ask evidence-grounded questions.',
-            )
-          : i18n.t(
-              'research.empty_state_denied',
-              'Ask an administrator to configure a corpus database or grant you access.',
-            )
+          ? i18n.t('research.empty_state_help')
+          : i18n.t('research.empty_state_denied')
       "
-      :action-label="
-        canCreateDatabase ? i18n.t('research.empty_state_action', 'Create a collection') : ''
-      "
-      @action="runtime.openDatabaseCreationFromResearch?.()"
+      :action-label="canCreateDatabase ? i18n.t('research.empty_state_action') : ''"
+      @action="openDatabaseCreationFromResearch()"
     />
-    <template v-else-if="workspace && config">
-      <UiPageHeader
-        :kicker="i18n.t('research.page_kicker', 'Evidence-grounded inquiry')"
-        :title="i18n.t('research.page_title', 'Research workspace')"
-        title-id="research-page-title"
-        :description="
-          i18n.t(
-            'research.page_subtitle',
-            'Ask the corpus, inspect the evidence, and keep provenance attached to the answer.',
-          )
+    <template v-else>
+      <ResearchThreadBrowser
+        v-if="auth.can('rag.run')"
+        @open-record="openThreadEvidenceRecord"
+        @open-relationships="openThreadEvidenceRelationships"
+        :thread-id="currentThreadId"
+        :job-id="String(route.query.job || '')"
+        :retry-disabled="
+          starting ||
+          loading ||
+          Boolean(workspaceError) ||
+          !workspace?.can_run ||
+          !config ||
+          !profiles.length
         "
-        :actions-label="i18n.t('research.page_state', 'Research workspace status')"
+        :retry-busy="starting"
+        :refresh-key="threadRefreshKey"
+        :initial-search="routeText(route.query.thread_q)"
+        :initial-offset="Math.max(0, Number(route.query.thread_offset) || 0)"
+        :initial-archived="route.query.thread_archived === 'true'"
+        @filters="threadListFilters"
+        @continuable="threadContinuable = $event"
+        @retry-turn="runResearch"
+        @follow-up="followUpFrom"
+        @select="selectThread"
+        @open="openThreadTurn"
+        @new="newThread"
+        @removed="onThreadRemoved"
       >
-        <template #actions>
-          <div class="research-page-state">
-            <span
-              ><i></i
-              >{{
-                i18n.tf(
-                  stores.length === 1
-                    ? "research.database_count_one"
-                    : "research.database_count_other",
-                  stores.length === 1 ? "{count} database" : "{count} databases",
-                  { count: stores.length.toLocaleString(i18n.locale) },
-                )
-              }}</span
-            ><span
-              >{{ selectedEvidence.length }}
-              {{ i18n.t("rag.selected_evidence", "selected evidence") }}</span
-            >
+        <template #workspace>
+          <ResearchComposer
+            :compact="Boolean(currentThreadId)"
+            :context-scope="contextScope"
+            @remove-context-turn="removeContextTurn"
+            @reset-context="contextScope = null"
+            v-model:prompt="prompt"
+            v-model:instructions="instructions"
+            v-model:filter-expression="filterExpression"
+            @scope-accepted="filterFromInstructions = $event"
+            @filter-change="filterState = $event"
+            :source-collection="config?.source_collection || ''"
+            :provider-profile-id="config?.provider_profile_id || ''"
+            :response-language="config?.response_language || ''"
+            :preset="preset"
+            :evidence-count="selectedEvidence.length"
+            :prompt-metadata="config?.prompt_metadata || normalizedResearchConfig().prompt_metadata"
+            :pipeline-name="effectivePipeline?.name || ''"
+            :pipeline-version="effectivePipeline?.version || null"
+            :pipeline-override="pipelineOverrideActive"
+            :stores="stores"
+            :profiles="profiles"
+            :history="workspace?.history || []"
+            :busy="starting"
+            :can-run="canRun"
+            :can-configure="canConfigureResearch"
+            :can-draft="auth.can('rag.run')"
+            :can-manage-runs="canManageRuns"
+            :disabled-reason="runDisabledReason"
+            @update:source-collection="updateConfig({ source_collection: $event })"
+            @update:provider-profile-id="changeProfile"
+            @update:response-language="updateConfig({ response_language: $event })"
+            @update:preset="applyPreset"
+            @run="runResearch"
+            @settings="settingsDrawer?.open()"
+            @pipeline-settings="settingsDrawer?.open('pipeline')"
+            @prompt-metadata="settingsDrawer?.open('evidence', true)"
+            @runs="runsDrawer?.open()"
+            @history="loadHistory"
+          />
+
+          <UiLoadingState v-if="runsLoading" variant="inline" :label="i18n.t('loading.updating')" />
+          <div v-if="runsError" class="info error research-runs-status" role="alert">
+            <p>{{ runsError }}</p>
+            <button type="button" class="btn" @click="refreshRuns()">
+              {{ i18n.t("ui.retry") }}
+            </button>
           </div>
+          <UiLoadingState
+            v-if="pipelinesLoading"
+            variant="inline"
+            :label="i18n.t('pipelines.loading')"
+          />
+          <div v-if="pipelinesError" class="info error research-pipelines-status" role="alert">
+            <p>{{ pipelinesError }}</p>
+            <button type="button" class="btn" @click="loadPipelines()">
+              {{ i18n.t("ui.retry") }}
+            </button>
+          </div>
+          <ResearchPipelineBar
+            :jobs="jobs"
+            :selected-job-id="activeJob?.id || ''"
+            :can-manage="canManageRuns"
+            :thread-id="currentThreadId"
+            @select="openJob"
+            @cancel="cancelJob"
+            @open-runs="runsDrawer?.open()"
+          />
+
+          <UiLoadingState
+            v-if="answerLoading"
+            variant="inline"
+            :label="i18n.t('runtime.system_responses_loading')"
+          />
+          <div v-if="answerError" class="info error research-answer-status" role="alert">
+            <p>
+              <template v-if="activeResult">{{ i18n.t("loading.stale") }} </template
+              >{{ answerError }}
+            </p>
+            <button v-if="activeJob" type="button" class="btn" @click="loadAnswer(activeJob)">
+              {{ i18n.t("ui.retry") }}
+            </button>
+          </div>
+          <ResearchResultPresentation
+            id="research-selected-run"
+            tabindex="-1"
+            role="region"
+            :aria-label="i18n.t('research.answer')"
+            v-if="
+              workspace && !currentThreadId && ((!answerLoading && !answerError) || activeResult)
+            "
+            :job="activeJob"
+            :result="activeResult"
+            :draft="researchDraft.draft.value"
+            :selected-evidence="selectedEvidence"
+            :active-evidence-index="activeEvidenceIndex"
+            :busy="starting"
+            :can-grade="canGrade"
+            :can-remove-selected="
+              Boolean(workspace?.can_select_evidence) && auth.can('evidence.select')
+            "
+            :researcher="workspace?.is_researcher || false"
+            @copy="copyAnswer"
+            @grade="gradeAnswer"
+            @rerun="prepareRerun"
+            @details="runsDrawer?.open()"
+            @evidence="focusEvidence"
+            @select-evidence="activeEvidenceIndex = $event"
+            @remove-selected="removeEvidence"
+            @clear-selected="clearEvidence"
+            @open-record="openEvidenceRecord"
+            @open-relationships="openEvidenceRelationships"
+          />
         </template>
-      </UiPageHeader>
-
-      <ResearchComposer
-        v-model:prompt="prompt"
-        v-model:instructions="instructions"
-        :source-collection="config.source_collection"
-        :provider-profile-id="config.provider_profile_id"
-        :response-language="config.response_language"
-        :preset="preset"
-        :evidence-count="selectedEvidence.length"
-        :stores="stores"
-        :profiles="profiles"
-        :history="workspace.history || []"
-        :busy="starting"
-        :can-run="canRun"
-        :can-configure="canConfigureResearch"
-        :can-manage-runs="canManageRuns"
-        :disabled-reason="runDisabledReason"
-        :compact="composerCompact"
-        @update:source-collection="updateConfig({ source_collection: $event })"
-        @update:provider-profile-id="changeProfile"
-        @update:response-language="updateConfig({ response_language: $event })"
-        @update:preset="applyPreset"
-        @run="runResearch"
-        @settings="settingsDrawer?.open()"
-        @runs="runsDrawer?.open()"
-        @history="loadHistory"
-        @expand="expandComposer"
-      />
-
-      <div class="research-thread-layout">
-        <ResearchThreadList
-          :jobs="jobs"
-          :selected-job-id="activeJob?.id || ''"
-          :can-manage="canManageRuns"
-          @select="openJob"
-          @cancel="cancelJob"
-          @new="newQuestion"
-          @open-runs="runsDrawer?.open()"
-        />
-        <ResearchResultPresentation
-          :job="activeJob"
-          :result="activeResult"
-          :selected-evidence="selectedEvidence"
-          :active-evidence-index="activeEvidenceIndex"
-          :busy="starting"
-          :can-grade="canGrade"
-          :can-remove-selected="workspace.can_select_evidence && auth.can('evidence.select')"
-          :researcher="workspace.is_researcher"
-          @copy="copyAnswer"
-          @grade="gradeAnswer"
-          @rerun="prepareRerun"
-          @details="runsDrawer?.open()"
-          @evidence="focusEvidence"
-          @select-evidence="activeEvidenceIndex = $event"
-          @remove-selected="removeEvidence"
-          @clear-selected="clearEvidence"
-        />
-      </div>
+      </ResearchThreadBrowser>
+      <div v-else class="info" role="status">{{ i18n.t("permissions.rag_denied") }}</div>
 
       <ResearchSettingsDrawer
+        v-if="workspace && config"
         ref="settingsDrawer"
         :config="config"
         :profiles="profiles"
@@ -621,7 +1278,13 @@ onBeforeUnmount(() => {
         :generation="generation"
         :model="model"
         :models="discoveredModels"
+        :metadata-fields="metadataFields"
         :researcher="workspace.is_researcher"
+        :pipeline-options="workspace?.pipeline_options || []"
+        :pipeline-strategies="workspace?.pipeline_strategies || []"
+        :pipeline-assignment="workspace?.pipeline_assignment || null"
+        :pipeline-override-allowed="workspace?.pipeline_override_allowed || false"
+        :run-pipeline-overrides="runPipelineOverrides"
         @apply="applySettings"
         @discover="discoverModels"
       />
@@ -639,3 +1302,11 @@ onBeforeUnmount(() => {
     </template>
   </main>
 </template>
+
+<style scoped>
+/* The thread browser owns the navigation and reading layout. ResearchView keeps
+   orchestration and run/settings state instead of imposing a second workspace. */
+.research-native-page {
+  min-width: 0;
+}
+</style>

@@ -1,0 +1,960 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""Metadata enrichment reruns: retry, multi-pass rerun, and per-record enrichment worker.
+
+Started as background operations against a build already past segmentation, these
+methods orchestrate retrying, rerunning, and merging metadata enrichment passes across
+records. Moved verbatim out of PdfCorpusBuildManager as a mixin (see
+corpus_review_actions.py's module docstring for why a mixin, not free functions, is
+the right tool when a cluster calls a dozen-plus other self.* members).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import time
+import uuid
+from collections import Counter
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING, Any
+
+from .concurrency import bounded_as_completed
+from .config import settings
+from .corpus_enrichment_feedback import enrichment_informational_event
+from .corpus_enrichment_helpers import (
+    _enrichment_pass_indices,
+    _merge_enrichment_snapshot,
+    _prepend_metadata_priority,
+    _record_source_matches,
+)
+from .corpus_llm_helpers import _validate_execution_budget
+from .corpus_record_quality import iso_now
+from .corpus_review_actions import _serialize_record_mutation
+from .corpus_review_state import _sync_record_metadata_state
+from .corpus_reviewer_helpers import _metadata_issue_type_for_field
+from .enrichment_cycles import (
+    CONFIDENCE_FIELDS,
+    MAX_PASSES,
+    resolve_conflict,
+    same_value,
+)
+from .enrichment_ledger import RECORD_RUN
+from .field_assertions import (
+    create_model_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+    reopen_assertion,
+    reset_fields_for_evaluation,
+    store_assertion,
+)
+from .metadata_schema import MetadataSchema, default_schema
+from .operation_events import note_record_metadata
+
+
+class EnrichmentRerunsMixin:
+    """Mixin members declared here exist on PdfCorpusBuildManager, not on this mixin itself.
+
+    See corpus_review_actions.py's identical block for the full explanation, including why
+    everything below is wrapped in `if TYPE_CHECKING:` (an unguarded stub method is a real,
+    empty method at runtime and can silently shadow another mixin's real implementation
+    depending on base-class order). Attributes typed Any (repo, _lock, _executor,
+    _global_learning, _provider_epoch, _cancel) would otherwise need their real classes
+    imported from corpus_builder.py, which is circular.
+    """
+
+    if TYPE_CHECKING:
+        repo: Any
+        _lock: Any
+        _executor: ThreadPoolExecutor
+        _global_learning: Any
+        _ledger: Any
+        _provider_epoch: dict[str, int]
+        _cancel: set[str]
+
+        def active_enrichment_runs(self) -> int: ...
+        def _cancelled(self, build_id: str) -> bool: ...
+        def _update(self, build_id: str, **changes: Any) -> dict[str, Any]: ...
+        def _rewrite_and_validate(self, build_id: str, records: list[dict[str, Any]], *, persist_records: bool = True) -> dict[str, Any]: ...
+        def _reconcile_and_validate(self, build_id: str) -> dict[str, Any]: ...
+        def _allowed_fields(self, build_id: str) -> set[str]: ...
+        def _refresh_workflow_fields(self, build: dict[str, Any]) -> dict[str, Any]: ...
+        def _schema_for(self, build_id: str) -> MetadataSchema: ...
+        def _schema_of_build(self, build: dict[str, Any]) -> MetadataSchema: ...
+        def _profile_of_build(self, build: dict[str, Any]) -> dict[str, Any]: ...
+        def _latest_runtime_request(self, build_id: str, fallback: dict[str, Any]) -> dict[str, Any]: ...
+        def _editorial_memory(self, build_id: str, current_record: dict[str, Any] | None = None, *, exclude_record_id: str = "", use_global: bool = True, use_progressive: bool = True, field_filter: set[str] | None = None) -> dict[str, Any]: ...
+        def _enrich_record(
+            self,
+            record: dict[str, Any],
+            manifest: dict[str, Any],
+            request: dict[str, Any],
+            *,
+            previous_text: str = "",
+            next_text: str = "",
+            build_id: str = "",
+            stage_callback: Callable[[dict[str, Any], str, str, str | None], None] | None = None,
+            family_executor: Any = None,
+        ) -> dict[str, Any]: ...
+
+
+    def retry_incomplete_metadata(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Retry only automatically-retryable metadata issues.
+
+        This is deliberately separate from ``resume``: a metadata retry never
+        re-enters document analysis, segmentation, or topology construction.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            return build
+        records = self.repo.load_records(build_id)
+        retryable_types = {"not_run", "llm_failed", "evidence_failed", "invalid_value", "unresolved"}
+        target_indices: list[int] = []
+        target_fields: dict[str, list[str]] = {}
+        for index, record in enumerate(records):
+            incomplete = [str(value) for value in record.get("metadata_incomplete_fields") or []]
+            retry_fields = [
+                field
+                for field in incomplete
+                if _metadata_issue_type_for_field(record, field) in retryable_types
+            ]
+            if retry_fields:
+                target_indices.append(index)
+                target_fields[str(record.get("record_id") or index)] = retry_fields
+        if not target_indices:
+            raise ValueError("No automatically retryable metadata fields remain. Review the human-resolution queue instead.")
+        _validate_execution_budget(request)
+        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
+        build["provider"] = request.get("provider") or build.get("provider") or "ollama"
+        build["model"] = request.get("model") or build.get("model")
+        build["request"] = {**(build.get("request") or {}), **public_request}
+        operation_id = f"metadata-retry-{uuid.uuid4().hex[:10]}"
+        operation = {
+            "operation_id": operation_id, "kind": "metadata_retry", "state": "queued",
+            "started_at": iso_now(), "finished_at": None,
+            "records_total": len(target_indices), "records_processed": 0,
+            "fields_total": sum(len(fields) for fields in target_fields.values()),
+            "fields_resolved": 0, "fields_remaining": sum(len(fields) for fields in target_fields.values()),
+            "provider_profile_id": public_request.get("provider_profile_id"),
+            "provider": build.get("provider"), "model": build.get("model"),
+            "target_fields": target_fields,
+        }
+        build["metadata_operation"] = operation
+        self.repo.save_build(build)
+        self._update(build_id, status="running", stage="metadata_retry", progress=max(0.96, float(build.get("progress") or 0.0)), error=None, resumable=False, metadata_operation=operation)
+        self._executor.submit(self._retry_metadata_worker, build_id, request, operation_id, target_indices, target_fields)
+        return self.repo.get_build(build_id)
+
+
+    def _retry_metadata_worker(self, build_id: str, request: dict[str, Any], operation_id: str, target_indices: list[int], target_fields: dict[str, list[str]]) -> None:
+        request = {**request, "_capacity_priority": "foreground"}
+        try:
+            build = self.repo.get_build(build_id)
+            records = self.repo.load_records(build_id)
+            # Queued ordinals may have moved or retired before this worker starts.
+            target_indices = [
+                index for index, record in enumerate(records)
+                if str(record.get("record_id") or "") in target_fields
+            ]
+            manifest = build.get("manifest") or {}
+            total = max(1, len(target_indices))
+            max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
+            operation = dict(build.get("metadata_operation") or {})
+            operation["state"] = "running"
+            self._update(build_id, metadata_operation=operation)
+            with (
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-meta-retry",
+                ) as pool,
+                ThreadPoolExecutor(
+                    max_workers=max_workers,
+                    thread_name_prefix="pdf-corpus-family-retry",
+                ) as family_pool,
+            ):
+                def submit_record(index: int):
+                    record = dict(records[index])
+                    previous_text = str(records[index - 1].get("text") or "") if index > 0 else ""
+                    next_text = str(records[index + 1].get("text") or "") if index + 1 < len(records) else ""
+                    return pool.submit(
+                        self._enrich_record,
+                        record,
+                        manifest,
+                        request,
+                        previous_text=previous_text,
+                        next_text=next_text,
+                        build_id=build_id,
+                        family_executor=family_pool,
+                    )
+                processed = 0
+                resolved = 0
+                for index, future in bounded_as_completed(
+                    target_indices, submit_record, max_pending=max_workers,
+                    cancelled=lambda: self._cancelled(build_id),
+                ):
+                    before = list(records[index].get("metadata_incomplete_fields") or [])
+                    try:
+                        updated = future.result()
+                    except Exception as exc:
+                        updated = dict(records[index])
+                        schema = self._schema_for(build_id)
+                        reset_fields_for_evaluation(
+                            updated,
+                            target_fields.get(str(updated.get("record_id") or index), []),
+                            schema=schema,
+                            discard_history=False,
+                            method="metadata_retry_failed",
+                            reason=f"Metadata retry failed: {exc}",
+                        )
+                        updated["metadata_needs_attention"] = True
+                        updated["metadata_attention_reasons"] = [f"Metadata retry failed: {exc}"]
+                    record_id = str(records[index]["record_id"])
+                    baseline = records[index]
+                    allowed = self._allowed_fields(build_id)
+
+                    def merge_retry(
+                        rows: list[dict[str, Any]], baseline: dict[str, Any] = baseline,
+                        updated: dict[str, Any] = updated, allowed: set[str] = allowed,
+                    ) -> None:
+                        if rows and _record_source_matches(rows[0], baseline):
+                            rows[0] = _merge_enrichment_snapshot(rows[0], updated, allowed)
+
+                    current = self.repo.reconcile_records(build_id, merge_retry, record_ids=[record_id])
+                    after = set(current[0].get("metadata_incomplete_fields") or []) if current else set(before)
+                    resolved += sum(1 for field in before if field not in after)
+                    processed += 1
+                    if current:
+                        records[index] = current[0]
+                        note_record_metadata(build_id, record_id, "record_completed")
+                    op = dict(self.repo.get_build(build_id).get("metadata_operation") or {})
+                    op.update({
+                        "state": "running", "records_processed": processed,
+                        "fields_resolved": resolved,
+                        "fields_remaining": max(0, int(op.get("fields_total") or 0) - resolved),
+                    })
+                    self._update(build_id, status="running", stage="metadata_retry", progress=min(0.979, 0.96 + 0.019 * (processed / total)), metadata_operation=op)
+                if self._cancelled(build_id):
+                    raise InterruptedError("Metadata retry cancelled")
+            self._reconcile_and_validate(build_id)
+            with self._lock:
+                if self._cancelled(build_id):
+                    raise InterruptedError("Metadata retry cancelled")
+                final_build = self.repo.get_build(build_id)
+                records = self.repo.get_records(build_id, list(target_fields))
+                target_remaining = 0
+                for record in records:
+                    if record is None:
+                        continue
+                    rid = str(record.get("record_id") or "")
+                    incomplete_now = set(str(value) for value in record.get("metadata_incomplete_fields") or [])
+                    target_remaining += sum(1 for field in target_fields[rid] if field in incomplete_now)
+                unresolved_after = int((final_build.get("metadata_issue_summary") or {}).get("fields_unresolved") or 0)
+                op = dict(final_build.get("metadata_operation") or {})
+                op.update({
+                    "state": "completed", "finished_at": iso_now(),
+                    "records_processed": len(target_indices),
+                    "fields_remaining": target_remaining,
+                    "fields_resolved": max(0, int(op.get("fields_total") or 0) - target_remaining),
+                    "unresolved_fields_after": unresolved_after,
+                })
+                final_build["metadata_operation"] = op
+                self._refresh_workflow_fields(final_build)
+                self.repo.save_build(final_build)
+        except Exception as exc:
+            build = self.repo.get_build(build_id)
+            op = dict(build.get("metadata_operation") or {})
+            op.update({"state": "failed", "finished_at": iso_now(), "error": str(exc)})
+            build["metadata_operation"] = op
+            build["status"] = "awaiting_review"
+            build["stage"] = "review"
+            build["error"] = None
+            warnings = list(build.get("warnings") or [])
+            warnings.append(f"Metadata retry failed: {exc}")
+            build["warnings"] = warnings[-200:]
+            self._refresh_workflow_fields(build)
+            self.repo.save_build(build)
+
+
+    def rerun_metadata_enrichment(self, build_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        """Start one enrichment pass, or a chain of up to ``passes`` passes.
+
+        The build stays open for review while passes run. A chain ends early once a
+        pass changes nothing, because a further pass could only repeat itself.
+        """
+        build = self.repo.get_build(build_id)
+        if build.get("status") in {"queued", "running"}:
+            raise ValueError("Wait for the active corpus operation to finish before starting metadata enrichment.")
+        _validate_execution_budget(request)
+        limit = max(1, int(settings.enrichment_max_concurrent_runs))
+        working = self.active_enrichment_runs()
+        if working >= limit:
+            raise ValueError(f"{working} metadata enrichment run(s) are already working (the limit is {limit}). Wait for one to finish.")
+        scope = str(request.get("scope") or "all")
+        groups = self._schema_of_build(build).family_fields()
+        families = [str(v) for v in request.get("families") or [] if str(v) in groups] or list(groups)
+        passes = max(1, min(MAX_PASSES, int(request.get("passes") or 1)))
+        record_ids = [str(value) for value in request.get("record_ids") or [] if str(value)]
+        if scope == "selected" and not record_ids:
+            raise ValueError("Select at least one record for selected-record enrichment.")
+        indices = _enrichment_pass_indices(self.repo.load_records(build_id), scope, record_ids)
+        if not indices:
+            raise ValueError("No records match the selected metadata enrichment scope.")
+        public_request = {k: v for k, v in request.items() if k not in {"api_key", "_review_provider"}}
+        operation_id = f"metadata-enrichment-{uuid.uuid4().hex[:10]}"
+        run = {
+            "operation_id": operation_id, "kind": "metadata_enrichment_rerun", "state": "queued",
+            "started_at": iso_now(), "finished_at": None,
+            "records_total": len(indices), "records_processed": 0, "records_unchanged": 0, "records_enriched": 0,
+            "records_disputed": 0, "records_reopened": 0, "records_skipped": 0, "fields_replaced": 0, "fields_kept": 0,
+            "provider_profile_id": public_request.get("provider_profile_id"),
+            "provider": request.get("provider") or build.get("provider"), "model": request.get("model") or build.get("model"),
+            "families": families, "scope": scope,
+            "passes_requested": passes, "passes_completed": 0, "current_pass": 0, "converged": False, "pass_results": [],
+            "record_ids": record_ids, "active_tasks": [], "current_record_id": None, "current_task": None,
+        }
+        for key in ("recheck_rate", "iaa_rate"):
+            if request.get(key) is not None:
+                build["experiment"] = {**(build.get("experiment") or {}), key: float(request[key])}
+        runs = list(build.get("metadata_enrichment_runs") or []) + [run.copy()]
+        build["metadata_enrichment_runs"] = runs[-30:]
+        build["metadata_operation"] = run.copy()
+        self.repo.save_build(build)
+        self._update(build_id, status="running", stage="metadata_enrichment_rerun", error=None, resumable=False, metadata_operation=run)
+        # The operation id tags every ledger event this run writes, so runs never blur together.
+        self._executor.submit(self._metadata_enrichment_rerun_worker, build_id, {**request, "run_id": operation_id}, operation_id, scope, families, passes)
+        return self.repo.get_build(build_id)
+
+
+    def _share_generalizable_learning(self, build_id: str) -> None:
+        """Offer this build's reviewer-confirmed conventions to the cross-build store."""
+        build = self.repo.get_build(build_id)
+        if build.get("editorial_memory_reset_at"):
+            return
+        local = {field: value for field, value in self._editorial_memory(build_id).get("conventions", {}).items() if value.get("scope") != "global"}
+        self._global_learning.observe(build_id, local)
+
+
+    def _merge_enrichment_candidate(
+        self, live: dict[str, Any], candidate: dict[str, Any], families: list[str], run_id: str, request: dict[str, Any], profile: dict[str, Any],
+        schema: MetadataSchema | None = None, pass_number: int = 1,
+    ) -> dict[str, Any]:
+        """Fold one pass's candidate into the live record. Human-owned assertions are never touched."""
+        active_schema = schema or default_schema()
+        groups = active_schema.family_fields()
+        # Provider/test candidates are often shallow copies of the live record.
+        # Canonical migration mutates nested assertion maps, so isolate the
+        # candidate before migration to prevent it from changing live state
+        # before conflict resolution has made a decision.
+        candidate = json.loads(json.dumps(candidate))
+        candidate_values = {
+            field: json.loads(json.dumps(candidate.get(field)))
+            for family in families
+            for field in groups[family]
+            if field in candidate
+        }
+        candidate_status_snapshot = json.loads(
+            json.dumps(
+                candidate.get("metadata_field_status")
+                if isinstance(candidate.get("metadata_field_status"), dict)
+                else {}
+            )
+        )
+        migrate_record_assertions(live, active_schema)
+        migrate_record_assertions(candidate, active_schema)
+
+        def candidate_id(field: str, value: Any, source: str, model: str = "", pass_no: int | None = None) -> str:
+            payload = json.dumps(
+                {"field": field, "value": value, "source": source, "model": model, "run_id": run_id, "pass": pass_no},
+                ensure_ascii=False, sort_keys=True, default=str,
+            )
+            return "cand-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+        live_status = live.setdefault("metadata_field_status", {})
+        cand_status = candidate.get("metadata_field_status") if isinstance(candidate.get("metadata_field_status"), dict) else {}
+        added: list[str] = []
+        replaced: list[dict[str, Any]] = []
+        kept: list[str] = []
+        disputes: list[dict[str, Any]] = []
+        history_disputes: list[dict[str, Any]] = []
+        informational: list[dict[str, Any]] = []
+        known = {(d.get("field"), json.dumps(d.get("proposed"), sort_keys=True, default=str)) for d in live.get("metadata_disputes") or [] if isinstance(d, dict)}
+        model_name = str(request.get("model") or "")
+
+        for family in families:
+            for field in groups[family]:
+                new = candidate_values.get(field, candidate.get(field))
+                old = live.get(field)
+                old_assertion = current_assertion_by_name(live, field)
+                new_assertion = current_assertion_by_name(candidate, field)
+                old_info = live_status.get(field) if isinstance(live_status.get(field), dict) else {}
+                snapshot_info = candidate_status_snapshot.get(field)
+                new_info = (
+                    snapshot_info
+                    if isinstance(snapshot_info, dict)
+                    else (cand_status.get(field) if isinstance(cand_status.get(field), dict) else {})
+                )
+                # Some provider/test candidates are shallow derivatives of the live
+                # record: their top-level proposal and compatibility status are new,
+                # but the copied canonical assertion still describes the old value.
+                # Normalize that mismatch into a fresh model assertion before
+                # conflict resolution so canonical state follows the proposal.
+                if new not in (None, "", []) and (
+                    new_assertion is None or not same_value(new_assertion.value, new)
+                ):
+                    evidence_map = (
+                        candidate.get("metadata_evidence")
+                        if isinstance(candidate.get("metadata_evidence"), dict)
+                        else {}
+                    )
+                    evidence_item = evidence_map.get(field) if isinstance(evidence_map.get(field), dict) else None
+                    new_assertion = create_model_assertion(
+                        candidate,
+                        field,
+                        new,
+                        schema=active_schema,
+                        confidence=(
+                            float(new_info["confidence"])
+                            if isinstance(new_info.get("confidence"), (int, float))
+                            and not isinstance(new_info.get("confidence"), bool)
+                            else None
+                        ),
+                        method=str(new_info.get("method") or "llm"),
+                        reason=str(new_info.get("reason") or ""),
+                        evidence=[dict(evidence_item)] if evidence_item else [],
+                        model=str(new_info.get("model") or request.get("model") or "") or None,
+                        run_id=str(new_info.get("run_id") or run_id or "") or None,
+                    )
+                if new in (None, "", []):
+                    continue
+                if old_assertion is not None and old_assertion.authority_status in {"human_confirmed", "human_override"}:
+                    informational.append(enrichment_informational_event(
+                        "agreement" if same_value(old, new) else "protected_suggestion",
+                        field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason=(
+                            "The model agreed with the human-owned value."
+                            if same_value(old, new)
+                            else "The model proposed a different value, but the human-owned value remains authoritative."
+                        ),
+                    ))
+                    continue
+                if old in (None, "", []):
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
+                    else:
+                        live[field] = new
+                    added.append(field)
+                    continue
+                if field in CONFIDENCE_FIELDS:
+                    continue
+                if same_value(old, new):
+                    informational.append(enrichment_informational_event(
+                        "agreement",
+                        field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason="The model found no new supported value.",
+                    ))
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion, select=False)
+                    continue
+                if (field, json.dumps(new, sort_keys=True, default=str)) in known:
+                    informational.append(enrichment_informational_event(
+                        "duplicate",
+                        field,
+                        run_id=run_id,
+                        pass_number=pass_number,
+                        model=model_name,
+                        authoritative=old,
+                        proposed=new,
+                        confidence=new_info.get("confidence"),
+                        reason="The model repeated an existing unresolved candidate.",
+                    ))
+                    continue
+                # PR #83 permits a valid LLM proposal to occupy the record while
+                # remaining pending human review. PR #81's generic resolver treats
+                # an unresolved existing value as replaceable; doing that here would
+                # discard the first unverified proposal. When both values are
+                # pending LLM proposals, retain both for reviewer adjudication.
+                both_pending_llm = (
+                    old_info.get("verification_status") == "pending_review"
+                    and new_info.get("verification_status") == "pending_review"
+                    and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
+                    and (new_info.get("value_source") == "llm" or new_info.get("method") == "llm")
+                )
+                decision = "keep_both" if both_pending_llm else resolve_conflict(old_info, new_info)
+                if decision == "replace":
+                    replaced.append({"field": field, "previous": old, "value": new, "confidence": new_info.get("confidence")})
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion)
+                    else:
+                        live[field] = new
+                elif decision == "keep_existing":
+                    kept.append(field)
+                else:
+                    known.add((field, json.dumps(new, sort_keys=True, default=str)))
+                    existing_source = (
+                        "llm"
+                        if (
+                            old_info.get("verification_status") == "pending_review"
+                            and (old_info.get("value_source") == "llm" or old_info.get("method") == "llm")
+                        )
+                        else "current"
+                    )
+                    existing_model = str(old_info.get("model") or "")
+                    existing_pass = old_info.get("pass") if isinstance(old_info.get("pass"), int) else None
+                    existing_candidate = {
+                        "candidate_id": candidate_id(field, old, existing_source, existing_model, existing_pass),
+                        "value": old, "source": existing_source, "model": existing_model or None,
+                        "run_id": old_info.get("run_id"), "pass": existing_pass,
+                        "created_at": old_info.get("updated_at") or old_info.get("created_at"),
+                    }
+                    if isinstance(old_info.get("confidence"), (int, float)):
+                        existing_candidate["confidence"] = old_info.get("confidence")
+                    if old_info.get("verification_status"):
+                        existing_candidate["verification_status"] = old_info.get("verification_status")
+
+                    model_name = str(request.get("model") or new_info.get("model") or "")
+                    candidate_entry = {
+                        "candidate_id": candidate_id(field, new, "llm", model_name, pass_number),
+                        "value": new, "source": "llm", "model": model_name or None,
+                        "run_id": run_id, "pass": pass_number, "created_at": iso_now(),
+                    }
+                    if isinstance(new_info.get("confidence"), (int, float)):
+                        candidate_entry["confidence"] = new_info.get("confidence")
+                    if new_info.get("verification_status"):
+                        candidate_entry["verification_status"] = new_info.get("verification_status")
+
+                    prior_dispute = next(
+                        (item for item in live.get("metadata_disputes") or []
+                         if isinstance(item, dict) and item.get("field") == field and not item.get("resolved_at")),
+                        None,
+                    )
+                    if prior_dispute is not None:
+                        fallback_existing = dict(existing_candidate)
+                        fallback_existing["value"] = prior_dispute.get("existing")
+                        candidates = list(prior_dispute.get("candidates") or [fallback_existing])
+                        if not any(same_value(item.get("value"), new) for item in candidates if isinstance(item, dict)):
+                            candidates.append(candidate_entry)
+                            prior_dispute["candidates"] = candidates[-12:]
+                            prior_dispute["proposed"] = new
+                            prior_dispute["run_id"] = run_id
+                            prior_dispute["pass"] = pass_number
+                            prior_dispute["updated_at"] = iso_now()
+                            history_disputes.append(json.loads(json.dumps(prior_dispute)))
+                    else:
+                        dispute = {
+                            "field": field, "existing": old, "proposed": new,
+                            "candidates": [existing_candidate, candidate_entry],
+                            "confidence": new_info.get("confidence"), "reason": new_info.get("reason"),
+                            "run_id": run_id, "pass": pass_number, "created_at": iso_now(),
+                        }
+                        disputes.append(dispute)
+                        history_disputes.append(json.loads(json.dumps(dispute)))
+                    if new_assertion is not None:
+                        store_assertion(live, new_assertion, select=False)
+                    if old_assertion is not None:
+                        reopen_assertion(
+                            live,
+                            old_assertion,
+                            reason="A later metadata enrichment pass proposed a different value and neither was confident enough to decide.",
+                            legacy_metadata={"reason_code": "llm_disagreement"},
+                        )
+        project_record_assertions(live)
+        live["metadata_disputes"] = (list(live.get("metadata_disputes") or []) + disputes)[-100:]
+        outcome = "enriched" if added or replaced else "disputed" if history_disputes else "unchanged"
+        history = list(live.get("metadata_enrichment_history") or [])
+        history.append({
+            "run_id": run_id, "pass": pass_number, "at": iso_now(), "state": "complete", "outcome": outcome, "added_fields": added,
+            "replaced": replaced, "kept_existing": kept, "disputes": history_disputes,
+            "informational": informational,
+            "provider_profile_id": request.get("provider_profile_id"), "model": request.get("model"),
+        })
+        live["metadata_enrichment_history"] = history[-30:]
+        activity = dict(live.get("activity") or {})
+        activity["llm_review_count"] = int(activity.get("llm_review_count") or 0) + 1
+        activity["enrichment_pass_count"] = int(activity.get("enrichment_pass_count") or 0) + 1
+        activity["last_llm_reviewed_at"] = iso_now()
+        activity["last_enrichment_at"] = activity["last_llm_reviewed_at"]
+        activity["last_enrichment_provider"] = request.get("provider")
+        activity["last_enrichment_model"] = request.get("model")
+        live["activity"] = activity
+        if added or replaced or history_disputes:
+            live["review_disposition"] = "pending"
+            live["accepted"] = False
+            live["rejected"] = False
+            live["needs_review"] = True
+            live["review_reason"] = "Metadata enrichment added, replaced, or disputed metadata; review the highlighted changes."
+            _sync_record_metadata_state(live, profile)
+        return {"outcome": outcome, "added": len(added), "replaced": len(replaced), "kept": len(kept), "disputed": len(history_disputes)}
+
+
+    def _run_enrichment_pass(
+        self, build_id: str, request: dict[str, Any], run_id: str, scope: str, families: list[str],
+        on_progress: Callable[[dict[str, int], int], None], pass_number: int = 1,
+    ) -> dict[str, int]:
+        """Run one pass over the records currently in scope, merging results into live state."""
+        request = {**request, "_capacity_priority": "foreground"}
+        build = self.repo.get_build(build_id)
+        manifest = build.get("manifest") or {}
+        profile = self._profile_of_build(build)
+        snapshot = self.repo.load_records(build_id)
+        indices = _enrichment_pass_indices(snapshot, scope, [str(value) for value in request.get("record_ids") or []])
+        priority = [str(value) for value in build.get("metadata_priority_record_ids") or []]
+        priority_indices = [index for value in priority for index, row in enumerate(snapshot) if str(row.get("record_id") or "") == value and index in indices]
+        indices = priority_indices + [index for index in indices if index not in priority_indices]
+        max_workers = max(1, min(64, int(request.get("max_concurrent_requests") or 1)))
+        totals: Counter[str] = Counter()
+        pass_schema = self._schema_for(build_id)
+        with self._lock:
+            epoch_at_start = self._provider_epoch.get(build_id, 0)
+        provider_keys = ("provider", "model", "base_url", "api_key", "generation", "provider_profile_id", "review_provider_profile_id", "_review_provider")
+
+        def effective_request() -> dict[str, Any]:
+            """This run's request, with the provider the reviewer switched to since it started, if they did.
+
+            A switch applies to records not yet started; requests already in flight finish on the old model.
+            Each event in the ledger names the model that actually answered, so the metrics show both.
+            """
+            with self._lock:
+                if self._provider_epoch.get(build_id, 0) == epoch_at_start:
+                    return request
+                live = self._latest_runtime_request(build_id, request)
+            return {**request, **{key: live[key] for key in provider_keys if key in live}}
+
+        def operation_stage_callback(record: dict[str, Any], task_name: str, state: str, _error: str | None) -> None:
+            self._update_enrichment_operation_task(
+                build_id,
+                run_id,
+                str(record.get("record_id") or ""),
+                task_name,
+                state,
+            )
+
+        def candidate_for(
+            index: int,
+        ) -> tuple[dict[str, Any] | None, dict[str, Any], float, Exception | None]:
+            record_started = time.perf_counter()
+            candidate = json.loads(json.dumps(snapshot[index]))
+            reset_fields = {
+                field
+                for family in families
+                for field in pass_schema.family_fields()[family]
+            }
+            reset_fields_for_evaluation(
+                candidate,
+                reset_fields,
+                schema=pass_schema,
+                discard_history=True,
+                method="metadata_rerun_worker",
+            )
+            for family in families:
+                candidate.setdefault("metadata_stage_status", {}).pop(family, None)
+                candidate.setdefault("metadata_execution_ledger", {}).pop(family, None)
+            neighbors = {
+                "previous_text": str(snapshot[index - 1].get("text") or "") if index > 0 else "",
+                "next_text": str(snapshot[index + 1].get("text") or "") if index + 1 < len(snapshot) else "",
+            }
+            request_used = {**effective_request(), "families": families, "_interactive_provider_override": True}
+            try:
+                enriched = self._enrich_record(
+                    candidate,
+                    manifest,
+                    request_used,
+                    build_id=build_id,
+                    previous_text=neighbors["previous_text"],
+                    next_text=neighbors["next_text"],
+                    stage_callback=operation_stage_callback,
+                    family_executor=family_pool,
+                )
+                return enriched, request_used, record_started, None
+            except Exception as exc:
+                return None, request_used, record_started, exc
+
+        with (
+            ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="pdf-corpus-meta-enrich",
+            ) as pool,
+            ThreadPoolExecutor(
+                max_workers=max_workers,
+                thread_name_prefix="pdf-corpus-family-enrich",
+            ) as family_pool,
+        ):
+            submitted: dict[int, float] = {}
+
+            def submit_candidate(index: int):
+                submitted[index] = time.perf_counter()
+                return pool.submit(candidate_for, index)
+
+            for index, future in bounded_as_completed(
+                indices, submit_candidate, max_pending=max_workers,
+                cancelled=lambda: self._cancelled(build_id),
+            ):
+                if self._cancelled(build_id):
+                    break
+                submitted_at = submitted.pop(index)
+                record_id = str(snapshot[index].get("record_id") or "")
+                try:
+                    candidate, request_used, record_started, candidate_error = future.result()
+                except Exception as exc:
+                    candidate = None
+                    request_used = request
+                    record_started = submitted_at
+                    candidate_error = exc
+                failure: dict[str, Any] = {}
+                if candidate_error is not None:
+                    failure = {
+                        "run_id": run_id,
+                        "at": iso_now(),
+                        "state": "failed",
+                        "error": str(candidate_error),
+                    }
+                # Merge into the live copy, never the snapshot: the reviewer may have
+                # edited this or any other record while the model was thinking.
+                result: dict[str, Any]
+                with self._lock:
+                    was_accepted = False
+                    result = {"outcome": "skipped"}
+
+                    def merge_candidate(
+                        rows: list[dict[str, Any]], baseline: dict[str, Any] = snapshot[index],
+                        candidate: dict[str, Any] | None = candidate,
+                        failure: dict[str, Any] = failure, request_used: dict[str, Any] = request_used,
+                    ) -> None:
+                        nonlocal result, was_accepted
+                        if not rows:
+                            return
+                        live = rows[0]
+                        if not _record_source_matches(live, baseline):
+                            return
+                        if candidate is None:
+                            live["metadata_enrichment_history"] = (list(live.get("metadata_enrichment_history") or []) + [failure])[-30:]
+                            result = {"outcome": "failed"}
+                            return
+                        was_accepted = str(live.get("review_disposition") or "pending") == "accepted"
+                        result = self._merge_enrichment_candidate(live, candidate, families, run_id, request_used, profile, schema=pass_schema, pass_number=pass_number)
+                    current = self.repo.reconcile_records(build_id, merge_candidate, record_ids=[record_id])
+                    if not current:
+                        continue
+                    if was_accepted and result["outcome"] != "unchanged":
+                        totals["records_reopened"] += 1
+                # The event promises that an immediate read sees the merged result.
+                note_record_metadata(build_id, record_id, "record_completed")
+                self._ledger.append(
+                    RECORD_RUN,
+                    model=str(request_used.get("model") or ""),
+                    field="__record__",
+                    build_id=build_id,
+                    record_id=record_id,
+                    run_id=run_id,
+                    elapsed_ms=max(
+                        0,
+                        int((time.perf_counter() - record_started) * 1000),
+                    ),
+                    outcome=result.get("outcome"),
+                    pass_number=pass_number,
+                    families=list(families),
+                    provider=str(request_used.get("provider") or ""),
+                    provider_profile_id=request_used.get("provider_profile_id"),
+                    max_concurrent_requests=max_workers,
+                )
+                totals["records_processed"] += 1
+                for key, name in (("added", "fields_added"), ("replaced", "fields_replaced"), ("kept", "fields_kept"), ("disputed", "fields_disputed")):
+                    totals[name] += result.get(key, 0)
+                totals[f"records_{result['outcome']}"] += 1
+                on_progress(dict(totals), len(indices))
+        return dict(totals)
+
+
+    def _update_enrichment_operation_task(
+        self, build_id: str, operation_id: str, record_id: str, task_name: str, state: str,
+    ) -> None:
+        """Expose the active rerun family without changing the aggregate counters."""
+        with self._lock:
+            build = self.repo.get_build(build_id)
+            operation = dict(build.get("metadata_operation") or {})
+            if operation.get("operation_id") != operation_id:
+                return
+            active = [
+                item for item in operation.get("active_tasks") or []
+                if isinstance(item, dict)
+                and not (str(item.get("record_id") or "") == record_id and str(item.get("task") or "") == task_name)
+            ]
+            if state == "running":
+                active.append({
+                    "record_id": record_id,
+                    "task": task_name,
+                    "state": state,
+                    "started_at": iso_now(),
+                })
+            operation["active_tasks"] = active[:32]
+            current = active[0] if active else {}
+            operation["current_record_id"] = current.get("record_id")
+            operation["current_task"] = current.get("task")
+            self._update(build_id, metadata_operation=operation)
+
+
+    def _metadata_enrichment_rerun_worker(self, build_id: str, request: dict[str, Any], operation_id: str, scope: str, families: list[str], passes: int) -> None:
+        op = dict(self.repo.get_build(build_id).get("metadata_operation") or {})
+        try:
+            counter_keys = ("records_processed", "records_enriched", "records_disputed", "records_unchanged", "records_skipped", "records_reopened", "fields_replaced", "fields_kept")
+            for pass_number in range(1, passes + 1):
+                if self._cancelled(build_id):
+                    op["state"] = "cancelled"
+                    break
+                # Each pass starts from what reviewers and earlier passes settled,
+                # and the editorial memory it reads reflects both.
+                self._share_generalizable_learning(build_id)
+                before = {key: int(op.get(key) or 0) for key in counter_keys}
+
+                def on_progress(totals: dict[str, int], pass_total: int, pass_number: int = pass_number, before: dict[str, int] = before) -> None:
+                    op.update({key: before[key] + totals.get(key, 0) for key in counter_keys})
+                    live_operation = self.repo.get_build(build_id).get("metadata_operation")
+                    if isinstance(live_operation, dict):
+                        for key in ("active_tasks", "current_record_id", "current_task"):
+                            op[key] = live_operation.get(key)
+                    op.update({"state": "running", "current_pass": pass_number, "records_total": max(int(op.get("records_total") or 0), pass_total)})
+                    fraction = ((pass_number - 1) + totals.get("records_processed", 0) / max(1, pass_total)) / passes
+                    self._update(build_id, metadata_operation=dict(op), progress=min(0.995, 0.78 + 0.20 * fraction))
+
+                op.update({"state": "running", "current_pass": pass_number})
+                totals = self._run_enrichment_pass(build_id, request, operation_id, scope, families, on_progress, pass_number=pass_number)
+                changed = totals.get("fields_added", 0) + totals.get("fields_replaced", 0) + totals.get("fields_disputed", 0)
+                op["passes_completed"] = pass_number
+                op["pass_results"] = list(op.get("pass_results") or []) + [{"pass": pass_number, "changed_fields": changed, **totals}]
+                self._update(build_id, metadata_operation=dict(op))
+                if self._cancelled(build_id):
+                    op["state"] = "cancelled"
+                    break
+                if changed == 0:
+                    # A pass that changes nothing has converged; more would repeat it.
+                    op["converged"] = True
+                    break
+            self._share_generalizable_learning(build_id)
+            self._reconcile_and_validate(build_id)
+            with self._lock:
+                final = self.repo.get_build(build_id)
+                op.update({
+                    "state": "cancelled" if op.get("state") == "cancelled" or self._cancelled(build_id) else "completed",
+                    "finished_at": iso_now(),
+                })
+                final["metadata_operation"] = op
+                final["metadata_enrichment_runs"] = [({**r, **op} if r.get("operation_id") == operation_id else r) for r in final.get("metadata_enrichment_runs") or []]
+                final.update({"status": "awaiting_review", "stage": "review", "progress": 1.0, "cancel_requested": False})
+                self._cancel.discard(build_id)
+                self._refresh_workflow_fields(final)
+                self.repo.save_build(final)
+        except Exception as exc:
+            build = self.repo.get_build(build_id)
+            op.update({"state": "failed", "finished_at": iso_now(), "error": str(exc)})
+            build.update({"metadata_operation": op, "status": "awaiting_review", "stage": "review", "cancel_requested": False})
+            self._cancel.discard(build_id)
+            self.repo.save_build(build)
+
+
+    @_serialize_record_mutation
+    def rerun_metadata(self, build_id: str, record_id: str, request: dict[str, Any]) -> dict[str, Any]:
+        build = self.repo.get_build(build_id)
+        records = self.repo.load_records(build_id)
+        target = next((record for record in records if record.get("record_id") == record_id), None)
+        if target is None:
+            raise KeyError(record_id)
+        metadata_operation = build.get("metadata_operation")
+        metadata_active = (
+            str(build.get("stage") or "").startswith("metadata_enrichment")
+            or (
+                build.get("status") == "running"
+                and isinstance(metadata_operation, dict)
+                and metadata_operation.get("state") == "running"
+            )
+            or "metadata_priority_record_ids" in build
+        )
+        if metadata_active:
+            _prepend_metadata_priority(build, record_id)
+            feedback = list(build.get("metadata_review_feedback") or [])
+            feedback.append({
+                "record_id": record_id,
+                "at": iso_now(),
+                "source": "human_requeue",
+                "human_decisions": list(target.get("metadata_decisions") or [])[-20:],
+                "metadata": {
+                    key: target.get(key)
+                    for fields in self._schema_for(build_id).family_fields().values()
+                    for key in fields
+                    if key in target
+                },
+            })
+            build["metadata_review_feedback"] = feedback[-100:]
+            self.repo.save_build(build)
+            return build
+        requested_families = request.get("families")
+        rerun_groups = self._schema_for(build_id).family_fields()
+        families = [str(value) for value in requested_families or [] if str(value) in rerun_groups]
+        if not families:
+            families = list(rerun_groups)
+        # Clear only non-authoritative fields in the selected families. Human,
+        # inherited, and deterministic assertions survive reruns.
+        schema = self._schema_for(build_id)
+        migrate_record_assertions(target, schema)
+        fields_to_reset: set[str] = set()
+        for family in families:
+            for key in rerun_groups[family]:
+                assertion = current_assertion_by_name(target, key)
+                if assertion is not None and (
+                    assertion.authority_status in {"human_confirmed", "human_override"}
+                    or assertion.derivation_method in {"inherited", "deterministic"}
+                ):
+                    continue
+                fields_to_reset.add(key)
+            target.setdefault("metadata_stage_status", {}).pop(family, None)
+            target.setdefault("metadata_stage_results", {}).pop(family, None)
+            target.setdefault("metadata_execution_ledger", {}).pop(family, None)
+        reset_fields_for_evaluation(
+            target,
+            fields_to_reset,
+            schema=schema,
+            discard_history=False,
+            method="human_requeue",
+            reason="Reviewer requested a fresh metadata evaluation.",
+        )
+        rerun_request = dict(request)
+        rerun_request["families"] = families
+        rerun_request["_interactive_provider_override"] = True
+        rerun_request["_capacity_priority"] = "foreground"
+        index = records.index(target)
+        self._enrich_record(
+            target,
+            build.get("manifest") or {},
+            rerun_request,
+            previous_text=str(records[index - 1].get("text") or "") if index > 0 else "",
+            next_text=str(records[index + 1].get("text") or "") if index + 1 < len(records) else "",
+            build_id=build_id,
+        )
+        self._rewrite_and_validate(build_id, records)
+        note_record_metadata(build_id, record_id, "record_completed")
+        return target

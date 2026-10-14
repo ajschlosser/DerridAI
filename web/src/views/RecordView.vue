@@ -1,22 +1,66 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
+import { toast } from "../composables/notifications";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { decompressUrlState } from "../domain/urlState";
+import { useAuthStore } from "../stores/auth";
 import { useRoute } from "vue-router";
-import * as runtime from "../runtime/runtime.js";
+import { sharedRecordWorkspace as recordWorkspace } from "../domain/sharedRecordWorkspace";
+import { openSemanticRecord } from "../domain/semanticMapSources";
+import { navigateTo } from "../domain/sharedNavigation";
 import { useI18nStore } from "../stores/i18n";
+import { useNewerData } from "../composables/useNewerData";
+import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import { useShellStore } from "../stores/shell";
 import RecordWorkspaceHeader from "../components/record/RecordWorkspaceHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import RecordReadingPane from "../components/record/RecordReadingPane.vue";
 import RecordInspector from "../components/record/RecordInspector.vue";
 import RecordEditSheet from "../components/record/RecordEditSheet.vue";
+import CorpusRecordSemanticMap from "../components/corpus-builder/CorpusRecordSemanticMap.vue";
+import { corpusBuildsApi } from "../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../types/record";
+import type { DerridaiNormativeModel, ResearchObjectGraph } from "../types/researchObjectGraph";
+import { useSemanticMapStore } from "../stores/semanticMap";
 import { annotationsService } from "../services/annotations";
+import { currentFieldAssertions } from "../domain/fieldAssertions";
+import { metadataSchemasApi, type MetadataSchema } from "../api/metadataSchemas";
 
 const i18n = useI18nStore();
 const shell = useShellStore();
+const semanticMap = useSemanticMapStore();
 const route = useRoute();
+const auth = useAuthStore();
+let readRequest = 0;
+let semanticRequest = 0;
 const snapshot = ref<RecordWorkspaceSnapshot>({ available: false, mode: "workspace" });
 const loading = ref(true);
 const error = ref("");
+const objectGraph = ref<ResearchObjectGraph | null>(null);
+const normativeModel = ref<DerridaiNormativeModel | null>(null);
+const graphLoading = ref(false);
+const graphError = ref("");
+let graphRequest = 0;
+let schemaRequest = 0;
+const recordSchema = ref<MetadataSchema | null>(null);
+const schemaCache = new Map<string, MetadataSchema | null>();
 const editOpen = ref(false);
 const inspectorCollapsed = ref(false);
 const inspectorWidth = ref(
@@ -31,15 +75,69 @@ const annotationQuote = ref("");
 const annotationNote = ref("");
 const annotationTags = ref("");
 const annotationField = ref("text");
+const annotationScope = ref<"text" | "record" | "work">("text");
+const annotationParentId = ref<string | null>(null);
+const annotationLinkedRecords = ref("");
 const annotationError = ref("");
+const recordSemanticBuildId = ref("");
+const recordSemanticLoading = ref(false);
+const showRecordMap = computed(
+  () => semanticMap.enabled && semanticMap.placement === "record" && snapshot.value.available,
+);
+
+function schemaIdForRecord(value: Record<string, unknown>): string {
+  const explicit = String(value.schema_id || "").trim();
+  const ids = new Set<string>(explicit ? [explicit] : []);
+  for (const assertion of currentFieldAssertions(value)) {
+    const id = String(assertion.schema_id || "").trim();
+    if (id) ids.add(id);
+  }
+  return ids.size === 1 ? [...ids][0] : "";
+}
+
+async function loadRecordSchema(value: Record<string, unknown>) {
+  const request = ++schemaRequest;
+  recordSchema.value = null;
+  const schemaId = schemaIdForRecord(value);
+  if (!schemaId) return;
+  if (schemaCache.has(schemaId)) {
+    if (request === schemaRequest) recordSchema.value = schemaCache.get(schemaId) || null;
+    return;
+  }
+  try {
+    const loaded = await metadataSchemasApi.get(schemaId);
+    schemaCache.set(schemaId, loaded);
+    if (request === schemaRequest) recordSchema.value = loaded;
+  } catch {
+    schemaCache.set(schemaId, null);
+    if (request === schemaRequest) recordSchema.value = null;
+  }
+}
+
+async function loadSemanticMap() {
+  const request = ++semanticRequest;
+  recordSemanticBuildId.value = "";
+  const recordId = String(snapshot.value.record_id || "");
+  if (!recordId) return;
+  recordSemanticLoading.value = true;
+  try {
+    const result = await corpusBuildsApi
+      .recordSemanticMapBuild(recordId)
+      .catch(() => ({ build_id: null }));
+    if (request === semanticRequest) recordSemanticBuildId.value = result.build_id || "";
+  } finally {
+    if (request === semanticRequest) recordSemanticLoading.value = false;
+  }
+}
+function openSemanticMap() {
+  semanticMap.enable(semanticMap.placement);
+  void loadSemanticMap();
+  if (semanticMap.placement === "page") navigateTo("semanticmap");
+}
 
 const record = computed(() => snapshot.value.record || {});
 const work = computed(() =>
-  String(
-    record.value.work ||
-      record.value.document_title ||
-      i18n.t("record.untitled", "Untitled record"),
-  ),
+  String(record.value.work || record.value.document_title || i18n.t("record.untitled")),
 );
 const author = computed(() => String(record.value.document_author || ""));
 const year = computed<string | number | null>(() => {
@@ -48,7 +146,7 @@ const year = computed<string | number | null>(() => {
 });
 const positionLabel = computed(() =>
   snapshot.value.total && snapshot.value.current_index != null
-    ? i18n.tf("record.position_of", "{current} of {total}", {
+    ? i18n.tf("record.position_of", {
         current: snapshot.value.current_index + 1,
         total: snapshot.value.total,
       })
@@ -57,44 +155,97 @@ const positionLabel = computed(() =>
 const badges = computed(() => {
   const out: Array<{ text: string; tone?: string }> = [];
   if (record.value.region_type) out.push({ text: String(record.value.region_type) });
-  if (record.value.primary_text === false)
-    out.push({ text: i18n.t("record.secondary_text", "Secondary text") });
-  else if (record.value.primary_text === true)
-    out.push({ text: i18n.t("record.primary_text", "Primary text") });
-  if (record.value.document_is_translation)
-    out.push({ text: i18n.t("record.translation", "Translation") });
-  if (record.value.needs_review)
-    out.push({ text: i18n.t("record.needs_review", "Needs review"), tone: "warn" });
-  if (snapshot.value.mode === "database")
-    out.push({ text: i18n.t("record.database_record", "Database record") });
+  if (record.value.primary_text === false) out.push({ text: i18n.t("record.secondary_text") });
+  else if (record.value.primary_text === true) out.push({ text: i18n.t("record.primary_text") });
+  if (record.value.document_is_translation) out.push({ text: i18n.t("record.translation") });
+  if (record.value.needs_review) out.push({ text: i18n.t("record.needs_review"), tone: "warn" });
+  if (snapshot.value.mode === "database") out.push({ text: i18n.t("record.database_record") });
   else if (snapshot.value.file_name) out.push({ text: String(snapshot.value.file_name) });
   return out;
 });
 
+async function loadTraceability(current: RecordWorkspaceSnapshot) {
+  const request = ++graphRequest;
+  objectGraph.value = null;
+  graphLoading.value = false;
+  graphError.value = "";
+  if (!current.available || !current.record) return;
+  if (!String(current.record.record_id || "").trim()) {
+    graphError.value = i18n.t(
+      "traceability.missing_record_id",
+      "This record does not yet have a durable record ID, so its traceability graph cannot be resolved.",
+    );
+    return;
+  }
+  graphLoading.value = true;
+  try {
+    const [graph, model] = await Promise.all([
+      recordWorkspace.getRecordObjectGraph(current.record),
+      recordWorkspace.getDerridaiNormativeModel(),
+    ]);
+    if (request !== graphRequest) return;
+    objectGraph.value = graph as ResearchObjectGraph;
+    normativeModel.value = model as DerridaiNormativeModel;
+  } catch (exc) {
+    if (request !== graphRequest) return;
+    graphError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === graphRequest) graphLoading.value = false;
+  }
+}
 async function load() {
+  const request = ++readRequest;
   loading.value = true;
   error.value = "";
   try {
-    snapshot.value = (await runtime.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
+    const next = (await recordWorkspace.getRecordWorkspaceSnapshot()) as RecordWorkspaceSnapshot;
+    if (request !== readRequest) return;
+    if (next.record_id !== snapshot.value.record_id) editOpen.value = false;
+    snapshot.value = next;
+    recordWorkspace.rememberRecordWorkspaceSnapshot(next);
+    void loadRecordSchema(next.record || {});
+    void loadTraceability(snapshot.value);
+    loadSemanticMap();
   } catch (exc) {
+    if (request !== readRequest) return;
+    if (
+      exc &&
+      typeof exc === "object" &&
+      "status" in exc &&
+      [401, 403].includes(Number(exc.status))
+    ) {
+      clearSelection();
+      loading.value = false;
+    }
     error.value = exc instanceof Error ? exc.message : String(exc);
   } finally {
-    loading.value = false;
+    if (request === readRequest) loading.value = false;
   }
+}
+const newer = useNewerData();
+async function loadNewer() {
+  newer.acknowledge();
+  await load();
 }
 async function refreshAfter(action: () => Promise<unknown> | unknown) {
   try {
     await action();
     await load();
   } catch (exc) {
-    runtime.notifyToast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
+    if (!snapshot.value.available) {
+      loading.value = false;
+      error.value = exc instanceof Error ? exc.message : String(exc);
+    }
+    toast(exc instanceof Error ? exc.message : String(exc), { tone: "danger" });
   }
 }
 async function previous() {
-  await refreshAfter(() => runtime.recordWorkspaceNavigate(-1));
+  clearSelection();
+  await refreshAfter(() => recordWorkspace.recordWorkspaceNavigate(-1));
 }
 async function next() {
-  await refreshAfter(() => runtime.recordWorkspaceNavigate(1));
+  clearSelection();
+  await refreshAfter(() => recordWorkspace.recordWorkspaceNavigate(1));
 }
 function isTypingTarget(target: EventTarget | null) {
   const element = target as HTMLElement | null;
@@ -112,26 +263,29 @@ function handleKeyboard(event: KeyboardEvent) {
 }
 function setFind(value: string) {
   snapshot.value = { ...snapshot.value, find_query: value };
-  runtime.setRecordWorkspaceFind(value);
+  recordWorkspace.setRecordWorkspaceFind(value);
 }
 async function toggleEvidence() {
-  await refreshAfter(() => runtime.toggleCurrentRecordEvidence());
+  await refreshAfter(() => recordWorkspace.toggleCurrentRecordEvidence());
 }
 async function toggleReview() {
-  await refreshAfter(() => runtime.toggleCurrentRecordReviewSelection());
+  await refreshAfter(() => recordWorkspace.toggleCurrentRecordReviewSelection());
 }
 async function saveChanges(changes: Record<string, unknown>) {
-  await refreshAfter(() => runtime.saveCurrentRecordChanges(changes));
+  await refreshAfter(() => recordWorkspace.saveCurrentRecordChanges(changes));
   editOpen.value = false;
 }
 async function quickChange(changes: Record<string, unknown>) {
-  await refreshAfter(() => runtime.saveCurrentRecordChanges(changes));
+  await refreshAfter(() => recordWorkspace.saveCurrentRecordChanges(changes));
 }
 function metadataSearch(field: string, value: string, contains = false) {
-  runtime.searchCurrentRecordMetadata(field, value, { contains });
+  recordWorkspace.searchCurrentRecordMetadata(field, value, { contains });
 }
 function openAnnotation(selection?: { field: string; quote: string }) {
   annotationField.value = selection?.field || "text";
+  annotationScope.value = selection?.quote ? "text" : "record";
+  annotationParentId.value = null;
+  annotationLinkedRecords.value = "";
   annotationQuote.value = selection?.quote || "";
   annotationNote.value = "";
   annotationTags.value = "";
@@ -141,21 +295,46 @@ function openAnnotation(selection?: { field: string; quote: string }) {
     annotationDialog.value?.querySelector<HTMLTextAreaElement>("#recordAnnotationNote")?.focus();
   });
 }
+function openReply(annotationId: string) {
+  annotationField.value = "text";
+  annotationScope.value = "record";
+  annotationParentId.value = annotationId;
+  annotationQuote.value = "";
+  annotationNote.value = "";
+  annotationTags.value = "";
+  annotationLinkedRecords.value = "";
+  annotationError.value = "";
+  void nextTick(() => annotationDialog.value?.showModal());
+}
 function closeAnnotation() {
   annotationDialog.value?.close();
 }
 async function saveAnnotation() {
   annotationError.value = "";
   try {
-    await annotationsService.addToCurrentRecord({
-      field: annotationField.value,
-      quote: annotationQuote.value,
-      note: annotationNote.value,
-      tags: annotationTags.value
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
-    });
+    const tags = annotationTags.value
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+    if (annotationParentId.value) {
+      await annotationsService.replyToAnnotation(annotationParentId.value, {
+        quote: annotationQuote.value,
+        note: annotationNote.value,
+        tags,
+      });
+    } else {
+      await annotationsService.addToCurrentRecord({
+        scope: annotationScope.value,
+        linkedRecordIds: annotationLinkedRecords.value
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean),
+        field: annotationField.value,
+        quote: annotationQuote.value,
+        note: annotationNote.value,
+        tags,
+      });
+    }
     closeAnnotation();
     await load();
   } catch (exc) {
@@ -166,7 +345,7 @@ async function removeAnnotation(id: string) {
   await refreshAfter(() => annotationsService.removeFromCurrentRecord(id));
 }
 async function action(name: string, payload: Record<string, unknown> = {}) {
-  await refreshAfter(() => runtime.currentRecordPrimaryAction(name, payload));
+  await refreshAfter(() => recordWorkspace.currentRecordPrimaryAction(name, payload));
 }
 function startResize(event: PointerEvent) {
   if (window.innerWidth < 1180) return;
@@ -203,7 +382,36 @@ function keyboardResize(event: KeyboardEvent) {
 }
 
 const activeFileId = computed(() => shell.snapshot.files.find((file) => file.active)?.id || "");
-watch([() => route.fullPath, activeFileId, () => shell.snapshot.activeStore], () => {
+// Ignore find-query URL changes: they do not change the authorized record identity.
+const selectionKey = computed(() =>
+  JSON.stringify([
+    route.path,
+    route.query.file,
+    route.query.record,
+    (decompressUrlState(String(route.query.ts || "")) as { rr?: string } | null)?.rr || "",
+    activeFileId.value,
+    shell.snapshot.activeStore,
+    auth.user,
+  ]),
+);
+function clearSelection() {
+  loading.value = true;
+  readRequest += 1;
+  graphRequest += 1;
+  semanticRequest += 1;
+  schemaRequest += 1;
+  recordSchema.value = null;
+  snapshot.value = { available: false, mode: "workspace" };
+  objectGraph.value = null;
+  normativeModel.value = null;
+  graphLoading.value = false;
+  recordSemanticBuildId.value = "";
+  recordSemanticLoading.value = false;
+  editOpen.value = false;
+  closeAnnotation();
+}
+watch(selectionKey, clearSelection, { flush: "sync" });
+watch(selectionKey, () => {
   void load();
 });
 watch(
@@ -221,6 +429,9 @@ onMounted(() => {
   void load();
 });
 onBeforeUnmount(() => {
+  readRequest += 1;
+  graphRequest += 1;
+  semanticRequest += 1;
   window.removeEventListener("derridai:record-updated", onRecordUpdated);
   window.removeEventListener("keydown", handleKeyboard);
   window.removeEventListener("pointermove", resize);
@@ -229,32 +440,33 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="record-workspace-page" :aria-busy="loading">
-    <div v-if="loading" class="record-workspace-loading">
-      <span></span><strong>{{ i18n.t("record.loading", "Loading record…") }}</strong>
+  <main class="record-workspace-page" :aria-busy="loading && !snapshot.available">
+    <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
+    <div v-if="loading && !snapshot.available" class="record-workspace-loading" aria-busy="true">
+      <h1>{{ i18n.t("loading.record_frame") }}</h1>
+      <UiLoadingState :label="i18n.t('record.loading')" variant="skeleton" :skeleton-count="2" />
     </div>
-    <section v-else-if="error" class="record-workspace-empty">
-      <h1>{{ i18n.t("record.load_failed", "Could not load record") }}</h1>
+    <section v-if="error" class="record-workspace-empty" role="alert">
+      <p v-if="snapshot.available">{{ i18n.t("loading.stale") }}</p>
+      <h1>{{ i18n.t("record.load_failed") }}</h1>
       <p>{{ error }}</p>
-      <button type="button" @click="load">{{ i18n.t("ui.retry", "Retry") }}</button>
+      <button type="button" @click="load()">{{ i18n.t("ui.retry") }}</button>
     </section>
-    <section v-else-if="!snapshot.available" class="record-workspace-empty">
-      <h1>{{ i18n.t("record.no_record_selected", "No record selected") }}</h1>
+    <section v-if="!loading && !error && !snapshot.available" class="record-workspace-empty">
+      <h1>{{ i18n.t("record.no_record_selected") }}</h1>
       <p>
-        {{
-          snapshot.reason ||
-          i18n.t("record.no_record_help", "Choose a record from Search, Works, or Records.")
-        }}
+        {{ snapshot.reason || i18n.t("record.no_record_help") }}
       </p>
       <div>
-        <button type="button" @click="runtime.navigateRecordWorkspace('global')">
-          {{ i18n.t("nav.search", "Search") }}</button
-        ><button type="button" @click="runtime.navigateRecordWorkspace('works')">
-          {{ i18n.t("nav.works", "Works") }}
+        <button type="button" @click="recordWorkspace.navigateRecordWorkspace('global')">
+          {{ i18n.t("nav.search") }}</button
+        ><button type="button" @click="recordWorkspace.navigateRecordWorkspace('works')">
+          {{ i18n.t("nav.works") }}
         </button>
       </div>
     </section>
-    <template v-else>
+    <template v-if="snapshot.available">
+      <UiLoadingState v-if="loading" variant="inline" :label="i18n.t('loading.updating')" />
       <RecordWorkspaceHeader
         :work="work"
         :author="author"
@@ -279,17 +491,37 @@ onBeforeUnmount(() => {
         @edit="editOpen = true"
         @evidence="toggleEvidence"
         @review="toggleReview"
-        @copy-inline="runtime.copyCurrentRecordCitation('inline')"
-        @copy-full="runtime.copyCurrentRecordCitation('full')"
-        @copy-json="runtime.copyCurrentRecordJson()"
+        @copy-inline="recordWorkspace.copyCurrentRecordCitation('inline')"
+        @copy-full="recordWorkspace.copyCurrentRecordCitation('full')"
+        @copy-json="recordWorkspace.copyCurrentRecordJson()"
         @upsert="action('upsert')"
         @llm="action('llm')"
         @ocr="action('ocr')"
         @history="action('history')"
         @pdf="action('pdf_explorer')"
+        @semantic-map="openSemanticMap"
       />
 
-      <div class="record-context-strip" :aria-label="i18n.t('record.status', 'Record status')">
+      <UiLoadingState
+        v-if="showRecordMap && recordSemanticLoading"
+        :label="i18n.t('pdf_corpus.semantic_map_calculating')"
+      />
+      <CorpusRecordSemanticMap
+        v-else-if="showRecordMap && recordSemanticBuildId && snapshot.record_id"
+        :build-id="recordSemanticBuildId"
+        :record="{
+          record_id: String(snapshot.record_id),
+          text: typeof record.text === 'string' ? record.text : undefined,
+          record_revision:
+            typeof record.record_revision === 'number' ? record.record_revision : undefined,
+        }"
+        @open-record="openSemanticRecord($event)"
+      />
+      <p v-else-if="showRecordMap" class="info">
+        {{ i18n.t("record.semantic_map_unavailable") }}
+      </p>
+
+      <div class="record-context-strip" :aria-label="i18n.t('record.status')">
         <span
           v-for="badge in badges"
           :key="badge.text"
@@ -301,9 +533,9 @@ onBeforeUnmount(() => {
           v-if="snapshot.collection"
           type="button"
           class="record-context-link"
-          @click="runtime.navigateRecordWorkspace('global')"
+          @click="recordWorkspace.navigateRecordWorkspace('global')"
         >
-          {{ i18n.t("record.collection", "Collection") }}: {{ snapshot.collection }}
+          {{ i18n.t("record.collection") }}: {{ snapshot.collection }}
         </button>
         <span class="record-context-spacer"></span>
         <button
@@ -313,9 +545,7 @@ onBeforeUnmount(() => {
           @click="inspectorCollapsed = !inspectorCollapsed"
         >
           {{
-            inspectorCollapsed
-              ? i18n.t("record.show_inspector", "Show inspector")
-              : i18n.t("record.hide_inspector", "Hide inspector")
+            inspectorCollapsed ? i18n.t("record.show_inspector") : i18n.t("record.hide_inspector")
           }}
         </button>
       </div>
@@ -342,7 +572,7 @@ onBeforeUnmount(() => {
           role="separator"
           tabindex="0"
           aria-orientation="vertical"
-          :aria-label="i18n.t('record.resize_inspector', 'Resize record inspector')"
+          :aria-label="i18n.t('record.resize_inspector')"
           aria-valuemin="310"
           aria-valuemax="440"
           :aria-valuenow="Math.round(inspectorWidth)"
@@ -352,10 +582,16 @@ onBeforeUnmount(() => {
         <RecordInspector
           v-if="!inspectorCollapsed"
           :snapshot="snapshot"
+          :object-graph="objectGraph"
+          :normative-model="normativeModel"
+          :graph-loading="graphLoading"
+          :graph-error="graphError"
+          :schema="recordSchema"
           @search="metadataSearch"
           @change="quickChange"
           @add-annotation="openAnnotation()"
           @remove-annotation="removeAnnotation"
+          @reply-annotation="openReply"
           @open-pdf="(index) => action('open_pdf', { index })"
           @remove-pdf="(index) => action('remove_pdf', { index })"
           @remove-all-pdf="action('remove_all_pdf')"
@@ -368,6 +604,7 @@ onBeforeUnmount(() => {
       <RecordEditSheet
         :open="editOpen"
         :record="record"
+        :schema="recordSchema"
         @close="editOpen = false"
         @save="saveChanges"
       />
@@ -381,37 +618,50 @@ onBeforeUnmount(() => {
         <form method="dialog" @submit.prevent="saveAnnotation">
           <header>
             <div>
-              <p>{{ i18n.t("annotations.record_notes", "Annotations") }}</p>
+              <p>{{ i18n.t("annotations.record_notes") }}</p>
               <h2 id="recordAnnotationTitle">
-                {{ i18n.t("annotations.add_note_tags", "Add note / tags") }}
+                {{
+                  annotationParentId
+                    ? i18n.t("annotations.reply")
+                    : i18n.t("annotations.add_note_tags")
+                }}
               </h2>
             </div>
-            <button
-              type="button"
-              :aria-label="i18n.t('ui.close', 'Close')"
-              @click="closeAnnotation"
-            >
+            <button type="button" :aria-label="i18n.t('ui.close')" @click="closeAnnotation">
               ×
             </button>
           </header>
           <div class="record-annotation-form">
+            <label v-if="!annotationParentId">
+              <span>{{ i18n.t("annotations.scope") }}</span>
+              <select v-model="annotationScope">
+                <option value="text">{{ i18n.t("annotations.scope_text") }}</option>
+                <option value="record">{{ i18n.t("annotations.scope_record") }}</option>
+                <option value="work">{{ i18n.t("annotations.scope_work") }}</option>
+              </select>
+            </label>
             <blockquote v-if="annotationQuote">{{ annotationQuote }}</blockquote>
+            <label v-if="!annotationParentId">
+              <span>{{ i18n.t("annotations.linked_records") }}</span>
+              <input
+                v-model="annotationLinkedRecords"
+                :placeholder="i18n.t('annotations.linked_records_placeholder')"
+              />
+            </label>
             <label
-              ><span>{{ i18n.t("annotations.note", "Note") }}</span
+              ><span>{{ i18n.t("annotations.note") }}</span
               ><textarea
                 id="recordAnnotationNote"
                 v-model="annotationNote"
                 rows="5"
-                :placeholder="
-                  i18n.t('annotations.note_placeholder', 'Add a note about this selection…')
-                "
+                :placeholder="i18n.t('annotations.note_placeholder')"
               ></textarea>
             </label>
             <label
-              ><span>{{ i18n.t("annotations.tags", "Tags") }}</span
+              ><span>{{ i18n.t("annotations.tags") }}</span
               ><input
                 v-model="annotationTags"
-                :placeholder="i18n.t('annotations.tags_placeholder', 'Comma-separated tags')"
+                :placeholder="i18n.t('annotations.tags_placeholder')"
             /></label>
             <p v-if="annotationError" class="record-annotation-error" role="alert">
               {{ annotationError }}
@@ -419,9 +669,9 @@ onBeforeUnmount(() => {
           </div>
           <footer>
             <button type="button" @click="closeAnnotation">
-              {{ i18n.t("ui.cancel", "Cancel") }}</button
+              {{ i18n.t("ui.cancel") }}</button
             ><button type="submit" class="primary">
-              {{ i18n.t("annotations.save", "Save annotation") }}
+              {{ i18n.t("annotations.save") }}
             </button>
           </footer>
         </form>

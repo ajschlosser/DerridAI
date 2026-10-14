@@ -1,0 +1,222 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.30.13 — Bits and Bobs */
+/* Metadata badges must size to their contents. Long terms wrap instead of
+   disappearing behind fixed widths or ellipses. */
+.record-index-card .editable-chips,
+.researcher-badge-wrap {
+  align-items: flex-start;
+}
+.record-index-card .editable-chip,
+.researcher-index-chip {
+  display: inline-flex !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  flex: 0 1 auto !important;
+}
+.record-index-card .chip-search-link,
+.researcher-index-chip .chip-search-link {
+  display: inline-block !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+/* Collection wizard: selected work/record totals sit directly below the
+   available-works heading and align as one compact status row. */
+.collection-wizard-dialog .wizard-sync-summary {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(140px, 190px)) !important;
+  gap: 8px !important;
+  justify-content: start;
+  margin-top: -4px;
+}
+.collection-wizard-dialog .wizard-sync-summary > span {
+  display: grid !important;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  justify-content: start !important;
+  gap: 7px;
+  min-height: 44px;
+  min-width: 0 !important;
+}
+.collection-wizard-dialog .wizard-sync-summary > span b {
+  font-size: 1.0625rem;
+}
+.collection-wizard-dialog .wizard-sync-summary .info {
+  grid-column: 1/-1 !important;
+}
+@media (max-width: 700px) {
+  .collection-wizard-dialog .wizard-sync-summary {
+    grid-template-columns: 1fr !important;
+  }
+  .collection-wizard-dialog .wizard-sync-summary .info {
+    grid-column: auto !important;
+  }
+}
+.research-composer .rag-prompt {
+  min-height: 132px;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.research-composer textarea:not(.rag-prompt) {
+  min-height: 78px;
+}
+.research-generation-card > .rag-config-grid {
+  margin-bottom: 12px;
+}
+.research-run-bar .btn.primary {
+  min-height: 44px;
+  padding-inline: 18px;
+}
+.theme-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+.theme-swatch.green {
+  background: #355f52;
+}
+.theme-swatch.blue {
+  background: #0b67e8;
+}
+.theme-swatch.slate {
+  background: #4d6076;
+}
+
+/* Keep interactive focus visible on all newly introduced controls. */
+.provider-access-switch:focus-within,
+.dashboard-theme-options label:has(input:focus-visible) {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+}
+.research-text-action.danger:hover:not(:disabled) {
+  background: var(--tone-danger-bg);
+}
+.research-compose-context .control:hover {
+  border-color: var(--line);
+  background: var(--card);
+}
+.research-compose-context .control:focus {
+  border-color: var(--ui-accent);
+  background: var(--card);
+}
+@keyframes research-pulse {
+  0%,
+  100% {
+    transform: scale(0.75);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+.research-evidence-panel .citation,
+.research-evidence-panel .meta,
+.research-evidence-panel code {
+  overflow-wrap: anywhere;
+}
+.research-evidence-tag.large {
+  min-width: 37px;
+  height: 31px;
+  font-size: 0.8125rem;
+}
+.research-drawer-head .tools {
+  display: flex;
+  gap: 6px;
+}
+.research-drawer-head .btn.icon-only {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 1.1875rem;
+}
+.research-settings-grid .wide {
+  grid-column: 1/-1;
+}
+.research-run-status-dot.running,
+.research-run-status-dot.queued {
+  background: #d6952e;
+}
+.research-run-status-dot.completed {
+  background: #3d836c;
+}
+.research-run-status-dot.failed {
+  background: #b84949;
+}
+.research-run-status-dot.cancelling,
+.research-run-status-dot.cancelled {
+  background: #7c8797;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* 0.31.0 evidence/readability refinements. */
+
+.research-relation-grid.compact {
+  grid-template-columns: 92px minmax(0, 1fr);
+  margin: 0;
+  padding: 8px;
+}
+/* WCAG 2.2 keyboard focus: all native Research interactions use a solid,
+   high-contrast focus indicator rather than relying on a translucent halo. */
+.research-native-page :is(button, input, textarea, select, summary):focus-visible,
+.research-drawer :is(button, input, textarea, select, summary):focus-visible {
+  outline: 3px solid var(--ui-accent) !important;
+  outline-offset: 2px !important;
+  box-shadow: none;
+}
+.research-compose-context .control:hover {
+  border-color: var(--line-strong);
+}
+
+/* 0.31.3 — tooltips must escape the sidebar stacking context.
+   Keep mobile behavior unchanged; desktop tooltips sit above the workspace. */
+.shell-sidebar {
+  z-index: 500 !important;
+  overflow: visible !important;
+}
+.shell-primary-nav,
+.shell-primary-nav .nav-tooltip-wrap {
+  overflow: visible !important;
+}
+.nav-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after,
+.nav-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):focus-within::after,
+.action-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):hover::after,
+.action-tooltip-wrap[data-tooltip]:not([data-tooltip=""]):focus-within::after,
+.disabled-control-tooltip[data-tooltip]:not([data-tooltip=""]):hover::after,
+.disabled-control-tooltip[data-tooltip]:not([data-tooltip=""]):focus-within::after {
+  z-index: 20000 !important;
+}

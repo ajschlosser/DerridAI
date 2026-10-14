@@ -1,4 +1,20 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 export type RecordsFileOrigin = "imported" | "subset" | "merge" | "work_split" | "chroma";
 
@@ -9,9 +25,9 @@ export interface RecordsFileProvenance {
   count?: number;
   dirty?: Set<unknown> | unknown[] | number;
   active?: boolean;
-  subset?: {source?: string; source_label?: string} | null;
+  subset?: { source?: string; source_label?: string } | null;
   merged_from?: string[] | null;
-  derived_from?: {type?: string; source_file?: string; work?: string} | null;
+  derived_from?: { type?: string; source_file?: string; work?: string } | null;
   imported_from_chroma?: string | null;
   content_hash?: string;
 }
@@ -66,13 +82,21 @@ export function describeRecordsFile(
   };
 }
 
-export function serializableRecordsFile(file: RecordsFileProvenance & {records: unknown[]; errors?: unknown[]; imported_at?: string; content_hash?: string}) {
+export function serializableRecordsFile(
+  file: RecordsFileProvenance & {
+    records: unknown[];
+    errors?: unknown[];
+    imported_at?: string;
+    content_hash?: string;
+  },
+) {
   return {
     id: file.id,
     name: file.name,
     records: file.records,
     errors: file.errors || [],
-    dirty: file.dirty instanceof Set ? [...file.dirty] : Array.isArray(file.dirty) ? file.dirty : [],
+    dirty:
+      file.dirty instanceof Set ? [...file.dirty] : Array.isArray(file.dirty) ? file.dirty : [],
     imported_at: file.imported_at || new Date().toISOString(),
     saved_at: new Date().toISOString(),
     content_hash: file.content_hash || "",

@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Built-in language dictionaries and their usage in the web app.
 
 Why: English and French must stay complete and equivalent, every string the
@@ -10,8 +26,13 @@ regular expressions; the last test uses a temporary SQLite system repository.
 from __future__ import annotations
 
 import ast
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -88,14 +109,48 @@ def test_all_literal_i18n_keys_used_by_web_code_exist_in_both_builtins():
     # target, and every alias target must itself exist in both dictionaries.
     aliases = dict(re.findall(
         r'"([^"]+)":\s*"(common\.[^"]+)"',
-        (ROOT / "web/src/stores/i18n.ts").read_text(encoding="utf-8"),
+        (ROOT / "web/src/i18n/englishDefault.ts").read_text(encoding="utf-8"),
     ))
-    assert aliases, "COMMON_KEY_ALIASES not found in web/src/stores/i18n.ts"
+    assert aliases, "COMMON_KEY_ALIASES not found in web/src/i18n/englishDefault.ts"
     assert set(aliases.values()) - set(english) == set()
     assert set(aliases.values()) - set(french) == set()
     used = {aliases.get(key, key) for key in used}
     assert used - set(english) == set()
     assert used - set(french) == set()
+
+
+def test_frontend_english_defaults_match_builtin_en_us():
+    """web/src/i18n/enUsDefaults.json is the exported EN_US dictionary."""
+    import json
+
+    english = _translation_dicts()["DEFAULT_EN_US"]
+    exported = json.loads((ROOT / "web/src/i18n/enUsDefaults.json").read_text(encoding="utf-8"))
+    assert exported == english
+
+
+def test_locale_export_parser_preserves_both_key_quotes_and_adjacent_values():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required to exercise the locale exporter")
+    source = r"""EN_US = {
+        'single': 'one',
+        "double": "two",
+        "joined": ('three ' "four"),
+        "escaped\"key": "escaped",
+        'line': 'first\nsecond',
+    }"""
+    script = (
+        "import { parseEnUsPy } from './scripts/parse-en-us-locale.mjs';"
+        f"process.stdout.write(JSON.stringify(parseEnUsPy({json.dumps(source)})));"
+    )
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script],
+        cwd=ROOT, text=True, capture_output=True, check=True,
+    )
+    assert json.loads(result.stdout) == {
+        "single": "one", "double": "two", "joined": "three four",
+        'escaped"key': "escaped", "line": "first\nsecond",
+    }
 
 
 
@@ -126,4 +181,65 @@ def test_builtin_dictionaries_bootstrap_current_values_and_preserve_admin_edits(
     preserved = store_module.SystemStore().snapshot()
     assert preserved["languages"]["fr-CA"]["dictionary"]["app.subtitle"] == "Mon libellé personnalisé"
 
+def test_metadata_schema_copy_keys_exist_in_both_builtins():
+    """Metadata-schema scoped copy, including generated key families, is complete.
 
+    useSchemaCopy prefixes local t/tf calls with schemas. The general frontend
+    key scanner cannot see that indirection or template-string key families,
+    so this test owns the feature-specific contract.
+    """
+    dictionaries = _translation_dicts()
+    english = dictionaries["DEFAULT_EN_US"]
+    french = dictionaries["DEFAULT_FR_CA"]
+    feature_root = ROOT / "web/src/components/metadata-schemas"
+    sources = [
+        ROOT / "web/src/components/MetadataSchemaEditor.vue",
+        *sorted(feature_root.glob("*.vue")),
+    ]
+
+    required: set[str] = set()
+    literal_pattern = re.compile(r"\b(?:t|tf)\(\s*['\"]([^'\"]+)['\"]")
+    for path in sources:
+        source = path.read_text(encoding="utf-8")
+        required.update(f"schemas.{key}" for key in literal_pattern.findall(source))
+
+    metadata_api = (ROOT / "web/src/api/metadataSchemas.ts").read_text(encoding="utf-8")
+    document_block = re.search(
+        r"export const DOCUMENT_FIELD_NAMES\s*=\s*\[(.*?)\]\s*as const",
+        metadata_api,
+        re.DOTALL,
+    )
+    assert document_block
+    document_fields = re.findall(r'"([^"]+)"', document_block.group(1))
+    required.update(f"schemas.document_field.{name}" for name in document_fields)
+    required.update({"schemas.required_for_evidence", "schemas.required_for_publication"})
+
+    nlp_source = (ROOT / "web/src/domain/nlpTags.ts").read_text(encoding="utf-8")
+    for constant, prefix in (
+        ("UNIVERSAL_POS_TAG_OPTIONS", "pos_tag"),
+        ("NER_TAG_OPTIONS", "ner_tag"),
+    ):
+        block = re.search(
+            rf"export const {constant}.*?=\s*\[(.*?)\];",
+            nlp_source,
+            re.DOTALL,
+        )
+        assert block
+        values = re.findall(r'value:\s*"([^"]+)"', block.group(1))
+        required.update(f"schemas.{prefix}.{value.lower()}" for value in values)
+
+    field_form = (feature_root / "SchemaFieldForm.vue").read_text(encoding="utf-8")
+    matching_block = re.search(
+        r"const MATCHING_MODES.*?=\s*\[(.*?)\];",
+        field_form,
+        re.DOTALL,
+    )
+    assert matching_block
+    matching_modes = re.findall(r'"([^"]+)"', matching_block.group(1))
+    required.add("schemas.value_matching_default_note")
+    for mode in matching_modes:
+        required.add(f"schemas.value_matching_{mode}")
+        required.add(f"schemas.value_matching_{mode}_note")
+
+    assert required - set(english) == set()
+    assert required - set(french) == set()

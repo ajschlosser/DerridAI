@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Locale completeness and accessibility floor.
 
 Why: English (en-US) and French (fr-CA) are both first-class. Every string
@@ -61,7 +77,11 @@ def test_no_explicit_frontend_font_size_is_below_twelve_pixels():
     """
     pattern = re.compile(r"font-size\s*:\s*([0-9.]+)(px|rem)")
     offenders: list[str] = []
-    paths = [ROOT / "web/src/style.css", *WEB.rglob("*.vue")]
+    paths = [
+        ROOT / "web/src/style.css",
+        *sorted((ROOT / "web/src/styles").rglob("*.css")),
+        *WEB.rglob("*.vue"),
+    ]
     for path in paths:
         text = path.read_text(encoding="utf-8")
         for match in pattern.finditer(text):

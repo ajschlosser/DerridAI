@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import * as touchup from "../../src/domain/touchupFields";
 import * as review from "../../src/domain/reviewPresentation";
@@ -19,6 +36,124 @@ const rowsets = [
 ];
 
 describe("work metadata helpers", () => {
+  it("discovers work metadata from stable FieldAssertion identities without surfacing discourse fields", () => {
+    const asserted = (fieldId: string, fieldName: string, value: unknown) => ({
+      assertion_id: `a-${fieldName}`,
+      field_id: fieldId,
+      field_name: fieldName,
+      value,
+      derivation_method: "model",
+      evaluation_status: "value_supported",
+      authority_status: "human_confirmed",
+      value_status: "present",
+    });
+    const record = {
+      work: "W",
+      document_author: "A",
+      publisher: "Press",
+      conceptual_tension: "hospitality / sovereignty",
+      speaker: "A",
+      field_assertions: {
+        "field-conceptual-tension": [
+          asserted("field-conceptual-tension", "conceptual_tension", "hospitality / sovereignty"),
+        ],
+        "derridai.speaker": [asserted("derridai.speaker", "speaker", "A")],
+      },
+      current_field_assertions: {
+        "field-conceptual-tension": "a-conceptual_tension",
+        "derridai.speaker": "a-speaker",
+      },
+    };
+    const rows = [mk(record), mk({ ...record })];
+
+    const metadata = work.workMetadataPresentationRows(rows);
+    expect(metadata).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field_id: "derridai.document.document_author",
+          field: "document_author",
+          value: "A",
+          empty: false,
+        }),
+        expect.objectContaining({
+          field_id: "field-conceptual-tension",
+          field: "conceptual_tension",
+          value: "hospitality / sovereignty",
+          empty: false,
+        }),
+      ]),
+    );
+    expect(metadata.some((item) => item.field === "speaker")).toBe(false);
+  });
+
+  it("uses pinned schema scope instead of scholarly field names for work metadata", () => {
+    const asserted = (fieldId: string, fieldName: string, value: unknown) => ({
+      assertion_id: `a-${fieldName}`,
+      field_id: fieldId,
+      field_name: fieldName,
+      value,
+      derivation_method: "model",
+      evaluation_status: "value_supported",
+      authority_status: "human_confirmed",
+      value_status: "present",
+      schema_id: "scope-test",
+    });
+    const record = {
+      work: "W",
+      document_author: "A",
+      corpus_theme: "hospitality",
+      passage_theme: "gift",
+      field_assertions: {
+        "field-corpus-theme": [asserted("field-corpus-theme", "corpus_theme", "hospitality")],
+        "field-passage-theme": [asserted("field-passage-theme", "passage_theme", "gift")],
+      },
+      current_field_assertions: {
+        "field-corpus-theme": "a-corpus_theme",
+        "field-passage-theme": "a-passage_theme",
+      },
+    };
+    const scopedSchema = {
+      id: "scope-test",
+      groups: [{ key: "custom", label: "Custom" }],
+      fields: [
+        {
+          field_id: "field-corpus-theme",
+          name: "corpus_theme",
+          label: "Corpus theme",
+          type: "text",
+          group: "custom",
+          scope: "corpus",
+          role: "scholarly",
+        },
+        {
+          field_id: "field-passage-theme",
+          name: "passage_theme",
+          label: "Passage theme",
+          type: "text",
+          group: "custom",
+          scope: "record",
+          role: "scholarly",
+        },
+      ],
+    };
+
+    const metadata = work.workMetadataPresentationRows(
+      [mk(record), mk({ ...record })],
+      scopedSchema as never,
+    );
+
+    expect(metadata).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field_id: "field-corpus-theme",
+          field: "corpus_theme",
+          value: "hospitality",
+        }),
+      ]),
+    );
+    expect(metadata.some((item) => item.field === "passage_theme")).toBe(false);
+  });
+
   it("summarizes a work's rows", () => {
     for (const rows of rowsets) {
       expect([
@@ -43,6 +178,33 @@ describe("touch-up fields", () => {
         custom: 1,
       }),
     ).toMatchSnapshot();
+  });
+
+  it("offers custom assertion fields and hides canonical bookkeeping", () => {
+    const fields = touchup.touchupFieldsForRecord({
+      text: "t",
+      conceptual_tension: "hospitality / sovereignty",
+      field_assertions: {
+        "field-conceptual-tension": [
+          {
+            assertion_id: "a1",
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "human_confirmed",
+            value_status: "present",
+          },
+        ],
+      },
+      current_field_assertions: { "field-conceptual-tension": "a1" },
+      metadata_field_status: { conceptual_tension: { status: "human_confirmed" } },
+    });
+    expect(fields).toContain("conceptual_tension");
+    expect(fields).not.toContain("field_assertions");
+    expect(fields).not.toContain("current_field_assertions");
+    expect(fields).not.toContain("metadata_field_status");
   });
 });
 

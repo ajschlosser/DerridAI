@@ -1,5 +1,23 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import type { SubsetRule } from "./recordQuery";
+import { currentAccountScopedBrowserStorageKey } from "./browserStorageScope";
 import { SUBSET_OPERATORS, type SubsetExpressionItem, type SubsetJoin } from "./subsetExpression";
 
 /** Saved "Create JSONL subset" filter profiles: the file format used to move them between browsers. */
@@ -20,7 +38,9 @@ export interface SubsetProfile {
 /** Saved profiles in this browser. Unreadable storage reads as none rather than failing the dialog. */
 export function loadSubsetProfiles(): SubsetProfile[] {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const value = JSON.parse(
+      localStorage.getItem(currentAccountScopedBrowserStorageKey(STORAGE_KEY)) || "[]",
+    );
     return Array.isArray(value) ? value : [];
   } catch {
     return [];
@@ -28,7 +48,10 @@ export function loadSubsetProfiles(): SubsetProfile[] {
 }
 
 export function saveSubsetProfiles(profiles: SubsetProfile[]): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles.slice(0, SUBSET_PROFILES_LIMIT)));
+  localStorage.setItem(
+    currentAccountScopedBrowserStorageKey(STORAGE_KEY),
+    JSON.stringify(profiles.slice(0, SUBSET_PROFILES_LIMIT)),
+  );
 }
 
 /** Why an import was refused; the dialog maps each code to a localized message. */

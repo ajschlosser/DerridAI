@@ -1,0 +1,14 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# Build/test closure for the native CLI packaging spine.
+#
+# Keep this list deliberately narrow. When a new headless CLI import becomes
+# reachable, add its actual runtime dependency here rather than installing the
+# entire FastAPI/web-server environment into binary CI.
+
+pydantic>=2.10,<3
+PyYAML>=6.0,<7
+zstandard>=0.23,<1
+pytest>=9,<10
+Nuitka>=4.2,<5

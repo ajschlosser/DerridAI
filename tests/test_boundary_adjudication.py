@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Second-reader boundary adjudication and boundary editorial memory.
 
 Why: a second LLM pass can audit where records were split. Its verdict is advice
@@ -61,7 +77,7 @@ def test_second_reader_keep_corroboration_clears_only_heuristic_boundary_warning
     left={'boundary_quality_issues':[{'code':'boundary_suspect','edge':'end','reason':'x'}],'needs_review':True,'review_reason':'Possible sentence/quotation continuation across this record boundary.'}
     right={'boundary_quality_issues':[{'code':'boundary_suspect','edge':'start','reason':'x'}],'needs_review':True,'review_reason':'Possible sentence/quotation continuation across this record boundary.'}
     decision={'decision':'keep','confidence':.91,'reason':'Coherent boundary','suggested_after_block_id':'b2'}
-    cb.PdfCorpusBuildManager._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
+    cb._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
     assert left.get('boundary_quality_issues') is None
     assert right.get('boundary_quality_issues') is None
     assert left['boundary_llm_after']['decision']=='keep'
@@ -79,7 +95,7 @@ def test_second_reader_move_is_a_review_recommendation_not_an_automatic_rewrite(
     right={'text':'right','source_block_ids':['b3','b4'],'review_disposition':'pending'}
     before=(left['text'],right['text'])
     decision={'decision':'move_later','confidence':.84,'reason':'Quotation continues.','suggested_after_block_id':'b3'}
-    cb.PdfCorpusBuildManager._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
+    cb._apply_boundary_adjudication_to_records(left,right,decision,threshold=.72)
     assert (left['text'],right['text'])==before
     assert 'Boundary review required' in left['review_reason']
     assert left['boundary_quality_issues'][-1]['suggested_after_block_id']=='b3'
@@ -111,7 +127,7 @@ def test_human_slice_becomes_boundary_editorial_memory(tmp_path:Path):
     repo,build=install(tmp_path);manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     row=repo.load_records(build['build_id'])[1]
     cut=row['text'].index('A new unit')
-    manager.slice_to_neighbor(build['build_id'],'r2','previous',cut,1)
+    manager.create_from_selection(build['build_id'],'r2',cut,len(row['text']),'merge_prior',expected_revision=1)
     memory=repo.load_checkpoint(build['build_id'],'boundary_editorial_memory',{})
     assert memory['examples']
     assert memory['examples'][-1]['source']=='human_confirmed_boundary'

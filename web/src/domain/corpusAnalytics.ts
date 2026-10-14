@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flattenValueList } from "./recordQuery";
 
 // Derived, memoized statistics over the loaded corpus for the dashboard and Works view. Moved verbatim from the
@@ -15,24 +32,48 @@ export function createCorpusAnalytics(deps: Deps) {
   const { allRows, memoCorpus } = deps;
   function workIndex() {
     return memoCorpus("work-index", () => {
+      // The same logical record can sit in several loaded files (a collection and one of its works, or a
+      // reload). Count it once per work; prefer the copy carrying unsaved edits so they stay visible.
+      const chosen = new Map<string, Loose[]>();
+      const byId = new Map<string, Map<string, number>>();
+      for (const row of allRows()) {
+        const key = String(row.record.work || "(Untitled work)");
+        const rows = chosen.get(key) || [];
+        const ids = byId.get(key) || new Map<string, number>();
+        chosen.set(key, rows);
+        byId.set(key, ids);
+        const id = row.record.record_id;
+        const edited = Boolean(row.file.dirty?.has?.(row.index));
+        if (id != null && String(id) !== "") {
+          const seen = ids.get(String(id));
+          if (seen !== undefined) {
+            const prior = rows[seen];
+            if (edited && !prior.file.dirty?.has?.(prior.index)) rows[seen] = row;
+            continue;
+          }
+          ids.set(String(id), rows.length);
+        }
+        rows.push(row);
+      }
       const map = new Map();
-      for (const { file, record: r, index } of allRows()) {
-        const key = String(r.work || "(Untitled work)");
-        const item = map.get(key) || {
+      for (const [key, rows] of chosen) {
+        const item = {
           work: key,
           count: 0,
           review: 0,
           files: new Set(),
           authors: new Set(),
           years: new Set(),
-          rows: [],
+          rows: [] as Loose[],
         };
-        item.count++;
-        if (r.needs_review) item.review++;
-        item.files.add(file.name);
-        if (r.document_author) item.authors.add(r.document_author);
-        if (r.year != null) item.years.add(r.year);
-        item.rows.push({ file, record: r, index });
+        for (const { file, record: r, index } of rows) {
+          item.count++;
+          if (r.needs_review) item.review++;
+          item.files.add(file.name);
+          if (r.document_author) item.authors.add(r.document_author);
+          if (r.year != null) item.years.add(r.year);
+          item.rows.push({ file, record: r, index });
+        }
         map.set(key, item);
       }
       return map;

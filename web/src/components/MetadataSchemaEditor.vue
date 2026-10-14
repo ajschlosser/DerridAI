@@ -1,65 +1,179 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import { useI18nStore } from "../stores/i18n";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useSchemaCopy } from "../composables/useSchemaCopy";
+import type { ProviderProfile } from "../api/system";
 import UiButton from "./ui/UiButton.vue";
+import UiField from "./ui/UiField.vue";
+import UiInput from "./ui/UiInput.vue";
+import UiStatusBadge from "./ui/UiStatusBadge.vue";
+import UiLoadingState from "./ui/UiLoadingState.vue";
+import UiTabs from "./ui/UiTabs.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
+import SchemaFieldsTable from "./metadata-schemas/SchemaFieldsTable.vue";
+import SchemaDocumentFieldsPanel from "./metadata-schemas/SchemaDocumentFieldsPanel.vue";
+import SchemaGroupsPanel from "./metadata-schemas/SchemaGroupsPanel.vue";
+import SchemaListTable from "./metadata-schemas/SchemaListTable.vue";
+import SchemaPreviewPanel from "./metadata-schemas/SchemaPreviewPanel.vue";
 import {
-  CORE_FIELDS,
-  CORE_GROUP,
+  completeDocumentFields,
   blankField,
   metadataSchemasApi,
   type MetadataSchema,
-  type SchemaField,
-  type SchemaGroup,
-  type SchemaPreview,
   type SchemaSummary,
 } from "../api/metadataSchemas";
 
 // Define which metadata fields a corpus record has, what each may hold and what the model is told to look for.
 // Three fields (region type, primary text, discourse role) are the locked core: they are in every schema and are
 // not edited here. A build copies the schema it starts with, so nothing done here changes a build already made.
-type PreviewProfile = {
-  id: string;
-  name?: string;
-  model?: string;
-  type?: string;
-  base_url?: string;
-  api_key?: string;
-};
+// This component owns the draft and every request; the tables and forms below only edit the draft in place.
 const props = withDefaults(
-  defineProps<{ providerProfiles?: PreviewProfile[]; defaultProviderId?: string }>(),
-  { providerProfiles: () => [], defaultProviderId: "" },
+  defineProps<{
+    providerProfiles?: ProviderProfile[];
+    defaultProviderId?: string;
+    initialSchemaId?: string;
+    initialTab?: string;
+  }>(),
+  {
+    providerProfiles: () => [],
+    defaultProviderId: "",
+    initialSchemaId: "default",
+    initialTab: "fields",
+  },
 );
-const emit = defineEmits<{ saved: [id: string]; changed: [] }>();
-const i18n = useI18nStore();
+const emit = defineEmits<{
+  saved: [id: string];
+  changed: [];
+  selection: [id: string];
+  tab: [id: string];
+}>();
+const { t, tf } = useSchemaCopy();
 
+const VALID_TABS = new Set(["fields", "document", "groups", "preview"]);
 const summaries = ref<SchemaSummary[]>([]);
-const selectedId = ref("default");
+const selectedId = ref(props.initialSchemaId || "default");
 const draft = ref<MetadataSchema | null>(null);
 const savedHash = ref("");
 const error = ref("");
+const readError = ref("");
+const catalogLoading = ref(false);
+const catalogReady = ref(false);
+const detailLoading = ref(false);
+const requestedId = ref(props.initialSchemaId || "default");
 const notice = ref("");
 const busy = ref(false);
+let catalogRequestSerial = 0;
+let detailRequestSerial = 0;
 const isNew = ref(false);
+const tab = ref(VALID_TABS.has(props.initialTab) ? props.initialTab : "fields");
 
-const builtin = computed(() => selectedId.value === "default" && !isNew.value);
-const dirty = computed(() => JSON.stringify(draft.value) !== savedHash.value);
-const t = (key: string, fallback: string) => i18n.t(`schemas.${key}`, fallback);
+const builtin = computed(() => {
+  if (isNew.value) return false;
+  return summaries.value.some((item) => item.id === selectedId.value && item.builtin);
+});
+const dirty = computed(
+  () => draft.value !== null && JSON.stringify(draft.value) !== savedHash.value,
+);
+const readonly = computed(() => builtin.value || busy.value || detailLoading.value);
+const tabs = computed(() => [
+  { id: "fields", label: t("tab_fields", "Fields") },
+  { id: "document", label: t("tab_document_fields", "Document fields") },
+  { id: "groups", label: t("tab_prompts", "Prompt groups") },
+  { id: "preview", label: t("tab_preview", "Test schema") },
+]);
 
 function load(schema: MetadataSchema, fresh = false) {
-  draft.value = JSON.parse(JSON.stringify(schema));
+  const next = JSON.parse(JSON.stringify(schema)) as MetadataSchema;
+  for (const field of next.fields) {
+    field.retrieval_profile ||= blankField().retrieval_profile;
+    field.pos_tags ||= [];
+    field.ner_tags ||= [];
+    field.scope ||= "record";
+    field.members ||= [];
+    field.max_items = field.type === "repeatable" ? field.max_items || 8 : null;
+    field.instance_label ||= "{label} {number}";
+  }
+  next.document_fields = completeDocumentFields(next.document_fields);
+  draft.value = next;
   savedHash.value = JSON.stringify(draft.value);
   isNew.value = fresh;
   error.value = "";
 }
+const confirmDiscard = () =>
+  !dirty.value || window.confirm(t("discard_changes", "Discard unsaved schema changes?"));
 async function refresh(keep?: string) {
-  summaries.value = (await metadataSchemasApi.list()).items;
-  const id = keep && summaries.value.some((s) => s.id === keep) ? keep : selectedId.value;
-  await select(summaries.value.some((s) => s.id === id) ? id : "default");
+  const request = ++catalogRequestSerial;
+  catalogLoading.value = true;
+  readError.value = "";
+  try {
+    const next = (await metadataSchemasApi.list()).items;
+    if (request !== catalogRequestSerial) return;
+    summaries.value = next;
+    catalogReady.value = true;
+    const id = keep && next.some((item) => item.id === keep) ? keep : requestedId.value;
+    await select(next.some((item) => item.id === id) ? id : "default", true);
+  } catch (exc) {
+    if (request !== catalogRequestSerial) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === catalogRequestSerial) catalogLoading.value = false;
+  }
 }
-async function select(id: string) {
-  selectedId.value = id;
+async function select(id: string, force = false) {
+  if (!force && id === selectedId.value && !isNew.value) return;
+  if (!force && !confirmDiscard()) {
+    emit("selection", selectedId.value);
+    return;
+  }
+
+  const request = ++detailRequestSerial;
+  const changesIdentity = isNew.value || id !== selectedId.value;
+  requestedId.value = id;
   notice.value = "";
-  load(await metadataSchemasApi.get(id));
+  readError.value = "";
+  if (changesIdentity) {
+    selectedId.value = id;
+    draft.value = null;
+    savedHash.value = "";
+    isNew.value = false;
+  }
+  detailLoading.value = true;
+  try {
+    const next = await metadataSchemasApi.get(id);
+    if (request !== detailRequestSerial) return;
+    selectedId.value = id;
+    load(next);
+    emit("selection", id);
+  } catch (exc) {
+    if (request !== detailRequestSerial) return;
+    readError.value = exc instanceof Error ? exc.message : String(exc);
+  } finally {
+    if (request === detailRequestSerial) detailLoading.value = false;
+  }
+}
+async function retryRead() {
+  if (!catalogReady.value) {
+    await refresh(requestedId.value);
+    return;
+  }
+  await select(requestedId.value || selectedId.value || "default", true);
 }
 async function guarded<T>(work: () => Promise<T>): Promise<T | undefined> {
   busy.value = true;
@@ -73,26 +187,51 @@ async function guarded<T>(work: () => Promise<T>): Promise<T | undefined> {
     busy.value = false;
   }
 }
+/** A new schema starts from the built-in groups and prompts with no added fields (the core stays). */
+async function newSchema() {
+  if (!confirmDiscard()) return;
+  const base = await guarded(() => metadataSchemasApi.get("default"));
+  if (!base) return;
+  load(
+    {
+      ...JSON.parse(JSON.stringify(base)),
+      id: "",
+      name: t("new_schema_name", "New schema"),
+      fields: [],
+    },
+    true,
+  );
+  savedHash.value = "";
+  // Unsaved drafts are deliberately transient. Keep the URL bound to the last
+  // durable schema until this draft is saved.
+  selectedId.value = "";
+  tab.value = "fields";
+}
 function duplicate() {
   if (!draft.value) return;
   load(
-    { ...JSON.parse(JSON.stringify(draft.value)), id: "", name: `${draft.value.name} (copy)` },
+    {
+      ...JSON.parse(JSON.stringify(draft.value)),
+      id: "",
+      name: tf("copy_name", { name: draft.value.name }),
+    },
     true,
   );
   savedHash.value = ""; // a copy is unsaved
+  // Do not put unsaved draft identity into the shareable route.
   selectedId.value = "";
 }
 async function save() {
   const schema = draft.value;
-  if (!schema) return;
+  if (!schema || builtin.value || busy.value || (!dirty.value && !isNew.value)) return;
   const saved = await guarded(() =>
     isNew.value
       ? metadataSchemasApi.create(schema)
       : metadataSchemasApi.update(selectedId.value, schema),
   );
   if (!saved) return;
-  notice.value = t("saved", "Schema saved.");
   await refresh(saved.id);
+  notice.value = t("saved", "Schema saved.");
   emit("saved", saved.id);
   emit("changed");
 }
@@ -136,430 +275,210 @@ async function importFile(event: Event) {
   }
   const imported = await guarded(() => metadataSchemasApi.importFile(payload));
   if (imported) {
-    notice.value = t("imported", "Schema imported.");
     await refresh(imported.id);
+    notice.value = t("imported", "Schema imported.");
     emit("changed");
   }
 }
+const runPreview = (payload: Record<string, unknown>) =>
+  guarded(() => metadataSchemasApi.preview(payload));
 
-// ---- editing ---------------------------------------------------------------------------------------------------
-const groupKeys = computed(() => (draft.value?.groups ?? []).map((g) => g.key));
-function addField(group: string) {
-  draft.value?.fields.push(blankField(group));
+// Ctrl/Cmd+S saves, and leaving the page with unsaved edits asks first.
+function onKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    void save();
+  }
 }
-function removeField(index: number) {
-  draft.value?.fields.splice(index, 1);
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  if (dirty.value && !builtin.value) event.preventDefault();
 }
-function moveField(index: number, by: -1 | 1) {
-  const fields = draft.value?.fields;
-  if (!fields || index + by < 0 || index + by >= fields.length) return;
-  [fields[index], fields[index + by]] = [fields[index + by], fields[index]];
-}
-function addGroup() {
-  const n = (draft.value?.groups.length ?? 0) + 1;
-  draft.value?.groups.push({
-    key: `group_${n}`,
-    label: `Group ${n}`,
-    intro: "Infer ONLY the following metadata for one immutable DerridAI record.",
-    fields_heading: "",
-    notes: [],
-    trailer: "",
-    footer:
-      "Return one field_assessments entry for every one of {assessed_fields}. Each assessment must contain confidence (0..1 or null), needs_review, reason, and outcome (supported_value, no_supported_value, or uncertain).\n",
-  });
-}
-function removeGroup(key: string) {
-  if (!draft.value || key === CORE_GROUP) return;
-  draft.value.groups = draft.value.groups.filter((g) => g.key !== key);
-  draft.value.fields = draft.value.fields.filter((f) => f.group !== key);
-}
-const notesText = (group: SchemaGroup) => group.notes.join("\n");
-const setNotes = (group: SchemaGroup, text: string) => {
-  group.notes = text
-    .split("\n")
-    .map((n) => n.trim())
-    .filter(Boolean);
-};
-const fieldsOf = (key: string) =>
-  (draft.value?.fields ?? [])
-    .map((field, index) => ({ field, index }))
-    .filter((item) => item.field.group === key);
-const addValue = (field: SchemaField) => field.values.push({ value: "", definition: "" });
-
-// ---- preview ---------------------------------------------------------------------------------------------------
-const previewGroup = ref(CORE_GROUP);
-const previewText = ref(
-  "In this passage Derrida distinguishes the archive from simple memory. He cites Freud while qualifying the claim: the archive is not merely a storehouse, and its authority depends on the institution that preserves and interprets it. The paragraph asks whether a supposedly universal concept can remain neutral when its exclusions and historical conditions are ignored.",
+watch(tab, (id) => emit("tab", id));
+watch(
+  () => props.initialSchemaId,
+  (value) => {
+    const id = value || "default";
+    requestedId.value = id;
+    if (id === selectedId.value || !catalogReady.value) return;
+    void select(summaries.value.some((item) => item.id === id) ? id : "default");
+  },
 );
-const previewProfile = ref("");
-const preview = ref<SchemaPreview | null>(null);
-function previewProvider(profileId: string): Record<string, unknown> {
-  const profile = props.providerProfiles.find((item) => item.id === profileId);
-  if (!profile) return { provider_profile_id: profileId };
-  const apiKey = profile.api_key?.trim() || "";
-  return {
-    provider_profile_id: profile.id,
-    provider: profile.type,
-    model: profile.model,
-    base_url: profile.base_url || undefined,
-    // The OpenAI key lives on the browser profile. Leave it off when this profile
-    // has none, so a key stored for a published profile can still be used.
-    api_key: apiKey || undefined,
-  };
-}
-async function tryGroup(run: boolean) {
-  const schema = draft.value;
-  if (!schema || !previewText.value.trim()) return;
-  const payload: Record<string, unknown> = {
-    schema,
-    group: previewGroup.value,
-    text: previewText.value,
-    run,
-  };
-  const profileId =
-    previewProfile.value || props.defaultProviderId || props.providerProfiles[0]?.id;
-  if (run && profileId) Object.assign(payload, previewProvider(profileId));
-  const result = await guarded(() => metadataSchemasApi.preview(payload));
-  if (result) preview.value = result;
-}
+watch(
+  () => props.initialTab,
+  (value) => {
+    if (VALID_TABS.has(value) && value !== tab.value) tab.value = value;
+  },
+);
 
 onMounted(() => {
+  window.addEventListener("keydown", onKeydown);
+  window.addEventListener("beforeunload", onBeforeUnload);
   void refresh();
 });
-watch(
-  () => props.providerProfiles,
-  (profiles) => {
-    if (!profiles.length) return;
-    if (previewProfile.value && !profiles.some((profile) => profile.id === previewProfile.value))
-      previewProfile.value = "";
-    if (!previewProfile.value && !props.defaultProviderId)
-      previewProfile.value = profiles[0]?.id || "";
-  },
-  { immediate: true, deep: true },
-);
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("beforeunload", onBeforeUnload);
+});
 defineExpose({ select, draft });
 </script>
 
 <template>
   <div class="schema-editor">
-    <aside class="schema-list" :aria-label="t('saved_schemas', 'Saved schemas')">
-      <ul>
-        <li v-for="item in summaries" :key="item.id">
-          <button
-            type="button"
-            class="schema-row"
-            :aria-current="item.id === selectedId && !isNew ? 'true' : undefined"
-            @click="select(item.id)"
-          >
-            <b>{{ item.name }}</b>
-            <small
-              >{{ item.builtin ? t("builtin", "Built in") : "" }} · v{{
-                item.schema_version || "1.0.0"
-              }}
-              ·
-              {{
-                i18n.tf("schemas.field_count", "{count} fields", { count: item.field_count })
-              }}</small
-            >
-          </button>
-        </li>
-        <li v-if="isNew" class="schema-row is-new" aria-current="true">
-          <b>{{ draft?.name }}</b
-          ><small>{{ t("unsaved", "Not saved yet") }}</small>
-        </li>
-      </ul>
-      <label class="import-button btn small"
-        >{{ t("import", "Import a schema…")
-        }}<input type="file" accept="application/json,.json" class="sr-only" @change="importFile"
-      /></label>
-    </aside>
-
-    <section v-if="draft" class="schema-form" :aria-label="t('editor', 'Schema editor')">
-      <p v-if="error" class="schema-error" role="alert">{{ error }}</p>
-      <p v-if="notice" class="schema-notice" role="status">{{ notice }}</p>
-      <p v-if="builtin" class="schema-note">
-        {{
-          t(
-            "builtin_help",
-            "The built-in schema describes the fields DerridAI has always produced. It cannot be changed; duplicate it to make your own.",
-          )
-        }}
-      </p>
-
-      <div class="schema-actions">
-        <UiButton :label="t('duplicate', 'Duplicate')" :disabled="busy" @click="duplicate" />
-        <UiButton :label="t('export', 'Export')" :disabled="busy || isNew" @click="exportFile" />
-        <UiButton
-          :label="t('delete', 'Delete')"
-          :disabled="busy || builtin || isNew"
-          @click="remove"
-        />
+    <section class="schema-library" :aria-label="t('saved_schemas', 'Saved schemas')">
+      <div class="library-bar">
+        <h2>{{ t("saved_schemas", "Saved schemas") }}</h2>
+        <span class="spacer"></span>
+        <label class="import-button btn small">
+          <span>{{ t("import", "Import a schema…") }}</span>
+          <input type="file" accept="application/json,.json" class="sr-only" @change="importFile" />
+        </label>
         <UiButton
           variant="primary"
-          :label="t('save', 'Save schema')"
-          :disabled="busy || builtin || !dirty"
-          @click="save"
+          size="small"
+          icon="plus"
+          button-class="new-schema"
+          :disabled="busy || !catalogReady"
+          :label="t('new_schema', 'New schema')"
+          @click="newSchema"
         />
       </div>
-
-      <fieldset :disabled="builtin || busy" class="schema-fieldset">
-        <label class="schema-field"
-          ><span>{{ t("name", "Name") }}</span
-          ><input v-model="draft.name" class="control" maxlength="80"
-        /></label>
-        <p class="schema-version">
-          {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b
-          ><span>{{
-            t("version_help", "Versions change automatically when the saved schema changes.")
-          }}</span>
-        </p>
-        <label class="schema-field"
-          ><span>{{ t("description", "Description") }}</span
-          ><textarea
-            v-model="draft.description"
-            class="control"
-            rows="2"
-            maxlength="600"
-          ></textarea>
-        </label>
-
-        <div class="locked-core" role="note">
-          <b>{{ t("locked_core", "Locked core") }}</b>
-          <span>{{
-            t(
-              "locked_core_help",
-              "Every schema has these three fields. DerridAI's page and layout logic depends on them, so they cannot be changed or removed.",
-            )
-          }}</span>
-          <code v-for="name in CORE_FIELDS" :key="name">{{ name }}</code>
-        </div>
-
-        <section
-          v-for="group in draft.groups"
-          :key="group.key"
-          class="schema-group"
-          :aria-labelledby="`group-${group.key}`"
-        >
-          <header>
-            <h3 :id="`group-${group.key}`">
-              {{ group.label }}
-              <small>{{
-                group.key === CORE_GROUP ? t("holds_core", "holds the locked core") : ""
-              }}</small>
-            </h3>
-            <button
-              v-if="group.key !== CORE_GROUP"
-              type="button"
-              class="link-button"
-              @click="removeGroup(group.key)"
-            >
-              {{ t("remove_group", "Remove group") }}
-            </button>
-          </header>
-          <p class="hint">{{ t("group_help", "Each group is one model call per record.") }}</p>
-          <label class="schema-field"
-            ><span>{{ t("group_label", "Group name") }}</span
-            ><input v-model="group.label" class="control" maxlength="80"
-          /></label>
-          <label class="schema-field"
-            ><span>{{ t("intro", "Opening instructions") }}</span
-            ><textarea v-model="group.intro" class="control" rows="4"></textarea>
-          </label>
-          <label class="schema-field"
-            ><span>{{ t("fields_heading", "Heading above the field list") }}</span
-            ><input v-model="group.fields_heading" class="control"
-          /></label>
-          <label class="schema-field"
-            ><span>{{ t("notes", "Notes after the field list (one per line)") }}</span
-            ><textarea
-              :value="notesText(group)"
-              class="control"
-              rows="3"
-              @input="setNotes(group, ($event.target as HTMLTextAreaElement).value)"
-            ></textarea>
-          </label>
-          <label class="schema-field"
-            ><span>{{ t("trailer", "Closing remarks") }}</span
-            ><textarea v-model="group.trailer" class="control" rows="3"></textarea>
-          </label>
-          <label class="schema-field"
-            ><span>{{ t("footer", "Evidence and confidence instructions") }}</span
-            ><textarea v-model="group.footer" class="control" rows="3"></textarea
-            ><small class="hint">{{
-              t("footer_help", "You can use {fields} and {assessed_fields}.")
-            }}</small></label
-          >
-
-          <h4>{{ t("fields", "Fields") }}</h4>
-          <article v-for="item in fieldsOf(group.key)" :key="item.index" class="schema-field-card">
-            <div class="row">
-              <label class="schema-field"
-                ><span>{{ t("field_name", "Field name") }}</span
-                ><input v-model="item.field.name" class="control" maxlength="40" spellcheck="false"
-              /></label>
-              <label class="schema-field"
-                ><span>{{ t("field_label", "Label") }}</span
-                ><input v-model="item.field.label" class="control" maxlength="80"
-              /></label>
-              <label class="schema-field"
-                ><span>{{ t("field_type", "Type") }}</span>
-                <select v-model="item.field.type" class="control">
-                  <option value="text">{{ t("type_text", "Text") }}</option>
-                  <option value="number">{{ t("type_number", "Number") }}</option>
-                  <option value="boolean">{{ t("type_boolean", "Yes / no") }}</option>
-                  <option value="choice">{{ t("type_choice", "One of a list") }}</option>
-                  <option value="list">{{ t("type_list", "List of texts") }}</option>
-                </select></label
-              >
-              <label class="schema-field"
-                ><span>{{ t("field_group", "Group") }}</span
-                ><select v-model="item.field.group" class="control">
-                  <option v-for="key in groupKeys" :key="key" :value="key">{{ key }}</option>
-                </select></label
-              >
-            </div>
-            <label class="schema-field"
-              ><span>{{ t("instruction", "What the model should look for") }}</span
-              ><textarea v-model="item.field.instruction" class="control" rows="2"></textarea
-              ><small class="hint">{{
-                t(
-                  "instruction_help",
-                  "Shown to the model after the field's name. {values} is replaced by the allowed values.",
-                )
-              }}</small></label
-            >
-            <div v-if="item.field.type === 'choice'" class="values">
-              <div v-for="(value, vi) in item.field.values" :key="vi" class="value-row">
-                <input
-                  v-model="value.value"
-                  class="control"
-                  :aria-label="t('value', 'Allowed value')"
-                  maxlength="80"
-                />
-                <input
-                  v-model="value.definition"
-                  class="control"
-                  :aria-label="t('definition', 'What it means (optional)')"
-                  :placeholder="t('definition', 'What it means (optional)')"
-                />
-                <button type="button" class="link-button" @click="item.field.values.splice(vi, 1)">
-                  {{ t("remove", "Remove") }}
-                </button>
-              </div>
-              <button type="button" class="btn small" @click="addValue(item.field)">
-                {{ t("add_value", "Add a value") }}
-              </button>
-              <label class="check"
-                ><input v-model="item.field.strict" type="checkbox" /><span>{{
-                  t("strict", "The model may only return these values")
-                }}</span></label
-              >
-            </div>
-            <div class="flags">
-              <label class="check"
-                ><input v-model="item.field.evidence" type="checkbox" /><span>{{
-                  t("evidence", "Must cite the source")
-                }}</span></label
-              >
-              <label class="check"
-                ><input v-model="item.field.assess" type="checkbox" /><span>{{
-                  t("assess", "Report its confidence")
-                }}</span></label
-              >
-              <label class="check"
-                ><input v-model="item.field.review" type="checkbox" /><span>{{
-                  t("review", "A person must settle it before accepting")
-                }}</span></label
-              >
-              <span class="grow"></span>
-              <button
-                type="button"
-                class="link-button"
-                :disabled="builtin"
-                @click="moveField(item.index, -1)"
-              >
-                {{ t("up", "Move up") }}
-              </button>
-              <button
-                type="button"
-                class="link-button"
-                :disabled="builtin"
-                @click="moveField(item.index, 1)"
-              >
-                {{ t("down", "Move down") }}
-              </button>
-              <button type="button" class="link-button" @click="removeField(item.index)">
-                {{ t("remove_field", "Remove field") }}
-              </button>
-            </div>
-          </article>
-          <button type="button" class="btn small" @click="addField(group.key)">
-            {{ t("add_field", "Add a field") }}
-          </button>
-        </section>
-        <button type="button" class="btn small" @click="addGroup">
-          {{ t("add_group", "Add a group") }}
+      <UiLoadingState
+        v-if="catalogLoading && !catalogReady"
+        variant="skeleton"
+        :skeleton-count="3"
+        :label="t('loading', 'Loading schemas…')"
+      />
+      <p v-if="readError && !catalogReady" class="schema-error" role="alert">
+        {{ readError }}
+        <button type="button" class="btn small" @click="retryRead">
+          {{ t("retry", "Retry") }}
         </button>
-      </fieldset>
+      </p>
+      <SchemaListTable
+        v-if="catalogReady"
+        :items="summaries"
+        :selected-id="selectedId"
+        :unsaved-name="isNew ? draft?.name || t('new_schema_name', 'New schema') : ''"
+        @select="select($event)"
+      />
+      <UiLoadingState
+        v-if="catalogLoading && catalogReady"
+        variant="inline"
+        :label="t('updating', 'Updating…')"
+      />
+    </section>
 
-      <section class="schema-preview" aria-labelledby="schema-preview-title">
-        <h3 id="schema-preview-title">{{ t("preview", "Try it on a passage") }}</h3>
-        <p class="hint">
-          {{
-            t(
-              "preview_help",
-              "See the prompt a group produces, or run it on a passage with a model. A real build adds the document details and earlier reviewer decisions.",
-            )
-          }}
+    <section class="schema-form" :aria-label="t('editor', 'Schema editor')">
+      <p v-if="readError && catalogReady" class="schema-error" role="alert">
+        {{ readError }}
+        <button type="button" class="btn small" @click="retryRead">
+          {{ t("retry", "Retry") }}
+        </button>
+      </p>
+      <UiLoadingState
+        v-if="detailLoading && !draft"
+        variant="skeleton"
+        :skeleton-count="3"
+        :label="t('loading_schema', 'Loading schema…')"
+      />
+      <template v-if="draft">
+        <p v-if="error" class="schema-error" role="alert">{{ error }}</p>
+        <p v-if="notice" class="schema-notice" role="status">{{ notice }}</p>
+        <p v-if="builtin" class="schema-note">
+          {{ t("builtin_help") }}
         </p>
-        <div class="row">
-          <label class="schema-field"
-            ><span>{{ t("preview_group", "Group") }}</span
-            ><select v-model="previewGroup" class="control">
-              <option v-for="key in groupKeys" :key="key" :value="key">{{ key }}</option>
-            </select></label
-          >
-          <label v-if="providerProfiles.length" class="schema-field"
-            ><span>{{ t("preview_model", "Model") }}</span
-            ><select v-model="previewProfile" class="control">
-              <option value="">{{ t("preview_default_model", "Default provider") }}</option>
-              <option v-for="p in providerProfiles" :key="p.id" :value="p.id">
-                {{ p.name || p.id }}{{ p.model ? ` · ${p.model}` : "" }}
-              </option>
-            </select></label
-          >
-        </div>
-        <label class="schema-field"
-          ><span>{{ t("preview_text", "Passage") }}</span
-          ><textarea v-model="previewText" class="control" rows="5"></textarea>
-        </label>
-        <div class="schema-actions">
-          <UiButton
-            :label="t('show_prompt', 'Show the prompt')"
-            :disabled="busy || !previewText.trim()"
-            @click="tryGroup(false)"
-          /><UiButton
-            variant="primary"
-            :label="t('run_sample', 'Run on this passage')"
-            :disabled="busy || !previewText.trim()"
-            @click="tryGroup(true)"
+
+        <header class="schema-bar">
+          <div class="schema-context">
+            <span>{{ t("editing_schema", "Editing schema") }}</span>
+            <strong>{{ draft.name }}</strong>
+          </div>
+          <div class="schema-status">
+            <UiStatusBadge v-if="builtin" tone="info" :label="t('builtin', 'Built in')" />
+            <UiStatusBadge
+              v-else-if="isNew"
+              tone="warning"
+              :label="t('unsaved', 'Not saved yet')"
+            />
+            <UiStatusBadge
+              v-else-if="dirty"
+              tone="warning"
+              :label="t('unsaved_changes', 'Unsaved changes')"
+            />
+            <UiStatusBadge v-else tone="success" :label="t('saved_state', 'Saved')" />
+            <UiTooltip :text="t('version_help')" trigger-mode="content" placement="bottom">
+              <span class="schema-version">
+                {{ t("version", "Schema version") }}: <b>v{{ draft.schema_version || "1.0.0" }}</b>
+              </span>
+            </UiTooltip>
+          </div>
+          <div class="schema-actions">
+            <UiButton
+              icon="copy"
+              :label="t('duplicate', 'Duplicate')"
+              :disabled="busy"
+              @click="duplicate"
+            />
+            <UiButton
+              icon="download"
+              :label="t('export', 'Export')"
+              :disabled="busy || isNew"
+              @click="exportFile"
+            />
+            <UiButton
+              icon="trash"
+              :label="t('delete', 'Delete')"
+              :disabled="busy || builtin || isNew"
+              @click="remove"
+            />
+            <UiButton
+              variant="primary"
+              :label="t('save', 'Save schema')"
+              :disabled="busy || builtin || !dirty"
+              @click="save"
+            />
+          </div>
+        </header>
+
+        <fieldset :disabled="readonly" class="schema-identity">
+          <UiField :label="t('name', 'Name')" control-id="schema-name">
+            <UiInput id="schema-name" v-model="draft.name" maxlength="80" />
+          </UiField>
+          <UiField :label="t('description', 'Description')" control-id="schema-description">
+            <UiInput id="schema-description" v-model="draft.description" maxlength="600" />
+          </UiField>
+        </fieldset>
+
+        <UiTabs
+          v-model="tab"
+          :tabs="tabs"
+          :tablist-label="t('editor', 'Schema editor')"
+          id-prefix="schema"
+        />
+        <div
+          :id="`schema-panel-${tab}`"
+          role="tabpanel"
+          :aria-labelledby="`schema-tab-${tab}`"
+          class="schema-panel"
+        >
+          <SchemaFieldsTable v-if="tab === 'fields'" :draft="draft" :readonly="readonly" />
+          <SchemaDocumentFieldsPanel
+            v-else-if="tab === 'document'"
+            :draft="draft"
+            :readonly="readonly"
+          />
+          <SchemaGroupsPanel v-else-if="tab === 'groups'" :draft="draft" :readonly="readonly" />
+          <SchemaPreviewPanel
+            v-else
+            :draft="draft"
+            :busy="busy"
+            :provider-profiles="props.providerProfiles"
+            :default-provider-id="props.defaultProviderId"
+            :run="runPreview"
+            @manage="emit('changed')"
           />
         </div>
-        <template v-if="preview">
-          <h4>{{ t("prompt", "Prompt") }}</h4>
-          <pre class="preview-out" tabindex="0">{{ preview.prompt }}</pre>
-          <template v-if="preview.answer !== undefined"
-            ><h4>
-              {{
-                i18n.tf("schemas.answer", "Answer ({seconds} s)", { seconds: preview.seconds ?? 0 })
-              }}
-            </h4>
-            <pre class="preview-out" tabindex="0">{{
-              JSON.stringify(preview.answer, null, 1)
-            }}</pre>
-          </template>
-        </template>
-      </section>
+      </template>
     </section>
   </div>
 </template>
@@ -567,69 +486,108 @@ defineExpose({ select, draft });
 <style scoped>
 .schema-editor {
   display: grid;
-  grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(16rem, 20rem) minmax(0, 1fr);
+  gap: var(--space-5);
+  align-content: start;
   align-items: start;
 }
-.schema-list ul {
+.schema-library {
+  position: sticky;
+  inset-block-start: var(--space-3);
   display: grid;
-  gap: 6px;
-  margin: 0 0 10px;
-  padding: 0;
-  list-style: none;
+  gap: var(--space-2);
+  min-inline-size: 0;
 }
-.schema-row {
-  display: grid;
-  gap: 2px;
-  inline-size: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--card);
-  color: var(--text);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
+.library-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
 }
-.schema-row[aria-current="true"] {
-  border-color: var(--accent-fg);
-  box-shadow: inset 3px 0 0 var(--accent-fg);
+.library-bar h2 {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--fs-md);
 }
-.schema-row small {
-  color: var(--muted);
-  font-size: 0.8125rem;
+.spacer {
+  flex: 1;
 }
-.schema-row:focus-visible,
 .import-button:focus-within {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 .schema-form {
   display: grid;
-  gap: 14px;
+  gap: var(--space-3);
   min-inline-size: 0;
 }
-.schema-fieldset {
+.schema-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-overlay);
+  background: var(--surface-raised);
+}
+.schema-context {
   display: grid;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-inline-size: 0;
+  gap: var(--space-1);
+  min-inline-size: min(22rem, 100%);
 }
-.schema-fieldset:disabled {
-  opacity: 0.85;
+.schema-context span {
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.schema-context strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--fs-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.schema-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+.schema-version {
+  color: var(--text-tertiary);
+  font-size: var(--fs-sm);
 }
 .schema-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+.schema-identity {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+.schema-identity {
+  display: grid;
+  grid-template-columns: minmax(12rem, 1fr) minmax(0, 2fr);
+  gap: 10px 12px;
+}
+.schema-panel {
+  min-inline-size: 0;
+}
 .schema-error {
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--tone-danger-border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--tone-danger-bg);
   color: var(--tone-danger-fg);
 }
@@ -638,164 +596,25 @@ defineExpose({ select, draft });
   margin: 0;
   padding: 10px 12px;
   border: 1px solid var(--tone-info-border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--tone-info-bg);
   color: var(--tone-info-fg);
   font-size: 0.875rem;
 }
-.locked-core {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px dashed var(--line-strong);
-  border-radius: 10px;
-  background: var(--soft);
-  font-size: 0.875rem;
-}
-.locked-core code,
-.schema-group code {
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--card);
-  border: 1px solid var(--line);
-}
-.schema-group {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--card);
-}
-.schema-group header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 10px;
-}
-.schema-group h3,
-.schema-preview h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-h4 {
-  margin: 4px 0 0;
-  font-size: 0.9375rem;
-}
-.schema-group h3 small {
-  color: var(--muted);
-  font-weight: 500;
-}
-.schema-field {
-  display: grid;
-  gap: 4px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  min-inline-size: 0;
-}
-.schema-field textarea,
-.schema-field input,
-.schema-field select {
-  inline-size: 100%;
-  font-weight: 500;
-}
-.hint {
-  color: var(--muted);
-  font-size: 0.8125rem;
-  font-weight: 500;
-  margin: 0;
-}
-.row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 10px;
-}
-.schema-field-card {
-  display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-}
-.values {
-  display: grid;
-  gap: 6px;
-}
-.value-row {
-  display: grid;
-  grid-template-columns: minmax(6rem, 0.5fr) minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-.flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
-  align-items: center;
-}
-.check {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-.grow {
-  flex: 1;
-}
-.link-button {
-  border: 0;
-  background: none;
-  padding: 4px 6px;
-  color: var(--accent-fg);
-  font: inherit;
-  font-weight: 700;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.link-button:disabled {
-  color: var(--muted);
-  cursor: not-allowed;
-}
-.link-button:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.schema-preview {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.preview-out {
-  max-block-size: 22rem;
-  overflow: auto;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-  font-size: 0.8125rem;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.preview-out:focus-visible {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.control {
-  min-block-size: 40px;
-}
-@media (max-width: 820px) {
+@media (max-width: 1100px) {
   .schema-editor {
     grid-template-columns: minmax(0, 1fr);
   }
-  .value-row {
+  .schema-library {
+    position: static;
+  }
+}
+@media (max-width: 820px) {
+  .schema-identity {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .schema-bar {
+    position: static;
   }
 }
 </style>

@@ -1,12 +1,34 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Pure scholarly metadata vocabulary and deterministic ownership constraints.
 
 No repository, model-provider, or job-manager dependency is permitted here.
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
+from .field_assertions import (
+    create_deterministic_assertion,
+    current_assertion_by_name,
+    migrate_record_assertions,
+    project_record_assertions,
+)
 from .metadata_values import clean as clean_value
 from .metadata_values import is_placeholder
 
@@ -44,19 +66,88 @@ STRONG_STRUCTURAL_METHODS = {
     "confirmed_manifest_page_range",
 }
 
+_LLM_TRANSPORT_SUFFIX = re.compile(
+    r"\s*,?\s*(?:field[_ -]?evidence|field[_ -]?assessments)"
+    r"(?:-[A-Za-z0-9_.:-]+)?\s*:",
+    re.IGNORECASE,
+)
+
+
+# A list item that is structured-output residue rather than a value: an evidence reference, a confidence score, an
+# assessment key, or a source-block ID. Small models sometimes flatten {value, evidence, confidence, reason} into one
+# list ("Balzac", "field_evidence_id-…:p00001-b0001", "confidence_score_0.95", "The text presents…").
+_LLM_TRANSPORT_ITEM = re.compile(
+    r"^\s*(?:field[_ -]?(?:evidence|assessments?)|evidence[_ -]?(?:ids?|blocks?)|block[_ -]?ids?)(?:\b|_)"
+    r"|^\s*confidence(?:[_ -]?score)?\s*[_:=]?\s*(?:0|1)?\.?\d"
+    r"|^\s*(?:needs[_ -]?review|reason)\s*[:=]"
+    r"|:p\d{3,}-b\d{3,}|^\s*p\d{3,}-b\d{3,}\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_llm_transport_items(value: list[Any]) -> tuple[list[Any], list[Any] | None]:
+    """List items before the first transport marker; everything from it on is residue (its reason included)."""
+    kept: list[Any] = []
+    for item in value:
+        if isinstance(item, str) and _LLM_TRANSPORT_ITEM.search(item):
+            return kept, list(value)
+        if isinstance(item, str):
+            cleaned, raw = _strip_llm_transport_suffix(item)
+            if raw is not None:
+                if cleaned:
+                    kept.append(cleaned)
+                return kept, list(value)
+        kept.append(item)
+    return value, None
+
+
+def _strip_llm_transport_suffix(value: Any) -> tuple[Any, Any | None]:
+    """Keep model transport/audit syntax out of scholarly metadata values.
+
+    Some small models occasionally flatten a neighbouring structured-output
+    field into a scalar value, such as a person name followed by a
+    field_evidence marker. Preserve the raw response for audit while selecting
+    only the value before that explicit structured-output marker.
+    """
+    if isinstance(value, list):
+        return _strip_llm_transport_items(value)
+    if not isinstance(value, str):
+        return value, None
+    text: str = value
+    parts = _LLM_TRANSPORT_SUFFIX.split(text, maxsplit=1)
+    if len(parts) < 2 or not parts[0].strip():
+        return value, None
+    clean = parts[0].rstrip(" ,;")
+    return (clean or None), value
+
+
+_ECHOED_FIELD_NAMES = frozenset(
+    {
+        "region_type", "discourse_role", "speaker", "quoted_speaker", "position_holder", "target",
+        "stance", "proposition_status", "claim_scope", "primary_text",
+    }
+)
+
+
+def _is_field_name_echo(value: str) -> bool:
+    """A model that answers with a field's own name (``region_type``) has not supplied a value."""
+    return value.strip().strip("\"'`").casefold().replace(" ", "_") in _ECHOED_FIELD_NAMES
+
+
 def _normalize_semantic_value(field: str, value: Any) -> tuple[Any, Any | None]:
     """Canonicalize only closed-vocabulary grammatical aliases.
 
     The raw model value is returned separately for audit. We deliberately avoid
     semantic synonym expansion: only direct inflectional variants are normalized.
     """
-    if isinstance(value, str) and is_placeholder(value):
-        return None, value  # the raw text is kept for audit; it is not a value
+    value, transport_raw = _strip_llm_transport_suffix(value)
+    if isinstance(value, str) and (is_placeholder(value) or _is_field_name_echo(value)):
+        return None, transport_raw or value  # raw text is kept for audit; it is not a value
     if isinstance(value, list) and any(is_placeholder(item) for item in value):
-        return clean_value(value), value
+        return clean_value(value), transport_raw or value
     if field != "stance" or not isinstance(value, str):
-        return value, None
-    raw = value
+        return value, transport_raw
+    raw = transport_raw or value
     token = value.strip().casefold()
     if token in STANCE_VALUES:
         return token, None
@@ -85,7 +176,10 @@ REVIEW_METADATA_FIELDS = ("region_type", "primary_text", "discourse_role", "spea
 
 NON_PRIMARY_REGION_TYPES = {"front_matter", "back_matter", "bibliography", "index", "paratext"}
 
-def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
+def apply_metadata_constraints(
+    record: dict[str, Any],
+    schema: Any | None = None,
+) -> list[dict[str, Any]]:
     """Apply deterministic record-metadata relationships.
 
     Hard semantic invariants are applied consistently in single-record editing,
@@ -94,13 +188,13 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
     offered as scholarly choices.
     """
     region = str(record.get("region_type") or "")
-    status = record.setdefault("metadata_field_status", {})
+    migrate_record_assertions(record, schema)
     changes: list[dict[str, Any]] = []
 
-    primary_status = status.get("primary_text") if isinstance(status.get("primary_text"), dict) else {}
-    human_primary = str(primary_status.get("status") or "") in {"human_confirmed", "human_override"}
-    strong_structural_primary = str(primary_status.get("method") or "") in STRONG_STRUCTURAL_METHODS
-    semantic_disagreement = str(primary_status.get("reason_code") or "") == "deterministic_llm_disagreement"
+    primary_assertion = current_assertion_by_name(record, "primary_text")
+    human_primary = bool(primary_assertion and primary_assertion.authority_status in {"human_confirmed", "human_override"})
+    strong_structural_primary = bool(primary_assertion and primary_assertion.method in STRONG_STRUCTURAL_METHODS)
+    semantic_disagreement = bool(primary_assertion and "disagreement" in primary_assertion.reason)
     desired_primary: bool | None = None
     primary_reason = ""
     primary_hard = False
@@ -116,13 +210,17 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
             changes.append({"field": "primary_text", "value": desired_primary, "reason": primary_reason})
         record["primary_text"] = desired_primary
         if not semantic_disagreement and not strong_structural_primary:
-            status["primary_text"] = {
-                "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-                "reason_code": "semantic_invariant" if primary_hard else "deterministic_default", "reason": primary_reason,
-            }
+            create_deterministic_assertion(
+                record,
+                "primary_text",
+                desired_primary,
+                schema=schema,
+                method="region_type_consistency",
+                reason=primary_reason,
+            )
 
-    role_status = status.get("discourse_role") if isinstance(status.get("discourse_role"), dict) else {}
-    human_role = str(role_status.get("status") or "") in {"human_confirmed", "human_override"}
+    role_assertion = current_assertion_by_name(record, "discourse_role")
+    human_role = bool(role_assertion and role_assertion.authority_status in {"human_confirmed", "human_override"})
     desired_role: str | None = None
     role_reason = ""
     if region == "bibliography":
@@ -135,10 +233,15 @@ def apply_metadata_constraints(record: dict[str, Any]) -> list[dict[str, Any]]:
         if record.get("discourse_role") != desired_role:
             changes.append({"field": "discourse_role", "value": desired_role, "reason": role_reason})
         record["discourse_role"] = desired_role
-        status["discourse_role"] = {
-            "status": "deterministic", "method": "region_type_consistency", "confidence": 1.0,
-            "reason_code": "semantic_invariant", "reason": role_reason,
-        }
+        create_deterministic_assertion(
+            record,
+            "discourse_role",
+            desired_role,
+            schema=schema,
+            method="region_type_consistency",
+            reason=role_reason,
+        )
+    project_record_assertions(record)
     return changes
 
 ATTRIBUTION_EVIDENCE_FIELDS = {
@@ -186,6 +289,26 @@ MANIFEST_INHERITED_FIELDS = {
     "document_author", "translator", "edition", "year", "publication_year", "publisher",
     "publication_place", "isbn", "document_language", "original_language",
     "document_is_translation",
+}
+
+# Runtime schema policy is intentionally smaller than the legacy compatibility
+# whitelists below. Ordinary scholarly fields come from the build's pinned
+# MetadataSchema; only document-level or computed record metadata stays fixed.
+FIXED_RECORD_METADATA_FIELDS = MANIFEST_INHERITED_FIELDS | {
+    "language",
+    "attribution_confidence",
+    "semantic_classification_confidence",
+    "extraction_quality",
+    "inline_citation",
+    "full_citation",
+    "needs_review",
+    "review_reason",
+}
+
+FIXED_HUMAN_EDITABLE_METADATA_FIELDS = MANIFEST_INHERITED_FIELDS | {
+    "language",
+    "needs_review",
+    "review_reason",
 }
 
 HUMAN_EDITABLE_METADATA_FIELDS = {

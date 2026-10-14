@@ -1,12 +1,29 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createSearchWorkspace } from "../../src/domain/searchWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // The Search workspace commands set fields on the runtime state, save preferences and sync the URL. The view-level
 // behavior is covered by the legacy baseline's search scenarios; these pin the commands themselves.
 function setup() {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   // Every helper the workspace destructures is a spy; the three that matter here also record their order.
   const deps = new Proxy(
@@ -15,7 +32,8 @@ function setup() {
       get: (target, name: string) => {
         if (name in target) return (target as Record<string, unknown>)[name];
         return vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl" || name === "shell") calls.push(name);
+          if (name.startsWith("persist") || name === "syncUrl" || name === "refreshShell")
+            calls.push(name);
         });
       },
     },
@@ -38,7 +56,16 @@ describe("search workspace commands", () => {
     expect(ctx.workspace.updateSearchQuery("  hospitality")).toBe("  hospitality");
     expect(ctx.state.globalSearch).toBe("  hospitality");
     expect(ctx.state.globalPage).toBe(1);
-    expect(ctx.calls).toEqual(["persistPrefs", "syncUrl"]);
+    expect(ctx.calls).toEqual(["persistSearchPreferences", "syncUrl"]);
+  });
+
+  it("persists page size in list and search domains without a workspace snapshot", () => {
+    ctx.workspace.setSearchPageSize(250);
+
+    expect(ctx.state.pageSize).toBe(250);
+    expect(ctx.state.globalPage).toBe(1);
+    expect(ctx.calls).toEqual(["persistListPreferences", "persistSearchPreferences", "syncUrl"]);
+    expect(ctx.calls).not.toContain("persistPrefs");
   });
 
   it("never sets a page below one", () => {
@@ -56,6 +83,41 @@ describe("search workspace commands", () => {
     ctx.workspace.toggleSearchFacet("topics", "text");
     ctx.workspace.toggleSearchFacet("topics", "sign");
     expect(ctx.state.searchFacetFilters).toEqual({});
+  });
+
+  it("validates custom advanced filters by schema field kind rather than field name", () => {
+    ctx.state.globalSearchMode = "traditional";
+
+    ctx.workspace.addSearchAdvancedFilter({
+      field: "conceptual_score",
+      op: "gte",
+      value: "0.7",
+      kind: "number",
+    });
+    ctx.workspace.addSearchAdvancedFilter({
+      field: "motifs",
+      op: "has",
+      value: "trace",
+      kind: "list",
+    });
+    ctx.workspace.addSearchAdvancedFilter({
+      field: "conceptual_score",
+      op: "has",
+      value: "invalid-for-number",
+      kind: "number",
+    });
+
+    expect(
+      ctx.state.globalFilters.map((filter: Record<string, unknown>) => ({
+        field: filter.field,
+        op: filter.op,
+        value: filter.value,
+      })),
+    ).toEqual([
+      { field: "conceptual_score", op: "gte", value: "0.7" },
+      { field: "motifs", op: "has", value: "trace" },
+      { field: "conceptual_score", op: "eq", value: "invalid-for-number" },
+    ]);
   });
 
   it("clears every filter and any database results", () => {

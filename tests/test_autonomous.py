@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from app.autonomous import Policy, may_accept, settle_record
 
 
@@ -20,8 +36,11 @@ def test_a_confident_proposal_is_taken_and_labelled_as_the_models_not_a_persons(
     out = settle_record(r, Policy(enabled=True, unresolved="leave"))
     assert r["stance"] == "critique" and out["filled"][0]["field"] == "stance"
     info = r["metadata_field_status"]["stance"]
-    assert info["status"] == "model_inferred" and info["method"] == "autonomous_policy" and info["autonomous"] is True
-    assert "no person reviewed" in info["reason"]
+    assert info["status"] == "unresolved" and info["method"] == "llm" and info["autonomous"] is True
+    assert info["evaluation_status"] == "no_supported_value"
+    assert info["value_status"] == "unresolved"
+    assert info["autonomous_decision"]["field"] == "stance"
+    assert info["autonomous_decision"]["actor_kind"] == "autonomous_policy"
 
 
 def test_a_doubtful_proposal_is_left_or_taken_by_policy():
@@ -90,7 +109,8 @@ def test_hands_free_settles_accepts_and_reports_what_it_could_not(tmp_path):
     report = m.run_autonomous(bid, {"model": "", "autonomous": {"enabled": True, "passes": 0}})
     saved = {r["record_id"]: r for r in repo.load_records(bid)}
     assert saved["good"]["accepted"] is True and saved["good"]["accepted_by"] == "autonomous" and saved["good"]["stance"] == "critique"
-    assert saved["good"]["metadata_field_status"]["stance"]["method"] == "autonomous_policy"
+    assert saved["good"]["metadata_field_status"]["stance"]["method"] == "llm"
+    assert saved["good"]["autonomous_decision"]["actor_kind"] == "autonomous_policy"
     assert saved["hopeless"].get("accepted") is not True and saved["touched"].get("accepted") is not True  # left for a person
     assert report["accepted"] == 1 and report["left_for_review"] == 1 and report["exceptions"][0]["record_id"] == "hopeless"
     assert repo.get_build(bid)["autonomous_report"]["fields_filled"] == 1

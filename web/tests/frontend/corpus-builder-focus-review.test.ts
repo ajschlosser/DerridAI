@@ -1,84 +1,416 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
 import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
+import CorpusActionMenu from "../../src/components/CorpusActionMenu.vue";
 
-function buttonByText(wrapper:any,text:string){
-  const button=wrapper.findAll("button").find((node:any)=>node.text().includes(text));
-  if(!button)throw new Error("Button not found: "+text);
+function buttonByText(wrapper: any, text: string) {
+  const button = wrapper.findAll("button").find((node: any) => node.text().includes(text));
+  if (!button) throw new Error("Button not found: " + text);
   return button;
 }
-function lastEmission(wrapper:any,event:string){const events=wrapper.emitted(event)||[];return events[events.length-1]||[]}
+function lastEmission(wrapper: any, event: string) {
+  const events = wrapper.emitted(event) || [];
+  return events[events.length - 1] || [];
+}
 
-const record:any={
-  record_id:"record-00014",record_revision:2,text:"A representative passage under review.",text_length:42,page_start:22,page_end:23,pdf_pages:[24],
-  source_block_ids:["p24-b1"],source_spans:[],needs_review:true,review_reason:"Boundary requires review.",review_disposition:"pending",
-  metadata_field_status:{},metadata_evidence:{},metadata_incomplete_fields:[],metadata_review_fields:[],region_type:"main_text",primary_text:true,
+const record: any = {
+  record_id: "record-00014",
+  record_revision: 2,
+  text: "A representative passage under review.",
+  text_length: 42,
+  page_start: 22,
+  page_end: 23,
+  pdf_pages: [24],
+  source_block_ids: ["p24-b1"],
+  source_spans: [],
+  needs_review: true,
+  review_reason: "Boundary requires review.",
+  review_disposition: "pending",
+  metadata_field_status: {},
+  metadata_evidence: {},
+  metadata_incomplete_fields: [],
+  metadata_review_fields: [],
+  region_type: "main_text",
+  primary_text: true,
 };
-const stubs={CorpusSourceIssuePanel:true,CorpusMetadataResolutionPanel:true,CorpusTextCleanupDialog:true,CorpusRevisionHistory:true,CorpusBoundarySliceDialog:true,CorpusBoundaryAdjudication:true,CorpusSourceSummary:true};
+const stubs = {
+  CorpusSourceIssuePanel: true,
+  CorpusMetadataResolutionPanel: true,
+  CorpusTextCleanupDialog: true,
+  CorpusRevisionHistory: true,
+  CorpusBoundarySliceDialog: true,
+  CorpusBoundaryAdjudication: true,
+  CorpusSourceSummary: true,
+};
 
-describe("Corpus Builder focus review interactions",()=>{
-  it("focuses the close action on open and exposes modal semantics",async()=>{
-    const wrapper=mount(CorpusRecordFocusReview,{attachTo:document.body,props:{record,canPreviousRecord:true,canNextRecord:true},global:{stubs}});
-    await nextTick();
-    expect(wrapper.get('[role="dialog"]').attributes("aria-modal")).toBe("true");
-    expect(document.activeElement).toBe(buttonByText(wrapper,"Close").element);
+describe("Corpus Builder focus review interactions", () => {
+  it("shows text-only readiness without unlocking metadata or cleanup", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, locked: true, textLocked: false, editingText: true, textDraft: record.text },
+      global: { stubs },
+    });
+    expect(
+      wrapper
+        .findAll("[role=status]")
+        .some((node) => node.text().includes("Text review is available")),
+    ).toBe(true);
+    expect(buttonByText(wrapper, "Save").attributes("disabled")).toBeUndefined();
+    expect(buttonByText(wrapper, "Clean text").attributes("disabled")).toBeDefined();
+    expect(wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" }).props("busy")).toBe(
+      true,
+    );
+    await wrapper.setProps({ textLocked: undefined });
+    expect(buttonByText(wrapper, "Save").attributes("disabled")).toBeDefined();
+    expect(
+      wrapper
+        .findAll("[role=status]")
+        .some((node) => node.text().includes("Text review is available")),
+    ).toBe(false);
     wrapper.unmount();
   });
 
-  it("supports Escape and record-navigation keyboard shortcuts",async()=>{
-    const wrapper=mount(CorpusRecordFocusReview,{attachTo:document.body,props:{record,canPreviousRecord:true,canNextRecord:true},global:{stubs}});
-    const dialog=wrapper.get(".focus-review");
-    await dialog.trigger("keydown",{key:"Escape"});
+  it("focuses the close action on open and exposes modal semantics", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record, canPreviousRecord: true, canNextRecord: true },
+      global: { stubs },
+    });
+    await nextTick();
+    expect(wrapper.get('[role="dialog"]').attributes("aria-modal")).toBe("true");
+    expect(document.activeElement).toBe(buttonByText(wrapper, "Close").element);
+    wrapper.unmount();
+  });
+
+  it("supports Escape and record-navigation keyboard shortcuts", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record, canPreviousRecord: true, canNextRecord: true },
+      global: { stubs },
+    });
+    const dialog = wrapper.get(".focus-review");
+    await dialog.trigger("keydown", { key: "Escape" });
     expect(wrapper.emitted("close")).toHaveLength(1);
-    await dialog.trigger("keydown",{key:"ArrowLeft",altKey:true});
+    await dialog.trigger("keydown", { key: "ArrowLeft", altKey: true });
     expect(wrapper.emitted("previousRecord")).toHaveLength(1);
-    await dialog.trigger("keydown",{key:"ArrowRight",altKey:true});
+    await dialog.trigger("keydown", { key: "ArrowRight", altKey: true });
     expect(wrapper.emitted("nextRecord")).toHaveLength(1);
     wrapper.unmount();
   });
 
-  it("implements arrow-key tab navigation across metadata, evidence, and source",async()=>{
-    const wrapper=mount(CorpusRecordFocusReview,{attachTo:document.body,props:{record},global:{stubs}});
+  it("implements arrow-key tab navigation across metadata, evidence, source, and semantic map", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record, inspectorTab: "metadata" },
+      global: { stubs },
+    });
     expect(wrapper.get("#focus-tab-metadata").attributes("aria-selected")).toBe("true");
-    await wrapper.get(".tabs").trigger("keydown",{key:"ArrowRight"});
-    await nextTick();
+    const metadataPanel = wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" });
+    expect(metadataPanel.props("active")).toBe(true);
+    await wrapper.get(".focus-tabs").trigger("keydown", { key: "ArrowRight" });
+    // The tab is parent-owned (blocked accepts switch it too): the view asks, the parent applies.
+    expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["evidence"]);
+    await wrapper.setProps({ inspectorTab: "evidence" });
     expect(wrapper.get("#focus-tab-evidence").attributes("aria-selected")).toBe("true");
+    expect(metadataPanel.props("active")).toBe(false);
+    expect(wrapper.findComponent({ name: "CorpusMetadataResolutionPanel" }).vm).toBe(
+      metadataPanel.vm,
+    );
     expect(document.activeElement).toBe(wrapper.get("#focus-tab-evidence").element);
-    await wrapper.get(".tabs").trigger("keydown",{key:"End"});
-    await nextTick();
-    expect(wrapper.get("#focus-tab-source").attributes("aria-selected")).toBe("true");
+    await wrapper.get(".focus-tabs").trigger("keydown", { key: "End" });
+    expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["semantic"]);
+    await wrapper.setProps({ inspectorTab: "semantic" });
+    await wrapper.get(".focus-tabs").trigger("keydown", { key: "ArrowLeft" });
+    expect(lastEmission(wrapper, "update:inspectorTab")).toEqual(["source"]);
     wrapper.unmount();
   });
 
-  it("saves reviewed text with Ctrl/Cmd+S without mutating immutable source text",async()=>{
-    const wrapper=mount(CorpusRecordFocusReview,{attachTo:document.body,props:{record},global:{stubs}});
-    await buttonByText(wrapper,"Edit text").trigger("click");
-    const editor=wrapper.get("textarea.focus-text-editor");
+  it("uses parent-owned text state and requests save with Ctrl/Cmd+S", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record },
+      global: { stubs },
+    });
+
+    await buttonByText(wrapper, "Edit text").trigger("click");
+    expect(wrapper.emitted("beginTextEdit")).toHaveLength(1);
+
+    await wrapper.setProps({
+      editingText: true,
+      textDraft: record.text,
+      resolveSourceIssues: false,
+    });
+    const editor = wrapper.get("textarea.focus-text-editor");
     expect((editor.element as HTMLTextAreaElement).value).toBe(record.text);
+
     await editor.setValue("A corrected reviewed passage.");
-    await wrapper.get(".focus-review").trigger("keydown",{key:"s",ctrlKey:true});
-    const event=lastEmission(wrapper,"saveText");
-    expect(event?.[0]).toBe("A corrected reviewed passage.");
-    expect(event?.[1]).toBe(false);
+    expect(lastEmission(wrapper, "textDraftChange")).toEqual(["A corrected reviewed passage."]);
+
+    // A controlled parent applies the emitted draft before the save shortcut.
+    await wrapper.setProps({ textDraft: "A corrected reviewed passage." });
+    await wrapper.get(".focus-review").trigger("keydown", { key: "s", ctrlKey: true });
+
+    expect(wrapper.emitted("saveText")).toHaveLength(1);
+    expect(lastEmission(wrapper, "saveText")).toEqual([]);
     expect(record.text).toBe("A representative passage under review.");
     wrapper.unmount();
   });
 
-  it("disables acceptance when the parent marks the record unsafe to accept",()=>{
-    const wrapper=mount(CorpusRecordFocusReview,{props:{record,canAccept:false},global:{stubs}});
-    const accept=buttonByText(wrapper,"Accept");
-    expect(accept.attributes("disabled")).toBeDefined();
+  it("opens the full record in the movable pop-out", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record },
+      global: { stubs },
+    });
+
+    await buttonByText(wrapper, "Reviewed record text").trigger("click");
+    expect(wrapper.get(".record-popout").attributes("role")).toBe("dialog");
+    expect(wrapper.get("[data-record-text]").text()).toBe(record.text);
+    await wrapper.get(".record-popout-head").trigger("pointerdown", { button: 0, pointerId: 1 });
+    await wrapper.get(".record-popout-head").trigger("pointermove", {
+      pointerId: 1,
+      clientX: 40,
+      clientY: 30,
+    });
+    expect(wrapper.get(".record-popout").attributes("style")).toContain("translate(40px, 30px)");
+    expect(wrapper.get(".record-popout-head").attributes("tabindex")).toBe("0");
+    expect(wrapper.get(".record-popout-head").attributes("aria-keyshortcuts")).toBe(
+      "ArrowLeft ArrowRight ArrowUp ArrowDown",
+    );
+    await wrapper.get(".record-popout-head").trigger("keydown", { key: "ArrowRight" });
+    expect(wrapper.get(".record-popout").attributes("style")).toContain("translate(56px, 30px)");
+    await wrapper.get(".record-popout button").trigger("click");
+    expect(wrapper.find(".record-popout").exists()).toBe(false);
     wrapper.unmount();
   });
 
-  it("emits front-of-queue requeue and disables the action while busy",async()=>{
-    const wrapper=mount(CorpusRecordFocusReview,{props:{record},global:{stubs}});
-    const requeue=buttonByText(wrapper,"Send back through current LLM run");
-    await requeue.trigger("click");
-    expect(wrapper.emitted("requeueMetadata")).toHaveLength(1);
-    await wrapper.setProps({busy:true});
-    expect(buttonByText(wrapper,"Send back through current LLM run").attributes("disabled")).toBeDefined();
+  it("saves the value with the selected text as evidence and stays on the metadata tab", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, sourceBlocks: [] },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            template:
+              "<button data-selection-evidence @click=\"$emit('resolveWithEvidence','position_holder','Levinas','responsibility precedes freedom')\">Save with evidence</button>",
+          },
+        },
+      },
+    });
+
+    await wrapper.get("[data-selection-evidence]").trigger("click");
+
+    expect(lastEmission(wrapper, "resolveMetadataWithEvidence")).toEqual([
+      "position_holder",
+      "Levinas",
+      "responsibility precedes freedom",
+    ]);
+    // The reviewer proceeds to the next value; the evidence tab is not opened.
+    expect(wrapper.get("#focus-tab-metadata").attributes("aria-selected")).toBe("true");
+    expect(wrapper.emitted("assignEvidence")).toBeUndefined();
+  });
+
+  it("passes the pinned metadata schema into focus-mode field review", () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: {
+        record,
+        schema: {
+          format_version: 1,
+          schema_version: "review-schema-v1",
+          id: "review-schema",
+          name: "Review schema",
+          description: "Focus-mode schema fixture",
+          groups: [],
+          fields: [
+            {
+              field_id: "field-quoted-author",
+              name: "quoted_author",
+              label: "Quoted author",
+              type: "text",
+              group: "core",
+              instruction: "",
+              definitions_heading: "",
+              values: [],
+              strict: false,
+              evidence: true,
+              assess: true,
+              review: true,
+              pos_tags: [],
+              ner_tags: [],
+              retrieval_profile: {
+                enabled: true,
+                include_corrections: true,
+                include_confirmed_absence: false,
+                max_items: 4,
+                min_similarity: 0.8,
+              },
+            },
+          ],
+        },
+      },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            props: ["schema"],
+            template:
+              '<div data-focus-schema>{{ schema?.fields?.[0]?.label || "missing schema" }}</div>',
+          },
+        },
+      },
+    });
+    expect(wrapper.get("[data-focus-schema]").text()).toBe("Quoted author");
+    wrapper.unmount();
+  });
+
+  it("forwards metadata completion so the parent can advance the active queue", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            template:
+              "<button data-complete @click=\"$emit('complete')\">Complete metadata</button>",
+          },
+        },
+      },
+    });
+
+    await wrapper.get("[data-complete]").trigger("click");
+
+    expect(wrapper.emitted("metadataComplete")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("forwards Save all suggestions from focus-mode metadata review", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record },
+      global: {
+        stubs: {
+          ...stubs,
+          CorpusMetadataResolutionPanel: {
+            template:
+              "<button data-save-all @click=\"$emit('resolveMany',{ speaker: 'Jacques Derrida', target: null }, ['target'])\">Save all</button>",
+          },
+        },
+      },
+    });
+
+    await wrapper.get("[data-save-all]").trigger("click");
+
+    expect(lastEmission(wrapper, "resolveMetadataMany")).toEqual([
+      { speaker: "Jacques Derrida", target: null },
+      ["target"],
+    ]);
+    wrapper.unmount();
+  });
+
+  it("names what blocks the record, badges the metadata tab, and jumps to it from the dock", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, blockingFields: ["speaker", "discourse_role"] },
+      global: { stubs },
+    });
+    const blocker = wrapper.get("#focus-metadata-blocker");
+    expect(blocker.text()).toContain("speaker");
+    expect(wrapper.get("#focus-tab-metadata").text()).toContain("2");
+    // Accept stays available (the server decides) and is described by what blocks it.
+    expect(buttonByText(wrapper, "Accept").attributes("aria-describedby")).toBe(
+      "focus-metadata-blocker",
+    );
+    await blocker.trigger("click");
+    expect(wrapper.emitted("focusBlocker")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("shows a ready state and no blocker when every field is decided", () => {
+    const wrapper = mount(CorpusRecordFocusReview, { props: { record }, global: { stubs } });
+    expect(wrapper.find("#focus-metadata-blocker").exists()).toBe(false);
+    expect(wrapper.get(".dock-ready").text()).toContain("Metadata decided");
+    wrapper.unmount();
+  });
+
+  it("routes secondary record actions through the shared menu and honors busy", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, actionItems: [{ id: "requeue", label: "Requeue" }] },
+      global: { stubs },
+    });
+    wrapper.getComponent(CorpusActionMenu).vm.$emit("select", "requeue");
+    expect(lastEmission(wrapper, "recordAction")).toEqual(["requeue"]);
+    await wrapper.setProps({ busy: true });
+    expect(wrapper.get(".action-menu-trigger").attributes("disabled")).toBeDefined();
+    expect(buttonByText(wrapper, "Skip").attributes("disabled")).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it("decides with the same dock: accept, reject, skip, undo, redo", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, { props: { record }, global: { stubs } });
+    await buttonByText(wrapper, "Accept").trigger("click");
+    await buttonByText(wrapper, "Reject").trigger("click");
+    await buttonByText(wrapper, "Skip").trigger("click");
+    await wrapper.get('[aria-keyshortcuts="Z"]').trigger("click");
+    await wrapper.get('[aria-keyshortcuts="Shift+Z"]').trigger("click");
+    for (const event of ["accept", "reject", "skip", "undo", "redo"])
+      expect(wrapper.emitted(event), event).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("offers Mark reviewed until the text has been reviewed", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, { props: { record }, global: { stubs } });
+    await buttonByText(wrapper, "Mark reviewed").trigger("click");
+    expect(wrapper.emitted("markTextReviewed")).toHaveLength(1);
+    await wrapper.setProps({ record: { ...record, text_review_status: "human_reviewed" } });
+    expect(wrapper.findAll("button").some((b) => b.text().includes("Mark reviewed"))).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("reports build progress to assistive technology", () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: { record, accepted: 42, remaining: 118, total: 340 },
+      global: { stubs },
+    });
+    const bar = wrapper.get('[role="progressbar"]');
+    expect(bar.attributes("aria-valuenow")).toBe("42");
+    expect(bar.attributes("aria-valuemax")).toBe("340");
+    expect(bar.attributes("aria-valuetext")).toBe("42 accepted, 118 remaining");
+    wrapper.unmount();
+  });
+
+  it("exposes noise status and linked queue context", async () => {
+    const wrapper = mount(CorpusRecordFocusReview, {
+      props: {
+        record: { ...record, text_noise: { score: 52, unusable: true } },
+        justProcessedRecordId: "record-00013",
+        nextRecordId: "record-00015",
+      },
+      global: { stubs },
+    });
+    expect(wrapper.get(".focus-facts").text()).toContain("52% noise");
+    expect(wrapper.text()).toContain("unusable");
+    const links = wrapper.findAll(".queue-context .text-link");
+    expect(links).toHaveLength(3);
+    await links[0].trigger("click");
+    expect(lastEmission(wrapper, "navigateRecord")[0]).toBe("record-00013");
+    await links[2].trigger("click");
+    expect(lastEmission(wrapper, "navigateRecord")[0]).toBe("record-00015");
     wrapper.unmount();
   });
 });

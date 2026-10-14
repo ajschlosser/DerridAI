@@ -1,6 +1,25 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
-import * as runtime from "../runtime/runtimeBridge";
+import { getNavItems } from "../domain/navItems";
+import { getShellSnapshot } from "../domain/shellSnapshot";
 
 export interface ShellFile {
   id: string;
@@ -20,51 +39,27 @@ export interface ShellNavItem {
 }
 export interface ShellSnapshot {
   view: string;
-  sidebarCollapsed: boolean;
   files: ShellFile[];
   context: { kicker: string; title: string; meta: string };
   totalLoaded: number;
-  flagged: number;
-  pending: number;
-  activeJobs: number;
   corpusStoreCount: number;
   dbRecords: number;
-  cacheCount: number;
   hasCorpusDb: boolean;
-  dbUnavailableReason: string;
   activeStore: string;
-  canEdit: boolean;
-  canGoBack: boolean;
-  canGoForward: boolean;
-  backLabel: string;
-  forwardLabel: string;
   selectedEvidenceCount: number;
-  systemHtml: string;
   nav: ShellNavItem[];
 }
 
 const emptySnapshot: ShellSnapshot = {
   view: "home",
-  sidebarCollapsed: false,
   files: [],
   context: { kicker: "Overview", title: "Dashboard", meta: "" },
   totalLoaded: 0,
-  flagged: 0,
-  pending: 0,
-  activeJobs: 0,
   corpusStoreCount: 0,
   dbRecords: 0,
-  cacheCount: 0,
   hasCorpusDb: false,
-  dbUnavailableReason: "",
   activeStore: "",
-  canEdit: false,
-  canGoBack: false,
-  canGoForward: false,
-  backLabel: "",
-  forwardLabel: "",
   selectedEvidenceCount: 0,
-  systemHtml: "",
   nav: [],
 };
 
@@ -76,20 +71,75 @@ export const useShellStore = defineStore("shell", () => {
   // must not draw a partial menu (only the Vue-side admin items) before this.
   const navReady = ref(false);
 
+  function syncContext() {
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellSnapshot({
+        projection: "context",
+        includeNavigation: false,
+      }) as Pick<ShellSnapshot, "view" | "files" | "context">),
+    };
+  }
+
+  function syncStatus() {
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellSnapshot({
+        projection: "status",
+        includeNavigation: false,
+      }) as Pick<
+        ShellSnapshot,
+        | "totalLoaded"
+        | "corpusStoreCount"
+        | "dbRecords"
+        | "hasCorpusDb"
+        | "activeStore"
+        | "selectedEvidenceCount"
+      >),
+    };
+  }
+
   function sync() {
-    snapshot.value = runtime.getShellSnapshot() as ShellSnapshot;
-    navReady.value = true;
+    // Generic compatibility refreshes update only context/status. Navigation is
+    // stable for the signed-in user and is recomputed only when it has not been
+    // initialized (or when an explicit navigation refresh is requested).
+    snapshot.value = {
+      ...snapshot.value,
+      ...(getShellSnapshot({
+        projection: "context",
+        includeNavigation: false,
+      }) as Pick<ShellSnapshot, "view" | "files" | "context">),
+      ...(getShellSnapshot({
+        projection: "status",
+        includeNavigation: false,
+      }) as Pick<
+        ShellSnapshot,
+        | "totalLoaded"
+        | "corpusStoreCount"
+        | "dbRecords"
+        | "hasCorpusDb"
+        | "activeStore"
+        | "selectedEvidenceCount"
+      >),
+    };
+    if (!navReady.value) syncNav();
   }
 
   // Publish only the menu. Cheap and independent of workspace bootstrap, so it can run
   // the moment a user signs in instead of waiting for the first full snapshot.
   function syncNav() {
-    snapshot.value = { ...snapshot.value, nav: runtime.getNavItems() as ShellNavItem[] };
+    snapshot.value = { ...snapshot.value, nav: getNavItems() as ShellNavItem[] };
     navReady.value = true;
   }
 
   function resetNav() {
     snapshot.value = { ...snapshot.value, nav: [] };
+    navReady.value = false;
+  }
+
+  function reset() {
+    snapshot.value = { ...emptySnapshot };
+    ready.value = false;
     navReady.value = false;
   }
 
@@ -106,5 +156,16 @@ export const useShellStore = defineStore("shell", () => {
     return groups;
   });
 
-  return { snapshot, ready, navReady, groupedNav, sync, syncNav, resetNav };
+  return {
+    snapshot,
+    ready,
+    navReady,
+    groupedNav,
+    sync,
+    syncContext,
+    syncStatus,
+    syncNav,
+    resetNav,
+    reset,
+  };
 });

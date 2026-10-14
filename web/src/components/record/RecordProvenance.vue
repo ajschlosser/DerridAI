@@ -1,27 +1,57 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
+import UiTooltip from "../ui/UiTooltip.vue";
 
 const props = defineProps<{ record: Record<string, unknown>; fields?: string[] }>();
 const emit = defineEmits<{ search: [field: string, value: string] }>();
 const i18n = useI18nStore();
 const nodes = computed(() =>
   [
-    { key: "speaker", label: i18n.t("field.speaker", "Speaker"), value: props.record.speaker },
+    { key: "speaker", label: i18n.t("field.speaker"), value: props.record.speaker },
     {
       key: "position_holder",
-      label: i18n.t("field.position_holder", "Position holder"),
+      label: i18n.t("field.position_holder"),
       value: props.record.position_holder,
     },
-    { key: "stance", label: i18n.t("field.stance", "Stance"), value: props.record.stance },
-    { key: "target", label: i18n.t("field.target", "Target"), value: props.record.target },
+    { key: "stance", label: i18n.t("field.stance"), value: props.record.stance },
+    { key: "target", label: i18n.t("field.target"), value: props.record.target },
   ].filter(
     (item) => item.value !== undefined && item.value !== null && String(item.value).trim() !== "",
   ),
 );
+function nodeHelp(key: string) {
+  const help: Record<string, string> = {
+    speaker: "record.provenance_speaker_help",
+    position_holder: "record.provenance_position_holder_help",
+    stance: "record.provenance_stance_help",
+    target: "record.provenance_target_help",
+  };
+  return help[key] ? i18n.t(help[key]) : "";
+}
 const supporting = computed(() => {
   const keys = props.fields?.length
-    ? props.fields.filter((key) => !["speaker", "position_holder", "stance", "target"].includes(key))
+    ? props.fields.filter(
+        (key) => !["speaker", "position_holder", "stance", "target"].includes(key),
+      )
     : ["discourse_role", "proposition_status", "claim_scope", "semantic_function"];
   return keys
     .map((key) => ({
@@ -39,48 +69,40 @@ const supporting = computed(() => {
   <section class="provenance-map" aria-labelledby="provenanceHeading">
     <header class="provenance-head">
       <div>
-        <p>{{ i18n.t("record.provenance_kicker", "Attribution structure") }}</p>
-        <h2 id="provenanceHeading">{{ i18n.t("record.provenance", "Provenance") }}</h2>
+        <p>{{ i18n.t("record.provenance_kicker") }}</p>
+        <h2 id="provenanceHeading">{{ i18n.t("record.provenance") }}</h2>
       </div>
       <span
         v-if="nodes.length"
         class="provenance-count"
-        :aria-label="
-          i18n.tf('record.provenance_fields', '{count} attribution fields', { count: nodes.length })
-        "
+        :aria-label="i18n.tf('record.provenance_fields', { count: nodes.length })"
         >{{ nodes.length }}</span
       >
     </header>
 
     <p class="provenance-help">
-      {{
-        i18n.t(
-          "record.provenance_help",
-          "A structured attribution view showing who speaks, whose position is represented, the stance taken, and its target.",
-        )
-      }}
+      {{ i18n.t("record.provenance_help") }}
     </p>
 
-    <ol
-      v-if="nodes.length"
-      class="provenance-path"
-      :aria-label="i18n.t('record.attribution_path', 'Attribution path')"
-    >
+    <ol v-if="nodes.length" class="provenance-path" :aria-label="i18n.t('record.attribution_path')">
       <li v-for="(node, index) in nodes" :key="node.key">
         <span class="provenance-step" aria-hidden="true">{{ index + 1 }}</span>
-        <button type="button" @click="emit('search', node.key, String(node.value))">
-          <small>{{ node.label }}</small>
-          <strong>{{ node.value }}</strong>
-        </button>
+        <UiTooltip
+          :text="nodeHelp(node.key)"
+          placement="bottom"
+          trigger-mode="content"
+          :content-focusable="false"
+        >
+          <button type="button" @click="emit('search', node.key, String(node.value))">
+            <small class="provenance-label">{{ node.label }}</small>
+            <strong>{{ node.value }}</strong>
+            <span class="sr-only">{{ nodeHelp(node.key) }}</span>
+          </button>
+        </UiTooltip>
       </li>
     </ol>
     <p v-else class="provenance-empty">
-      {{
-        i18n.t(
-          "record.provenance_empty",
-          "No structured attribution fields are recorded for this passage.",
-        )
-      }}
+      {{ i18n.t("record.provenance_empty") }}
     </p>
 
     <dl v-if="supporting.length" class="provenance-support">
@@ -197,6 +219,11 @@ const supporting = computed(() => {
 .provenance-path button:hover {
   border-color: var(--line);
   background: var(--card);
+}
+.provenance-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .provenance-path small {
   color: var(--muted);

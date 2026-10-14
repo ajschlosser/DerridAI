@@ -1,0 +1,74 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.work-metadata-dialog {
+  width: min(1180px, calc(100% - 24px));
+}
+.work-metadata-body {
+  display: grid;
+  gap: 12px;
+  max-height: 75vh;
+  overflow: auto;
+}
+.work-meta-table {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.work-meta-row {
+  display: grid;
+  grid-template-columns: 75px 190px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  padding: 8px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+}
+.work-meta-row:first-child {
+  border-top: 0;
+}
+.work-meta-apply {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-weight: 800;
+}
+.work-meta-field {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.work-meta-field b {
+  font-size: 0.8125rem;
+}
+
+.work-meta-value {
+  width: 100%;
+  min-width: 0;
+}
+.work-meta-json {
+  min-height: 72px;
+  font:
+    12px/1.4 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}

@@ -1,5 +1,22 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
-import { describe, expect, it, vi } from "vitest";
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createOperationDock } from "../../src/domain/operationDock";
 import { fitDockInViewport } from "../../src/domain/operationsDock";
 
@@ -18,6 +35,11 @@ function setup(html: string, state: Record<string, unknown> = {}) {
   return createOperationDock(deps as never);
 }
 
+afterEach(() => {
+  delete document.documentElement.dataset.operationsDockMode;
+  document.body.innerHTML = "";
+});
+
 describe("operation dock summary", () => {
   it("counts the failed cards when every card has failed", () => {
     const dock = setup(
@@ -26,9 +48,48 @@ describe("operation dock summary", () => {
     dock.updateOperationStackCount();
     expect(document.querySelector("#operationStackCount")?.textContent).toBe("2 failed");
   });
+
+  it("publishes an explicit summary event for the docked top bar", () => {
+    const listener = vi.fn();
+    globalThis.addEventListener("derridai:operation-summary", listener);
+    const dock = setup('<div class="operation-progress"></div>');
+    dock.updateOperationStackCount();
+    globalThis.removeEventListener("derridai:operation-summary", listener);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "derridai:operation-summary",
+        detail: expect.objectContaining({ visible: true }),
+      }),
+    );
+  });
 });
 
 describe("operation dock placement", () => {
+  it("uses double-click and keyboard activation to request a mode switch", () => {
+    const listener = vi.fn();
+    globalThis.addEventListener("derridai:operation-mode-toggle", listener);
+    const dock = setup("");
+    document.querySelector("#operationProgressStack")?.remove();
+    dock.progressStack();
+    const toolbar = document.querySelector<HTMLElement>("[data-operation-drag]")!;
+    toolbar.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    toolbar.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    globalThis.removeEventListener("derridai:operation-mode-toggle", listener);
+    expect(listener).toHaveBeenCalledTimes(2);
+    dock.setOperationDockMinimized(true);
+  });
+
+  it("does not start a drag while the operations stack is docked", () => {
+    document.documentElement.dataset.operationsDockMode = "docked";
+    const dock = setup("");
+    document.querySelector("#operationProgressStack")?.remove();
+    dock.progressStack();
+    const stack = document.querySelector<HTMLElement>("#operationProgressStack")!;
+    const toolbar = stack.querySelector<HTMLElement>("[data-operation-drag]")!;
+    toolbar.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }));
+    expect(stack.classList.contains("is-dragging")).toBe(false);
+  });
+
   it("slides an expanded dock back on screen when it would overflow the right or bottom edge", () => {
     const viewport = { width: 1200, height: 800 };
     // Minimized pill left near the bottom-right corner, then expanded to 380 x 500.

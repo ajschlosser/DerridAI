@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """SQLite persistence layer for system state and jobs.
 
 Why: since 0.36 provider profiles, annotations, languages, and background-job
@@ -12,6 +28,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +49,12 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
         "researcher_provider_profiles": [
             {"id": "local", "name": "Local", "type": "ollama", "api_key": "write-only-secret"}
         ],
+        "settings": {
+            "embedding_defaults": {
+                "embedding_provider": "profile:local",
+                "embedding_model": "nomic-embed-text",
+            }
+        },
         "annotations": [
             {"id": "a1", "user_id": 7, "created_at": "2026-09-15T10:00:00+00:00", "note": "note"}
         ],
@@ -59,7 +82,65 @@ def test_system_repository_round_trip_is_transactional_sqlite(tmp_path: Path):
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert "schema_migrations" not in tables
     assert "system_meta" not in tables
-    assert {"researcher_provider_profiles", "annotations", "languages", "jobs"} <= tables
+    assert {
+        "researcher_provider_profiles",
+        "system_settings",
+        "annotations",
+        "languages",
+        "jobs",
+    } <= tables
+
+
+def test_semantic_map_projections_are_versioned_rebuildable_system_data(tmp_path: Path):
+    repo = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+
+    initial = repo.semantic_map_state("build-1")
+    assert initial["generation"] == 1
+    assert initial["dirty"] is True
+
+    repo.put_semantic_map_projections([
+        {
+            "scope_type": "record",
+            "scope_id": "r1",
+            "build_id": "build-1",
+            "generation": 1,
+            "audience": "reviewer-a",
+            "work": "Of Grammatology",
+            "payload": {"record_id": "r1", "nodes": []},
+        },
+        {
+            "scope_type": "work",
+            "scope_id": "Of Grammatology",
+            "build_id": "build-1",
+            "generation": 1,
+            "audience": "reviewer-a",
+            "work": "Of Grammatology",
+            "payload": {"work": "Of Grammatology", "sources": []},
+        },
+    ])
+    assert repo.mark_semantic_map_clean("build-1", 1) is True
+    ready = repo.semantic_map_state("build-1")
+    assert ready["dirty"] is False
+
+    record = repo.get_semantic_map_projection(
+        "record", "r1", "build-1", audience="reviewer-a"
+    )
+    assert record is not None
+    assert record["payload"]["record_id"] == "r1"
+    # Blind-review projections are isolated by audience.
+    assert repo.get_semantic_map_projection(
+        "record", "r1", "build-1", audience="reviewer-b"
+    ) is None
+
+    generation = repo.mark_semantic_map_dirty("build-1", reason="record_updated:r1")
+    assert generation == 2
+    dirty = repo.semantic_map_state("build-1")
+    assert dirty["dirty"] is True and dirty["generation"] == 2
+    # The old snapshot remains available as stale System Data until replaced.
+    stale = repo.get_semantic_map_projection(
+        "record", "r1", "build-1", audience="reviewer-a"
+    )
+    assert stale is not None and stale["generation"] == 1
 
 
 def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path: Path, monkeypatch):
@@ -91,6 +172,78 @@ def test_system_store_bootstraps_current_defaults_and_ignores_old_json(tmp_path:
 
 
 
+
+
+def test_unpersisted_ollama_default_uses_configured_ollama_profile(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.system_store as module
+
+    repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    monkeypatch.setattr(module, "system_repository", repository)
+    monkeypatch.setattr(
+        module,
+        "app_settings",
+        replace(
+            module.app_settings,
+            embedding_provider="ollama",
+            ollama_embed_model="legacy-env-model",
+        ),
+    )
+    store = module.SystemStore()
+    store.set_researcher_profiles(
+        [
+            {
+                "id": "local-embeddings",
+                "name": "Local embeddings",
+                "type": "ollama",
+                "base_url": "http://configured-ollama:11434",
+                "model": "nomic-embed-text",
+            }
+        ]
+    )
+
+    defaults = store.embedding_defaults()
+
+    assert defaults["embedding_provider"] == "profile:local-embeddings"
+    assert defaults["embedding_model"] == "nomic-embed-text"
+    assert defaults["persisted"] is False
+
+
+def test_embedding_defaults_are_server_owned_and_can_reference_provider_profiles(
+    tmp_path: Path,
+    monkeypatch,
+):
+    import app.system_store as module
+
+    repository = SQLiteSystemRepository(tmp_path / "derridai-system.sqlite3")
+    monkeypatch.setattr(module, "system_repository", repository)
+    store = module.SystemStore()
+    store.set_researcher_profiles(
+        [
+            {
+                "id": "embedding-lab",
+                "name": "Embedding Lab",
+                "type": "openai",
+                "base_url": "https://embeddings.example/v1",
+                "model": "text-embedding-model",
+                "api_key": "secret",
+            }
+        ]
+    )
+
+    saved = store.set_embedding_defaults("profile:embedding-lab", None)
+
+    assert saved["embedding_provider"] == "profile:embedding-lab"
+    assert saved["embedding_model"] == "text-embedding-model"
+    assert saved["persisted"] is True
+
+    restarted = module.SystemStore()
+    loaded = restarted.embedding_defaults()
+    assert loaded["embedding_provider"] == "profile:embedding-lab"
+    assert loaded["embedding_model"] == "text-embedding-model"
+    assert loaded["persisted"] is True
 
 
 def test_job_repository_survives_restart_and_marks_active_job_interrupted(tmp_path: Path):
@@ -137,6 +290,7 @@ def test_jobs_and_system_state_share_one_durable_database(tmp_path: Path):
 
     system.replace({
         "researcher_provider_profiles": [],
+        "settings": {},
         "annotations": [],
         "languages": {"en-US": {"name": "English", "flag": "🇺🇸", "dictionary": {}}},
     })

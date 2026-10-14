@@ -1,9 +1,28 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import PdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
 import { useI18nStore } from "../stores/i18n";
 import type { SourceBlock } from "../api/pdfCorpus";
+import UiLoadingState from "./ui/UiLoadingState.vue";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = PdfWorkerUrl;
 const props = withDefaults(
@@ -15,8 +34,18 @@ const props = withDefaults(
     blocks?: SourceBlock[];
     evidenceBlockIds?: string[];
     zoomable?: boolean;
+    maxWidth?: number;
+    showSourceBoxes?: boolean;
   }>(),
-  { pageWidth: 0, pageHeight: 0, blocks: () => [], evidenceBlockIds: () => [], zoomable: false },
+  {
+    pageWidth: 0,
+    pageHeight: 0,
+    blocks: () => [],
+    evidenceBlockIds: () => [],
+    zoomable: false,
+    maxWidth: 720,
+    showSourceBoxes: true,
+  },
 );
 const i18n = useI18nStore();
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -32,8 +61,16 @@ let resizeObserver: ResizeObserver | null = null;
 let lastRenderedPage = 0;
 let lastRenderedWidth = 0;
 const zoom = ref(1);
+/**
+ * The page number that the canvas actually represents. This intentionally
+ * differs from props.page while a new page is requested: retained pixels
+ * must never be announced or overlaid as the new page before rendering commits.
+ */
+const displayedPage = ref(0);
 const pageBlocks = computed(() =>
-  props.blocks.filter((block) => Number(block.page) === Number(props.page)),
+  displayedPage.value
+    ? props.blocks.filter((block) => Number(block.page) === Number(displayedPage.value))
+    : [],
 );
 const evidenceSet = computed(() => new Set(props.evidenceBlockIds.map(String)));
 function boxStyle(block: SourceBlock) {
@@ -41,11 +78,15 @@ function boxStyle(block: SourceBlock) {
   const width = Number(props.pageWidth || 0),
     height = Number(props.pageHeight || 0);
   if (!width || !height) return { display: "none" };
+  const left = Math.max(0, Math.min(width, Math.min(Number(x0), Number(x1))));
+  const right = Math.max(left, Math.min(width, Math.max(Number(x0), Number(x1))));
+  const top = Math.max(0, Math.min(height, Math.min(Number(y0), Number(y1))));
+  const bottom = Math.max(top, Math.min(height, Math.max(Number(y0), Number(y1))));
   return {
-    insetInlineStart: `${Math.max(0, Math.min(100, (x0 / width) * 100))}%`,
-    top: `${Math.max(0, Math.min(100, (y0 / height) * 100))}%`,
-    width: `${Math.max(0, Math.min(100, ((x1 - x0) / width) * 100))}%`,
-    height: `${Math.max(0, Math.min(100, ((y1 - y0) / height) * 100))}%`,
+    insetInlineStart: `${(left / width) * 100}%`,
+    top: `${(top / height) * 100}%`,
+    width: `${((right - left) / width) * 100}%`,
+    height: `${((bottom - top) / height) * 100}%`,
   };
 }
 async function cancelRender() {
@@ -65,6 +106,12 @@ async function destroyDocument() {
   renderGeneration += 1;
   lastRenderedPage = 0;
   lastRenderedWidth = 0;
+  displayedPage.value = 0;
+  const node = canvas.value;
+  if (node) {
+    node.width = 0;
+    node.height = 0;
+  }
   await cancelRender().catch(() => {});
   const task = loadingTask;
   const doc = pdfDocument;
@@ -118,13 +165,16 @@ async function renderPage() {
     const safePage = Math.min(Math.max(1, Number(props.page) || 1), pdfDocument.numPages);
     const page = await pdfDocument.getPage(safePage);
     if (token !== renderGeneration) return;
-    const available = Math.max(160, Math.min(900, shell.value?.clientWidth || 700)) * zoom.value;
+    const available =
+      Math.max(160, Math.min(Number(props.maxWidth) || 720, shell.value?.clientWidth || 700)) *
+      zoom.value;
     if (safePage === lastRenderedPage && Math.abs(available - lastRenderedWidth) < 3) return;
     const base = page.getViewport({ scale: 1 });
     const viewport = page.getViewport({ scale: available / base.width });
     const outputScale = Math.min(2, window.devicePixelRatio || 1);
     const node = canvas.value;
     if (!node) return;
+    if (safePage !== displayedPage.value) displayedPage.value = 0;
     node.width = Math.floor(viewport.width * outputScale);
     node.height = Math.floor(viewport.height * outputScale);
     node.style.width = `${Math.floor(viewport.width)}px`;
@@ -142,6 +192,7 @@ async function renderPage() {
       renderTask = null;
       lastRenderedPage = safePage;
       lastRenderedWidth = available;
+      displayedPage.value = safePage;
     }
   } catch (exc: unknown) {
     if (
@@ -185,44 +236,47 @@ onBeforeUnmount(async () => {
 </script>
 
 <template>
-  <section
-    ref="shell"
-    class="pdf-evidence-viewer"
-    :aria-label="i18n.t('pdf_corpus.source_pdf', 'Source PDF')"
-  >
+  <section ref="shell" class="pdf-evidence-viewer" :aria-label="i18n.t('pdf_corpus.source_pdf')">
     <div
       v-if="zoomable"
       class="viewer-controls"
       role="group"
-      :aria-label="i18n.t('pdf_corpus.pdf_zoom_controls', 'PDF zoom controls')"
+      :aria-label="i18n.t('pdf_corpus.pdf_zoom_controls')"
     >
       <button type="button" class="btn small" :disabled="zoom <= 1" @click="setZoom(zoom - 0.25)">
-        {{ i18n.t("pdf_corpus.zoom_out", "Zoom out") }}
+        {{ i18n.t("pdf_corpus.zoom_out") }}
       </button>
       <span aria-live="polite">{{ Math.round(zoom * 100) }}%</span>
       <button type="button" class="btn small" :disabled="zoom >= 2.5" @click="setZoom(zoom + 0.25)">
-        {{ i18n.t("pdf_corpus.zoom_in", "Zoom in") }}
+        {{ i18n.t("pdf_corpus.zoom_in") }}
       </button>
       <button type="button" class="btn small" :disabled="zoom === 1" @click="setZoom(1)">
-        {{ i18n.t("pdf_corpus.zoom_reset", "Reset zoom") }}
+        {{ i18n.t("pdf_corpus.zoom_reset") }}
       </button>
     </div>
-    <div v-if="loading" class="viewer-state" role="status" aria-live="polite">
-      {{ i18n.t("pdf_corpus.pdf_loading", "Rendering source page…") }}
-    </div>
+    <UiLoadingState v-if="loading" :label="i18n.t('pdf_corpus.pdf_loading')" />
     <div v-if="error" class="viewer-state error" role="alert">
       {{
-        i18n.tf("pdf_corpus.pdf_render_error", "Could not render the source page: {error}", {
+        i18n.tf("pdf_corpus.pdf_render_error", {
           error,
         })
       }}
     </div>
-    <div class="page-stage" :class="{ zoomed: zoom > 1 }" :aria-busy="loading ? 'true' : 'false'">
+    <div
+      class="page-stage"
+      :class="{ zoomed: zoom > 1 }"
+      :aria-busy="loading ? 'true' : 'false'"
+      :style="{ maxWidth: `${props.maxWidth}px` }"
+    >
       <canvas
         ref="canvas"
-        :aria-label="i18n.tf('pdf_corpus.pdf_page_canvas', 'PDF page {page}', { page })"
+        :aria-label="
+          displayedPage
+            ? i18n.tf('pdf_corpus.pdf_page_canvas', { page: displayedPage })
+            : i18n.t('pdf_corpus.pdf_loading')
+        "
       ></canvas>
-      <div class="block-overlay" aria-hidden="true">
+      <div v-if="showSourceBoxes" class="block-overlay" aria-hidden="true">
         <span
           v-for="block in pageBlocks"
           :key="block.block_id"
@@ -231,15 +285,10 @@ onBeforeUnmount(async () => {
           :style="boxStyle(block)"
         ></span>
       </div>
+      <slot name="overlay"></slot>
     </div>
-    <p class="viewer-caption">
-      {{
-        i18n.tf(
-          "pdf_corpus.pdf_highlight_help",
-          "Page {page}. Highlighted boxes show the source blocks bound to the selected evidence field.",
-          { page },
-        )
-      }}
+    <p v-if="displayedPage" class="viewer-caption">
+      {{ i18n.tf("pdf_corpus.pdf_highlight_help", { page: displayedPage }) }}
     </p>
   </section>
 </template>

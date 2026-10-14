@@ -1,52 +1,224 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 # DerridAI
 
-DerridAI is a local-first Docker application for building, auditing, and querying scholarly corpora of philosophical texts. It turns source PDFs into structured JSONL records, reviews and enriches those records with local or OpenAI-compatible LLMs, manages persistent ChromaDB vector collections, and runs an evidence-grounded retrieval-augmented generation (RAG) pipeline over the result.
+![DerridAI logo](https://repository-images.githubusercontent.com/1336867942/1ef2d928-ee57-480e-addb-5caf6acc1754)
 
-Current version: **0.70.0 — Amesbury** ([release notes](docs/notes/0.70.0.md)).
+[English](README.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt.md) · [Deutsch](README.de.md) · [Italiano](README.it.md) · [Magyar](README.hu.md) · [Русский](README.ru.md) · [हिन्दी](README.hi.md) · [বাংলা](README.bn.md) · [العربية](README.ar.md) · [简体中文](README.zh-CN.md)
 
-## Features
+DerridAI is a local-first, provenance-preserving research environment for building, reviewing, searching, and querying scholarly corpora. It combines source ingestion, human-in-the-loop corpus construction, evidence-aware metadata enrichment, derived vector/search indexes, and evidence-grounded retrieval-augmented generation (RAG) in one Docker application.
 
-- **Corpus Builder** — a sequenced Source → Document structure → LLM & enrichment → Record construction → Build workflow that extracts, segments, and enriches records from PDFs, with reviewer-owned document structure and auditable field provenance.
-- **Record review** — JSONL workspaces with full audit history, bulk and work-level metadata editing, red/green diffs, source-PDF linking, and human/LLM field ownership (high-confidence LLM proposals populate fields; lower-confidence ones stay as suggestions).
-- **LLM review and tools** — foreground, background, and background Auto-improve runs against named Ollama or OpenAI-compatible provider profiles, each with its own concurrency limit and warmup state.
-- **Vector stores** — persistent ChromaDB collections on the local filesystem or a running Chroma server, with English/French language mirrors, background upserts, and JSONL round-tripping.
-- **RAG Research** — hybrid retrieval, cross-encoder reranking, language routing, streamed and cancellable generation, a cached Response Library, and LLM grading of answers.
-- **Roles** — Admin and Researcher accounts; researchers see summarized evidence text and cannot mutate corpora.
-- **Backup & restore** — one ZIP holding workspaces, audit history, provider profiles, PDFs, and every Chroma collection with its embeddings.
-- **Bilingual and accessible** — English and French are first-class locales with enforced key parity. Keyboard access, visible focus, and WCAG 2.0 AA are release requirements.
+DerridAI is also the originating reference implementation of **cELF 1.0 — the Capta-Enriched Locatable Factum**, a provenance-preserving information architecture for AI-assisted documentary research. The implementation keeps source identity, record identity and revision, metadata assertions, evidence, generated claims, and support bindings separately inspectable instead of flattening them into one opaque vector store.
 
-See the [User Guide](docs/USER_GUIDE.md) for a full feature reference.
+Current version: **0.82.0 — Gloucester** ([release notes](docs/notes/0.82.0.md)). This README describes the Gloucester release.
+
+## What DerridAI does
+
+- **Acquire and ingest heterogeneous sources.** Upload PDF, plain text, RTF, DOCX, images, and audio; import URLs and Project Gutenberg material; or use Corpus Capture to discover and acquire works through provider adapters such as Wikidata, Project Gutenberg, and Wikisource. Ingestion applies medium-specific safety/resource limits and preserves extractor/tool/version provenance.
+- **Build corpora with media-aware workflows.** Corpus Builder separates source registration, extraction/transcription, source-unit mapping, structure/segmentation, enrichment, record construction, review, and publication. Controls and evidence coordinates adapt to the source medium instead of applying PDF/page concepts to everything.
+- **Preserve cELF provenance and field authority.** Canonical `FieldAssertion` records distinguish derivation, evaluation, authority, value state, confidence, evidence, actor/model, stable field identity, and record revision. Human confirmation does not erase model or deterministic provenance.
+- **Review records with evidence in context.** Reviewers can edit text and metadata, inspect source spans and other-record evidence, compare revisions, use semantic maps and relationship views, accept or reject suggestions, and publish with auditable decisions. Optimistic review saves keep the interface responsive while conflicting same-record writes are serialized.
+- **Use configurable metadata schemas and reviewed precedent.** Schemas define stable fields, types, controlled values, evidence/review rules, POS/NER hints, field scope, model guidance, and retrieval policy. Reviewed examples become bounded, evidence-linked precedents for later enrichment without replacing canonical reviewer decisions.
+- **Add optional Document Intelligence.** A provider-neutral derived analysis layer can add entities, coreference, quotation-speaker information, and semantic-content relationships. Small English and French spaCy models plus LatinCy for academic/classical Latin are bundled; other digest-verified language packs are administrator-managed, and an isolated BookNLP worker remains an optional English enhancement. These annotations remain rebuildable analysis, not source evidence or corpus authority.
+- **Search derived projections without confusing them with the corpus.** ChromaDB stores rebuildable semantic/search projections and caches, using embedded or HTTP-server modes. Dense, lexical, MMR, reciprocal-rank fusion, filters, language routing, and bounded cross-encoder reranking are available where appropriate.
+- **Run evidence-grounded Research/RAG.** Research supports hybrid retrieval, reranking, selected-evidence mode, evidence budgets, optional Record-size-aware retrieval sizing, streamed/cancellable generation, deterministic citation rendering, claim/support persistence, claim validation, response/claim memory, and LLM grading. Provenance-incomplete records are excluded from evidence rather than silently treated as valid support.
+- **Publish portable research sites.** Works can export immutable static snapshots with Works/Record browsing, metadata filters, local annotations, keyword/semantic/hybrid search, browser-ready vectors or local Transformers.js indexing, reader-configured generation providers, and evidence-grounded Research. Generated answers bind deterministic inline citations back to the corresponding evidence, and the published interface has its own Vue entrypoint over the framework-neutral DerridAI SDK.
+- **Inspect and configure AI pipelines.** Pipeline Studio separates server-owned workflow purpose, strategy family, and scholarly effect; exposes typed stage inputs/outputs, resolved wiring, versioned definitions and assignments, traces, scope/latency/complexity metrics, retrieval tuning ports, non-persistent comparison, and fixed-case benchmarks. Retrieval, memory, metadata-precedent, reviewer-evidence, recovery, segmentation, and enrichment stages can be explicit while provenance/authority gates remain structural constraints.
+- **Expose distinct API transports for distinct jobs.** REST owns commands and mutations; a read-only cELF-aware GraphQL façade composes typed reads; an authenticated WebSocket plane sends realtime operation notifications. Realtime messages are never canonical state and clients can resynchronize from REST/GraphQL.
+- **Support controlled multi-user research.** Built-in Administrator and Researcher roles plus custom researcher-safe roles are enforced by both UI and API. Researcher-facing source text is summarized at the API boundary, jobs are owner-scoped, and administrator-only corpus/system mutations remain inaccessible.
+- **Keep long-running work observable and pages usable while data changes.** Corpus builds, LLM review, RAG, grading, imports, model/language-pack work, and vector upserts surface as cancellable operations with durable snapshots/history and realtime progress. Resource-change notifications trigger canonical refetches without making WebSocket state authoritative, and progressively loaded workspaces retain usable content, isolate failures, and reject stale responses.
+- **Ship an accessible, multilingual interface.** English and Canadian French are first-class UI locales with enforced key parity; README coverage is broader. WCAG 2.2 AA, keyboard access, visible focus, reflow, reduced motion, forced-colors/high-contrast behavior, and long-string/localization checks are release criteria. The Help Center is search-first, role-aware, bookmarkable, and includes task shortcuts, route guidance, workflow FAQs, and a technical/plain-language glossary.
+- **Back up the research environment.** Backup/restore covers workspaces, audit history, provider profiles, source assets, system/provenance state, and Chroma collections/embeddings.
+
+## Current `master`
+
+The summary below describes the Gloucester release.
+
+- **Corpus Builder is now a progressive Setup → Build → Review → Publish workflow.** It supports bounded concurrent enrichment, explicit corpus topology and Record-sizing choices, resumable/revision-aware review, persistent record-local review queues, focused publication-remediation sessions, repeatable metadata groups, audio speaker assignments, and safe text review while verified preparation is still in progress.
+- **Metadata and evidence processing does less model work while preserving stronger semantics.** Deterministic/candidate-first routing, semantic identity and value equivalence, support-validated evidence cascade v2, structured-completion repair/retry classification, and incremental Metadata Memory/exemplar reconciliation reduce latency without allowing retrieval relevance or malformed output to become evidence.
+- **Pipeline Studio models executable computation explicitly.** Server-owned purposes, strategy families, scholarly effects, typed ports, resolved wiring, stage traces, scope/complexity metrics, tunable retrieval parameters, and non-persistent comparison now cover more Search, Research, reviewer-evidence, recovery, segmentation, and enrichment paths.
+- **Works can publish portable research sites.** Static exports combine the DerridAI SDK with a dedicated Vue runtime for browsing, annotations, browser semantic indexing, reader-configured providers, and citation-bound Research without turning the export into canonical corpus state.
+- **Realtime invalidation and progressive loading replace broad polling and blank-page refreshes across more of the application.** Works, Record, Search, Research, Response Library, Languages, Relationships, Accounts/Roles, Metadata Memory, and related surfaces retain useful content during refreshes, expose local retry states, and discard stale responses.
+- **The frontend is continuing to retire the legacy runtime.** Router-owned navigation, Vue-hosted dialogs and notifications, shared domain/state modules, Pinia slices, and extracted provider/search/compare/workspace helpers reduce coupling while the remaining compatibility code stays isolated.
+- **cELF and developer infrastructure were tightened.** The specification is product-neutral and profile/provenance-oriented with generalized `EvidenceRef` locator semantics; architecture maps now document critical code boundaries; CI/pre-push selection, repository hygiene, and copyright enforcement were strengthened.
+
+See the [User Guide](docs/USER_GUIDE.md) for the full feature reference.
+
+## cELF traceability model
+
+DerridAI's scholarly data model follows the cELF distinction between authoritative documentary/scholarly state and rebuildable computational projections. At full traceability, the conceptual path is:
+
+```text
+SourceDocument
+  -> SourceSpan
+  -> Record
+  -> RecordRevision
+  -> FieldAssertion
+  -> Evidence Acquisition
+  -> EvidenceRef
+  -> EvidencePacket
+  -> GenerationRun
+  -> GeneratedClaim
+  -> SupportBinding
+```
+
+This means an answer can be audited backward from a generated claim to its support, evidence, record revision, source span, and source document. Embeddings, retrieval rank, reranker scores, caches, UI state, and other operation-specific values remain derived state; they do not become intrinsic properties of the source record.
+
+See [SPECIFICATION.md](SPECIFICATION.md) for the normative cELF 1.0 specification.
 
 ## Architecture
 
-| Service | Stack | Notes |
-| --- | --- | --- |
-| `web` | Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, served by nginx | Proxies `/api/` to the API; Storybook is available as an opt-in dev service |
-| `api` | Python 3.12, FastAPI, ChromaDB, PyMuPDF, sentence-transformers | Persistent state lives under `./data` (Chroma, SQLite auth/system stores, model cache) |
-| LLM backend | Ollama (default) or any OpenAI-compatible endpoint | Runs on the host or elsewhere; not part of the compose stack |
+DerridAI's top-level dependency and authority boundaries are:
 
-## Quick start
+```mermaid
+flowchart LR
+    Browser["web · Vue 3 browser app"]
 
-Prerequisites: Docker with Compose, and an [Ollama](https://ollama.com) server (or an OpenAI-compatible endpoint) with the default models pulled.
+    subgraph API["api · FastAPI"]
+        REST["REST commands + mutations"]
+        GQL["GraphQL read façade"]
+        WS["WebSocket notifications"]
+        Reads["cELF read services"]
+        Domains["Corpus · Research · Pipelines · Jobs"]
+    end
+
+    Canonical["Canonical scholarly state<br/>sources · records · revisions · assertions · evidence"]
+    System["Server-owned durable state<br/>SQLite"]
+    Chroma["Derived/rebuildable projections<br/>Chroma + embeddings + caches"]
+    Providers["LLM / embedding providers"]
+    NLP["Optional document-nlp worker"]
+
+    Browser --> REST
+    Browser --> GQL
+    Browser <-->|bounded events| WS
+    REST --> Domains
+    REST --> Reads
+    GQL --> Reads
+    Reads --> Canonical
+    Reads -. query derived projections .-> Chroma
+    Domains --> Canonical
+    Domains --> System
+    Domains -. index / retrieve .-> Chroma
+    Domains --> Providers
+    Domains -. change notifications .-> WS
+    Domains -. bounded reviewed text .-> NLP
+    NLP -. derived annotations .-> Domains
+```
+
+For developers working inside a subsystem, the local maps are more specific than this overview:
+
+- [Backend application map](api/app/README.md)
+- [Backend test architecture](tests/README.md)
+- [Computational pipelines](api/app/pipelines/README.md)
+- [Frontend workspace](web/README.md)
+- [Frontend application map](web/src/README.md)
+- [Frontend domain layer](web/src/domain/README.md)
+- [Frontend components](web/src/components/README.md)
+- [Frontend API clients](web/src/api/README.md)
+- [Corpus Builder frontend feature](web/src/features/corpus-builder/README.md)
+- [Corpus Builder components](web/src/components/corpus-builder/README.md)
+- [Pipeline Studio components](web/src/components/pipelines/README.md)
+- [Frontend test architecture](web/tests/README.md)
+
+### Contributing by area
+
+| If you want to change…              | Start here                                                                                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend/domain behavior             | [`api/README.md`](api/README.md) → [`api/app/README.md`](api/app/README.md)                                                                                                               |
+| Frontend route/workspace behavior   | [`web/README.md`](web/README.md) → [`web/src/README.md`](web/src/README.md)                                                                                                               |
+| Reusable UI or Storybook components | [`web/src/components/README.md`](web/src/components/README.md)                                                                                                                            |
+| Corpus Builder                      | [`web/src/features/corpus-builder/README.md`](web/src/features/corpus-builder/README.md) and [`web/src/components/corpus-builder/README.md`](web/src/components/corpus-builder/README.md) |
+| Pipeline Studio                     | [`api/app/pipelines/README.md`](api/app/pipelines/README.md) and [`web/src/components/pipelines/README.md`](web/src/components/pipelines/README.md)                                       |
+| Tests / CI ownership                | [`tests/README.md`](tests/README.md) and [`web/tests/README.md`](web/tests/README.md)                                                                                                     |
+
+Read [`docs/CODE_READABILITY.md`](docs/CODE_READABILITY.md) before a refactor. It records naming, documentation, nesting, and provenance-preservation conventions, plus the main traps in legacy/derived-state code.
+
+### Runtime services
+
+- `web` — Vue 3, TypeScript, Pinia, Vue Router, Vite, PDF.js, and nginx. It is the browser application, proxies `/api/`, and consumes REST, GraphQL, and realtime notifications. Storybook is an opt-in development profile.
+- `api` — Python 3.12, FastAPI, Strawberry GraphQL, the ChromaDB client, PyMuPDF, sentence-transformers, and spaCy. It is the authoritative application boundary for authentication, source/corpus operations, cELF reads, provenance, RAG, pipelines, jobs, and system state.
+- `document-nlp` — an optional isolated BookNLP worker for English Document Intelligence. It receives bounded reviewed text and has no corpus authority.
+- `chroma` — an optional HTTP Chroma server. Embedded `PersistentClient` remains the default; both modes store derived search/vector projections.
+- `ollama` — an optional local Ollama service. DerridAI can instead use Ollama already running on the host or any configured OpenAI-compatible endpoint.
+
+The default Compose stack starts `web` and `api`; the other services are opt-in profiles or external providers.
+
+### Authority and persistence
+
+DerridAI deliberately does not treat every store as equally authoritative:
+
+- **Canonical scholarly state** — source assets/identity, records and revisions, field assertions, review decisions, exact evidence/support bindings, and publication state.
+- **Server-owned durable state** — authentication plus system/provenance/job/pipeline state in SQLite under `./data`.
+- **Derived/rebuildable state** — Chroma indexes, embeddings, metadata-exemplar projections, retrieval scores, semantic-content projections, Document Intelligence output, and caches.
+- **Browser workspace state** — local working-set preferences and unsaved workspace state, kept separate from corpus authority.
+
+### Transport split
+
+- **REST**: every command and mutation, including uploads, review decisions, jobs, publication, administration, backup, and restore.
+- **GraphQL**: read-only cELF-aware typed query façade at `POST /api/graphql`; no mutation or subscription root.
+- **WebSocket**: authenticated realtime notification plane at `WS /api/ws/events`; never a source of truth.
+
+For detailed module ownership, persistence boundaries, and data flow, see [Architecture](docs/ARCHITECTURE.md), [GraphQL](docs/GRAPHQL.md), and [Realtime](docs/REALTIME.md).
+
+## Getting started
+
+These are the supported clean-checkout steps.
+
+### 1. Prerequisites
+
+Install Git, Docker Engine/Desktop with the `docker compose` command, and an LLM endpoint. The default configuration expects Ollama on the host.
+
+Default models:
+
+```text
+gemma4:e2b
+bge-m3:latest
+```
+
+### 2. Clone and configure
 
 ```bash
+git clone https://github.com/ajschlosser/DerridAI.git
+cd DerridAI
 cp .env.example .env
-docker compose up -d --build
 ```
 
-Then open <http://localhost:8181>. On first launch DerridAI asks you to create the initial administrator account; no default credentials are shipped. Interactive API documentation is at <http://localhost:8000/docs>.
+PowerShell:
 
-To rebuild after an upgrade:
+```powershell
+Copy-Item .env.example .env
+```
+
+On Docker Desktop with WSL, set `HOST_UID` and `HOST_GID` in `.env` to the output of `id -u` and `id -g` so bind-mounted SQLite/Chroma files remain owned by your host user.
+
+Do not export DerridAI test-storage variables such as `CHROMA_DATA_ROOT`, `AUTH_DB_PATH`, `SYSTEM_DB_PATH`, or `CHROMA_PATH` globally in your shell. Compose interpolates exported variables before values from the file are passed into the container.
+
+### 3. Make the configured models available
+
+For Ollama already running on the host:
 
 ```bash
-docker compose down
-docker compose up -d --build
+ollama pull gemma4:e2b
+ollama pull bge-m3:latest
 ```
 
-### Configuration
-
-Copy `.env.example` to `.env` and edit as needed. Key settings:
+The default `.env.example` uses:
 
 ```env
 OLLAMA_BASE_URL=http://host.docker.internal:11434
@@ -55,41 +227,181 @@ OLLAMA_EMBED_MODEL=bge-m3:latest
 EMBEDDING_PROVIDER=ollama
 ```
 
-Set `SESSION_COOKIE_SECURE=true` only when the browser reaches DerridAI through an HTTPS reverse proxy (it defaults to `false` for local HTTP). Repeated failed logins lock the username for `AUTH_LOGIN_LOCKOUT_SECONDS` (default 300) after `AUTH_LOGIN_MAX_FAILURES` (default 5).
-
-On Docker Desktop with WSL, set `HOST_UID` and `HOST_GID` to `id -u` / `id -g` so Chroma files are not created root-owned. Additional LLM providers are configured in the app under **LLM Providers**.
-
-### Troubleshooting
+Or use the optional Compose Ollama service:
 
 ```bash
-./scripts/diagnose.sh          # PowerShell: .\scripts\diagnose.ps1
-./scripts/fix-data-permissions.sh   # if older releases left root-owned data
+docker compose --profile ollama up -d ollama
+docker compose exec ollama ollama pull gemma4:e2b
+docker compose exec ollama ollama pull bge-m3:latest
 ```
 
-## Development
+Then set `OLLAMA_BASE_URL=http://ollama:11434` in `.env`.
+
+### 4. Start DerridAI
 
 ```bash
-# Backend and release regression tests
-pip install -r api/requirements.txt pytest
-pytest -q
+docker compose config --quiet
+docker compose up -d --build
+```
 
-# Frontend
+Default endpoints:
+
+- Application: <http://localhost:8181>
+- API: <http://127.0.0.1:8000>
+- OpenAPI docs: <http://127.0.0.1:8000/docs>
+
+On first launch, create the initial administrator account in the browser. DerridAI ships no default credentials.
+
+### 5. Verify the installation
+
+```bash
+docker compose ps
+curl -fsS http://127.0.0.1:8000/api/live
+```
+
+The liveness response should contain `"ok": true`, the application version, and the baked git commit when available.
+
+For a broader diagnostic:
+
+```bash
+./scripts/diagnose.sh
+```
+
+PowerShell:
+
+```powershell
+.\scripts\diagnose.ps1
+```
+
+### 6. Optional services
+
+```bash
+# Local Ollama service
+docker compose --profile ollama up -d ollama
+
+# Chroma HTTP server (then set CHROMA_MODE=http)
+docker compose --profile chroma up -d chroma
+
+# English BookNLP Document Intelligence enhancement
+docker compose --profile document-nlp up -d document-nlp
+
+# Storybook development surface
+docker compose --profile dev up storybook
+```
+
+See [Document Intelligence](docs/DOCUMENT_INTELLIGENCE.md) before enabling or installing NLP language packs.
+
+### 7. Stop or rebuild
+
+```bash
+docker compose down
+
+# after pulling changes
+docker compose down
+docker compose up -d --build
+```
+
+If an older release left root-owned files under `data/`, run `./scripts/fix-data-permissions.sh` on supported Unix-like hosts.
+
+## Developer setup
+
+CI uses Python 3.12 and Node 22.
+
+Backend/test environment:
+
+```bash
+python3.12 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r api/requirements-dev.txt
+```
+
+Frontend environment:
+
+```bash
 cd web
-npm install
-npm run typecheck && npm run test:unit && npm run build
-npm run storybook            # or: docker compose --profile dev up storybook
-npm run test:e2e             # Playwright + axe-core
+npm ci --no-audit --no-fund
+npx playwright install chromium
+cd ..
 ```
 
-CI (`.github/workflows/frontend.yml`) runs Ruff, mypy, ESLint, the backend tests, and the full frontend gate. See [CONTRIBUTING.md](CONTRIBUTING.md) for every gate and [AGENTS.md](AGENTS.md) for conventions.
+Fast local quality gates:
+
+```bash
+ruff check api/app tests scripts/check_frontend_api_contract.py scripts/check_frontend_graphql_contract.py
+mypy
+python -m compileall -q api/app
+pytest -q -n auto --dist=worksteal \
+  --ignore=tests/test_frontend_api_contract.py \
+  --ignore=tests/test_frontend_graphql_contract.py
+pytest -q -m contract tests/test_frontend_api_contract.py tests/test_frontend_graphql_contract.py
+
+cd web
+npm run format:repo:check
+npm run lint
+npm run typecheck
+npm run typecheck:tests
+npm run test:unit
+npm run build:ci
+```
+
+Use `npm run format:repo` from `web/` to format every Prettier-supported source, configuration, and documentation file in the repository. Generated legacy DOM snapshot HTML is intentionally excluded.
+
+For a change-aware local gate, run `scripts/preflight.sh` from the repository root after installing both environments. It selects checks from the diff and verifies that the branch is not behind `origin/master`; browser suites remain CI-owned.
+
+For browser coverage, Storybook, CI parity, and contribution rules, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Choose a contribution area
+
+Start with the narrowest architectural map for the part you intend to change. This avoids learning the whole repository before making a focused contribution.
+
+| Change area                        | Start here                                                                                                                                                             | Important boundary / common trap                                                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Source ingestion and extraction    | [Backend map](api/app/README.md), [ingestion safety](docs/INGESTION_VALIDATION.md)                                                                                     | Treat every source as inert untrusted data; preserve medium-specific locators and extractor provenance.                                       |
+| Corpus Builder and review          | [Backend application map](api/app/README.md), [frontend feature](web/src/features/corpus-builder/README.md), [components](web/src/components/corpus-builder/README.md) | `corpus_builder.py` and `PdfCorpusBuilder.vue` are orchestration/compatibility owners, not default homes for new domain logic.                |
+| Metadata, assertions, and evidence | [Metadata schemas](docs/METADATA_SCHEMAS.md), [Metadata Memory](docs/METADATA_MEMORY.md), [project context](docs/PROJECT_CONTEXT.md)                                   | Keep derivation, evaluation, authority, value state, revision, and evidence distinct; do not flatten them into one value or flag.             |
+| Research, retrieval, and pipelines | [Pipeline backend](api/app/pipelines/README.md), [Pipeline UI](web/src/components/pipelines/README.md), [architecture](docs/ARCHITECTURE.md)                           | Retrieval scores and indexes are derived state. Exact evidence/support binding is deterministic scholarly state.                              |
+| REST, GraphQL, or realtime         | [Backend map](api/README.md), [frontend API clients](web/src/api/README.md), [GraphQL](docs/GRAPHQL.md), [realtime](docs/REALTIME.md)                                  | REST owns mutations; GraphQL is read-only; WebSocket messages signal change and must be followed by canonical reads.                          |
+| Frontend UI or state               | [Frontend workspace](web/README.md), [application map](web/src/README.md), [domain layer](web/src/domain/README.md)                                                    | Keep user-facing strings in i18n, preserve WCAG behavior, and avoid new dependencies on the remaining compatibility runtime.                  |
+| Static research sites / SDK        | [Frontend workspace](web/README.md), `web/site/`, `web/sdk/`, `api/app/site_publication.py`                                                                            | Generated `api/app/site_assets/derridai-*.js` files are build outputs; change their TypeScript/Vue sources and regenerate.                    |
+| Tests and CI                       | [Backend tests](tests/README.md), [frontend tests](web/tests/README.md), [contributing](CONTRIBUTING.md)                                                               | Contract tests are intentionally separate from the broad backend run; characterization snapshots change only for understood behavior changes. |
+| cELF/specification or requirements | [SPECIFICATION.md](SPECIFICATION.md), [requirements](docs/requirements/README.md)                                                                                      | Preserve normative requirement identifiers and traceability; implementation detail must not silently redefine cELF semantics.                 |
+
+## Repository map
+
+- `api/app/` — FastAPI backend: source/corpus workflows, cELF read services, GraphQL, realtime, provenance, pipelines, RAG, providers, persistence, and jobs.
+- `web/src/` — Vue 3 application: views, components, Pinia stores, routing, API clients, realtime client, domain modules, and the shrinking isolated legacy compatibility layer.
+- `web/sdk/` — framework-neutral TypeScript SDK for publication loading, local retrieval, citations, annotations, provider injection, and Research.
+- `web/site/` — generated-site Vue entrypoint and compatibility adapter for the portable research-site runtime.
+- `booknlp-worker/` — optional isolated BookNLP Document Intelligence worker.
+- `tests/` — backend, regression, contract, release-consistency, and architecture tests.
+- `web/tests/frontend/` — Vitest component/domain tests.
+- `web/tests/e2e/` — Playwright application, Storybook, accessibility, and characterization coverage.
+- `docs/` — current architecture/domain contracts and historical release notes.
+- `data/` — local runtime state; git-ignored except placeholders. Never commit its contents.
 
 ## Documentation
 
-- [User Guide](docs/USER_GUIDE.md) — feature reference, operations, backup, and limitations
-- [Changelog](CHANGELOG.md) — release history; full notes live in [`docs/notes/`](docs/notes/)
-- [Architecture overview](docs/ARCHITECTURE.md) and [Contributing](CONTRIBUTING.md)
-- Design notes: [Storage](docs/STORAGE_0.36.1.md), [Shareable state and data model](docs/SHAREABLE_STATE_AND_DATA_MODEL_0.36.2.md), [Search workspace](docs/SEARCH_WORKSPACE_0.36.10.md), [Packet reduction](docs/PACKET_REDUCTION_0.30.11.md), [fr-CA localization](docs/LOCALIZATION_FR_CA.md)
+Start with the documents describing current behavior:
+
+- [User Guide](docs/USER_GUIDE.md) — feature and workflow reference
+- [Architecture](docs/ARCHITECTURE.md) — runtime boundaries, authority, persistence, and data flow
+- [cELF 1.0 specification](SPECIFICATION.md) — normative information model and conformance requirements
+- [Project context](docs/PROJECT_CONTEXT.md) — scholarly rationale and implemented-versus-intended capabilities
+- [GraphQL](docs/GRAPHQL.md) — read-only cELF query façade
+- [Realtime](docs/REALTIME.md) — WebSocket notification protocol and resynchronization
+- [Document Intelligence](docs/DOCUMENT_INTELLIGENCE.md) — derived linguistic analysis and language packs
+- [Source ingestion](docs/INGESTION_VALIDATION.md) — safety, resource limits, and extraction fidelity
+- [Metadata schemas](docs/METADATA_SCHEMAS.md) — configurable field contracts and model guidance
+- [Metadata memory](docs/METADATA_MEMORY.md) — reviewed precedents and authority boundaries
+- [FieldAssertion migration](docs/FIELD_ASSERTION_MIGRATION.md) — canonical assertion model and compatibility work
+- [Code readability](docs/CODE_READABILITY.md) — naming, documentation, complex-logic, and refactoring conventions
+- [Contributing](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) — development rules and quality gates
+
+Release history is in [CHANGELOG.md](CHANGELOG.md) and `docs/notes/<version>.md`. Version-specific release notes are historical records, not current architecture or backlog documents.
 
 ## License
 
-No license file is currently included. Source files carry `Copyright 2026 Aaron John Schlosser, PhD.` The sign-in screen, account menu, and Settings → About DerridAI show `© 2026 The New England Transcendental Club of California`.
+DerridAI is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+Copyright © 2026 Aaron John Schlosser, PhD. The application also displays © 2026 The New England Transcendental Club of California.

@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Typed dictionaries for scholarly records and RAG payloads.
 
 These contracts name the provenance chain without flattening speaker,
@@ -78,3 +93,8 @@ class EvidenceItem(TypedDict, total=False):
     inline_citation: str
     full_citation: str
     text_truncated: bool
+    selection_role: str
+    neighbor_of: str
+    neighbor_distance: int
+    neighbor_reason: str
+    automatic_region_size: int

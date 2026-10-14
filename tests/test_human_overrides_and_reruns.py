@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Human text corrections, manifest overrides, selective reruns, and readiness.
 
 Why: reviewers fix bad extractions and override document-level metadata per record.
@@ -104,6 +120,7 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
         "accepted": True,
         "rejected": False,
         "needs_review": False,
+        "human_touched_fields": ["__review__"],
     }
     repo, build = install_review_build(tmp_path, record)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
@@ -112,6 +129,8 @@ def test_human_text_correction_reopens_previously_accepted_record(tmp_path: Path
     assert updated["accepted"] is False
     assert updated["rejected"] is False
     assert updated["needs_review"] is True
+    assert "__review__" not in updated["human_touched_fields"]
+    assert "__text__" in updated["human_touched_fields"]
     assert "reviewed record text changed" in updated["review_reason"].lower()
     assert updated["review_events"][-1]["event"] == "text_corrected"
 
@@ -124,25 +143,25 @@ def test_manifest_metadata_can_be_overridden_at_record_scope_without_future_over
     """
     record = {"metadata_field_status": {}, "pdf_pages": [10]}
     manifest = {"title": "Document title", "document_author": "Jacques Derrida", "main_text_start_page": 5, "main_text_end_page": 20}
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(record, manifest)
+    cb._apply_manifest_metadata(record, manifest)
     assert record["document_author"] == "Jacques Derrida"
     assert record["metadata_field_status"]["document_author"]["status"] == "inherited"
     record["document_author"] = "Different record author"
     record["metadata_field_status"]["document_author"] = {"status": "human_override", "method": "human_record_override"}
-    cb.PdfCorpusBuildManager._apply_manifest_metadata(record, {**manifest, "document_author": "Changed manifest author"})
+    cb._apply_manifest_metadata(record, {**manifest, "document_author": "Changed manifest author"})
     assert record["document_author"] == "Different record author"
 
 
-def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_all(tmp_path: Path, monkeypatch):
-    """Fast mode only runs discourse when there is no quotation signal; deep runs everything.
+def test_fast_and_deep_enrichment_skip_unsignaled_quotation(tmp_path: Path, monkeypatch):
+    """Quotation is signal-routed in both modes; Deep still enables indexing.
 
-    Fast: only the discourse family is called; quotation and indexing become "skipped".
-    Deep: all three families are called, in order.
+    Fast: only discourse runs when quotation and semantic-indexing signals are absent.
+    Deep: discourse and indexing run, while unsignaled quotation remains skipped.
     """
     repo, build = install_review_build(tmp_path, {"text": "Derrida discusses hospitality without a direct citation."})
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     called: list[str] = []
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         called.append(schema_name)
         if schema_name == "derridai_record_discourse":
             return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "analysis"}, "field_evidence": {}, "review_reason": ""}
@@ -158,13 +177,14 @@ def test_fast_enrichment_skips_unsignaled_quotation_and_indexing_but_deep_runs_a
     called.clear()
     deep = {"record_id": "deep", "text": "Derrida discusses hospitality.", "source_block_ids": ["b1"], "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}]}
     manager._enrich_record(deep, {}, {"provider": "ollama", "model": "test", "enrichment_mode": "deep"}, build_id=build["build_id"])
-    assert called == ["derridai_record_discourse", "derridai_record_quotation", "derridai_record_indexing"]
+    assert called == ["derridai_record_discourse", "derridai_record_indexing"]
+    assert deep["metadata_stage_status"]["quotation"] == "skipped"
 
 
 def test_source_problem_is_not_mislabeled_as_topology():
     """A source-extraction problem is a "source" issue, not a "topology" one."""
     record = {"source_quality_issues": [{"code": "replacement_character", "severity": "minor"}], "review_reason": "Source extraction issue: replacement_character."}
-    codes = cb.PdfCorpusBuildManager._review_issue_codes(record)
+    codes = cb._review_issue_codes(record)
     assert "source" in codes
     assert "topology" not in codes
 
@@ -189,7 +209,7 @@ def test_selective_metadata_rerun_preserves_human_values_and_other_family_state(
     repo, build = install_review_build(tmp_path, record)
     manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
     called: list[str] = []
-    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id=""):
+    def fake(_request, prompt, *, response_model, max_tokens, schema_name, build_id="", **_kwargs):
         called.append(schema_name)
         return {
             "metadata": {"speaker": "Model speaker", "region_type": "main_text", "primary_text": True, "discourse_role": "analysis"},
@@ -230,6 +250,136 @@ def test_human_requeue_places_record_at_front_of_active_enrichment_queue(tmp_pat
     updated = repo.get_build(build["build_id"])
     assert updated["metadata_priority_record_ids"] == ["r1", "r2"]
     assert updated["metadata_review_feedback"][-1]["source"] == "human_requeue"
+
+
+def test_text_edit_during_active_enrichment_forces_fresh_llm_pass(tmp_path: Path):
+    """A queued Record edited after scheduling is reprocessed from its reviewed text."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Original queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+
+    updated = manager.patch_record_text(
+        build["build_id"],
+        "r1",
+        "Reviewed text that the model must see.",
+        expected_revision=1,
+    )
+
+    assert updated["text"] == "Reviewed text that the model must see."
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert updated["metadata_stage_status"] == {
+        "discourse": "queued",
+        "quotation": "queued",
+        "indexing": "queued",
+    }
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
+def test_absence_decision_during_active_enrichment_forces_fresh_llm_pass(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """Confirming absence cannot invalidate an in-flight worker without a replacement pass."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda _build_id: None)
+
+    result = manager.metadata_decision(
+        build["build_id"],
+        "r1",
+        "speaker",
+        None,
+        expected_revision=1,
+        confirm_no_supported_value=True,
+    )
+
+    updated = result["record"]
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert updated["metadata_field_status"]["speaker"]["status"] == "confirmed_absent"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
+
+
+def test_metadata_edit_during_active_enrichment_forces_fresh_llm_pass(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """A human field decision cannot strand the rest of a queued Record."""
+    repo, build = install_review_build(
+        tmp_path,
+        {
+            "text": "Queued text.",
+            "metadata_enrichment_state": "queued",
+            "metadata_stage_status": {
+                "discourse": "queued",
+                "quotation": "queued",
+                "indexing": "queued",
+            },
+        },
+    )
+    active = repo.get_build(build["build_id"])
+    active.update(
+        {
+            "status": "running",
+            "stage": "enriching",
+            "metadata_priority_record_ids": [],
+        }
+    )
+    repo.save_build(active)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager, "_schedule_metadata_exemplar_projection", lambda _build_id: None)
+
+    updated = manager.patch_metadata(
+        build["build_id"],
+        "r1",
+        {"speaker": "Reviewer supplied speaker"},
+        expected_revision=1,
+    )
+
+    assert updated["speaker"] == "Reviewer supplied speaker"
+    assert updated["metadata_requeue_requested"] is True
+    assert updated["metadata_enrichment_state"] == "stale"
+    assert repo.get_build(build["build_id"])["metadata_priority_record_ids"][0] == "r1"
 
 
 def test_dismissing_touchup_proposal_preserves_source_and_reviewed_text(tmp_path: Path):

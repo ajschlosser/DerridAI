@@ -1,15 +1,39 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import { createOperationPresenters } from "../../src/domain/operationPresenters";
 
 // The snapshots were verified to be identical to the original legacy runtime.js functions, over about
 // five hundred job fixtures covering every job type and status, before they were recorded.
 const tr = (_key: string, fallback = "") => fallback;
-const trf = (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
-  Object.entries(values).reduce(
+const trf = (
+  _key: string,
+  fallbackOrValues: string | Record<string, unknown> = "",
+  values: Record<string, unknown> = {},
+) => {
+  const fallback = typeof fallbackOrValues === "string" ? fallbackOrValues : "";
+  const replacements = typeof fallbackOrValues === "string" ? values : fallbackOrValues;
+  return Object.entries(replacements).reduce(
     (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
     fallback,
   );
+};
 const presenters = createOperationPresenters({
   tr,
   trf,

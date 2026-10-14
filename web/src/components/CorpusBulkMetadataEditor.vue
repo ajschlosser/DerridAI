@@ -1,8 +1,26 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
-import type { CorpusRecord } from "../api/pdfCorpus";
 import { useI18nStore } from "../stores/i18n";
 import { usableListOptions, usableOptions } from "../domain/metadataValues";
+import { metadataRegistryFields, metadataRegistryGroups } from "../domain/metadataFieldRegistry";
 import type { MetadataSchema } from "../api/metadataSchemas";
 import UiButton from "./ui/UiButton.vue";
 import UiField from "./ui/UiField.vue";
@@ -16,7 +34,6 @@ const props = withDefaults(
   defineProps<{
     selectedCount: number;
     totalCount: number;
-    records?: CorpusRecord[];
     knownValues?: Record<string, string[]>;
     regionTypes?: string[];
     discourseRoles?: string[];
@@ -24,7 +41,6 @@ const props = withDefaults(
     schema?: MetadataSchema | null;
   }>(),
   {
-    records: () => [],
     knownValues: () => ({}),
     regionTypes: () => [],
     discourseRoles: () => [],
@@ -41,7 +57,9 @@ const applyToAll = ref(false);
 const values = reactive<Record<string, string>>({});
 const cleared = reactive<Record<string, boolean>>({});
 const query = ref("");
+const dialog = ref<HTMLElement | null>(null);
 const titleEl = ref<HTMLElement | null>(null);
+let priorActive: HTMLElement | null = null;
 // Document details (title, author, publisher…) are set once for the whole document in Edit document metadata and
 // inherited by every record. They stay here for the rarer case of overriding them on chosen records.
 type BulkGroup = {
@@ -102,61 +120,65 @@ const legacyGroups: BulkGroup[] = [
   },
 ] as unknown as BulkGroup[];
 const identityGroup = legacyGroups.find((group) => group.key === "identity")!;
-// With a schema, the groups and fields are the schema's (the locked core first, in the discourse group); document details stay last.
+// Schema-backed groups, cardinality and controls come from one canonical
+// registry. Document overrides remain a distinct compatibility group because
+// they are not ordinary record-scoped schema fields.
+const registryFields = computed(() =>
+  metadataRegistryFields(props.schema, props.regionTypes, props.discourseRoles),
+);
+const registryFieldMap = computed(() =>
+  Object.fromEntries(registryFields.value.map((field) => [field.name, field])),
+);
 const groups = computed<BulkGroup[]>(() =>
   props.schema
     ? [
-        ...props.schema.groups.map((group) => ({
-          key: group.key,
-          label: group.label,
-          fallback: group.label,
-          help: "pdf_corpus.bulk_schema_group_help",
-          helpFallback: "",
-          fields: Array.from(
-            new Set([
-              ...(group.key === "discourse"
-                ? ["region_type", "primary_text", "discourse_role"]
-                : []),
-              ...props
-                .schema!.fields.filter((field) => field.group === group.key)
-                .map((field) => field.name),
-            ]),
-          ),
-        })),
+        ...metadataRegistryGroups(props.schema, props.regionTypes, props.discourseRoles).map(
+          (group) => ({
+            key: group.key,
+            label: group.label,
+            fallback: group.label,
+            help: "pdf_corpus.bulk_schema_group_help",
+            helpFallback: "",
+            fields: group.fields.map((field) => field.name),
+          }),
+        ),
         identityGroup,
       ]
     : legacyGroups,
 );
-const schemaFieldMap = computed(() =>
-  Object.fromEntries((props.schema?.fields || []).map((field) => [field.name, field])),
-);
 const listFields = computed(() =>
   props.schema
     ? new Set([
-        ...props.schema.fields.filter((f) => f.type === "list").map((f) => f.name),
+        ...registryFields.value
+          .filter((field) => field.control === "multi-combobox")
+          .map((field) => field.name),
         "document_language",
       ])
     : new Set(["topics", "concepts", "persons", "works_referenced", "document_language"]),
 );
 const booleanFields = computed(() =>
   props.schema
-    ? new Set([
-        "primary_text",
-        ...props.schema.fields.filter((f) => f.type === "boolean").map((f) => f.name),
-      ])
+    ? new Set(
+        registryFields.value
+          .filter((field) => field.control === "boolean")
+          .map((field) => field.name),
+      )
     : new Set(["primary_text"]),
 );
-const enumValues = computed<Record<string, string[]>>(() => ({
-  region_type: props.regionTypes || [],
-  discourse_role: props.discourseRoles || [],
-  ...Object.fromEntries(
-    (props.schema?.fields || [])
-      .filter((f) => f.type === "choice" && f.strict)
-      .map((f) => [f.name, f.values.map((v) => v.value)]),
-  ),
-}));
+const enumValues = computed<Record<string, string[]>>(() =>
+  props.schema
+    ? Object.fromEntries(
+        registryFields.value
+          .filter((field) => field.control === "enum" && field.allowedValues?.length)
+          .map((field) => [field.name, [...(field.allowedValues || [])]]),
+      )
+    : {
+        region_type: props.regionTypes || [],
+        discourse_role: props.discourseRoles || [],
+      },
+);
 const name = (field: string) =>
-  i18n.t(`record.${field}`, schemaFieldMap.value[field]?.label || field.replaceAll("_", " "));
+  i18n.t(`record.${field}`, registryFieldMap.value[field]?.label || field.replaceAll("_", " "));
 const filteredGroups = computed(() => {
   const q = query.value.trim().toLowerCase();
   if (!q) return groups.value;
@@ -173,11 +195,6 @@ const suggestions = computed(() => {
   for (const group of groups.value)
     for (const field of group.fields) {
       const seen: unknown[] = [];
-      for (const row of props.records || []) {
-        const value = (row as Record<string, unknown>)[field];
-        if (Array.isArray(value)) seen.push(...value);
-        else seen.push(value);
-      }
       seen.push(...(props.knownValues?.[field] || []));
       out[field] = (listFields.value.has(field) ? usableListOptions(seen) : usableOptions(seen))
         .sort((a, b) => a.localeCompare(b))
@@ -217,20 +234,56 @@ function reset() {
   for (const key of Object.keys(cleared)) delete cleared[key];
   applyToAll.value = false;
 }
+function focusables() {
+  if (!dialog.value) return [] as HTMLElement[];
+  return Array.from(
+    dialog.value.querySelectorAll<HTMLElement>(
+      'button:not([disabled]),[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((node) => node.offsetParent !== null);
+}
 function keydown(event: KeyboardEvent) {
-  if (event.key === "Escape") emit("close");
+  if (event.key === "Escape") {
+    event.preventDefault();
+    emit("close");
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const nodes = focusables();
+  if (!nodes.length) {
+    event.preventDefault();
+    titleEl.value?.focus({ preventScroll: true });
+    return;
+  }
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (
+    event.shiftKey &&
+    (document.activeElement === first || document.activeElement === titleEl.value)
+  ) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 onMounted(() => {
+  priorActive = document.activeElement as HTMLElement | null;
   window.addEventListener("keydown", keydown);
   titleEl.value?.focus({ preventScroll: true });
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", keydown);
+  priorActive?.focus?.({ preventScroll: true });
+});
 </script>
 
 <template>
   <Teleport to="body"
     ><div class="bulk-backdrop" @mousedown.self="emit('close')">
       <form
+        ref="dialog"
         class="bulk-dialog"
         role="dialog"
         aria-modal="true"
@@ -240,25 +293,18 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
       >
         <header class="bulk-head">
           <div>
-            <span class="eyebrow">{{
-              i18n.t("pdf_corpus.bulk_edit_eyebrow", "Record metadata")
-            }}</span>
+            <span class="eyebrow">{{ i18n.t("pdf_corpus.bulk_edit_eyebrow") }}</span>
             <h2 id="bulk-metadata-title" ref="titleEl" tabindex="-1">
-              {{ i18n.t("pdf_corpus.bulk_metadata_title", "Bulk edit record metadata") }}
+              {{ i18n.t("pdf_corpus.bulk_metadata_title") }}
             </h2>
             <p id="bulk-metadata-help">
-              {{
-                i18n.t(
-                  "pdf_corpus.bulk_metadata_help_v482",
-                  "Give a field a value to set it on every record in scope. Fields you leave empty are not touched.",
-                )
-              }}
+              {{ i18n.t("pdf_corpus.bulk_metadata_help_v482") }}
             </p>
           </div>
           <button
             type="button"
             class="bulk-close"
-            :aria-label="i18n.t('ui.close', 'Close')"
+            :aria-label="i18n.t('ui.close')"
             @click="emit('close')"
           >
             ×
@@ -266,10 +312,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
         </header>
         <div class="bulk-scroll">
           <MetadataFormSection
-            :title="i18n.t('pdf_corpus.bulk_scope', 'Scope')"
-            :description="
-              i18n.t('pdf_corpus.bulk_scope_help', 'Which records these changes apply to.')
-            "
+            :title="i18n.t('pdf_corpus.bulk_scope')"
+            :description="i18n.t('pdf_corpus.bulk_scope_help')"
           >
             <fieldset class="bulk-scope wide">
               <label
@@ -280,9 +324,9 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   name="bulk-scope"
                   :disabled="disabled"
                 /><span
-                  ><b>{{ i18n.t("pdf_corpus.bulk_selected_records", "Selected records") }}</b
+                  ><b>{{ i18n.t("pdf_corpus.bulk_selected_records") }}</b
                   ><small>{{
-                    i18n.tf("pdf_corpus.bulk_selected_count", "{count} selected", {
+                    i18n.tf("pdf_corpus.bulk_selected_count", {
                       count: selectedCount,
                     })
                   }}</small></span
@@ -296,21 +340,21 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   name="bulk-scope"
                   :disabled="disabled"
                 /><span
-                  ><b>{{ i18n.t("pdf_corpus.bulk_apply_all", "Apply to every record") }}</b
+                  ><b>{{ i18n.t("pdf_corpus.bulk_apply_all") }}</b
                   ><small>{{
-                    i18n.tf("pdf_corpus.bulk_total_count", "{count} total records", {
+                    i18n.tf("pdf_corpus.bulk_total_count", {
                       count: totalCount,
                     })
                   }}</small></span
                 ></label
               >
             </fieldset>
-            <UiField class="wide" :label="i18n.t('pdf_corpus.bulk_find_field', 'Find a field')"
+            <UiField class="wide" :label="i18n.t('pdf_corpus.bulk_find_field')"
               ><input
                 v-model="query"
                 class="control"
                 type="search"
-                :placeholder="i18n.t('pdf_corpus.bulk_search_fields', 'Search metadata fields…')"
+                :placeholder="i18n.t('pdf_corpus.bulk_search_fields')"
             /></UiField>
           </MetadataFormSection>
 
@@ -328,7 +372,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                 :disabled="disabled || cleared[field]"
               >
                 <option value="">
-                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged", "Leave unchanged") }}
+                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged") }}
                 </option>
                 <option v-for="option in enumValues[field]" :key="option" :value="option">
                   {{ i18n.t(`record.enum.${field}.${option}`, option.replaceAll("_", " ")) }}
@@ -341,10 +385,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                 :disabled="disabled || cleared[field]"
               >
                 <option value="">
-                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged", "Leave unchanged") }}
+                  {{ i18n.t("pdf_corpus.bulk_leave_unchanged") }}
                 </option>
-                <option value="true">{{ i18n.t("ui.yes", "Yes") }}</option>
-                <option value="false">{{ i18n.t("ui.no", "No") }}</option>
+                <option value="true">{{ i18n.t("ui.yes") }}</option>
+                <option value="false">{{ i18n.t("ui.no") }}</option>
               </select>
               <template v-else
                 ><input
@@ -354,8 +398,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   :disabled="disabled || cleared[field]"
                   :placeholder="
                     listFields.has(field)
-                      ? i18n.t('pdf_corpus.bulk_list_hint', 'Comma- or line-separated values')
-                      : i18n.t('pdf_corpus.bulk_leave_unchanged', 'Leave unchanged')
+                      ? i18n.t('pdf_corpus.bulk_list_hint')
+                      : i18n.t('pdf_corpus.bulk_leave_unchanged')
                   " /><datalist :id="`bulk-values-${field}`">
                   <option
                     v-for="option in suggestions[field] || []"
@@ -370,42 +414,42 @@ onBeforeUnmount(() => window.removeEventListener("keydown", keydown));
                   type="checkbox"
                   :disabled="disabled"
                 /><label :for="`bulk-clear-${field}`">{{
-                  i18n.t("pdf_corpus.bulk_clear_field", "Clear this field on every record in scope")
+                  i18n.t("pdf_corpus.bulk_clear_field")
                 }}</label></span
               >
             </UiField>
           </MetadataFormSection>
           <p v-if="!filteredGroups.length" class="empty">
-            {{ i18n.t("pdf_corpus.bulk_no_fields", "No metadata fields match that search.") }}
+            {{ i18n.t("pdf_corpus.bulk_no_fields") }}
           </p>
         </div>
         <MetadataFormFooter
           class="bulk-footer"
           :summary="
             activeCount
-              ? i18n.tf('pdf_corpus.bulk_changes_count', '{count} field(s) will change', {
+              ? i18n.tf('pdf_corpus.bulk_changes_count', {
                   count: activeCount,
                 })
-              : i18n.t('pdf_corpus.bulk_no_changes', 'No changes yet')
+              : i18n.t('pdf_corpus.bulk_no_changes')
           "
           :detail="
             applyToAll
-              ? i18n.tf('pdf_corpus.bulk_scope_all', 'Will update all {count} records', {
+              ? i18n.tf('pdf_corpus.bulk_scope_all', {
                   count: totalCount,
                 })
-              : i18n.tf('pdf_corpus.bulk_scope_selected', 'Will update {count} selected records', {
+              : i18n.tf('pdf_corpus.bulk_scope_selected', {
                   count: selectedCount,
                 })
           "
         >
-          <UiButton :label="i18n.t('ui.cancel', 'Cancel')" @click="emit('close')" /><UiButton
-            :label="i18n.t('ui.reset', 'Reset')"
+          <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
+            :label="i18n.t('ui.reset')"
             :disabled="disabled || (!activeCount && !applyToAll)"
             @click="reset"
           /><UiButton
             type="submit"
             variant="primary"
-            :label="i18n.t('pdf_corpus.bulk_apply', 'Apply changes')"
+            :label="i18n.t('pdf_corpus.bulk_apply')"
             :disabled="disabled || !activeCount || (!applyToAll && selectedCount < 1)"
           />
         </MetadataFormFooter>

@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Corpus Builder runtime resilience: bad LLM output, segmentation guards, resume.
 
 Why: local LLMs return malformed, truncated, or non-JSON answers. A book-length build must
@@ -14,10 +30,15 @@ from __future__ import annotations
 import json
 import sys
 import types
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "api"))
+
+from app.persistence_errors import PersistenceBusyError
 
 # Isolate Corpus Builder tests from optional vector-store dependencies.  The
 # production module imports these helpers from app.rag, while this test only
@@ -32,6 +53,8 @@ rag_stub.chat_complete = lambda **kwargs: "{}"
 rag_stub.run_rag_pipeline = lambda *args, **kwargs: {}
 sys.modules.setdefault("app.rag", rag_stub)
 from app import corpus_builder as cb
+from app import corpus_segmentation_execution as cse
+from app import operation_events
 
 
 def _blocks(count: int = 30):
@@ -72,16 +95,62 @@ def _build(repo: cb.PdfCorpusRepository, *, blocks: int = 30):
 def test_parse_json_robust_handles_common_model_wrappers_and_trailing_commas():
     """Extract the JSON object from a fenced reply with trailing commas and extra text."""
     raw = '''Here is the requested object:\n```json\n{"boundaries": [{"after_block_id": "p001-b001", "decision": "keep", "confidence": 0.9, "reason": "continuous", "change": {},},],}\n```\nextra'''
-    parsed = cb.PdfCorpusBuildManager._parse_json_robust(raw)
+    parsed = cb._parse_json_robust(raw)
     assert parsed["boundaries"][0]["after_block_id"] == "p001-b001"
 
 
-def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path: Path):
-    """Malformed replies are retried with a correction note and a larger token budget.
+def test_chat_json_repairs_malformed_json_before_spending_a_retry(monkeypatch, tmp_path: Path):
+    """A syntax-only JSON defect is repaired locally and validated in one model call."""
+    calls = []
 
-    Two invalid answers then a valid one: three calls total, the second prompt says the previous
-    response could not be validated, and max_tokens grows on retry.
-    """
+    def fake_chat_complete(**kwargs):
+        calls.append(kwargs)
+        return '{"boundaries": [],}'
+
+    monkeypatch.setattr(cb, "chat_complete", fake_chat_complete)
+    manager = cb.PdfCorpusBuildManager(cb.PdfCorpusRepository(tmp_path / "repo"), max_workers=1)
+    result = manager._chat_json(
+        {"provider": "ollama", "model": "test"},
+        "segment",
+        response_model=cb.SegmentationResponseModel,
+        attempts=3,
+    )
+    assert result == {"boundaries": []}
+    assert len(calls) == 1
+
+
+def test_chat_json_retries_cutoff_with_distinct_prompt_and_larger_budget(monkeypatch, tmp_path: Path):
+    """A token-limited response is not repaired; retry restarts with more output budget."""
+    calls = []
+
+    def fake_chat_complete(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise cb.StructuredJsonTruncatedError(
+                "cut off",
+                diagnostic='{"boundaries": [',
+                finish_reason="length",
+            )
+        return '{"boundaries": []}'
+
+    monkeypatch.setattr(cb, "chat_complete", fake_chat_complete)
+    manager = cb.PdfCorpusBuildManager(cb.PdfCorpusRepository(tmp_path / "repo"), max_workers=1)
+    result = manager._chat_json(
+        {"provider": "ollama", "model": "test"},
+        "segment",
+        response_model=cb.SegmentationResponseModel,
+        attempts=2,
+        max_tokens=1200,
+    )
+    assert result == {"boundaries": []}
+    assert len(calls) == 2
+    assert "OUTPUT LIMIT CORRECTION" in calls[1]["prompt"]
+    assert "do not continue the partial object" in calls[1]["prompt"]
+    assert calls[1]["max_tokens"] >= 1800
+
+
+def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path: Path):
+    """Unrepairable JSON is retried with a syntax-specific note and a larger token budget."""
     calls = []
 
     def fake_chat_complete(**kwargs):
@@ -100,8 +169,63 @@ def test_chat_json_retries_malformed_output_then_validates(monkeypatch, tmp_path
     )
     assert result == {"boundaries": []}
     assert len(calls) == 3
-    assert "previous response could not be validated" in calls[1]["prompt"]
+    assert "JSON SYNTAX CORRECTION" in calls[1]["prompt"]
     assert calls[1]["max_tokens"] > calls[0]["max_tokens"]
+
+
+def test_chat_json_records_prompt_and_keeps_live_draft_off_realtime(monkeypatch, tmp_path: Path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo)
+    operation_events.drain()
+
+    def fake_chat_complete(**kwargs):
+        on_delta = kwargs.get("on_delta")
+        assert callable(on_delta)
+        on_delta('{"boundaries":')
+        live = manager.llm_live_output(build["build_id"])
+        assert live["total"] == 1
+        assert live["items"][0]["text"] == '{"boundaries":'
+        on_delta("[]}")
+        return '{"boundaries": []}'
+
+    monkeypatch.setattr(cb, "chat_complete", fake_chat_complete)
+    result = manager._chat_json(
+        {
+            "provider": "ollama",
+            "model": "trace-test",
+            "base_url": "http://example.invalid",
+            "api_key": "SECRET-MUST-NOT-BE-PERSISTED",
+        },
+        "rendered source-bound prompt",
+        response_model=cb.SegmentationResponseModel,
+        schema_name="trace_schema",
+        build_id=build["build_id"],
+    )
+
+    assert result == {"boundaries": []}
+    assert manager.llm_live_output(build["build_id"]) == {"items": [], "total": 0}
+
+    trace = manager.llm_trace(build["build_id"])
+    assert trace["total"] == 1
+    entry = trace["items"][0]
+    assert entry["prompt"] == "rendered source-bound prompt"
+    assert entry["provider"] == "ollama"
+    assert entry["model"] == "trace-test"
+    assert entry["schema_name"] == "trace_schema"
+    assert entry["raw_response"] == '{"boundaries": []}'
+    assert entry["validated_response"] == {"boundaries": []}
+    assert entry["status"] == "complete"
+    serialized = json.dumps(entry)
+    assert "SECRET-MUST-NOT-BE-PERSISTED" not in serialized
+    assert "base_url" not in entry
+
+    progress = operation_events.drain().corpus_generation
+    assert progress and progress[-1]["final"] is True
+    # The realtime note is deliberately text-free; the draft is readable only
+    # through the administrator-authenticated live-output endpoint.
+    assert set(progress[-1]) == {"build_id", "call_id", "seq", "chars", "gap", "final"}
+    assert "rendered source-bound prompt" not in str(progress)
 
 
 def test_segment_blocks_instead_of_fabricating_record_when_every_llm_response_is_invalid(monkeypatch, tmp_path: Path):
@@ -163,7 +287,7 @@ def test_enrichment_failure_returns_reviewable_record_not_exception(monkeypatch,
 def test_parse_json_robust_accepts_safe_python_literal_objects_from_local_models():
     """Accept a Python-style dict ('single quotes', True, None) from a local model."""
     raw = "{'boundaries': [], 'ok': True, 'note': None}"
-    parsed = cb.PdfCorpusBuildManager._parse_json_robust(raw)
+    parsed = cb._parse_json_robust(raw)
     assert parsed == {"boundaries": [], "ok": True, "note": None}
 
 
@@ -227,7 +351,7 @@ def test_execution_budget_rejects_impossible_context_before_build():
     """
     request={"generation":{"num_ctx":4096},"stage_limits":{"segmentation_window_tokens":5000,"segmentation_num_predict":1200}}
     try:
-        cb.PdfCorpusBuildManager._validate_execution_budget(request)
+        cb._validate_execution_budget(request)
     except ValueError as exc:
         assert "context is too small" in str(exc)
     else:
@@ -254,7 +378,7 @@ def test_reconciliation_failure_is_an_explicit_topology_blocker(monkeypatch, tmp
     blocks = _blocks(12)
     build = _build(repo, blocks=len(blocks))
 
-    monkeypatch.setattr(manager, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["quotation_frame_change"], "candidate_score": .5, "source": "test", "index": 5, "protected": False}])
+    monkeypatch.setattr(cse, "_deterministic_boundary_candidates", lambda *args, **kwargs: [{"after_block_id": blocks[5]["block_id"], "next_block_id": blocks[6]["block_id"], "signals": ["quotation_frame_change"], "candidate_score": .5, "source": "test", "index": 5, "protected": False}])
     monkeypatch.setattr(manager, "_segment_candidate_batch", lambda *args, **kwargs: ({}, "truncated"))
     boundaries = manager._segment(blocks, {}, {"provider": "ollama", "model": "test"}, build["build_id"])
     assert boundaries == []
@@ -328,7 +452,7 @@ def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(
     assert queued["retrying_segmentation"] is True
     assert queued["segmentation_blocked"] is True  # preserved until the retry resolves it
 
-    operation = manager._operation_from_build(queued)
+    operation = cb._operation_from_build(queued)
     assert operation["status"] == "queued"
     assert operation["raw_status"] == "queued"
     assert operation["stage_detail"] == "Retrying 1 unresolved segmentation region(s)"
@@ -337,3 +461,536 @@ def test_blocked_segmentation_resume_marks_retry_and_is_idempotent_while_active(
     assert duplicate["status"] == "queued"
     assert duplicate["retrying_segmentation"] is True
     assert len(submissions) == 1  # no second background worker
+
+
+def test_restart_resume_preserves_build_contract_and_reviewed_records(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    _install_asset(repo, _blocks(3))
+    build = _build(repo, blocks=3)
+    saved_request = {
+        "provider": "ollama", "model": "original",
+        "topology_policy": {"mode": "source_units", "source_units_per_record": 2},
+        "run_guidance": {"speaker": {"instructions": "Do not flatten attribution."}},
+        "stage_limits": {"discourse_num_predict": 1234, "segmentation_num_predict": 4321},
+        "document_intelligence_profile": "none",
+    }
+    build.update(status="running", stage="enriching", request=saved_request)
+    repo.save_build(build)
+    manifest = {"title": "Reviewed title", "document_author": "Reviewer"}
+    repo.save_checkpoint(build["build_id"], "manifest", manifest)
+    repo.save_checkpoint(build["build_id"], "boundaries", [{"after_block_id": "p001-b001"}])
+    repo.save_records(build["build_id"], [{
+        "record_id": "reviewed", "record_revision": 7, "text": "Not a replacement.",
+        "accepted": True, "metadata_complete": True, "speaker": "Human reviewer",
+    }])
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    assert repo.get_build(build["build_id"])["status"] == "interrupted"
+    submissions = []
+    monkeypatch.setattr(manager._executor, "submit", lambda *args: submissions.append(args))
+    resumed = manager.resume(build["build_id"], {
+        "model": "replacement", "api_key": "runtime-only", "stage_limits": {"discourse_num_predict": 2468},
+    })
+    assert resumed["request"]["topology_policy"] == saved_request["topology_policy"]
+    assert resumed["request"]["run_guidance"] == saved_request["run_guidance"]
+    assert resumed["request"]["stage_limits"] == {"discourse_num_predict": 2468, "segmentation_num_predict": 4321}
+    assert resumed["request"]["document_intelligence_profile"] == "none"
+    assert resumed["request"]["model"] == "replacement"
+    assert "api_key" not in resumed["request"]
+    assert submissions[0][2]["api_key"] == "runtime-only"
+    assert submissions[0][3] is True
+    assert repo.load_checkpoint(build["build_id"], "manifest") == manifest
+    assert repo.get_record(build["build_id"], "reviewed")["record_revision"] == 7
+
+
+def test_concurrent_resume_submits_one_worker(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="interrupted", resumable=True)
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    submissions = []
+    monkeypatch.setattr(manager._executor, "submit", lambda *args: submissions.append(args))
+    with ThreadPoolExecutor(max_workers=8) as callers:
+        results = list(callers.map(lambda _: manager.resume(build["build_id"], {}), range(20)))
+    assert all(result["status"] == "queued" for result in results)
+    assert len(submissions) == 1
+
+
+def test_resume_submission_failure_is_visible_and_recoverable(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="interrupted", resumable=True)
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    def fail(*args):
+        raise RuntimeError("Executor unavailable")
+    monkeypatch.setattr(manager._executor, "submit", fail)
+    with pytest.raises(RuntimeError, match="Executor unavailable"):
+        manager.resume(build["build_id"], {})
+    failed = repo.get_build(build["build_id"])
+    assert failed["status"] == "failed"
+    assert failed["resumable"] is True
+    assert "Executor unavailable" in failed["error"]
+
+
+def test_enrichment_retries_transient_storage_contention(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo)
+    attempts = []
+
+    def flaky(*args):
+        attempts.append(len(attempts))
+        if len(attempts) < 3:
+            raise PersistenceBusyError("storage busy")
+        return [{"record_id": "settled"}]
+
+    monkeypatch.setattr(manager, "_schedule_build_enrichment", flaky)
+    monkeypatch.setattr(cb.time, "sleep", lambda _delay: None)
+
+    result = manager._schedule_build_enrichment_with_lock_recovery(
+        build["build_id"], {}, {}, []
+    )
+
+    assert result == [{"record_id": "settled"}]
+    assert len(attempts) == 3
+    assert repo.get_build(build["build_id"])["resumable"] is True
+    manager._executor.shutdown(wait=True)
+
+
+def test_exhausted_storage_contention_interrupts_instead_of_borking_build(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build = _build(repo)
+
+    monkeypatch.setattr(
+        manager,
+        "_prepare_build_scope",
+        lambda *_args, **_kwargs: types.SimpleNamespace(manifest={}),
+    )
+    monkeypatch.setattr(manager, "_construct_build_topology", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr(
+        manager,
+        "_schedule_build_enrichment_with_lock_recovery",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            PersistenceBusyError("storage busy")
+        ),
+    )
+
+    manager._run(build["build_id"], {})
+
+    interrupted = repo.get_build(build["build_id"])
+    assert interrupted["status"] == "interrupted"
+    assert interrupted["stage"] == "interrupted"
+    assert interrupted["interrupted_stage"] == "enriching"
+    assert interrupted["resumable"] is True
+    assert "checkpoints were preserved" in interrupted["error"]
+    manager._executor.shutdown(wait=True)
+
+
+def test_failed_build_resume_retires_orphaned_metadata_operation(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(
+        status="failed",
+        stage="failed",
+        resumable=True,
+        error="enriching: database is locked",
+        metadata_operation={"state": "running", "operation_id": "op-lock"},
+    )
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    submissions = []
+    monkeypatch.setattr(
+        manager._executor,
+        "submit",
+        lambda *args, **kwargs: submissions.append((args, kwargs)),
+    )
+
+    resumed = manager.resume(build["build_id"], {})
+
+    assert resumed["status"] == "queued"
+    assert resumed["error"] is None
+    assert resumed["metadata_operation"]["state"] == "failed"
+    assert resumed["metadata_operation"]["operation_id"] == "op-lock"
+    assert len(submissions) == 1
+    manager._executor.shutdown(wait=True)
+
+
+def test_restart_retires_orphaned_metadata_operation_without_replay(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(
+        status="running", stage="metadata_enrichment_rerun",
+        metadata_operation={"state": "running", "operation_id": "op-1"},
+    )
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    interrupted = repo.get_build(build["build_id"])
+    assert interrupted["interrupted_stage"] == "metadata_enrichment_rerun"
+    assert interrupted["metadata_operation"]["state"] == "failed"
+    assert interrupted["metadata_operation"]["operation_id"] == "op-1"
+    assert "restart" in interrupted["metadata_operation"]["error"]
+    assert not manager._runtime_requests
+    manager._executor.shutdown(wait=True)
+
+
+def test_resume_executes_saved_topology_and_preserves_reviewed_text(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    blocks = _blocks(3)
+    _install_asset(repo, blocks)
+    build = _build(repo, blocks=3)
+    request = {
+        "provider": "ollama", "model": "test", "memory_prefill": False,
+        "document_intelligence_profile": "none",
+        "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
+    }
+    build["request"] = request
+    repo.save_build(build)
+    first = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "{}")
+    def stop_after_topology(*args, **kwargs):
+        raise RuntimeError("Simulated interrupted enrichment")
+    monkeypatch.setattr(first, "_schedule_build_enrichment", stop_after_topology)
+    monkeypatch.setattr(cb.SourceEmbeddingProjection, "sync", lambda *args, **kwargs: {"status": "ready"})
+    first._run(build["build_id"], request)
+    records = repo.load_records(build["build_id"])
+    assert len(records) == 3
+    records[0].update(text="Human-reviewed text, not the extraction.", record_revision=7, accepted=True)
+    repo.save_records(build["build_id"], records)
+    saved = repo.get_build(build["build_id"])
+    saved.update(status="running", stage="enriching")
+    repo.save_build(saved)
+    first._executor.shutdown(wait=True)
+    restarted = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    resumed_text_edits = []
+    run_document_intelligence = restarted._run_document_intelligence
+
+    def review_during_resumed_preparation(build_id, current_records, manifest, current_request):
+        snapshot = repo.get_build(build_id)
+        assert snapshot["stage"] == "document_intelligence"
+        assert snapshot["text_review_available_at"]
+        assert snapshot["topology_validation"]["valid"] is True
+        target = repo.get_record(build_id, records[0]["record_id"])
+        assert target["text"] == records[0]["text"]
+        assert target["record_revision"] == 7
+        resumed_text_edits.append(restarted.patch_record_text(
+            build_id, target["record_id"], "Another human correction during resumed preparation.",
+            expected_revision=7,
+        ))
+        assert repo.get_build(build_id)["stage"] == "document_intelligence"
+        with pytest.raises(ValueError, match="not editable"):
+            restarted.patch_metadata(build_id, target["record_id"], {"primary_text": True})
+        with pytest.raises(ValueError, match="not editable"):
+            restarted._assert_human_review_available(build_id, structural=True, text_only=True)
+        return run_document_intelligence(build_id, current_records, manifest, current_request)
+
+    monkeypatch.setattr(restarted, "_run_document_intelligence", review_during_resumed_preparation)
+    submitted = []
+    submit = restarted._executor.submit
+    def capture(*args, **kwargs):
+        future = submit(*args, **kwargs)
+        submitted.append(future)
+        return future
+    monkeypatch.setattr(restarted._executor, "submit", capture)
+    restarted.resume(build["build_id"], {})
+    submitted[0].result(timeout=30)
+    final = repo.get_build(build["build_id"])
+    assert final["status"] == "awaiting_review", final.get("error")
+    assert len(resumed_text_edits) == 1
+    assert repo.get_record(build["build_id"], records[0]["record_id"])["text"] == resumed_text_edits[0]["text"]
+    assert repo.get_record(build["build_id"], records[0]["record_id"])["record_revision"] >= resumed_text_edits[0]["record_revision"]
+    assert final["request"]["topology_policy"] == request["topology_policy"]
+    restarted._executor.shutdown(wait=True)
+
+
+@pytest.mark.parametrize("damage", ["gap", "overlap", "order", "unknown_source", "empty_text"])
+def test_resume_rechecks_topology_before_exposing_text_review(monkeypatch, tmp_path, damage):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    blocks = _blocks(3)
+    _install_asset(repo, blocks)
+    build = _build(repo, blocks=3)
+    records = cb._construct_records(repo.get_asset(build["asset_id"]), blocks, [
+        {"after_block_id": block["block_id"], "decision": "split"} for block in blocks[:-1]
+    ])
+    if damage == "gap":
+        records.pop()
+    elif damage == "overlap":
+        records[1]["source_block_ids"] = records[0]["source_block_ids"]
+    elif damage == "order":
+        records.reverse()
+    elif damage == "unknown_source":
+        records[0]["source_block_ids"].append("missing-source-unit")
+    else:
+        records[0]["text"] = ""
+    repo.save_records(build["build_id"], records)
+    build.update(topology_validation={"valid": True}, text_review_available_at="2026-10-03T00:00:00Z")
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    inspected = []
+
+    def inspect_preparation(build_id, *args):
+        snapshot = repo.get_build(build_id)
+        inspected.append(snapshot)
+        assert snapshot["text_review_available_at"] is None
+        assert snapshot["topology_validation"]["valid"] is False
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build_id, text_only=True)
+        raise RuntimeError("Stop after checking resumed readiness")
+
+    monkeypatch.setattr(manager, "_run_document_intelligence", inspect_preparation)
+    try:
+        manager._run(build["build_id"], {
+            "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
+            "document_intelligence_profile": "none", "memory_prefill": False,
+        }, resume=True)
+        assert len(inspected) == 1
+        assert "Stop after checking resumed readiness" in repo.get_build(build["build_id"])["error"]
+        assert repo.load_records(build["build_id"]) == records
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_topology_is_durable_before_optional_embedding_work(monkeypatch, tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    _install_asset(repo, _blocks(3))
+    build = _build(repo, blocks=3)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    observed = []
+    edited = []
+    def inspect_projection(*args, **kwargs):
+        stored = repo.load_records(build["build_id"])
+        observed.append(len(stored))
+        snapshot = repo.get_build(build["build_id"])
+        assert snapshot["record_count"] == len(stored)
+        assert snapshot["topology_persisted_at"]
+        assert snapshot["text_review_available_at"]
+        assert not snapshot.get("review_available_at")
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build["build_id"])
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build["build_id"], structural=True, text_only=True)
+        target = stored[0]
+        edited.append(manager.patch_record_text(
+            build["build_id"], target["record_id"], "Human correction before optional work.",
+            expected_revision=target["record_revision"],
+        ))
+        with pytest.raises(ValueError, match="not editable"):
+            manager.patch_metadata(build["build_id"], target["record_id"], {"primary_text": True})
+        return {"status": "ready"}
+    monkeypatch.setattr(cb.SourceEmbeddingProjection, "sync", inspect_projection)
+    monkeypatch.setattr(cb, "chat_complete", lambda **kwargs: "{}")
+    manager._run(build["build_id"], {
+        "provider": "ollama", "model": "test", "memory_prefill": False,
+        "document_intelligence_profile": "none",
+        "topology_policy": {"mode": "source_units", "source_units_per_record": 1},
+    })
+    assert observed == [3]
+    final = repo.get_build(build["build_id"])
+    current = repo.get_record(build["build_id"], edited[0]["record_id"])
+    assert current["text"] == edited[0]["text"]
+    assert current["source_extracted_text"] != current["text"]
+    assert current["text_review_source"] == "human"
+    assert current["record_revision"] >= edited[0]["record_revision"]
+    assert final["text_review_available_at"] <= final["review_available_at"]
+    assert final["topology_persisted_at"] <= final["review_available_at"] <= final["metadata_first_settled_at"]
+    manager._executor.shutdown(wait=True)
+
+@pytest.mark.parametrize("stage, milestone, valid", [
+    ("constructing_records", None, True),
+    ("constructing_records", "2026-10-03T00:00:00Z", False),
+    ("segmenting", "2026-10-03T00:00:00Z", True),
+    ("constructing_topology", "2026-10-03T00:00:00Z", True),
+])
+def test_preparation_text_review_rejects_missing_or_incompatible_readiness(tmp_path, stage, milestone, valid):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(status="running", stage=stage, text_review_available_at=milestone, topology_validation={"valid": valid})
+    repo.save_build(build)
+    try:
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build["build_id"], text_only=True)
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_preparation_resets_text_review_milestone_before_resume(tmp_path, monkeypatch):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(status="running", stage="constructing_records",
+                 text_review_available_at="2026-10-03T00:00:00Z", topology_validation={"valid": True})
+    repo.save_build(build)
+    observed = []
+
+    def prepare(build_id, request, resume):
+        snapshot = repo.get_build(build_id)
+        observed.append(snapshot["text_review_available_at"])
+        assert snapshot["stage"] == "preparing"
+        assert resume is True
+        with pytest.raises(ValueError, match="not editable"):
+            manager._assert_human_review_available(build_id, text_only=True)
+        return None
+
+    monkeypatch.setattr(manager, "_prepare_build_scope", prepare)
+    try:
+        manager._run(build["build_id"], {}, resume=True)
+        assert observed == [None]
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_record_context_enforces_budget_and_retains_exact_locator(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    repo.save_records(build["build_id"], [
+        {"record_id": "before", "record_revision": 2, "text": "before-text", "source_document_id": "doc"},
+        {"record_id": "focus", "text": "focus"},
+        {"record_id": "after", "record_revision": 3, "text": "after-text", "source_document_id": "doc"},
+    ])
+    context = repo.record_context(build["build_id"], "focus", max_chars=8)
+    assert context["truncated"] is True
+    assert context["before"][0]["text"] == "text"
+    assert context["after"][0]["text"] == "afte"
+    assert sum(len(item["text"]) for item in context["before"] + context["after"]) == 8
+    previous = context["before"][0]
+    assert previous["record_revision"] == 2
+    assert previous["record_character_start"] == 7
+    assert previous["record_character_end"] == 11
+    assert previous["text_truncated"] is True
+    assert not repo.record_context(build["build_id"], "focus", max_chars=0)["before"]
+
+
+def test_sparse_resume_sizing_is_validated_against_saved_settings(monkeypatch, tmp_path):
+    from app.models import PdfCorpusBuildResume
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="interrupted", resumable=True, request={
+        "record_sizing": {
+            "preferred_record_chars": 5000, "record_length_tolerance": 200,
+            "long_record_chars": 7000, "absolute_record_chars": 9000,
+        },
+    })
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    monkeypatch.setattr(manager._executor, "submit", lambda *args: None)
+    overrides = PdfCorpusBuildResume(record_sizing={"preferred_record_chars": 6000})
+    resumed = manager.resume(build["build_id"], overrides.model_dump(exclude_unset=True, exclude_none=True))
+    assert resumed["request"]["record_sizing"]["preferred_record_chars"] == 6000
+    assert resumed["request"]["record_sizing"]["long_record_chars"] == 7000
+    manager._executor.shutdown(wait=True)
+
+
+
+def test_resume_reuses_current_document_intelligence(monkeypatch, tmp_path: Path):
+    """A paused/resumed build must not redo whole-document NLP when its binding is unchanged."""
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    records = [{"record_id": "r1", "text": "Stable documentary text."}]
+    persisted = {
+        "version": cb.DOCUMENT_INTELLIGENCE_VERSION,
+        "status": "ok",
+        "stale": False,
+        "profile": "scholarly",
+        "selected_provider": "auto",
+        "configuration": {"include_events": False, "language": "en"},
+    }
+    monkeypatch.setattr(
+        manager,
+        "_document_intelligence_for_records",
+        lambda build_id, rows: dict(persisted),
+    )
+
+    reused = manager._reusable_document_intelligence(
+        "build-1",
+        records,
+        {"language": "en"},
+        {
+            "document_intelligence_profile": "scholarly",
+            "document_nlp_provider": "auto",
+            "document_nlp_include_events": False,
+        },
+    )
+    assert reused == persisted
+
+    changed = manager._reusable_document_intelligence(
+        "build-1",
+        records,
+        {"language": "en"},
+        {
+            "document_intelligence_profile": "scholarly",
+            "document_nlp_provider": "auto",
+            "document_nlp_include_events": True,
+        },
+    )
+    assert changed is None
+
+
+def test_cancel_persists_intent_and_exposes_cancelling_stage(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(
+        status="running",
+        stage="enriching",
+        metadata_operation={"state": "running", "operation_id": "op-1"},
+    )
+    repo.save_build(build)
+    try:
+        cancelled = manager.cancel(build["build_id"])
+        assert cancelled["status"] == "running"
+        assert cancelled["stage"] == "cancelling"
+        assert cancelled["stage_before_cancel"] == "enriching"
+        assert cancelled["cancel_requested"] is True
+        assert cancelled["cancel_requested_at"]
+        assert cancelled["metadata_operation"]["state"] == "cancelling"
+
+        persisted = repo.get_build(build["build_id"])
+        assert persisted["cancel_requested"] is True
+        assert persisted["stage"] == "cancelling"
+        assert manager._cancelled(build["build_id"]) is True
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_durable_cancel_flag_is_honoured_without_live_token(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    build.update(status="running", stage="enriching", cancel_requested=True)
+    repo.save_build(build)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    try:
+        manager._cancel.discard(build["build_id"])
+        assert manager._cancelled(build["build_id"]) is True
+        assert build["build_id"] in manager._cancel
+    finally:
+        manager._executor.shutdown(wait=True)
+
+
+def test_worker_progress_cannot_erase_cancelling_stage(tmp_path):
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    build.update(status="running", stage="enriching")
+    repo.save_build(build)
+    try:
+        manager.cancel(build["build_id"])
+        updated = manager._update(
+            build["build_id"],
+            status="running",
+            stage="metadata_family",
+            progress=0.75,
+        )
+        assert updated["stage"] == "cancelling"
+
+        terminal = manager._update(
+            build["build_id"],
+            status="cancelled",
+            stage="cancelled",
+            resumable=True,
+        )
+        assert terminal["status"] == "cancelled"
+        assert terminal["stage"] == "cancelled"
+    finally:
+        manager._executor.shutdown(wait=True)

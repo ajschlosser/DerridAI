@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Multi-pass metadata enrichment: conflict resolution and cross-pass learning.
 
 Why: a later enrichment pass may disagree with what an earlier pass (or the
@@ -20,6 +35,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 from .experiment import is_gold
+from .field_assertions import (
+    current_assertion_by_name,
+    current_assertions,
+    migrate_record_assertions,
+)
+from .semantic_identity import SAME_RELATIONS
+from .semantic_identity_registry import compare_field_values
 
 HUMAN_OWNED_STATUSES = frozenset({"human_confirmed", "human_override", "confirmed_absent"})
 MAX_PASSES = 10
@@ -110,17 +132,43 @@ def resolve_conflict(existing_info: dict[str, Any], new_info: dict[str, Any]) ->
     return "keep_both"
 
 
-def learn_from_review(records: list[dict[str, Any]]) -> dict[str, Any]:
+def _review_relation(schema: Any, record: dict[str, Any], field: str, proposed: Any, chosen: Any, stored: Any = None, registry_for: Any = None) -> str:
+    """How a reviewer's value relates to the proposal it replaced.
+
+    A relation persisted at review time wins, so a later equivalence version never
+    reinterprets a past decision; older rows are compared now under the field's policy.
+    """
+    if stored in {"exact", "equivalent", "different", "unknown"}:
+        return str(stored)
+    if schema is None:
+        return "exact" if proposed == chosen else "different"
+    registry = registry_for(record) if registry_for else None
+    return compare_field_values(schema, field, proposed, chosen, record=record, registry=registry).relation
+
+
+def _latest_decision(record: dict[str, Any], field: str) -> dict[str, Any]:
+    for decision in reversed(record.get("metadata_decisions") or []):
+        if isinstance(decision, dict) and decision.get("field") == field:
+            return decision
+    return {}
+
+
+def learn_from_review(records: list[dict[str, Any]], schema: Any = None, registry_for: Any = None) -> dict[str, Any]:
     """Summarize how reviewers treated values proposed by enrichment passes.
 
     Returns per-field accepted/rejected tallies and a few rejected proposals to
     show the next pass as things not to repeat. Only reviewer decisions count;
-    a value nobody has looked at teaches nothing.
+    a value nobody has looked at teaches nothing. With the build's ``schema``,
+    an equivalent restatement counts as accepted, only a different value is a
+    rejection, and an unknown one counts as neither.
     """
     stats: dict[str, dict[str, int]] = {}
     rejected: dict[str, list[dict[str, Any]]] = {}
 
-    def tally(field: str, accepted: bool, record: dict[str, Any], proposed: Any) -> None:
+    def tally(field: str, relation: str, record: dict[str, Any], proposed: Any) -> None:
+        if relation == "unknown":
+            return
+        accepted = relation in SAME_RELATIONS
         bucket = stats.setdefault(field, {"accepted": 0, "rejected": 0})
         bucket["accepted" if accepted else "rejected"] += 1
         if not accepted and proposed not in (None, "", []):
@@ -134,36 +182,44 @@ def learn_from_review(records: list[dict[str, Any]]) -> dict[str, Any]:
 
     for record in records:
         if is_gold(str(record.get("record_id") or "")):
-            continue  # the frozen gold set is scored, never learned from
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+            continue
+        migrate_record_assertions(record)
         decided: set[str] = set()
-        # Values a person turned down after a model filled them in, whichever pass or build step did it.
         for turned_down in record.get("llm_rejections") or []:
             if isinstance(turned_down, dict) and turned_down.get("field"):
                 field = str(turned_down["field"])
                 decided.add(field)
-                tally(field, False, {**record, field: turned_down.get("chosen_value")}, turned_down.get("rejected_value"))
+                chosen = turned_down.get("chosen_value")
+                relation = _review_relation(schema, record, field, turned_down.get("rejected_value"), chosen, turned_down.get("equivalence_relation"), registry_for)
+                tally(field, relation, {**record, field: chosen}, turned_down.get("rejected_value"))
         for dispute in record.get("metadata_disputes") or []:
             if not isinstance(dispute, dict):
                 continue
             field = str(dispute.get("field") or "")
-            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            if not field or str(info.get("status") or "") not in {"human_confirmed", "human_override"}:
+            assertion = current_assertion_by_name(record, field)
+            if not field or assertion is None or assertion.authority_status not in {"human_confirmed", "human_override"}:
                 continue
             decided.add(field)
-            tally(field, record.get(field) == dispute.get("proposed"), record, dispute.get("proposed"))
+            tally(field, _review_relation(schema, record, field, dispute.get("proposed"), record.get(field), registry_for=registry_for), record, dispute.get("proposed"))
         for entry in record.get("metadata_enrichment_history") or []:
             for field in (entry.get("added_fields") or []) if isinstance(entry, dict) else []:
-                info = statuses.get(str(field)) if isinstance(statuses.get(str(field)), dict) else {}
-                status = str(info.get("status") or "")
-                if field in decided or status not in {"human_confirmed", "human_override"}:
+                field = str(field)
+                assertion = current_assertion_by_name(record, field)
+                if field in decided or assertion is None or assertion.authority_status not in {"human_confirmed", "human_override"}:
                     continue
                 decided.add(field)
-                tally(str(field), status == "human_confirmed", record, info.get("llm_value"))
+                stored = _latest_decision(record, field).get("equivalence_relation")
+                if assertion.authority_status == "human_confirmed" and assertion.derivation_method == "model":
+                    relation = "exact"
+                elif stored in {"equivalent", "unknown"}:
+                    relation = str(stored)
+                else:
+                    relation = "different"
+                tally(field, relation, record, (assertion.legacy_metadata or {}).get("llm_value"))
     return {"field_stats": stats, "rejected_examples": rejected}
 
 
-def learn_from_pass(records: list[dict[str, Any]]) -> dict[str, Any]:
+def learn_from_pass(records: list[dict[str, Any]], schema: Any = None, registry_for: Any = None) -> dict[str, Any]:
     """Summarize the last enrichment pass for the next one, including unreviewed inferences.
 
     Reviewer decisions still win: they occupy ``field_stats`` / ``rejected_examples``.
@@ -172,24 +228,32 @@ def learn_from_pass(records: list[dict[str, Any]]) -> dict[str, Any]:
     are working conventions for this build only; they are not treated as confirmed
     and are omitted for any field a reviewer has already judged on any record.
     """
-    learned = learn_from_review(records)
+    learned = learn_from_review(records, schema, registry_for)
     judged = set((learned.get("field_stats") or {}).keys())
     for record in records:
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
-        for field, info in statuses.items():
-            if isinstance(info, dict) and str(info.get("status") or "") in HUMAN_OWNED_STATUSES:
-                judged.add(str(field))
+        migrate_record_assertions(record)
+        for assertion in current_assertions(record):
+            if (
+                assertion.authority_status in {"human_confirmed", "human_override"}
+                or assertion.value_status == "confirmed_absent"
+            ):
+                judged.add(str(assertion.field_name))
     counts: dict[str, dict[str, dict[str, Any]]] = {}
     disputed: dict[str, int] = {}
     for record in records:
-        statuses = record.get("metadata_field_status") if isinstance(record.get("metadata_field_status"), dict) else {}
+        migrate_record_assertions(record)
         for field in PASS_LEARNING_FIELDS:
             if field in judged:
                 continue
-            info = statuses.get(field) if isinstance(statuses.get(field), dict) else {}
-            if str(info.get("status") or "") != "model_inferred":
+            assertion = current_assertion_by_name(record, field)
+            if (
+                assertion is None
+                or assertion.derivation_method != "model"
+                or assertion.authority_status != "unreviewed"
+                or assertion.value_status != "present"
+            ):
                 continue
-            confidence = info.get("confidence")
+            confidence = assertion.confidence
             if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or float(confidence) < PRIOR_PASS_MIN_CONFIDENCE:
                 continue
             value = record.get(field)

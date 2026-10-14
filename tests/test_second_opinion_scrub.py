@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Every corpus-build response hides a pending second opinion from the reviewer who owes it."""
 
 from __future__ import annotations
@@ -13,7 +29,10 @@ except ModuleNotFoundError:
     sys.modules["chromadb"] = types.SimpleNamespace()
 
 from app import main
+from app.auth import auth_store
+from app.response_filters import hide_pending_second_opinions, scrub_second_opinions
 from app.reviewer_context import current_reviewer
+from app.routers import corpus as corpus_routes
 from starlette.responses import JSONResponse
 
 
@@ -30,14 +49,14 @@ def test_nested_records_are_scrubbed_for_the_second_reviewer_only():
     token = current_reviewer.set("user-2")
     try:
         payload = {"record": record(), "records": [record(record_id="r2")], "left_record": record(record_id="r3")}
-        assert main.scrub_second_opinions(payload) is True
+        assert scrub_second_opinions(payload) is True
         assert "assertion" not in json.dumps(payload)
     finally:
         current_reviewer.reset(token)
     token = current_reviewer.set("user-1")
     try:
         payload = {"record": record()}
-        assert main.scrub_second_opinions(payload) is False
+        assert scrub_second_opinions(payload) is False
         assert payload["record"]["discourse_role"] == "assertion"
     finally:
         current_reviewer.reset(token)
@@ -47,7 +66,7 @@ def test_a_response_from_any_route_is_rewritten_in_flight():
     token = current_reviewer.set("user-2")
     try:
         original = JSONResponse({"record": record(), "build": {"status": "awaiting_review"}})
-        cleaned = asyncio.run(main._hide_pending_second_opinions(original))
+        cleaned = asyncio.run(hide_pending_second_opinions(original))
         body = json.loads(cleaned.body)
         assert "assertion" not in json.dumps(body) and body["build"]["status"] == "awaiting_review"
         assert cleaned.headers["content-type"].startswith("application/json")
@@ -59,7 +78,7 @@ def test_responses_that_never_mention_a_second_opinion_pass_through_untouched():
     token = current_reviewer.set("user-2")
     try:
         original = JSONResponse({"record": {"record_id": "r9", "discourse_role": "assertion"}})
-        assert json.loads(asyncio.run(main._hide_pending_second_opinions(original)).body)["record"]["discourse_role"] == "assertion"
+        assert json.loads(asyncio.run(hide_pending_second_opinions(original)).body)["record"]["discourse_role"] == "assertion"
     finally:
         current_reviewer.reset(token)
 
@@ -68,8 +87,8 @@ def test_through_the_real_app_an_accept_response_hides_the_first_answer(monkeypa
     import httpx
 
     user = types.SimpleNamespace(id=2, role="admin", username="b")
-    monkeypatch.setattr(main.auth_store, "user_for_session", lambda cookie: user)
-    monkeypatch.setattr(main.pdf_corpus_builds, "accept_record", lambda *a, **k: record())
+    monkeypatch.setattr(auth_store, "user_for_session", lambda cookie: user)
+    monkeypatch.setattr(corpus_routes.pdf_corpus_builds, "accept_record", lambda *a, **k: record())
 
     async def call():
         transport = httpx.ASGITransport(app=main.app)
@@ -91,6 +110,26 @@ from app.config import APP_VERSION  # noqa: E402
 
 def _manager(tmp_path: Path):
     repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    # The unfinished-export path reads immutable extraction blocks. Install a
+    # minimal real asset fixture instead of relying on a dangling build asset ID.
+    repo.asset_meta_path("a").write_text(
+        json.dumps({
+            "asset_id": "a",
+            "media_kind": "text",
+            "filename": "x.txt",
+            "block_count": 1,
+        }),
+        encoding="utf-8",
+    )
+    repo.asset_blocks_path("a").write_text(
+        json.dumps({
+            "block_id": "b1",
+            "text": "t",
+            "type": "paragraph",
+            "page": 1,
+        }) + "\n",
+        encoding="utf-8",
+    )
     build = repo.create_build({
         "asset_id": "a", "source_sha256": "x", "source_filename": "x.pdf", "source_page_count": 1, "source_block_count": 1,
         "schema_version": cb.SCHEMA_VERSION, "profile_id": cb.PROFILE_VERSION, "profile_version": 11, "app_version": APP_VERSION,
@@ -107,7 +146,7 @@ def test_the_rest_of_the_record_stops_repeating_the_first_answer(tmp_path):
     )
     token = current_reviewer.set("user-2")
     try:
-        main.scrub_second_opinions({"record": rec})
+        scrub_second_opinions({"record": rec})
     finally:
         current_reviewer.reset(token)
     assert "assertion" not in json.dumps(rec)
@@ -142,6 +181,42 @@ def test_editorial_examples_do_not_teach_a_second_reviewer_the_first_answer(tmp_
     assert "assertion" in mine and "assertion" not in theirs
 
 
+def test_precedents_do_not_show_a_second_reviewer_the_first_answer(tmp_path):
+    m, repo, bid = _manager(tmp_path)
+    rows = [record(record_id=f"rec-{i}") for i in range(3)] + [record(record_id="target", second_opinion={})]
+    repo.save_records(bid, rows)
+    m._progressive_metadata_index = None
+    token = current_reviewer.set("user-1")
+    try:
+        mine = json.dumps(m.metadata_precedents(bid, "target", "discourse_role"))
+    finally:
+        current_reviewer.reset(token)
+    token = current_reviewer.set("user-2")
+    try:
+        theirs = json.dumps(m.metadata_precedents(bid, "target", "discourse_role"))
+    finally:
+        current_reviewer.reset(token)
+    assert "assertion" in mine and "assertion" not in theirs
+
+
+def test_unfinished_export_hides_sealed_second_opinion_values(tmp_path):
+    import zipfile
+
+    m, repo, bid = _manager(tmp_path)
+    repo.save_records(bid, [record(review_disposition="pending")])
+    token = current_reviewer.set("user-2")
+    try:
+        artifact = m.create_unfinished_export(bid)
+    finally:
+        current_reviewer.reset(token)
+
+    with zipfile.ZipFile(artifact["path"]) as archive:
+        exported = archive.read("records.jsonl").decode("utf-8")
+        manifest = json.loads(archive.read("export_manifest.json"))
+    assert "assertion" not in exported
+    assert manifest["reviewer_filter_applied"] is True
+
+
 def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
     from app.enrichment_ledger import EnrichmentLedger
 
@@ -161,22 +236,50 @@ def test_the_ledger_export_does_not_carry_sealed_values(tmp_path):
 # hides a pending second opinion in any record it finds, and the channels tested above cover what it cannot see.
 CARRIES_RECORDS = {
     ("GET", "/api/pdf/corpus-builds/{build_id}/records"),
+    # Binary inspection export is scrubbed explicitly before the ZIP is written,
+    # because FileResponse cannot be rewritten by the JSON response middleware.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/download-unfinished"),
+    # Semantic graph nodes/edges may project reviewer-visible metadata values.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph/view"),
+    # Record maps and node walks are projections of that same reviewer-presented graph.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/semantic-map"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-content-graph/nodes/{node_id}"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/document-intelligence/rerun"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decision"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-decisions"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache"),
+    ("DELETE", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/metadata-cache"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/evidence-suggestions/llm"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/accept"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/disposition"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-decision"),
+    # Minimal review-status is still derived from one authoritative Record.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/review-status"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/disposition"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/records/metadata"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/review/undo"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/review/redo"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/merge"),
-    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/slice"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/from-selection"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/retired-records"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/context"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/boundary-adjudication"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/split"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
+    # Same per-reviewer exclusion as editorial memory (it is built by _editorial_memory).
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/precedents"),
+    # Kept precedents are re-verified through _editorial_memory for the current reviewer.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/field-precedents"),
+    # Validated Research claims only; no field values of the record or its neighbours.
+    # Administrator-only model diagnostics carry source/model text derived from Records.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-live-output"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/llm-trace"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/research-claims"),
     ("GET", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/preview"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/viewed"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/records/{record_id}/text-touchup"),
@@ -188,9 +291,21 @@ CARRIES_RECORDS = {
 }
 # Routes that return only build-level state (status, counters, manifest) or start work.
 BUILD_LEVEL = {
+    # Projection repair returns only unfiltered counts/generations, not values or records.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/review-queue/rebuild"),
     ("POST", "/api/pdf/corpus-builds"),
+    # Returns only the build ID and its warning acknowledgements.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/warnings/acknowledge"),
+    # Pause returns the build object like cancel does; delete returns only the deleted id.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/pause"),
+    ("DELETE", "/api/pdf/corpus-builds/{build_id}"),
     ("GET", "/api/pdf/corpus-builds"),
     ("GET", "/api/pdf/corpus-builds/{build_id}"),
+    # Reconciliation returns the same build-level readiness/validation shape after
+    # recomputing it from persisted Records; it does not return Record field values.
+    ("POST", "/api/pdf/corpus-builds/{build_id}/reconcile"),
+    # Provider annotations derive only from source text; no reviewer decisions are embedded.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/document-intelligence"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/provider-profile"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/manifest/regenerate"),
     ("PATCH", "/api/pdf/corpus-builds/{build_id}/manifest"),
@@ -202,17 +317,28 @@ BUILD_LEVEL = {
     ("POST", "/api/pdf/corpus-builds/{build_id}/metadata/enrich"),
     ("POST", "/api/pdf/corpus-builds/{build_id}/autonomous/run"),
     ("DELETE", "/api/pdf/corpus-builds/{build_id}/editorial-memory"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/metadata-exemplars/diagnosis"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/metadata-exemplars/project"),
+    # Reviewed alias sets hold surfaces a reviewer typed, never a record's (possibly sealed) value.
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-aliases"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/semantic-aliases"),
+    ("DELETE", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/{alias_set_id}"),
+    ("GET", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/sources"),
+    ("POST", "/api/pdf/corpus-builds/{build_id}/semantic-aliases/import"),
 }
 
 
 def test_every_corpus_build_route_has_been_considered_for_second_opinion_leaks():
+    # Corpus Builder now owns these endpoints through its APIRouter. Inventory
+    # that canonical route table directly; the earlier HTTP test verifies the
+    # router is mounted into the assembled FastAPI application.
     seen = {
         (method, route.path)
-        for route in main.app.routes
+        for route in corpus_routes.router.routes
         if getattr(route, "path", "").startswith("/api/pdf/corpus-builds")
         for method in getattr(route, "methods", set()) - {"HEAD", "OPTIONS"}
     }
-    assert len(seen) > 25  # the route table was actually read
+    assert len(seen) > 25  # the Corpus Builder route table was actually read
     unreviewed = sorted(seen - CARRIES_RECORDS - BUILD_LEVEL)
     assert not unreviewed, (
         "New corpus-build route(s) not classified in tests/test_second_opinion_scrub.py: " + ", ".join(f"{m} {p}" for m, p in unreviewed)

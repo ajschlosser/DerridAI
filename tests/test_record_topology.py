@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Record topology: sizing, normalization, validation.
 
 Why: records should be about 1,750 characters (within a tolerance) without cutting
@@ -19,6 +35,7 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
+from app.corpus_segmentation import _best_record_sizing_boundary, _best_safety_boundary
 from app.models import PdfCorpusBuildCreate
 
 POLICY={"preferred_record_chars":1750,"record_length_tolerance":200,"long_record_chars":3500,"absolute_record_chars":6000}
@@ -31,19 +48,21 @@ def block(i:int,chars:int=320,kind:str="paragraph",text:str|None=None):
 def test_profile_and_default_record_sizing():
     """The profile and API defaults agree on record sizing.
 
-    Preferred 1750, tolerance 200, "long" 3500, absolute limit 6000, profile id
-    derrida-scholarly-v12. Update these numbers deliberately when policy changes.
+    Preferred 1750, tolerance 200, "long" 3500, and absolute limit 6000.
+    Update these numbers deliberately when policy changes.
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["preferred_record_chars"]==1750
     assert profile["record_length_tolerance"]==200
     assert profile["long_record_chars"]==3500
     assert profile["absolute_record_chars"]==6000
     body=PdfCorpusBuildCreate(asset_id="asset")
-    assert body.profile_id=="derrida-scholarly-v12"
     assert body.record_sizing.preferred_record_chars==1750
     assert body.record_sizing.absolute_record_chars==6000
+
+
+def test_empty_safety_boundary_is_a_non_split_instead_of_an_index_error():
+    assert _best_safety_boundary([], 6000) == (None, False)
 
 
 def test_normalizer_targets_preferred_range_without_removing_semantic_boundary():
@@ -55,12 +74,12 @@ def test_normalizer_targets_preferred_range_without_removing_semantic_boundary()
     """
     blocks=[block(i,330) for i in range(18)]
     semantic={"after_block_id":"b8","decision":"split","confidence":1.0,"source":"semantic","semantic_boundary":True}
-    boundaries,reviews,metrics=cb.PdfCorpusBuildManager._normalize_topology(blocks,[semantic],POLICY)
+    boundaries,reviews,metrics=cb._normalize_topology(blocks,[semantic],POLICY)
     ids={b["after_block_id"] for b in boundaries}
     assert "b8" in ids
     assert reviews==[]
     assert metrics["size_optimized_splits"]>=1
-    records=cb.PdfCorpusBuildManager._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
+    records=cb._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
     assert max(r["text_length"] for r in records)<=POLICY["long_record_chars"]
     assert all(sum(1 for r in records if bid in r["source_block_ids"])==1 for bid in [b["block_id"] for b in blocks])
 
@@ -77,7 +96,7 @@ def test_coherent_exception_is_allowed_when_no_good_target_seam():
     ]
     # The only target seam is attribution-protected, so the unit may remain a
     # coherent exception below the long-record limit rather than forcing a cut.
-    boundaries,reviews,metrics=cb.PdfCorpusBuildManager._normalize_topology(blocks,[],POLICY)
+    boundaries,reviews,metrics=cb._normalize_topology(blocks,[],POLICY)
     assert boundaries==[]
     assert reviews==[]
     assert metrics["absolute_safety_splits"]==0
@@ -95,7 +114,7 @@ def test_topology_validator_detects_gap_overlap_order_and_size():
         {"record_id":"r1","text":"x"*1700,"text_length":1700,"source_block_ids":["b0","b1"]},
         {"record_id":"r2","text":"x"*6200,"text_length":6200,"source_block_ids":["b1","b3"]},
     ]
-    report=cb.PdfCorpusBuildManager._topology_sanity(records,POLICY,blocks)
+    report=cb._topology_sanity(records,POLICY,blocks)
     codes={f["code"] for f in report["findings"]}
     assert report["valid"] is False
     assert "topology.over_absolute_limit" in codes
@@ -110,9 +129,9 @@ def test_quality_report_exposes_distribution_and_conservation():
     """
     blocks=[block(i,300) for i in range(6)]
     boundaries=[{"after_block_id":"b2"}]
-    records=cb.PdfCorpusBuildManager._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
-    validation=cb.PdfCorpusBuildManager._topology_sanity(records,POLICY,blocks)
-    quality=cb.PdfCorpusBuildManager._topology_quality_report(records,blocks,POLICY,validation)
+    records=cb._construct_records({"filename":"fixture.pdf","asset_id":"a"},blocks,boundaries)
+    validation=cb._topology_sanity(records,POLICY,blocks)
+    quality=cb._topology_quality_report(records,blocks,POLICY,validation)
     assert quality["source_coverage"]==1.0
     assert quality["source_conservation_valid"] is True
     assert quality["p10_record_chars"]>0
@@ -131,10 +150,54 @@ def test_acceptance_fixture_invariants():
     fixture=json.loads((ROOT/"tests/fixtures/corpus_builder/topology_cases.json").read_text(encoding="utf-8"))
     for case in fixture["cases"]:
         blocks=case["blocks"]
-        boundaries,reviews,_=cb.PdfCorpusBuildManager._normalize_topology(blocks,case.get("semantic_boundaries",[]),POLICY)
-        records=cb.PdfCorpusBuildManager._construct_records({"filename":f"{case['id']}.pdf","asset_id":case["id"]},blocks,boundaries)
-        validation=cb.PdfCorpusBuildManager._topology_sanity(records,POLICY,blocks)
+        boundaries,reviews,_=cb._normalize_topology(blocks,case.get("semantic_boundaries",[]),POLICY)
+        records=cb._construct_records({"filename":f"{case['id']}.pdf","asset_id":case["id"]},blocks,boundaries)
+        validation=cb._topology_sanity(records,POLICY,blocks)
         assert validation["valid"],case["id"]
         assert not reviews,case["id"]
         assert len({bid for r in records for bid in r["source_block_ids"]})==len(blocks)
         assert validation["max_record_chars"]<=case.get("max_expected_chars",6000)
+
+
+def _record_sizes(blocks, boundaries):
+    split={b["after_block_id"] for b in boundaries}
+    sizes=[]; current=[]
+    for item in blocks:
+        current.append(item)
+        if item["block_id"] in split:
+            sizes.append(current); current=[]
+    if current: sizes.append(current)
+    return sizes
+
+
+def test_a_unit_larger_than_the_ceiling_does_not_swallow_the_rest_of_the_document():
+    """An oversize first unit stands alone; the document after it is still sized.
+
+    Why: with a small sentence-level target (150 characters, ceiling 550), a 75-page PDF whose opening paragraph
+    alone exceeded the ceiling became six records, one of them 110,000 characters: the safety splitter looked only
+    for seams within the ceiling, found none, and left the whole remainder in one group.
+    """
+    policy={"preferred_record_chars":150,"record_length_tolerance":30,"long_record_chars":300,"absolute_record_chars":550}
+    blocks=[block(0,1800)]+[block(i,70) for i in range(1,200)]
+    boundaries,_,metrics=cb._normalize_topology(blocks,[],policy)
+    groups=_record_sizes(blocks,boundaries)
+    assert groups[0]==[blocks[0]], "the oversize unit is a record of its own"
+    assert len(groups)>50
+    for group in groups[1:]:
+        assert sum(len(b["text"]) for b in group)+2*(len(group)-1)<=policy["absolute_record_chars"]
+    # Text is conserved: every unit once, in order.
+    assert [b["block_id"] for g in groups for b in g]==[b["block_id"] for b in blocks]
+    # Counted once per final record, not once per normalization pass.
+    assert metrics["long_exception_records"]==sum(
+        1 for g in groups if sum(len(b["text"]) for b in g)+2*(len(g)-1)>policy["long_record_chars"]
+    )
+
+
+def test_size_split_does_not_strand_a_tiny_tail():
+    """A seam that would leave under a quarter of the target behind is avoided when others exist."""
+    policy={"preferred_record_chars":500,"record_length_tolerance":50,"long_record_chars":1000,"absolute_record_chars":1750}
+    span=[block(i,chars=200) for i in range(5)]+[block(5,chars=30)]
+    choice,_=_best_record_sizing_boundary(span,policy)
+    assert choice is not None
+    tail=sum(len(b["text"])+2 for b in span[span.index(choice)+1:])
+    assert tail>=policy["preferred_record_chars"]//4

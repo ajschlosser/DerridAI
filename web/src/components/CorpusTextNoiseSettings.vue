@@ -1,30 +1,56 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { useId } from "vue";
+import { computed, useId } from "vue";
 import { useI18nStore } from "../stores/i18n";
 
-withDefaults(defineProps<{ threshold: number; llmAssist: boolean; disabled?: boolean }>(), {
-  disabled: false,
-});
-const emit = defineEmits<{ "update:threshold": [value: number]; "update:llmAssist": [value: boolean] }>();
+const props = withDefaults(
+  defineProps<{
+    threshold: number;
+    llmAssist: boolean;
+    mediaKind?: string;
+    disabled?: boolean;
+  }>(),
+  {
+    mediaKind: "",
+    disabled: false,
+  },
+);
+const emit = defineEmits<{
+  "update:threshold": [value: number];
+  "update:llmAssist": [value: boolean];
+}>();
 const i18n = useI18nStore();
 const id = useId();
 const percent = (value: number) => `${Math.round(value)}%`;
+const supportsLlmSecondRead = computed(() => props.mediaKind === "pdf");
 </script>
 
 <template>
   <fieldset class="text-noise" :disabled="disabled">
-    <legend>{{ i18n.t("pdf_corpus.text_noise.title", "Source illegibility") }}</legend>
+    <legend>{{ i18n.t("pdf_corpus.text_noise.title") }}</legend>
     <p>
-      {{
-        i18n.t(
-          "pdf_corpus.text_noise.help",
-          "Records whose text no longer looks like words in a writing system, or whose scan is too pixelated, count toward the 10% unusable-source warning and skip metadata enrichment until repaired.",
-        )
-      }}
+      {{ i18n.t("pdf_corpus.text_noise.help") }}
     </p>
     <label class="noise-field" :for="`${id}-threshold`">
       <span>{{
-        i18n.tf("pdf_corpus.text_noise.threshold", "Count as unusable at {percent} noise or higher", {
+        i18n.tf("pdf_corpus.text_noise.threshold", {
           percent: percent(threshold),
         })
       }}</span>
@@ -41,29 +67,22 @@ const percent = (value: number) => `${Math.round(value)}%`;
         :aria-valuetext="percent(threshold)"
         @input="emit('update:threshold', Number(($event.target as HTMLInputElement).value))"
       />
-      <small>{{
-        i18n.t(
-          "pdf_corpus.text_noise.threshold_help",
-          "0 treats only perfectly clean text as usable. 100 almost never flags a record. The default (45) catches OCR soup without punishing bilingual pages or names.",
-        )
-      }}</small>
+      <small>{{ i18n.t("pdf_corpus.text_noise.threshold_help") }}</small>
     </label>
-    <label class="noise-check">
+    <label v-if="supportsLlmSecondRead" class="noise-check">
       <input
         type="checkbox"
         :checked="llmAssist"
         @change="emit('update:llmAssist', ($event.target as HTMLInputElement).checked)"
       />
       <span>
-        <b>{{ i18n.t("pdf_corpus.text_noise.llm", "Ask the model to second-read mid-range noise") }}</b>
-        <small>{{
-          i18n.t(
-            "pdf_corpus.text_noise.llm_help",
-            "Optional. The model may only raise the deterministic score. Clean text and already-illegible records are skipped.",
-          )
-        }}</small>
+        <b>{{ i18n.t("pdf_corpus.text_noise.llm") }}</b>
+        <small>{{ i18n.t("pdf_corpus.text_noise.llm_help") }}</small>
       </span>
     </label>
+    <p v-else class="format-note">
+      {{ i18n.t("pdf_corpus.text_noise.llm_pdf_only") }}
+    </p>
   </fieldset>
 </template>
 
@@ -84,7 +103,8 @@ legend {
 }
 p,
 .noise-field small,
-.noise-check small {
+.noise-check small,
+.format-note {
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.45;

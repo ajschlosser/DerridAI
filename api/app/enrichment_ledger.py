@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """An append-only ledger of what enrichment proposed and what people decided.
 
 Every event carries the run id, model and field, so any number of runs can write to it at once
@@ -24,12 +39,17 @@ from .reviewer_context import current_reviewer
 # What can happen to a value. PROPOSED and AUTOFILLED are the model's doing, CALL is one model request
 # (its cost), and the rest are human decisions.
 PROPOSED, AUTOFILLED, CALL = "proposed", "autofilled", "call"
+RECORD_RUN = "record_run"  # one Record through enrichment, merge, and durable persistence
 BLIND_LABEL = "blind_label"  # a person's value for a field whose model value they could not see
 RECHECK_SEAL, RECHECK = "recheck_seal", "recheck"  # a decision set aside to be asked again, and the second answer
 SUSPENDED, RESUMED = "suspended", "resumed"  # the autofill policy switching a model and field off, and back on
 ACCEPTED, CORRECTED, REJECTED = "accepted", "corrected", "rejected"
+# A reviewer replaced a model value with one whose equivalence could be neither established nor
+# ruled out. The reviewer's value stands, but the row is neutral: it counts as neither an
+# acceptance nor a correction, so it stays out of every precision denominator.
+UNRESOLVED = "review_unresolved"
 REVIEW_EVENTS = {ACCEPTED, CORRECTED, REJECTED}
-HUMAN_EVENTS = REVIEW_EVENTS | {BLIND_LABEL, RECHECK_SEAL, RECHECK, "second_label"}
+HUMAN_EVENTS = REVIEW_EVENTS | {UNRESOLVED, BLIND_LABEL, RECHECK_SEAL, RECHECK, "second_label"}
 
 
 class EnrichmentLedger:

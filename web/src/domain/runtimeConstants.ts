@@ -1,4 +1,20 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // Static tables used by the legacy runtime, moved verbatim.
 
@@ -67,18 +83,20 @@ export const FIELD_LABELS = {
 
 export const viewConfig = [
   { id: "home", label: "Home", icon: "dashboard", section: "Overview" },
-  { id: "list", label: "Records", icon: "list", section: "Corpus" },
-  { id: "record", label: "Record View", icon: "record", section: "Corpus" },
-  { id: "works", label: "Works", icon: "books", section: "Corpus" },
-  { id: "global", label: "Search", icon: "search", section: "Corpus" },
-  { id: "annotations", label: "Annotations", icon: "record", section: "Corpus" },
-  { id: "pdf", label: "Corpus Builder", icon: "pdf", section: "Tools" },
-  { id: "compare", label: "Compare", icon: "compare", section: "Tools" },
-  { id: "vector", label: "Vector Stores", icon: "database", section: "Tools" },
   { id: "rag", label: "Research", icon: "spark", section: "Research" },
   { id: "faq", label: "Response Library", icon: "books", section: "Research" },
-  { id: "responsecache", label: "Response Cache", icon: "database", section: "Research" },
-  { id: "providers", label: "LLM Providers", icon: "spark", section: "System" },
+  { id: "global", label: "Search", icon: "search", section: "Corpora" },
+  { id: "works", label: "Works", icon: "books", section: "Corpora" },
+  { id: "list", label: "Records", icon: "list", section: "Corpora" },
+  { id: "record", label: "Record View", icon: "record", section: "Corpora" },
+  { id: "annotations", label: "Annotations", icon: "record", section: "Corpora" },
+  { id: "semanticmap", label: "Semantic map", icon: "map", section: "Corpora" },
+  { id: "compare", label: "Compare", icon: "compare", section: "Corpora" },
+  { id: "pdf", label: "Corpus Builder", icon: "pdf", section: "Corpus Management" },
+  { id: "vector", label: "Corpus Data", icon: "database", section: "Corpus Management" },
+  { id: "schemas", label: "Metadata schemas", icon: "list", section: "Corpus Management" },
+  { id: "providers", label: "LLM Providers", icon: "spark", section: "AI & Automation" },
+  { id: "responsecache", label: "System Data", icon: "database", section: "System" },
   { id: "config", label: "Settings", icon: "gear", section: "System" },
 ];
 
@@ -93,19 +111,10 @@ export const TABLE_DEFAULTS = {
 
 export const SEARCH_LOADED_COLUMNS = ["__db_status", "work", "page_start", "needs_review", "text"];
 
-export const SEARCH_FACET_FIELDS = [
-  "work",
-  "needs_review",
-  "__db_status",
-  "document_author",
-  "quoted_speaker",
-  "speaker",
-  "position_holder",
-  "discourse_role",
-  "document_language",
-  "topics",
-  "concepts",
-];
+/**
+ * Schema-less compatibility fallback only. Schema-aware Search derives its
+ * runtime filter/facet universe from MetadataSchema and collection capabilities.
+ */
 export const SEARCH_FILTER_FIELDS = [
   "work",
   "document_author",

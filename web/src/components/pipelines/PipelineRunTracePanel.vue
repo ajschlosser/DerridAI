@@ -1,0 +1,444 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<script setup lang="ts">
+import { computed } from "vue";
+import AppIcon from "../AppIcon.vue";
+import UiTooltip from "../ui/UiTooltip.vue";
+import { useI18nStore } from "../../stores/i18n";
+import type { PipelineRunTrace, PipelineStageTrace } from "../../types/pipelines";
+
+const props = defineProps<{
+  trace: PipelineRunTrace;
+  /** The execution inspector already shows identity and status above the trace. */
+  hideHeader?: boolean;
+}>();
+
+const i18n = useI18nStore();
+const completedStages = computed(
+  () => props.trace.stages.filter((stage) => stage.status === "completed").length,
+);
+
+function t(key: string, fallback: string) {
+  return i18n.t(key, fallback);
+}
+function ms(value?: number | null) {
+  if (value === null || value === undefined) return "—";
+  if (value < 1000) return `${Math.max(0, Math.round(value))} ms`;
+  return `${(value / 1000).toFixed(value < 10000 ? 2 : 1)} s`;
+}
+function count(value?: number | null) {
+  return value === null || value === undefined ? "—" : Number(value).toLocaleString(i18n.locale);
+}
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    completed: t("pipelines.status_completed", "Completed"),
+    skipped: t("pipelines.status_skipped", "Skipped"),
+    unavailable: t("pipelines.status_unavailable", "Unavailable"),
+    timed_out: t("pipelines.status_timed_out", "Timed out"),
+    failed: t("pipelines.status_failed", "Failed"),
+    running: t("pipelines.status_running", "Running"),
+    pending: t("pipelines.status_pending", "Pending"),
+  };
+  return labels[status] || status;
+}
+const REWIRED_PREFIX = "rewired_inputs: ";
+/** Ports whose explicit binding differs from the graph's own wiring (see wiring.rewired_warnings). */
+const rewiredPorts = computed(() => {
+  const line = (props.trace.warnings ?? []).find((w) => w.startsWith(REWIRED_PREFIX));
+  return line
+    ? line
+        .slice(REWIRED_PREFIX.length)
+        .split(",")
+        .map((port) => port.trim())
+        .filter(Boolean)
+    : [];
+});
+const otherWarnings = computed(() =>
+  (props.trace.warnings ?? []).filter((w) => !w.startsWith(REWIRED_PREFIX)),
+);
+function stageDetail(stage: PipelineStageTrace) {
+  return [stage.provider, stage.model, stage.collection].filter(Boolean).join(" · ");
+}
+</script>
+
+<template>
+  <article
+    class="trace-panel"
+    :class="{ embedded: hideHeader }"
+    :aria-labelledby="hideHeader ? undefined : `trace-${trace.run_id}`"
+    :aria-label="hideHeader ? t('pipelines.execution_trace', 'Execution trace') : undefined"
+  >
+    <header v-if="!hideHeader" class="trace-header">
+      <div>
+        <div class="eyebrow">{{ t("pipelines.execution_trace", "Execution trace") }}</div>
+        <h3 :id="`trace-${trace.run_id}`">
+          {{ trace.pipeline_id }} <span>v{{ trace.pipeline_version }}</span>
+        </h3>
+        <p>
+          {{ trace.run_id }} · {{ completedStages }}/{{ trace.stages.length }}
+          {{ t("pipelines.stages_completed", "stages completed") }}
+        </p>
+        <p class="trace-explainer">
+          {{
+            t(
+              "pipelines.trace_plain_help",
+              "This is the historical record of what actually happened during the run. It is not merely the saved design: skipped steps, fallbacks, models, counts, and timings reflect runtime behavior.",
+            )
+          }}
+        </p>
+      </div>
+      <div class="trace-summary">
+        <span class="status-pill" :data-status="trace.status">{{ statusLabel(trace.status) }}</span>
+        <strong>{{ ms(trace.total_elapsed_ms) }}</strong>
+      </div>
+    </header>
+
+    <ol class="trace-stages">
+      <li v-for="(stage, index) in trace.stages" :key="`${stage.stage_id}:${index}`">
+        <div class="trace-marker" :data-status="stage.status" aria-hidden="true">
+          <AppIcon
+            :name="
+              stage.status === 'completed'
+                ? 'check'
+                : stage.status === 'failed' || stage.status === 'timed_out'
+                  ? 'warning'
+                  : 'record'
+            "
+          />
+        </div>
+        <div class="trace-stage">
+          <div class="trace-stage-heading">
+            <div>
+              <strong class="trace-label-with-help">
+                {{ stage.strategy_id }}
+                <UiTooltip
+                  :text="
+                    t(
+                      'pipelines.trace_strategy_help',
+                      'The strategy ID is the technical name of the registered operation that ran at this step.',
+                    )
+                  "
+                />
+              </strong>
+              <code class="trace-label-with-help">
+                {{ stage.stage_id }}
+                <UiTooltip
+                  :text="
+                    t(
+                      'pipelines.trace_stage_id_help',
+                      'The stage ID identifies this specific step inside the saved pipeline version. It lets you match the runtime trace back to the pipeline definition.',
+                    )
+                  "
+                />
+              </code>
+            </div>
+            <div class="trace-stage-metrics">
+              <span>{{ statusLabel(stage.status) }}</span>
+              <span class="trace-label-with-help">
+                {{ ms(stage.elapsed_ms) }}
+                <UiTooltip
+                  :text="
+                    t(
+                      'pipelines.trace_elapsed_help',
+                      'Elapsed time is the measured runtime for this stage when DerridAI could attribute a duration to it. A dash means the duration was not separately measured.',
+                    )
+                  "
+                />
+              </span>
+            </div>
+          </div>
+
+          <p v-if="stageDetail(stage)" class="trace-meta">{{ stageDetail(stage) }}</p>
+          <div v-if="stage.input_count != null || stage.output_count != null" class="trace-counts">
+            <span>
+              {{ t("pipelines.input", "Input") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.trace_input_help',
+                    'How many items entered this stage, when the stage reports a count. The items may be candidate records, passages, or another stage-specific data type.',
+                  )
+                "
+              />
+              <strong>{{ count(stage.input_count) }}</strong>
+            </span>
+            <span aria-hidden="true">→</span>
+            <span>
+              {{ t("pipelines.output", "Output") }}
+              <UiTooltip
+                :text="
+                  t(
+                    'pipelines.trace_output_help',
+                    'How many items left this stage. A smaller output than input often means filtering, reranking truncation, validation, or selection reduced the candidate set.',
+                  )
+                "
+              />
+              <strong>{{ count(stage.output_count) }}</strong>
+            </span>
+          </div>
+
+          <p v-if="stage.fallback_reason" class="trace-warning">
+            <AppIcon name="warning" />
+            <span>
+              <strong>{{ t("pipelines.fallback", "Fallback") }}:</strong>
+              {{ stage.fallback_reason }}
+            </span>
+          </p>
+          <ul v-if="stage.warnings?.length" class="trace-warning-list">
+            <li v-for="warning in stage.warnings" :key="warning">{{ warning }}</li>
+          </ul>
+        </div>
+      </li>
+    </ol>
+
+    <p v-if="rewiredPorts.length" class="trace-warning rewired-notice" role="note">
+      <AppIcon name="warning" />
+      <span>
+        {{
+          t(
+            "pipelines.rewired_run_notice",
+            "This run used explicit input bindings that differ from the graph's own wiring:",
+          )
+        }}
+        <code v-for="port in rewiredPorts" :key="port">{{ port }}</code>
+      </span>
+    </p>
+
+    <details v-if="otherWarnings.length" class="run-warnings">
+      <summary>
+        {{ t("pipelines.run_warnings", "Run warnings") }} ({{ otherWarnings.length }})
+      </summary>
+      <ul>
+        <li v-for="warning in otherWarnings" :key="warning">{{ warning }}</li>
+      </ul>
+    </details>
+  </article>
+</template>
+
+<style scoped>
+.trace-panel {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+}
+.trace-panel.embedded {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.trace-header,
+.trace-stage-heading,
+.trace-stage-metrics,
+.trace-counts {
+  display: flex;
+  align-items: center;
+}
+.trace-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+.eyebrow {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.trace-header h3 {
+  margin: 3px 0 0;
+  font-size: 1rem;
+}
+.trace-header h3 span,
+.trace-header p {
+  color: var(--text-tertiary);
+  font-weight: 500;
+}
+.trace-header p {
+  margin: 4px 0 0;
+  font-size: 0.8125rem;
+}
+.trace-header .trace-explainer {
+  max-width: 720px;
+  line-height: 1.45;
+}
+.trace-summary {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  font-size: 0.875rem;
+}
+.status-pill {
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-inset);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.status-pill[data-status="completed"] {
+  border-color: color-mix(in srgb, var(--border-subtle) 65%, currentColor);
+}
+.trace-stages {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trace-stages > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 10px;
+}
+.trace-stages > li:not(:last-child)::before {
+  position: absolute;
+  top: 28px;
+  bottom: -2px;
+  left: 14px;
+  width: 1px;
+  background: var(--border-subtle);
+  content: "";
+}
+.trace-marker {
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-card);
+}
+.trace-marker :deep(svg) {
+  width: 13px;
+  height: 13px;
+}
+.trace-marker[data-status="skipped"],
+.trace-marker[data-status="pending"] {
+  color: var(--text-tertiary);
+}
+.trace-marker[data-status="failed"],
+.trace-marker[data-status="timed_out"],
+.trace-marker[data-status="unavailable"] {
+  background: var(--surface-inset);
+}
+.trace-stage {
+  min-width: 0;
+  padding: 3px 0 15px;
+}
+.trace-stage-heading {
+  justify-content: space-between;
+  gap: 12px;
+}
+.trace-stage-heading strong,
+.trace-stage-heading code {
+  display: block;
+}
+.trace-label-with-help {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 2px;
+}
+.trace-stage-heading strong {
+  font-size: 0.82rem;
+}
+.trace-stage-heading code {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+.trace-stage-metrics {
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+.trace-meta {
+  margin: 5px 0 0;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+.trace-counts {
+  gap: 7px;
+  margin-top: 7px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+.trace-counts strong {
+  color: inherit;
+}
+.trace-warning {
+  display: flex;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: var(--surface-inset);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.trace-warning :deep(svg) {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+.rewired-notice code {
+  margin-inline-start: var(--space-2, 0.5rem);
+}
+.trace-warning-list,
+.run-warnings ul {
+  margin: 7px 0 0;
+  padding-left: 18px;
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+}
+.run-warnings {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 10px;
+}
+.run-warnings summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+@media (max-width: 640px) {
+  .trace-header,
+  .trace-stage-heading {
+    align-items: start;
+  }
+  .trace-header {
+    display: grid;
+  }
+  .trace-summary {
+    justify-items: start;
+  }
+  .trace-stage-heading {
+    display: grid;
+  }
+  .trace-stage-metrics {
+    justify-content: start;
+  }
+}
+</style>

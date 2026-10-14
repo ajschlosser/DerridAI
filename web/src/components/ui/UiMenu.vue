@@ -1,7 +1,25 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, useId } from "vue";
 import AppIcon from "../AppIcon.vue";
+import UiTooltip from "./UiTooltip.vue";
 
 export interface UiMenuItem {
   id: string;
@@ -45,7 +63,7 @@ const trigger = ref<HTMLButtonElement | null>(null);
 const menu = ref<HTMLElement | null>(null);
 const menuId = `${useId()}-menu`;
 const itemId = (id: string) => `${menuId}-${id}`;
-const radio = () => props.items.some((item) => typeof item.checked === "boolean");
+const radio = (item: UiMenuItem) => typeof item.checked === "boolean";
 
 function itemButtons(): HTMLButtonElement[] {
   return Array.from(menu.value?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []);
@@ -105,22 +123,44 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
 
 <template>
   <div ref="root" class="ui-menu" :data-placement="placement" :data-align="align">
+    <UiTooltip
+      v-if="iconOnly"
+      :text="ariaLabel || label"
+      trigger-mode="content"
+      :content-focusable="disabled"
+      placement="bottom"
+    >
+      <button
+        ref="trigger"
+        type="button"
+        class="ui-menu-trigger icon-only"
+        aria-haspopup="menu"
+        :aria-expanded="open"
+        :aria-controls="open ? menuId : undefined"
+        :aria-label="ariaLabel || label"
+        :disabled="disabled"
+        @click="toggle"
+        @keydown="onTriggerKey"
+      >
+        <AppIcon v-if="icon" :name="icon" aria-hidden="true" />
+        <span v-if="caret" class="ui-menu-caret" aria-hidden="true"></span>
+      </button>
+    </UiTooltip>
     <button
+      v-else
       ref="trigger"
       type="button"
       class="ui-menu-trigger"
-      :class="{ 'icon-only': iconOnly }"
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-controls="open ? menuId : undefined"
-      :aria-label="iconOnly || ariaLabel ? ariaLabel || label : undefined"
-      :title="iconOnly ? ariaLabel || label : undefined"
+      :aria-label="ariaLabel || undefined"
       :disabled="disabled"
       @click="toggle"
       @keydown="onTriggerKey"
     >
       <AppIcon v-if="icon" :name="icon" aria-hidden="true" />
-      <span v-if="!iconOnly" class="ui-menu-label">{{ label }}</span>
+      <span class="ui-menu-label">{{ label }}</span>
       <span v-if="caret" class="ui-menu-caret" aria-hidden="true"></span>
     </button>
     <ul
@@ -135,9 +175,9 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       <li v-for="item in items" :key="item.id" role="none">
         <button
           type="button"
-          :role="radio() ? 'menuitemradio' : 'menuitem'"
+          :role="radio(item) ? 'menuitemradio' : 'menuitem'"
           class="ui-menu-item"
-          :aria-checked="radio() ? item.checked === true : undefined"
+          :aria-checked="radio(item) ? item.checked === true : undefined"
           :aria-disabled="item.reason ? 'true' : undefined"
           :aria-describedby="item.reason ? itemId(item.id) : undefined"
           tabindex="-1"

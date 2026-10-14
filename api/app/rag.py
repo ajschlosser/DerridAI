@@ -1,21 +1,85 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
 
+import copy
 import json
 import logging
-import math
 import re
 import time
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
 from typing import Any
 
-import httpx
-
 from .chroma_store import ChromaStore
+from .claim_memory import ClaimMemoryIndex
 from .config import settings
-from .models import OllamaTouchupOptions, RAGRunRequest
+from .corpus_citations import _citation_strings
+from .cross_encoder import predict_scores
+from .llm_transport import chat_complete, structured_chat_complete
+from .models import RAGPromptMetadataPolicy, RAGRunRequest
+from .pipelines.manager import pipeline_manager
+from .pipelines.models import PipelineDefinition
+from .pipelines.overrides import resolve_pipeline_config
+from .pipelines.research import (
+    classify_cross_encoder_failure,
+    compile_research_pipeline,
+    resolve_research_runtime_settings,
+)
 from .record_types import EvidenceItem, QueryDecomposition, RetrievalCandidate
+from .research_filters import (
+    combine_metadata_filters,
+    metadata_filter_fields,
+    normalize_document_filter,
+    normalize_metadata_filter,
+)
+from .research_followup import (
+    GENERATION_CONTRACT,
+    QUERY_CONTRACT,
+    advisory_context,
+    contextual_query_prompt,
+    validate_contextual_query,
+)
+from .research_memory import ResponseMemoryIndex, memory_guidance
+from .research_semantics import (
+    CONCEPTS_ID,
+    PERSONS_ID,
+    SOURCE_AUTHOR_ID,
+    SPEAKER_ID,
+    TOPICS_ID,
+    rerank_attribution_context,
+    semantic_text,
+    semantic_value,
+    source_author,
+    source_work_label,
+)
+from .research_sizing import (
+    automatic_collection_sizing,
+    collapse_adjacent_candidates,
+    expand_context_neighbors,
+)
+from .retrieval_selection import (
+    cosine_similarity,
+    distance_to_relevance,
+    mmr_select,
+    source_aware_select,
+)
+from .structured_json import parse_json_object
+from .system_store import system_store
 
 logger = logging.getLogger(__name__)
 
@@ -32,24 +96,20 @@ Return exactly one JSON object:
 {{
   "prompt_query": "the actual research question in English",
   "prompt_query_fr": "the same research question in French",
-  "prompt_instructions": "only instructions actually supplied by the user",
   "response_language": "en"
 }}
 
 Rules:
 - Do not answer the research question.
-- Do not invent instructions.
+- Do not return, rewrite, summarize, or infer user instructions.
 - Preserve philosophical terminology.
 - prompt_query_fr is required even when the original prompt is English.
 - response_language should be "fr" only when the user clearly requests a French answer or writes primarily in French; otherwise "en".
 - Return JSON only.
 """.strip()
 
-_CROSS_ENCODER_CACHE: dict[str, Any] = {}
-
-
 FOCUSED_PROMPT = """
-You are DerridAI, an evidence-grounded scholarly research assistant.
+Write an evidence-grounded scholarly answer to the current research question.
 
 <MASTER PROMPT>
 {prompt_query}
@@ -63,17 +123,86 @@ You are DerridAI, an evidence-grounded scholarly research assistant.
 {response_language}
 </RESPONSE LANGUAGE>
 
+<PRIOR_RESEARCH_MEMORY>
+{prior_response_memory}
+</PRIOR_RESEARCH_MEMORY>
+
+<PRIOR_CLAIM_PROVENANCE>
+{prior_claim_memory}
+</PRIOR_CLAIM_PROVENANCE>
+
 <EVIDENCE>
 {context}
 </EVIDENCE>
 
 Guidelines:
-- Preserve speaker, quoted_speaker, quoted_author, quoted_work, position_holder, stance, target, discourse_role, and proposition_status.
-- Distinguish Derrida's own claims from positions he quotes, describes, reconstructs, endorses, questions, or criticizes.
+- Preserve all supplied source-identity, attribution, quotation, stance, target, discourse-role, and proposition-status metadata.
+- Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
+- Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
 - Use the supplied EVIDENCE as the sole basis for substantive claims.
+- Prior memory is advisory workflow context, not current evidence. Never cite it
+  or repeat an unsupported claim from it.
 - Do not flatten quotation provenance.
 - Preserve modality and negation.
 - If evidence is insufficient, say so rather than inventing support.
+- Begin with a substantive, evidence-grounded point, a conceptual distinction, or a statement of evidentiary limits.
+- Do not identify yourself as the software or an AI assistant, announce an intended analysis, or promise to provide an answer.
+- Avoid generic introductions that restate the question or advertise the answer's scope.
+- Respond in cohesive scholarly prose unless the user's instructions explicitly require another form.
+
+Citation rules:
+- Tag every substantive claim with one or more evidence IDs using double square
+  brackets by default, such as [[E0]] or [[E0, E3]].
+- Do not cite an evidence ID that does not support the claim.
+""".strip()
+
+THREAD_FOCUSED_PROMPT = """
+Write an evidence-grounded scholarly answer to the current research question.
+
+<CURRENT_QUESTION>
+{prompt_query}
+</CURRENT_QUESTION>
+
+<THREAD_CONTEXT advisory="true" evidentiary="false">
+{thread_context}
+</THREAD_CONTEXT>
+
+<MASTER INSTRUCTIONS>
+{prompt_instructions}
+</MASTER INSTRUCTIONS>
+
+<RESPONSE LANGUAGE>
+{response_language}
+</RESPONSE LANGUAGE>
+
+<PRIOR_RESEARCH_MEMORY>
+{prior_response_memory}
+</PRIOR_RESEARCH_MEMORY>
+
+<PRIOR_CLAIM_PROVENANCE>
+{prior_claim_memory}
+</PRIOR_CLAIM_PROVENANCE>
+
+<EVIDENCE>
+{context}
+</EVIDENCE>
+
+Guidelines:
+- Preserve all supplied source-identity, attribution, quotation, stance, target, discourse-role, and proposition-status metadata.
+- Treat the supplied source-document author as document authorship only; never substitute a default author when it is absent.
+- Do not equate document authorship with proposition ownership. Distinguish the source author's own claims from positions the passage quotes, describes, reconstructs, endorses, questions, or criticizes.
+- Use the supplied EVIDENCE as the sole basis for substantive claims.
+- Thread context and prior memory are advisory, non-evidentiary context.
+  Current evidence governs any conflict with previous generated claims.
+  Never cite thread context or reuse its historical evidence markers.
+- Prior memory is advisory workflow context, not current evidence. Never cite it
+  or repeat an unsupported claim from it.
+- Do not flatten quotation provenance.
+- Preserve modality and negation.
+- If evidence is insufficient, say so rather than inventing support.
+- Begin with a substantive, evidence-grounded point, a conceptual distinction, or a statement of evidentiary limits.
+- Do not identify yourself as the software or an AI assistant, announce an intended analysis, or promise to provide an answer.
+- Avoid generic introductions that restate the question or advertise the answer's scope.
 - Respond in cohesive scholarly prose unless the user's instructions explicitly require another form.
 
 Citation rules:
@@ -84,351 +213,60 @@ Citation rules:
 
 
 def _extract_json(text: str) -> dict[str, Any]:
-    value = str(text or "").strip()
-    value = re.sub(r"^```(?:json)?\s*", "", value, flags=re.I)
-    value = re.sub(r"\s*```$", "", value)
-    candidates = [value]
-    start = value.find("{")
-    end = value.rfind("}")
-    if start >= 0 and end > start:
-        candidates.append(value[start:end + 1])
-    for candidate in candidates:
-        try:
-            parsed = json.loads(candidate)
-        except json.JSONDecodeError:
+    """Compatibility wrapper around the shared repair-first structured parser."""
+    return parse_json_object(text)
+
+
+def _prompt_metadata_value(record: Mapping[str, Any], selector: str) -> tuple[str, Any] | None:
+    """Resolve a prompt selector through current FieldAssertions or record projection."""
+    field = str(selector or "").strip()
+    if not field:
+        return None
+    selected = record.get("current_field_assertions")
+    buckets = record.get("field_assertions")
+    if isinstance(selected, dict) and isinstance(buckets, dict):
+        for field_id, values in buckets.items():
+            if not isinstance(values, list) or not values:
+                continue
+            selected_id = str(selected.get(field_id) or "")
+            current = next(
+                (item for item in values if isinstance(item, dict) and str(item.get("assertion_id") or "") == selected_id),
+                values[-1] if isinstance(values[-1], dict) else None,
+            )
+            if not isinstance(current, dict):
+                continue
+            name = str(current.get("field_name") or "")
+            identity = str(current.get("field_id") or field_id)
+            if field not in {name, identity}:
+                continue
+            if str(current.get("value_status") or "") == "confirmed_absent":
+                return name or field, None
+            if current.get("value_status") and str(current.get("value_status")) != "present":
+                return None
+            return name or field, current.get("value")
+    if field in record:
+        return field, record.get(field)
+    return None
+
+
+def _prompt_metadata(record: Mapping[str, Any], selectors: Sequence[str]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for selector in selectors:
+        resolved = _prompt_metadata_value(record, selector)
+        if resolved is None:
             continue
-        if isinstance(parsed, dict):
-            return parsed
-    raise ValueError("LLM did not return a valid JSON object.")
-
-
-def _response_detail(response: httpx.Response) -> str:
-    try:
-        payload = response.json()
-        if isinstance(payload, dict):
-            error = payload.get("error")
-            if isinstance(error, dict):
-                return str(error.get("message") or error)
-            return str(payload.get("detail") or payload.get("message") or "")
-    except Exception:
-        logger.debug("Could not parse provider error JSON; using response text", exc_info=True)
-    return response.text[:1200]
-
-
-def chat_complete(
-    *,
-    provider: str,
-    model: str,
-    base_url: str | None,
-    api_key: str | None,
-    prompt: str,
-    options: OllamaTouchupOptions | None = None,
-    json_mode: bool = False,
-    json_schema: dict[str, Any] | None = None,
-    schema_name: str = "derridai_response",
-    max_tokens: int | None = None,
-    cancelled: Callable[[], bool] | None = None,
-    timeout_seconds: float | None = None,
-) -> str:
-    tuning = options or OllamaTouchupOptions()
-    provider = provider.strip().lower()
-
-    if provider == "openai":
-        url = (base_url or settings.openai_compat_base_url).rstrip("/")
-        headers = {"Content-Type": "application/json"}
-        key = api_key if api_key is not None else settings.openai_compat_api_key
-        if key:
-            headers["Authorization"] = f"Bearer {key}"
-        body: dict[str, Any] = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.0 if tuning.temperature is None else tuning.temperature,
-            "max_tokens": max_tokens or tuning.num_predict or 4096,
-        }
-        if tuning.top_p is not None:
-            body["top_p"] = tuning.top_p
-        if tuning.seed is not None:
-            body["seed"] = tuning.seed
-        if tuning.stop:
-            body["stop"] = tuning.stop
-        if json_schema is not None:
-            body["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": schema_name, "strict": True, "schema": json_schema},
-            }
-        elif json_mode:
-            body["response_format"] = {"type": "json_object"}
-        for key_name, value in (tuning.extra_options or {}).items():
-            if key_name not in {"model", "messages"}:
-                body[key_name] = value
-
-        timeout = httpx.Timeout(
-            connect=settings.openai_connect_timeout_seconds,
-            read=min(settings.openai_timeout_seconds, timeout_seconds) if timeout_seconds else settings.openai_timeout_seconds,
-            write=min(settings.openai_timeout_seconds, timeout_seconds) if timeout_seconds else settings.openai_timeout_seconds,
-            pool=settings.openai_connect_timeout_seconds,
-        )
-        if cancelled is not None:
-            def stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
-                started_clock = time.monotonic()
-                streaming = dict(payload)
-                streaming["stream"] = True
-                chunks: list[str] = []
-                with httpx.Client(timeout=timeout) as client:
-                    with client.stream(
-                        "POST",
-                        f"{url}/chat/completions",
-                        headers=headers,
-                        json=streaming,
-                    ) as response:
-                        if response.status_code >= 400:
-                            raw = response.read().decode("utf-8", errors="replace")
-                            return response.status_code, "", raw[:2000]
-                        for line in response.iter_lines():
-                            if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
-                                raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
-                            if cancelled():
-                                raise InterruptedError("RAG generation cancelled.")
-                            if not line or not line.startswith("data:"):
-                                continue
-                            data = line[5:].strip()
-                            if data == "[DONE]":
-                                break
-                            try:
-                                event = json.loads(data)
-                            except json.JSONDecodeError:
-                                continue
-                            choices = event.get("choices") or []
-                            delta = choices[0].get("delta") if choices else {}
-                            piece = (delta or {}).get("content") or ""
-                            if isinstance(piece, list):
-                                piece = "".join(
-                                    str(part.get("text") or "")
-                                    for part in piece
-                                    if isinstance(part, dict)
-                                )
-                            if piece:
-                                chunks.append(str(piece))
-                return 200, "".join(chunks).strip(), ""
-
-            status, content, detail = stream_once(body)
-            if status in {400, 422} and "response_format" in body:
-                fallback = dict(body)
-                # Some OpenAI-compatible routers support JSON mode but not JSON Schema.
-                # Preserve structured output when possible before falling all the way
-                # back to unconstrained text.
-                if json_schema is not None:
-                    fallback["response_format"] = {"type": "json_object"}
-                else:
-                    fallback.pop("response_format", None)
-                status, content, detail = stream_once(fallback)
-                if status in {400, 422} and "response_format" in fallback:
-                    fallback.pop("response_format", None)
-                    status, content, detail = stream_once(fallback)
-            if status in {400, 422}:
-                # Preserve compatibility with local OpenAI-compatible routers
-                # that support Chat Completions but not streaming.
-                fallback_body = dict(body)
-                fallback_body.pop("stream", None)
-                with httpx.Client(timeout=timeout) as client:
-                    response = client.post(
-                        f"{url}/chat/completions",
-                        headers=headers,
-                        json=fallback_body,
-                    )
-                if response.status_code < 400:
-                    payload = response.json()
-                    choices = payload.get("choices") or []
-                    message = choices[0].get("message") if choices else {}
-                    content = (message or {}).get("content") or ""
-                    if isinstance(content, list):
-                        content = "".join(
-                            str(part.get("text") or "")
-                            for part in content
-                            if isinstance(part, dict)
-                        )
-                    if cancelled and cancelled():
-                        raise InterruptedError("RAG generation cancelled.")
-                    status = 200
-            if status >= 400:
-                raise RuntimeError(
-                    f"OpenAI-compatible endpoint returned HTTP {status}: {detail}"
-                )
-            return str(content).strip()
-
-        with httpx.Client(timeout=timeout) as client:
-            response = client.post(
-                f"{url}/chat/completions",
-                headers=headers,
-                json=body,
-            )
-            if response.status_code in {400, 422} and "response_format" in body:
-                if json_schema is not None:
-                    body["response_format"] = {"type": "json_object"}
-                    response = client.post(
-                        f"{url}/chat/completions",
-                        headers=headers,
-                        json=body,
-                    )
-                if response.status_code in {400, 422} and "response_format" in body:
-                    body.pop("response_format", None)
-                    response = client.post(
-                        f"{url}/chat/completions",
-                        headers=headers,
-                        json=body,
-                    )
-        if response.status_code >= 400:
-            raise RuntimeError(
-                f"OpenAI-compatible endpoint returned HTTP {response.status_code}: "
-                f"{_response_detail(response)}"
-            )
-        payload = response.json()
-        choices = payload.get("choices") or []
-        if not choices:
-            raise RuntimeError("OpenAI-compatible endpoint returned no choices.")
-        content = (choices[0].get("message") or {}).get("content") or ""
-        if isinstance(content, list):
-            content = "".join(
-                str(part.get("text") or "")
-                for part in content
-                if isinstance(part, dict)
-            )
-        return str(content).strip()
-
-    url = (base_url or settings.ollama_base_url).rstrip("/")
-    option_values: dict[str, Any] = dict(tuning.extra_options or {})
-    for key_name, value in {
-        "num_ctx": tuning.num_ctx,
-        "num_predict": max_tokens or tuning.num_predict,
-        "temperature": 0.0 if tuning.temperature is None else tuning.temperature,
-        "top_k": tuning.top_k,
-        "top_p": tuning.top_p,
-        "min_p": tuning.min_p,
-        "repeat_penalty": tuning.repeat_penalty,
-        "seed": tuning.seed,
-        "mirostat": tuning.mirostat,
-        "mirostat_eta": tuning.mirostat_eta,
-        "mirostat_tau": tuning.mirostat_tau,
-        "stop": tuning.stop,
-    }.items():
-        if value is not None:
-            option_values[key_name] = value
-
-    body = {
-        "model": model,
-        "stream": False,
-        "messages": [{"role": "user", "content": prompt}],
-        "options": option_values,
-    }
-    if json_schema is not None:
-        # Ollama accepts a JSON Schema object in `format`; this materially reduces
-        # malformed output from local models while remaining compatible with the
-        # ordinary `format: json` fallback below.
-        body["format"] = json_schema
-    elif json_mode:
-        body["format"] = "json"
-    if tuning.think is not None:
-        body["think"] = tuning.think
-    keep_alive = tuning.keep_alive or settings.ollama_keep_alive
-    if keep_alive:
-        body["keep_alive"] = keep_alive
-
-    timeout = httpx.Timeout(
-        connect=settings.ollama_connect_timeout_seconds,
-        read=min(settings.ollama_timeout_seconds, timeout_seconds) if timeout_seconds else settings.ollama_timeout_seconds,
-        write=min(settings.ollama_timeout_seconds, timeout_seconds) if timeout_seconds else settings.ollama_timeout_seconds,
-        pool=settings.ollama_connect_timeout_seconds,
-    )
-    if cancelled is not None:
-        def ollama_stream_once(payload: dict[str, Any]) -> tuple[int, str, str]:
-            started_clock = time.monotonic()
-            streaming = dict(payload)
-            streaming["stream"] = True
-            chunks: list[str] = []
-            with httpx.Client(timeout=timeout) as client:
-                with client.stream("POST", f"{url}/api/chat", json=streaming) as response:
-                    if response.status_code >= 400:
-                        raw = response.read().decode("utf-8", errors="replace")
-                        return response.status_code, "", raw[:2000]
-                    for line in response.iter_lines():
-                        if timeout_seconds and time.monotonic() - started_clock > timeout_seconds:
-                            raise TimeoutError(f"LLM generation exceeded {timeout_seconds:.0f}s stage deadline.")
-                        if cancelled():
-                            raise InterruptedError("RAG generation cancelled.")
-                        if not line:
-                            continue
-                        payload_line = json.loads(line)
-                        piece = ((payload_line.get("message") or {}).get("content") or "")
-                        if piece:
-                            chunks.append(str(piece))
-                        if payload_line.get("done"):
-                            break
-            return 200, "".join(chunks).strip(), ""
-
-        status, content, detail = ollama_stream_once(body)
-        if status in {400, 422} and json_schema is not None:
-            fallback = dict(body)
-            fallback["format"] = "json"
-            status, content, detail = ollama_stream_once(fallback)
-        if status >= 400:
-            raise RuntimeError(f"Ollama returned HTTP {status}: {detail}")
-        return content
-
-    with httpx.Client(timeout=timeout) as client:
-        response = client.post(f"{url}/api/chat", json=body)
-        if response.status_code in {400, 422} and json_schema is not None:
-            # Older Ollama builds support JSON mode but not schema-valued format.
-            # Keep the corpus builder compatible while Pydantic validation/retry
-            # still enforces the contract after generation.
-            fallback = dict(body)
-            fallback["format"] = "json"
-            response = client.post(f"{url}/api/chat", json=fallback)
-    if response.status_code >= 400:
-        raise RuntimeError(
-            f"Ollama returned HTTP {response.status_code}: "
-            f"{_response_detail(response)}"
-        )
-    payload = response.json()
-    return str((payload.get("message") or {}).get("content") or "").strip()
-
-
-def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
-    author = str(record.get("document_author") or record.get("speaker") or "Jacques Derrida")
-    work = str(record.get("work") or "")
-    edition = str(record.get("edition") or "")
-    year = record.get("year") or ""
-    page_start = record.get("page_start")
-    page_end = record.get("page_end")
-    translator = str(record.get("translator") or "")
-
-    last = author.split()[-1] if author.split() else author
-    if page_start is None:
-        pages = ""
-    elif page_end is None or page_end == page_start:
-        pages = str(page_start)
-    else:
-        pages = f"{page_start}-{page_end}"
-    inline = f"{last} {year}{': ' + pages if pages else ''}".strip()
-
-    parts = author.split()
-    reversed_name = (
-        f"{parts[-1]}, {' '.join(parts[:-1])}"
-        if len(parts) > 1 else author
-    )
-    full = (
-        f"{reversed_name}. {work}."
-        f"{f' {translator} trans.' if translator else ''}"
-        f"{f' {edition}.' if edition else ''}"
-        f"{f' {year}.' if year else ''}"
-    )
-    return inline.strip(), re.sub(r"\s+", " ", full).strip()
-
+        field, value = resolved
+        # Preserve false/zero/null when explicitly selected; only absent selectors are omitted.
+        metadata[field] = value
+    return metadata
 
 def _context_string(
     records: list[dict[str, Any]],
     *,
     record_char_limit: int,
     total_char_limit: int,
+    prompt_metadata: RAGPromptMetadataPolicy | None = None,
+    skip_overflow: bool = False,
 ) -> tuple[str, dict[str, str], list[EvidenceItem]]:
     blocks: list[str] = []
     works: dict[str, str] = {}
@@ -446,22 +284,29 @@ def _context_string(
             compact_text = compact_text.rstrip() + " …"
 
         tag = f"E{len(evidence)}"
+        policy = prompt_metadata or RAGPromptMetadataPolicy()
+        evidence_metadata = _prompt_metadata(record, policy.evidence)
+        context_metadata = _prompt_metadata(record, policy.context)
+        record_metadata = _prompt_metadata(record, policy.record)
+        metadata_lines = [
+            f"{field}={json.dumps(value, ensure_ascii=False)}"
+            for field, value in evidence_metadata.items()
+        ]
+        if context_metadata:
+            metadata_lines.append(
+                "context_metadata=" + json.dumps(context_metadata, ensure_ascii=False, sort_keys=True)
+            )
+        if record_metadata:
+            metadata_lines.append(
+                "record_metadata=" + json.dumps(record_metadata, ensure_ascii=False, sort_keys=True)
+            )
         block = "\n".join([
             f"<BEGIN EVIDENCE_TAG {tag}>",
             f"evidence_tag=[[{tag}]]",
             f"record_id={record.get('record_id', '')}",
-            f"work={record.get('work', '')}",
-            f"document_author={record.get('document_author', '')}",
-            f"speaker={record.get('speaker', '')}",
-            f"quoted_speaker={json.dumps(record.get('quoted_speaker', []), ensure_ascii=False)}",
-            f"quoted_author={json.dumps(record.get('quoted_author', []), ensure_ascii=False)}",
-            f"quoted_work={json.dumps(record.get('quoted_work', []), ensure_ascii=False)}",
-            f"quoted_position_holder={json.dumps(record.get('quoted_position_holder', []), ensure_ascii=False)}",
-            f"position_holder={record.get('position_holder', '')}",
-            f"stance={record.get('stance', '')}",
-            f"position_status={record.get('proposition_status', '')}",
-            f"target={record.get('target', '')}",
-            f"role={record.get('discourse_role', '')}",
+            f"source_work={source_work_label(record)}",
+            f"source_document_author={source_author(record)}",
+            *metadata_lines,
             f"citation={inline}",
             f"text={compact_text}",
             f"<END EVIDENCE_TAG {tag}>",
@@ -469,6 +314,12 @@ def _context_string(
 
         projected = total_chars + len(block) + (2 if blocks else 0)
         if blocks and projected > total_char_limit:
+            if skip_overflow:
+                # Auto-sizing packs all ranking anchors before neighbors. When
+                # one item cannot fit, keep looking rather than letting a single
+                # large Record prevent later compact evidence from using the
+                # remaining budget.
+                continue
             break
 
         total_chars = projected
@@ -484,6 +335,11 @@ def _context_string(
             "inline_citation": inline,
             "full_citation": full,
             "text_truncated": text_truncated,
+            "selection_role": item.get("selection_role"),
+            "neighbor_of": item.get("neighbor_of"),
+            "neighbor_distance": item.get("neighbor_distance"),
+            "neighbor_reason": item.get("neighbor_reason"),
+            "automatic_region_size": item.get("automatic_region_size"),
         })
         blocks.append(block)
 
@@ -500,8 +356,8 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
             field
             for field, value in {
                 "record_id": record.get("record_id"),
-                "work": record.get("work"),
-                "document_author": record.get("document_author"),
+                "work": source_work_label(record),
+                "document_author": source_author(record),
                 "exact_text": record.get("text"),
                 "inline_citation": item.get("inline_citation"),
                 "full_citation": item.get("full_citation"),
@@ -510,6 +366,247 @@ def evidence_sufficiency_issues(evidence: Sequence[Mapping[str, Any]]) -> list[d
         ]
         if missing:
             issues.append({"evidence_id": evidence_id, "missing": ", ".join(missing)})
+    return issues
+
+
+def partition_scope_compatible_records(
+    records: Sequence[Mapping[str, Any]],
+    allowed_works: Sequence[str],
+    allowed_authors: Sequence[str] = (),
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Drop non-pinned Records that escape inferred work/source-author scope."""
+
+    works = {str(work).strip() for work in allowed_works if str(work).strip()}
+    authors = {
+        _normalized_scope_text(author)
+        for author in allowed_authors
+        if str(author).strip()
+    }
+    if not works and not authors:
+        return [dict(item) for item in records], []
+
+    kept: list[dict[str, Any]] = []
+    excluded: list[dict[str, str]] = []
+    for item in records:
+        record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+        work = source_work_label(record)
+        author = source_author(record)
+        work_matches = not works or work in works
+        author_matches = not authors or _normalized_scope_text(author) in authors
+        if item.get("selected_evidence") or (work_matches and author_matches):
+            kept.append(dict(item))
+            continue
+        excluded.append({
+            "record_id": str(record.get("record_id") or item.get("id") or "unknown"),
+            "work": work,
+            "document_author": author,
+        })
+    return kept, excluded
+
+
+def partition_sufficient_records(
+    records: Sequence[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Split ranked candidates into citable records and provenance-incomplete ones.
+
+    Incomplete records are excluded before evidence tags are assigned, so one
+    record lacking e.g. ``document_author`` cannot abort the whole run; the
+    exclusions are returned so callers can surface them for review.
+    """
+    kept: list[dict[str, Any]] = []
+    excluded: list[dict[str, str]] = []
+    for item in records:
+        record = item.get("record") if isinstance(item.get("record"), dict) else {}
+        inline, full = _citation_strings(dict(record))
+        issues = evidence_sufficiency_issues([{
+            "evidence_id": str(record.get("record_id") or "unknown"),
+            "record": record,
+            "inline_citation": inline,
+            "full_citation": full,
+        }])
+        if issues:
+            excluded.append({"record_id": issues[0]["evidence_id"], "missing": issues[0]["missing"]})
+        else:
+            kept.append(dict(item))
+    return kept, excluded
+
+
+_EVIDENCE_TAG_GROUP = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
+# Memory-guidance prompt tags are internal grounding context, never citation syntax.
+# If a model echoes one, strip it before the answer reaches the reader.
+_STRAY_MEMORY_TAG_PATTERN = re.compile(
+    r"\[{1,2}\s*(?:prior-claim|prior-response):[^\[\]]+\]{1,2}"
+)
+EVIDENCE_MARKER_PATTERNS = (
+    rf"\[\[\s*{_EVIDENCE_TAG_GROUP}\s*\]\]",
+    rf"\(\(\s*{_EVIDENCE_TAG_GROUP}\s*\)\)",
+    rf"\{{\{{\s*{_EVIDENCE_TAG_GROUP}\s*\}}\}}",
+    rf"\[\s*{_EVIDENCE_TAG_GROUP}\s*\]",
+    rf"\(\s*{_EVIDENCE_TAG_GROUP}\s*\)",
+    rf"\{{\s*{_EVIDENCE_TAG_GROUP}\s*\}}",
+)
+
+
+def extract_evidence_ids(text: str) -> list[str]:
+    """Return evidence IDs from every marker syntax accepted by citation binding."""
+    ids: list[str] = []
+    for pattern in EVIDENCE_MARKER_PATTERNS:
+        for match in re.finditer(pattern, str(text or "")):
+            for tag in re.findall(r"\bE\d+\b", match.group(1)):
+                if tag not in ids:
+                    ids.append(tag)
+    return ids
+
+
+def strip_evidence_markers(text: str) -> str:
+    """Remove citation markers without changing the substantive claim text."""
+    value = str(text or "")
+    for pattern in EVIDENCE_MARKER_PATTERNS:
+        value = re.sub(pattern, "", value)
+    value = re.sub(r"\s+([.,;:!?])", r"\1", value)
+    return re.sub(r"\s{2,}", " ", value).strip()
+
+
+_JSON_OUTPUT_REQUEST_PATTERN = re.compile(
+    r"(?is)(?:"
+    r"\b(?:return|respond|output|format|provide|give|answer)\b.{0,50}\bjson\b|"
+    r"\b(?:as|in|en)\s+(?:valid\s+)?json\b|"
+    r"\bjson\s+(?:please|s['’]il\s+vous\s+pla[iî]t)\b"
+    r")"
+)
+_JSON_OUTPUT_NEGATION_PATTERN = re.compile(
+    r"(?is)(?:"
+    r"\b(?:do\s+not|don't|dont|never)\b.{0,60}\bjson\b|"
+    r"\bno\s+json\b|"
+    r"\bnot\s+(?:as|in)\s+json\b|"
+    r"\b(?:ne|n')\b.{0,60}\bpas\b.{0,60}\bjson\b|"
+    r"\b(?:pas\s+de|sans)\s+json\b"
+    r")"
+)
+_JSON_CODE_FENCE_PATTERN = re.compile(
+    r"(?is)\`\`\`(?:json)?\s*(.*?)\s*\`\`\`"
+)
+def _requests_json_output(prompt: str, instructions: str) -> bool:
+    """Return whether the researcher explicitly requested JSON output.
+
+    Negative directives are removed before positive matching so instructions
+    such as "do not answer as JSON" can never disable the prose safeguard.
+    """
+
+    combined = f"{prompt}\n{instructions}"
+    # A negative JSON directive makes the requested form ambiguous at best.
+    # Fail toward prose rather than allowing a positive phrase elsewhere in the
+    # request to disable the prose safeguard.
+    if _JSON_OUTPUT_NEGATION_PATTERN.search(combined):
+        return False
+    return bool(_JSON_OUTPUT_REQUEST_PATTERN.search(combined))
+
+
+def _json_payload_like(candidate: str) -> bool:
+    """Return whether one candidate string is a JSON-shaped object or array."""
+
+    value = str(candidate or "").strip()
+    if not value.startswith(("{", "[")):
+        return False
+    try:
+        return isinstance(json.loads(value), (dict, list))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        closing = "}" if value.startswith("{") else "]"
+        return value.endswith(closing) and bool(
+            re.search(r'"[^"]{1,80}"\s*:', value[:4000])
+        )
+
+
+def _json_like_answer(text: str) -> bool:
+    """Detect a JSON-dominated answer, including malformed fenced payloads."""
+
+    candidate = str(text or "").strip()
+    if _json_payload_like(candidate):
+        return True
+
+    # Local models often prefix a structured answer with a short courtesy line,
+    # e.g. "Here is the answer:" followed by a JSON fence. Treat a fenced
+    # object/array as the answer form when surrounding prose is only a small
+    # preface/suffix or the structured payload dominates the response.
+    for fenced in _JSON_CODE_FENCE_PATTERN.finditer(candidate):
+        payload = fenced.group(1).strip()
+        if not _json_payload_like(payload):
+            continue
+        surrounding = (candidate[: fenced.start()] + candidate[fenced.end() :]).strip()
+        if len(surrounding) <= 200 or len(payload) >= max(200, len(surrounding) * 2):
+            return True
+    return False
+
+
+# Match only the opening of an answer. Never strip text: citations, source
+# qualification, and even a deliberately quoted opening must remain intact.
+_NON_SUBSTANTIVE_RESEARCH_OPENING = re.compile(
+    r"(?i)^\s*(?:"
+    r"as\s+(?:derridai|an?\s+ai(?:\s+assistant)?)\s*[,!:—-]|"
+    r"i\s+(?:will|shall|'ll|am\s+going\s+to)\s+"
+    r"(?:provide|offer|present|deliver|give|conduct|undertake|"
+    r"explore|examine|discuss|analy[sz]e|compare|outline)\b|"
+    r"in\s+this\s+(?:(?:comprehensive|comparative|detailed|following)\s+)*"
+    r"(?:analysis|response|answer|discussion|essay)\b"
+    r")"
+)
+_EXPLICIT_RESEARCH_OPENING_REQUEST = re.compile(
+    r"(?i)\b(?:start|begin|open)\s+(?:your\s+|the\s+)?"
+    r"(?:answer|response)\s+(?:with|by)\b|"
+    r"\b(?:start|begin|open)\s+with\b|"
+    r"\b(?:write|respond|answer|narrate)\s+in\s+(?:the\s+)?first[- ]person\b|"
+    r"\b(?:introduce\s+yourself|act\s+as\s+derridai)\b"
+)
+
+
+def _non_substantive_research_opening(
+    answer: str,
+    question: str,
+    instructions: str,
+    *,
+    prose_required: bool,
+) -> bool:
+    """Flag formulaic openings only when they contradict the requested form.
+
+    This is a soft prose-quality signal, not an evidence/validation failure.
+    Explicit researcher instructions take precedence, and no output is rewritten.
+    """
+    if not prose_required or _EXPLICIT_RESEARCH_OPENING_REQUEST.search(
+        f"{question}\n{instructions}"
+    ):
+        return False
+    return bool(_NON_SUBSTANTIVE_RESEARCH_OPENING.match(answer))
+
+
+def _generation_contract_issues(
+    answer: str,
+    evidence: Sequence[Mapping[str, Any]],
+    *,
+    prose_required: bool,
+    require_evidence_markers: bool,
+) -> list[str]:
+    """Validate answer form and run-local evidence-marker integrity."""
+
+    issues: list[str] = []
+    if prose_required and _json_like_answer(answer):
+        issues.append("structured_json")
+
+    valid_ids = {
+        str(item.get("evidence_id") or "").strip()
+        for item in evidence
+        if str(item.get("evidence_id") or "").strip()
+    }
+    used_ids = extract_evidence_ids(answer)
+    if require_evidence_markers:
+        unknown_ids = sorted({
+            evidence_id
+            for evidence_id in used_ids
+            if evidence_id not in valid_ids
+        })
+        if unknown_ids:
+            issues.append("unknown_evidence_markers:" + ",".join(unknown_ids))
+        if not used_ids:
+            issues.append("missing_evidence_markers")
     return issues
 
 
@@ -530,24 +627,14 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
         ]
         return "(" + "; ".join(dict.fromkeys(rendered)) + ")"
 
-    used_ids = set(re.findall(r"\bE\d+\b", answer))
-    # Generators do not always obey one citation wrapper exactly.  Accept the
-    # six common forms while keeping [[E0]] as the prompt/default format.  Run
-    # double wrappers before single wrappers so a valid [[E0]] token is not
-    # partially consumed by the [E0] expression.
-    tag_group = r"((?:E\d+)(?:\s*[,;]\s*E\d+)*)"
-    bound = answer
-    for pattern in (
-        rf"\[\[\s*{tag_group}\s*\]\]",
-        rf"\(\(\s*{tag_group}\s*\)\)",
-        rf"\{{\{{\s*{tag_group}\s*\}}\}}",
-        rf"\[\s*{tag_group}\s*\]",
-        rf"\(\s*{tag_group}\s*\)",
-        rf"\{{\s*{tag_group}\s*\}}",
-    ):
+    used_ids = set(extract_evidence_ids(answer))
+    # Generators do not always obey one citation wrapper exactly. Keep rendering
+    # and durable claim/support persistence on the same accepted marker syntax.
+    bound = _STRAY_MEMORY_TAG_PATTERN.sub("", answer)
+    for pattern in EVIDENCE_MARKER_PATTERNS:
         bound = re.sub(pattern, replace_group, bound)
 
-    if include_works_cited:
+    if include_works_cited and used_ids:
         seen: set[str] = set()
         citations: list[str] = []
         for item in evidence:
@@ -570,29 +657,16 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
     return bound
 
 
-def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-    # Retrieval embeddings may arrive as NumPy arrays from Chroma. Explicit
-    # length checks avoid ambiguous NumPy truth-value evaluation.
-    if (
-        a is None
-        or b is None
-        or len(a) == 0
-        or len(b) == 0
-        or len(a) != len(b)
-    ):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if not na or not nb:
-        return 0.0
-    return dot / (na * nb)
+def _cosine(a: Any, b: Any) -> float:
+    """Compatibility wrapper around the shared retrieval-scoring primitive."""
+
+    return cosine_similarity(a, b)
 
 
 def _distance_similarity(distance: float | None) -> float:
-    if distance is None:
-        return 0.0
-    return 1.0 / (1.0 + max(0.0, float(distance)))
+    """Legacy metric-unknown wrapper retained for memory/reranker compatibility."""
+
+    return distance_to_relevance(distance)
 
 
 def _mmr_select(
@@ -601,30 +675,22 @@ def _mmr_select(
     k: int,
     lambda_mult: float,
 ) -> list[dict[str, Any]]:
-    if not candidates:
-        return []
-    remaining = list(candidates)
-    selected: list[dict[str, Any]] = []
+    """Compatibility wrapper that now preserves MMR objective provenance."""
 
-    while remaining and len(selected) < k:
-        best_index = 0
-        best_score = -float("inf")
-        for index, candidate in enumerate(remaining):
-            relevance = _distance_similarity(candidate.get("distance"))
-            diversity = 0.0
-            if selected:
-                diversity = max(
-                    _cosine(candidate.get("embedding"), chosen.get("embedding"))
-                    for chosen in selected
-                )
-            score = lambda_mult * relevance - (1.0 - lambda_mult) * diversity
-            if score > best_score:
-                best_score = score
-                best_index = index
-        chosen = remaining.pop(best_index)
-        chosen = dict(chosen)
-        chosen["mmr_score"] = best_score
-        selected.append(chosen)
+    selected = mmr_select(
+        candidates,
+        limit=k,
+        lambda_mult=lambda_mult,
+        relevance=lambda candidate: float(
+            candidate.get("relevance")
+            if candidate.get("relevance") is not None
+            else _distance_similarity(candidate.get("distance"))
+        ),
+        vector=lambda candidate: candidate.get("embedding"),
+    )
+
+    for item in selected:
+        item.pop("embedding", None)
     return selected
 
 
@@ -636,26 +702,47 @@ def _tokenize(text: str) -> set[str]:
     }
 
 
+def _rerank_candidate_text(item: Mapping[str, Any]) -> str:
+    """Expose semantic attribution roles to rerankers."""
+
+    record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+    passage = str(item.get("_rerank_text") or record.get("text") or "")
+    return rerank_attribution_context(record, passage)
+
+
 def _lexical_rerank(query: str, docs: list[dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
     q = _tokenize(query)
     scored: list[dict[str, Any]] = []
     for index, item in enumerate(docs):
         record = item["record"]
         text = " ".join([
-            str(record.get("work") or ""),
-            str(record.get("speaker") or ""),
-            str(record.get("position_holder") or ""),
-            str(record.get("topics") or ""),
-            str(record.get("concepts") or ""),
-            str(record.get("persons") or ""),
-            str(record.get("text") or ""),
+            source_author(record),
+            source_work_label(record),
+            semantic_text(record, SPEAKER_ID),
+            semantic_text(record, TOPICS_ID),
+            semantic_text(record, CONCEPTS_ID),
+            semantic_text(record, PERSONS_ID),
+            _rerank_candidate_text(item),
         ])
         tokens = _tokenize(text)
         overlap = len(q & tokens) / max(1, len(q))
+        author_tokens = _tokenize(source_author(record))
+        source_author_overlap = len(q & author_tokens) / max(1, len(q))
         retrieval_bonus = 1.0 / (60.0 + index + 1.0)
-        similarity = _distance_similarity(item.get("distance"))
+        similarity = float(
+            item.get("relevance")
+            if item.get("relevance") is not None
+            else _distance_similarity(item.get("distance"))
+        )
         row = dict(item)
-        row["rerank_score"] = overlap * 2.0 + similarity + retrieval_bonus
+        # Explicit source-author agreement is stronger evidence of source scope
+        # than merely mentioning the same author in passage text/metadata.
+        row["rerank_score"] = (
+            overlap * 2.0
+            + source_author_overlap
+            + similarity
+            + retrieval_bonus
+        )
         scored.append(row)
     return sorted(
         scored,
@@ -669,43 +756,43 @@ def _cross_encoder_rerank(
     docs: list[dict[str, Any]],
     top_n: int,
     model_name: str,
-) -> tuple[list[dict[str, Any]], str | None]:
-    try:
-        from sentence_transformers import CrossEncoder
-    except Exception as exc:
-        return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder unavailable ({exc}); used lexical/vector fallback."
-        )
+    *,
+    timeout_seconds: float | None,
+) -> tuple[list[dict[str, Any]] | None, str | None, dict[str, Any]]:
+    """Attempt CrossEncoder reranking without inventing a fallback path.
 
-    cache_dir = Path(settings.rag_model_cache)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    try:
-        model = _CROSS_ENCODER_CACHE.get(model_name)
-        if model is None:
-            model = CrossEncoder(
-                model_name,
-                cache_dir=str(cache_dir),
+    Fallback routing belongs to the selected pipeline graph. This helper reports
+    the operational failure; run_rag_pipeline then follows the configured
+    on_unavailable/on_timeout/on_error edge.
+    """
+
+    scores, telemetry = predict_scores(
+        [
+            (
+                query,
+                _rerank_candidate_text(item),
             )
-            _CROSS_ENCODER_CACHE[model_name] = model
-        pairs = [
-            [query, str(item["record"].get("text") or "")]
             for item in docs
-        ]
-        scores = model.predict(pairs)
-        ranked = []
-        for item, score in zip(docs, scores):
-            row = dict(item)
-            row["rerank_score"] = float(score)
-            ranked.append(row)
-        ranked.sort(
-            key=lambda item: item["rerank_score"],
-            reverse=True,
-        )
-        return ranked[:top_n], None
-    except Exception as exc:
-        return _lexical_rerank(query, docs, top_n), (
-            f"Cross-encoder failed ({exc}); used lexical/vector fallback."
-        )
+        ],
+        model_name=model_name,
+        timeout_seconds=timeout_seconds,
+    )
+    if scores is None:
+        reason = str(telemetry.get("fallback_reason") or "unavailable")
+        return None, f"Cross-encoder unavailable ({reason}).", {
+            **telemetry,
+            "mode": "unavailable",
+            "fallback_reason": reason,
+        }
+
+    ranked = []
+    for item, score in zip(docs, scores):
+        row = dict(item)
+        row["rerank_score"] = score
+        row["cross_encoder_score"] = score
+        ranked.append(row)
+    ranked.sort(key=lambda item: item["rerank_score"], reverse=True)
+    return ranked[:top_n], None, {**telemetry, "mode": "cross_encoder"}
 
 
 def _resolve_search_collections(
@@ -713,10 +800,43 @@ def _resolve_search_collections(
     source_name: str,
     locales: list[str],
 ) -> list[dict[str, Any]]:
-    stores = store.list_stores()
+    descriptor_loader = getattr(store, "list_store_descriptors", None)
+    stores = (
+        descriptor_loader()
+        if callable(descriptor_loader)
+        else store.list_stores()
+    )
+
+    def with_selected_counts(
+        rows: Sequence[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Resolve counts only after source/language routing selected stores."""
+
+        count_loader = getattr(store, "collection_count", None)
+        counts: dict[str, int] = {}
+        output: list[dict[str, Any]] = []
+        for item in rows:
+            row = dict(item)
+            name = str(row.get("name") or "")
+            if row.get("count") is None and name and callable(count_loader):
+                if name not in counts:
+                    counts[name] = int(count_loader(name))
+                row["count"] = counts[name]
+            output.append(row)
+        return output
     source = next((item for item in stores if item["name"] == source_name), None)
     if source is None:
         raise ValueError(f"Collection {source_name!r} does not exist.")
+
+    source_metadata = (
+        source.get("metadata") if isinstance(source.get("metadata"), dict) else {}
+    )
+    system_kind = str(source_metadata.get("derridai_system_collection") or "").strip()
+    if system_kind:
+        raise ValueError(
+            f"Collection {source_name!r} is a DerridAI system collection "
+            f"({system_kind}) and cannot be used as a Research source collection."
+        )
 
     requested = list(dict.fromkeys(locales or ["en", "fr"]))
     requested_set = set(requested)
@@ -727,7 +847,7 @@ def _resolve_search_collections(
             return []
         row = dict(source)
         row["_rag_locales"] = list(codes & requested_set) or list(codes)
-        return [row]
+        return with_selected_counts([row])
 
     resolved: list[dict[str, Any]] = []
     for locale in requested:
@@ -760,7 +880,7 @@ def _resolve_search_collections(
         row["_rag_locales"] = list(source.get("language_codes") or ["en", "fr"])
         row["_rag_route"] = "source"
         resolved.append(row)
-    return resolved
+    return with_selected_counts(resolved)
 
 
 def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) -> list[RetrievalCandidate]:
@@ -802,6 +922,403 @@ def _selected_evidence_candidates(request: RAGRunRequest, store: ChromaStore) ->
     return resolved
 
 
+def _candidate_diagnostic(item: Mapping[str, Any], rank: int) -> dict[str, Any]:
+    """Bounded candidate lineage for non-persistent comparison/benchmark runs.
+
+    Source text and arbitrary Record metadata are intentionally excluded. The
+    retained fields are enough to compare membership, rank, retrieval route,
+    and stage-specific scores without copying the corpus into diagnostics.
+    """
+
+    record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+    return {
+        "record_id": str(
+            record.get("record_id")
+            or item.get("chroma_id")
+            or item.get("id")
+            or ""
+        ),
+        "rank": rank,
+        "collection": item.get("collection"),
+        "selected_evidence": bool(item.get("selected_evidence")),
+        "distance": item.get("distance"),
+        "distance_metric": item.get("distance_metric"),
+        "relevance": item.get("relevance"),
+        "rrf_score": item.get("rrf_score"),
+        "rerank_score": item.get("rerank_score"),
+        "retrieval_hits": list(item.get("retrieval_hits") or []),
+    }
+
+
+def _candidate_diagnostics(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        diagnostic
+        for rank, item in enumerate(rows, start=1)
+        if (diagnostic := _candidate_diagnostic(item, rank))["record_id"]
+    ]
+
+
+def _normalized_scope_text(value: Any) -> str:
+    """Normalize author/work names for deterministic prompt-scope matching."""
+
+    folded = str(value or "").casefold().replace("’", "'")
+    # Research prompts routinely omit source-title diacritics (for example
+    # "Du cote" for "Du côté") and use either Proust's or Prousts'. Scope
+    # routing must tolerate those orthographic differences without asking the
+    # model to guess source identity.
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+    folded = re.sub(r"(?<=\w)(?:'s|s')(?=\W|$)", "", folded)
+    return re.sub(r"[^\w]+", " ", folded, flags=re.UNICODE).strip()
+
+
+def _mentions_scope_author(question: str, author: str) -> bool:
+    """Return whether a prompt explicitly names a corpus author."""
+
+    query = _normalized_scope_text(question)
+    normalized_author = _normalized_scope_text(author)
+    if not query or not normalized_author:
+        return False
+    if normalized_author in query:
+        return True
+    parts = [part for part in normalized_author.split() if part]
+    surname = parts[-1] if parts else ""
+    return bool(surname and len(surname) >= 4 and surname in set(query.split()))
+
+
+def _mentioned_scope_authors(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Return distinct corpus source authors explicitly named in the request."""
+
+    authors: set[str] = set()
+    for summary in work_summaries:
+        values = summary.get("source_authors")
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        for value in values:
+            author = str(value or "").strip()
+            if author and _mentions_scope_author(question, author):
+                authors.add(author)
+    return sorted(authors, key=str.casefold)
+
+
+def _author_scope_works(
+    work_summaries: Sequence[Mapping[str, Any]],
+    author: str,
+) -> list[str]:
+    """Return compact-inventory works attributed to one source author."""
+
+    target = _normalized_scope_text(author)
+    works: set[str] = set()
+    for summary in work_summaries:
+        values = summary.get("source_authors")
+        if not isinstance(values, (list, tuple, set)):
+            continue
+        if any(_normalized_scope_text(value) == target for value in values):
+            work = str(summary.get("scope_label") or "").strip()
+            if work:
+                works.add(work)
+    return sorted(works)
+
+
+def _source_subject_authors(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Infer one documentary source author from narrow grammatical cues."""
+
+    folded = str(question or "").casefold().replace("’", "'")
+    folded = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", folded)
+        if not unicodedata.combining(character)
+    )
+    if not folded or _COMPARATIVE_SCOPE_PATTERN.search(folded):
+        return []
+
+    scored: dict[str, int] = {}
+    for author in _mentioned_scope_authors(work_summaries, question):
+        normalized = _normalized_scope_text(author)
+        parts = [part for part in normalized.split() if part]
+        aliases = [normalized]
+        if parts and len(parts[-1]) >= 4:
+            aliases.append(parts[-1])
+        best = 0
+        for alias in dict.fromkeys(aliases):
+            escaped = re.escape(alias).replace(r"\ ", r"\s+")
+            patterns = (
+                (4, rf"\baccording\s+to\s+{escaped}\b"),
+                (4, rf"\bselon\s+{escaped}\b"),
+                (4, rf"\bd[' ]apres\s+{escaped}\b"),
+                (3, rf"\b(?:what|how)\s+does\s+{escaped}\b"),
+                (3, rf"\bque\s+dit\s+{escaped}\b"),
+                (3, rf"\b{escaped}(?:'s|s')(?=\s|[,.?!:;]|$)"),
+                (2, rf"\b(?:novels?|works?|writings?|texts?)\s+by\s+{escaped}\b"),
+                (2, rf"\b{escaped}\s+on\b"),
+            )
+            for priority, pattern in patterns:
+                if re.search(pattern, folded, flags=re.IGNORECASE):
+                    best = max(best, priority)
+        if best:
+            scored[author] = best
+
+    if not scored:
+        return []
+    highest = max(scored.values())
+    winners = sorted(
+        (author for author, priority in scored.items() if priority == highest),
+        key=str.casefold,
+    )
+    return winners if len(winners) == 1 else []
+
+
+def _explicitly_named_works(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[str]:
+    """Return corpus work titles explicitly named in the researcher's text."""
+
+    query = _normalized_scope_text(question)
+    if not query:
+        return []
+
+    display_question = "".join(
+        character
+        for character in unicodedata.normalize("NFKD", str(question or "").replace("’", "'"))
+        if not unicodedata.combining(character)
+    )
+    named: set[str] = set()
+    for summary in work_summaries:
+        work = str(summary.get("scope_label") or "").strip()
+        normalized_work = _normalized_scope_text(work)
+        if not work or not normalized_work:
+            continue
+        phrase_pattern = re.escape(normalized_work).replace(r"\ ", r"\s+")
+        if not re.search(rf"(?<!\w){phrase_pattern}(?!\w)", query):
+            continue
+        tokens = normalized_work.split()
+        if len(tokens) == 1:
+            display_work = "".join(
+                character
+                for character in unicodedata.normalize("NFKD", work)
+                if not unicodedata.combining(character)
+            )
+            exact_display = re.search(
+                rf"(?<!\w){re.escape(display_work)}(?!\w)",
+                display_question,
+                flags=re.IGNORECASE,
+            )
+            cue = re.search(
+                rf"\b(?:in|from|book|work|text|novel)\s+{re.escape(tokens[0])}\b",
+                query,
+                flags=re.IGNORECASE,
+            )
+            if not exact_display and not cue:
+                continue
+        named.add(work)
+    return sorted(named)
+
+
+def _mentioned_work_groups(
+    work_summaries: Sequence[Mapping[str, Any]],
+    question: str,
+    *,
+    max_groups: int = 4,
+) -> list[list[str]]:
+    """Resolve explicitly named works/authors to bounded corpus work groups.
+
+    Named authors and works are routing signals only. They do not establish any
+    scholarly claim or source authority; they reserve retrieval coverage for
+    corpus scopes the researcher explicitly requested.
+    """
+
+    query = _normalized_scope_text(question)
+    if not query:
+        return []
+
+    explicitly_named = set(_explicitly_named_works(work_summaries, question))
+    groups: list[list[str]] = []
+    author_works: dict[str, set[str]] = {}
+    for summary in work_summaries:
+        work = str(summary.get("scope_label") or "").strip()
+        if not work:
+            continue
+        if work in explicitly_named:
+            groups.append([work])
+
+        author_values = summary.get("source_authors")
+        if not isinstance(author_values, (list, tuple, set)):
+            author_values = []
+        for raw_author in author_values:
+            author = str(raw_author or "").strip()
+            if not author or not _mentions_scope_author(question, author):
+                continue
+            key = _normalized_scope_text(author)
+            author_works.setdefault(key, set()).add(work)
+
+    groups.extend(sorted(works) for works in author_works.values())
+
+    distinct: list[list[str]] = []
+    for group in groups:
+        works = sorted({str(work).strip() for work in group if str(work).strip()})
+        if not works:
+            continue
+        # A specifically named work already satisfies the broader author group
+        # containing it; do not consume another reserved evidence slot.
+        if any(set(existing) & set(works) for existing in distinct):
+            continue
+        distinct.append(works)
+        if len(distinct) >= max(1, int(max_groups)):
+            break
+    return distinct
+
+
+_COMPARATIVE_SCOPE_PATTERN = re.compile(
+    r"\b(?:compare|comparison|contrast|versus|vs\.?)\b",
+    flags=re.IGNORECASE,
+)
+_NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN = re.compile(
+    r"\b(?:cite|citation|include|mention|consult|draw\s+on|use)\b",
+    flags=re.IGNORECASE,
+)
+_STRONG_SINGLE_SOURCE_SUBJECT_PATTERN = re.compile(
+    r"(?:['’]s\b|\bwhat\s+does\b|\baccording\s+to\b|"
+    r"\b(?:novels?|works?|writings?|texts?)\s+by\b|\bin\s+the\s+(?:novels?|works?|writings?|texts?)\s+of\b)",
+    flags=re.IGNORECASE,
+)
+
+
+def _exclusive_scope_works(
+    groups: Sequence[Sequence[str]],
+    question: str,
+    *,
+    explicitly_named_works: Sequence[str] = (),
+) -> list[str]:
+    """Return a closed documentary scope only when the request establishes one.
+
+    Explicit work titles are the strongest deterministic signal: when the
+    researcher names Work A and Work B as the objects of the request, retrieval
+    is limited to exactly those works. A single named author can also close scope
+    when that author is the subject. Citation/additive directives remain open,
+    and author-level comparisons remain open unless work titles were enumerated.
+    """
+
+    text = str(question or "")
+    explicit_works = sorted({
+        str(work).strip()
+        for work in explicitly_named_works
+        if str(work).strip()
+    })
+    if (
+        _NONEXCLUSIVE_SOURCE_DIRECTIVE_PATTERN.search(text)
+        and not _STRONG_SINGLE_SOURCE_SUBJECT_PATTERN.search(text)
+    ):
+        return []
+    if explicit_works:
+        return explicit_works
+
+    normalized_groups = [
+        sorted({str(work).strip() for work in group if str(work).strip()})
+        for group in groups
+    ]
+    normalized_groups = [group for group in normalized_groups if group]
+    if len(normalized_groups) != 1 or _COMPARATIVE_SCOPE_PATTERN.search(text):
+        return []
+    return normalized_groups[0]
+
+
+def _scope_work_summaries(
+    store: ChromaStore,
+    collections: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Collect compact author/work inventory for deterministic scope routing."""
+
+    collection_names = [
+        name
+        for name in dict.fromkeys(
+            str(collection.get("name") or "").strip()
+            for collection in collections
+        )
+        if name
+    ]
+    if not collection_names:
+        return []
+
+    scope_inventory = getattr(store, "research_scope_inventory", None)
+    if callable(scope_inventory):
+        try:
+            return [
+                dict(item)
+                for item in scope_inventory(collection_names)
+                if isinstance(item, Mapping)
+            ]
+        except Exception:
+            # Memory containment is an invariant, not an optimization. A compact
+            # inventory failure must not fall back to work_stats(), which loads
+            # every document in the collection and can ratchet API RSS per run.
+            logger.warning(
+                "Compact Work/author inventory failed; skipping inferred Research scope",
+                exc_info=True,
+            )
+            return []
+
+    # Compatibility fallback for lightweight test doubles or older store
+    # implementations. Production ChromaStore must not take this path because
+    # work_stats() materializes every source document to compute word counts.
+    work_summaries: dict[str, dict[str, Any]] = {}
+    work_stats = getattr(store, "work_stats", None)
+    if not callable(work_stats):
+        return []
+    for name in collection_names:
+        try:
+            rows = work_stats(name)
+        except Exception:
+            logger.debug(
+                "Could not inspect fallback Work inventory for explicit Research scope",
+                exc_info=True,
+            )
+            continue
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            work = source_work_label(row)
+            if not work:
+                continue
+            summary = work_summaries.setdefault(
+                work,
+                {"scope_label": work, "source_authors": set()},
+            )
+            author = source_author(row)
+            if author:
+                summary["source_authors"].add(author)
+
+    return [
+        {
+            "scope_label": item["scope_label"],
+            "source_authors": sorted(item["source_authors"]),
+        }
+        for item in work_summaries.values()
+    ]
+
+
+def _explicit_scope_work_groups(
+    store: ChromaStore,
+    collections: Sequence[Mapping[str, Any]],
+    question: str,
+) -> list[list[str]]:
+    """Collect author/work targets from the searched corpus inventory."""
+
+    return _mentioned_work_groups(
+        _scope_work_summaries(store, collections),
+        question,
+    )
+
+
 def _scope_rag_candidates(
     rows: list[dict[str, Any]],
     collection: dict[str, Any],
@@ -816,7 +1333,9 @@ def _scope_rag_candidates(
         if language_value is None:
             language_value = record.get("document_languages")
         codes = ChromaStore._record_language_codes(language_value)
-        if not locale_codes or codes & locale_codes:
+        # Records that declare no language cannot be excluded by a locale
+        # filter; dropping them made small single-work corpora return nothing.
+        if not codes or not locale_codes or codes & locale_codes:
             scoped.append(candidate)
     return scoped
 
@@ -827,10 +1346,59 @@ def run_rag_pipeline(
     *,
     progress: Callable[[str, int, int, str], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
+    owner: str | None = None,
+    on_generation_delta: Callable[[str], None] | None = None,
+    stop_after_context: bool = False,
+    thread_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     started = time.perf_counter()
     stages: list[dict[str, Any]] = []
     warnings: list[str] = []
+    thread_audit = copy.deepcopy(thread_audit)
+    thread_context = advisory_context(thread_audit, request.prompt)
+
+    if request.pipeline_id:
+        pipeline = pipeline_manager.get_definition(
+            request.pipeline_id,
+            request.pipeline_version,
+        )
+        if pipeline is None:
+            raise ValueError(
+                f"Research pipeline {request.pipeline_id!r}"
+                + (
+                    f"@{request.pipeline_version}"
+                    if request.pipeline_version is not None
+                    else ""
+                )
+                + " was not found."
+            )
+    else:
+        resolved = pipeline_manager.resolve("research")
+        pipeline = PipelineDefinition.model_validate(resolved["pipeline"])
+    config_resolution = resolve_pipeline_config(
+        pipeline,
+        settings_overrides=request.settings_pipeline_overrides,
+        run_overrides=request.run_pipeline_overrides,
+    )
+    pipeline = config_resolution.effective
+    pipeline_plan = compile_research_pipeline(pipeline)
+    runtime_settings = resolve_research_runtime_settings(
+        pipeline_plan,
+        request.model_dump(mode="python"),
+    )
+    pipeline_summary = {
+        "pipeline_id": pipeline.pipeline_id,
+        "pipeline_version": pipeline.version,
+        # The effective hash binds the trace to the configuration that actually
+        # executed; the immutable Pipeline Studio baseline remains separately
+        # identified for audit/reproduction.
+        "pipeline_hash": config_resolution.effective_hash,
+        "baseline_pipeline_hash": config_resolution.baseline_hash,
+        "name": pipeline.name,
+        "purpose": pipeline.purpose,
+        "resolved_pipeline": pipeline.model_dump(mode="json"),
+        "config_resolution": config_resolution.summary(),
+    }
 
     def update(stage: str, current: int, total: int, detail: str = "") -> None:
         if progress:
@@ -849,31 +1417,38 @@ def run_rag_pipeline(
             else settings.ollama_model
         )
     )
-    if not model:
+    effective_query_decomposition = (
+        (request.query_decomposition or bool(thread_context)) and pipeline_plan.query_decomposition_available
+    )
+    if not model and (effective_query_decomposition or not stop_after_context):
         raise ValueError("No generation model selected.")
 
     # Step 1-2: query metadata/decomposition, adapted from the supplied pipeline.
     stage_start = time.perf_counter()
     update("query_metadata", 0, 1, "Decomposing the research prompt")
     parsed_query: dict[str, Any] = {}
-    if request.query_decomposition:
-        decomposition_prompt = QUERY_TEMPLATE.format(
-            prompt=request.prompt,
-            instructions=request.instructions or "",
-        )
-        raw = chat_complete(
-            provider=provider,
-            model=model,
-            base_url=request.base_url,
-            api_key=request.api_key,
-            prompt=decomposition_prompt,
-            options=request.generation,
-            json_mode=True,
-            max_tokens=request.query_decomposition_num_predict,
-            cancelled=cancelled,
+    if effective_query_decomposition:
+        decomposition_prompt = (
+            contextual_query_prompt(request.prompt, request.instructions or "", thread_context)
+            if thread_context else QUERY_TEMPLATE.format(
+                prompt=request.prompt, instructions=request.instructions or "",
+            )
         )
         try:
-            parsed_query = _extract_json(raw)
+            parsed_query = structured_chat_complete(
+                provider=provider,
+                model=model,
+                base_url=request.base_url,
+                api_key=request.api_key,
+                prompt=decomposition_prompt,
+                options=request.generation,
+                max_tokens=runtime_settings.query_decomposition_num_predict,
+                validate=validate_contextual_query if thread_context else None,
+                attempts=2,
+                cancelled=cancelled,
+            )
+        except InterruptedError:
+            raise
         except Exception as exc:
             warnings.append(
                 f"Query decomposition failed ({exc}); using the original prompt."
@@ -888,14 +1463,13 @@ def run_rag_pipeline(
             parsed_query.get("prompt_query_fr")
             or request.prompt
         ).strip(),
-        "prompt_instructions": str(
-            parsed_query.get("prompt_instructions")
-            or request.instructions
-            or ""
-        ).strip(),
-        # Retrieval/reranking limits are explicit pipeline controls, not LLM
-        # decisions. Keeping them authoritative prevents decomposition defaults
-        # from silently capping user-selected values (historically at 64/24).
+        # User instructions are authoritative request data. Query decomposition
+        # may transform retrieval wording, but it must never invent, remove, or
+        # reinterpret generation instructions.
+        "prompt_instructions": str(request.instructions or "").strip(),
+        # Retrieval/reranking limits are deterministic controls, not LLM
+        # decisions. Pipeline Studio supplies the baseline; Settings and run
+        # override layers have already been resolved into the effective pipeline.
         "limit_retrieval": int(request.k),
         "limit_reranking": int(request.rerank_top_n),
         "response_language": (
@@ -905,6 +1479,27 @@ def run_rag_pipeline(
         ),
         "document_languages": [str(code) for code in request.locales],
     }
+    if thread_audit is not None:
+        thread_audit.update({
+            "version": "research-thread-run-v2",
+            "context_consumed": bool(thread_context) and not stop_after_context,
+            "contextualization": {
+                "contract": QUERY_CONTRACT,
+                "attempted": bool(thread_context) and effective_query_decomposition,
+                "fallback": bool(thread_context) and effective_query_decomposition and not bool(parsed_query),
+                "provider": provider if thread_context and effective_query_decomposition else None,
+                "model": model if thread_context and effective_query_decomposition else None,
+                "original_question": request.prompt,
+                "derived_query": query_metadata["prompt_query"],
+                "derived_query_fr": query_metadata["prompt_query_fr"],
+            },
+        })
+    decomposed_instructions = str(parsed_query.get("prompt_instructions") or "").strip()
+    if decomposed_instructions and decomposed_instructions != query_metadata["prompt_instructions"]:
+        warnings.append(
+            "Query decomposition proposed instructions that differ from the user's request; "
+            "the proposal was ignored."
+        )
     stages.append({
         "name": "query_metadata",
         "seconds": time.perf_counter() - stage_start,
@@ -913,9 +1508,65 @@ def run_rag_pipeline(
     update("query_metadata", 1, 1, "Query decomposition complete")
     check_cancel()
 
+    available_search_types = pipeline_plan.available_search_types
+    effective_search_types = [
+        search_type
+        for search_type in request.search_types
+        if search_type in available_search_types
+    ]
+    if not effective_search_types and not request.skip_retrieval:
+        # The pipeline is the authoritative set of available retrieval stages.
+        # A stale client may submit only a route the selected chain no longer
+        # exposes, so fall back to the chain rather than silently retrieving zero.
+        effective_search_types = [
+            value
+            for value in ("similarity", "lexical", "mmr")
+            if value in available_search_types
+        ]
+    if not request.skip_retrieval and not effective_search_types:
+        raise ValueError("The selected Research pipeline has no usable retrieval route.")
+
+    scope_started = time.perf_counter()
+    filter_plan = request.filter_plan
+    metadata_filter = normalize_metadata_filter(
+        filter_plan.metadata_filter if filter_plan else None
+    )
+    document_filter = normalize_document_filter(
+        filter_plan.document_filter if filter_plan else None
+    )
+    filter_detail: dict[str, Any] = {
+        "source": filter_plan.source if filter_plan else None,
+        "metadata_filter": metadata_filter,
+        "document_filter": document_filter,
+        "metadata_fields": sorted(metadata_filter_fields(metadata_filter)),
+    }
+
+    scope_seconds = time.perf_counter() - scope_started
     selected_candidates = _selected_evidence_candidates(request, store)
+    if metadata_filter or document_filter:
+        # Pinned evidence is user-curated and is not removed by the retrieval
+        # filter; record the exception so audit views can label it.
+        filter_detail["selected_evidence_exempt_count"] = len(selected_candidates)
+    if pipeline_plan.scope_stage_id:
+        stages.append(
+            {
+                "name": "research_scope",
+                "seconds": round(scope_seconds, 6),
+                "detail": {
+                    "active": bool(metadata_filter or document_filter),
+                    "source": filter_detail["source"],
+                    "metadata_fields": filter_detail["metadata_fields"],
+                    "document_filter_active": bool(document_filter),
+                    "selected_evidence_exempt_count": filter_detail.get(
+                        "selected_evidence_exempt_count", 0
+                    ),
+                },
+            }
+        )
     if request.skip_retrieval and not selected_candidates:
-        raise ValueError("Selected-evidence-only RAG requires at least one selected evidence record.")
+        raise ValueError(
+            "Selected-evidence-only RAG requires at least one selected evidence record."
+        )
     if not request.skip_retrieval and not str(request.source_collection or "").strip():
         raise ValueError("Select a source collection when retrieval is enabled.")
 
@@ -933,16 +1584,184 @@ def run_rag_pipeline(
             "No selected language collection matches the requested locale scope."
         )
 
-    retrieve_k = max(1, int(request.k))
-    fetch_k = max(retrieve_k, request.fetch_k)
+    requested_retrieve_k = max(1, int(request.k))
+    semantic_fetch_k = max(requested_retrieve_k, runtime_settings.semantic_fetch_k)
+    lexical_fetch_k = max(requested_retrieve_k, runtime_settings.lexical_fetch_k)
+    effective_retrieve_k = requested_retrieve_k
+    automatic_sizing_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing),
+        "collections": [],
+    }
+    if request.automatic_sizing and collections:
+        sizing_started = time.perf_counter()
+        for collection in collections:
+            try:
+                stats = store.record_size_stats(collection["name"])
+                sizing = automatic_collection_sizing(
+                    count=max(0, int(collection.get("count") or 0)),
+                    median_record_chars=stats.get("median_record_chars"),
+                    requested_k=requested_retrieve_k,
+                    semantic_fetch_k=runtime_settings.semantic_fetch_k,
+                    lexical_fetch_k=runtime_settings.lexical_fetch_k,
+                    mmr_limit=runtime_settings.retrieval_mmr_limit,
+                )
+                sizing["sample_count"] = int(stats.get("sample_count") or 0)
+            except Exception as exc:
+                sizing = automatic_collection_sizing(
+                    count=max(0, int(collection.get("count") or 0)),
+                    median_record_chars=None,
+                    requested_k=requested_retrieve_k,
+                    semantic_fetch_k=runtime_settings.semantic_fetch_k,
+                    lexical_fetch_k=runtime_settings.lexical_fetch_k,
+                    mmr_limit=runtime_settings.retrieval_mmr_limit,
+                )
+                sizing["sample_count"] = 0
+                sizing["fallback_reason"] = type(exc).__name__
+            collection["_rag_automatic_sizing"] = sizing
+            automatic_sizing_detail["collections"].append({
+                "collection": collection["name"],
+                "route": collection.get("_rag_route"),
+                **sizing,
+            })
+            effective_retrieve_k = max(effective_retrieve_k, int(sizing["k"]))
+            semantic_fetch_k = max(semantic_fetch_k, int(sizing["semantic_fetch_k"]))
+            lexical_fetch_k = max(lexical_fetch_k, int(sizing["lexical_fetch_k"]))
+        stages.append({
+            "name": "automatic_sizing",
+            "seconds": time.perf_counter() - sizing_started,
+            "detail": automatic_sizing_detail,
+        })
+        query_metadata["limit_retrieval"] = effective_retrieve_k
+
+    explicit_scope_text = "\n".join(
+        value
+        for value in (
+            str(request.prompt or "").strip(),
+            str(request.instructions or "").strip(),
+        )
+        if value
+    )
+    scope_work_summaries = _scope_work_summaries(store, collections)
+    explicit_scope_groups = _mentioned_work_groups(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    explicitly_named_works = _explicitly_named_works(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    exclusive_scope_works = _exclusive_scope_works(
+        explicit_scope_groups,
+        explicit_scope_text,
+        explicitly_named_works=explicitly_named_works,
+    )
+    mentioned_scope_authors = _mentioned_scope_authors(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    source_subject_authors = _source_subject_authors(
+        scope_work_summaries,
+        explicit_scope_text,
+    )
+    if len(source_subject_authors) == 1:
+        if not exclusive_scope_works:
+            exclusive_scope_works = _author_scope_works(
+                scope_work_summaries,
+                source_subject_authors[0],
+            )
+        exclusive_scope_authors = source_subject_authors
+    elif exclusive_scope_works and len(mentioned_scope_authors) == 1:
+        exclusive_scope_authors = mentioned_scope_authors
+    else:
+        exclusive_scope_authors = []
+
+    inferred_scope_filter = None
+    if exclusive_scope_works:
+        inferred_scope_filter = {"work": {"$in": exclusive_scope_works}}
+    if exclusive_scope_authors:
+        inferred_scope_filter = combine_metadata_filters(
+            inferred_scope_filter,
+            {"document_author": {"$in": exclusive_scope_authors}},
+        )
+    retrieval_metadata_filter = combine_metadata_filters(
+        metadata_filter,
+        inferred_scope_filter,
+    )
+    filter_detail["explicitly_named_works"] = explicitly_named_works
+    filter_detail["mentioned_source_authors"] = mentioned_scope_authors
+    filter_detail["inferred_source_authors"] = exclusive_scope_authors
+    filter_detail["inferred_exclusive_works"] = exclusive_scope_works
+
+    inferred_scope_exemptions = 0
+    if (exclusive_scope_works or exclusive_scope_authors) and selected_candidates:
+        allowed_works = set(exclusive_scope_works)
+        allowed_authors = {
+            _normalized_scope_text(author)
+            for author in exclusive_scope_authors
+        }
+        for item in selected_candidates:
+            record = item.get("record") if isinstance(item.get("record"), Mapping) else {}
+            work_matches = (
+                not allowed_works
+                or source_work_label(record) in allowed_works
+            )
+            author_matches = (
+                not allowed_authors
+                or _normalized_scope_text(source_author(record)) in allowed_authors
+            )
+            if not (work_matches and author_matches):
+                inferred_scope_exemptions += 1
+        if inferred_scope_exemptions:
+            # Pinned evidence is an intentional exception to inferred scope.
+            # Record the actual out-of-scope pin count rather than silently
+            # presenting the final evidence packet as scope-pure.
+            filter_detail["selected_evidence_inferred_scope_exempt_count"] = (
+                inferred_scope_exemptions
+            )
+            filter_detail["selected_evidence_exempt_count"] = max(
+                int(filter_detail.get("selected_evidence_exempt_count") or 0),
+                inferred_scope_exemptions,
+            )
+
+    if pipeline_plan.scope_stage_id and (exclusive_scope_works or exclusive_scope_authors):
+        scope_stage = next(
+            (stage for stage in reversed(stages) if stage["name"] == "research_scope"),
+            None,
+        )
+        if scope_stage is not None:
+            scope_stage["detail"]["active"] = True
+            scope_stage["detail"]["inferred_exclusive_works"] = exclusive_scope_works
+            scope_stage["detail"]["inferred_source_authors"] = exclusive_scope_authors
+            scope_stage["detail"]["selected_evidence_exempt_count"] = filter_detail.get(
+                "selected_evidence_exempt_count", 0
+            )
+            scope_stage["detail"]["selected_evidence_inferred_scope_exempt_count"] = (
+                inferred_scope_exemptions
+            )
+
     raw_results: list[dict[str, Any]] = []
-    total_units = len(collections) * max(1, len(request.search_types))
+    total_units = len(collections) * max(1, len(effective_search_types))
     unit = 0
 
     if request.skip_retrieval:
         update("retrieval", 1, 1, f"Retrieval skipped · {len(selected_candidates)} selected evidence records")
 
     for collection in collections:
+        sizing = (
+            collection.get("_rag_automatic_sizing")
+            if request.automatic_sizing
+            else None
+        )
+        collection_retrieve_k = int((sizing or {}).get("k") or requested_retrieve_k)
+        collection_semantic_fetch_k = int(
+            (sizing or {}).get("semantic_fetch_k") or semantic_fetch_k
+        )
+        collection_lexical_fetch_k = int(
+            (sizing or {}).get("lexical_fetch_k") or lexical_fetch_k
+        )
+        collection_mmr_limit = int(
+            (sizing or {}).get("mmr_limit") or runtime_settings.retrieval_mmr_limit
+        )
         check_cancel()
         locale_codes = set(collection.get("_rag_locales") or collection.get("language_codes") or [])
         query = (
@@ -952,21 +1771,41 @@ def run_rag_pipeline(
         )
 
         semantic_candidates: list[dict[str, Any]] = []
-        if {"similarity", "mmr"} & set(request.search_types):
+        if {"similarity", "mmr"} & set(effective_search_types):
             try:
-                semantic_candidates = _scope_rag_candidates(
-                    store.semantic_candidates(
+                semantic_kwargs: dict[str, Any] = {}
+                if retrieval_metadata_filter:
+                    semantic_kwargs["where"] = retrieval_metadata_filter
+                if document_filter:
+                    semantic_kwargs["where_document"] = document_filter
+                semantic_limit = min(
+                    collection_semantic_fetch_k,
+                    max(1, collection["count"]),
+                )
+                if isinstance(store, ChromaStore):
+                    semantic_rows = store.semantic_candidates(
                         collection["name"],
                         query,
-                        min(fetch_k, max(1, collection["count"])),
-                    ),
+                        semantic_limit,
+                        **semantic_kwargs,
+                        include_embeddings="mmr" in effective_search_types,
+                    )
+                else:
+                    semantic_rows = store.semantic_candidates(
+                        collection["name"],
+                        query,
+                        semantic_limit,
+                        **semantic_kwargs,
+                    )
+                semantic_candidates = _scope_rag_candidates(
+                    semantic_rows,
                     collection,
                     locale_codes,
                 )
             except ValueError as exc:
                 # Precomputed-vector collections remain useful through the lexical
                 # route even though they cannot embed a new query.
-                if "lexical" not in request.search_types:
+                if "lexical" not in effective_search_types:
                     raise
                 update(
                     "retrieval",
@@ -975,7 +1814,7 @@ def run_rag_pipeline(
                     f"Semantic route unavailable for {collection['name']}: {exc}",
                 )
 
-        if "similarity" in request.search_types:
+        if "similarity" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -983,13 +1822,17 @@ def run_rag_pipeline(
                 total_units,
                 f"Similarity · {collection['name']} · {collection.get('_rag_route', '')}",
             )
-            for rank, candidate in enumerate(semantic_candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(
+                semantic_candidates[:collection_retrieve_k],
+                start=1,
+            ):
                 row = dict(candidate)
+                row.pop("embedding", None)
                 row["search_type"] = "similarity"
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-        if "lexical" in request.search_types:
+        if "lexical" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -997,23 +1840,47 @@ def run_rag_pipeline(
                 total_units,
                 f"Lexical · {collection['name']} · {collection.get('_rag_route', '')}",
             )
-            lexical_candidates = _scope_rag_candidates(
-                store.lexical_search(
+            lexical_kwargs: dict[str, Any] = {}
+            if retrieval_metadata_filter:
+                lexical_kwargs["where"] = retrieval_metadata_filter
+            if document_filter:
+                lexical_kwargs["where_document"] = document_filter
+            collection_count = max(1, int(collection["count"]))
+            lexical_pool_limit = min(collection_lexical_fetch_k, collection_count)
+            if isinstance(store, ChromaStore):
+                # Production Chroma can score the same deep lexical candidate
+                # window while hydrating only the Records that can survive RRF.
+                # Lightweight test/fake stores keep the historical call shape.
+                lexical_rows = store.lexical_search(
                     collection["name"],
                     query,
-                    min(fetch_k, max(1, collection["count"])),
-                ),
+                    min(collection_retrieve_k, collection_count),
+                    **lexical_kwargs,
+                    candidate_pool_size=lexical_pool_limit,
+                )
+            else:
+                lexical_rows = store.lexical_search(
+                    collection["name"],
+                    query,
+                    lexical_pool_limit,
+                    **lexical_kwargs,
+                )
+            lexical_candidates = _scope_rag_candidates(
+                lexical_rows,
                 collection,
                 locale_codes,
             )
-            for rank, candidate in enumerate(lexical_candidates[:retrieve_k], start=1):
+            for rank, candidate in enumerate(
+                lexical_candidates[:collection_retrieve_k],
+                start=1,
+            ):
                 row = dict(candidate)
                 row["collection"] = collection["name"]
                 row["search_type"] = "lexical"
                 row["search_rank"] = rank
                 raw_results.append(row)
 
-        if "mmr" in request.search_types:
+        if "mmr" in effective_search_types:
             unit += 1
             update(
                 "retrieval",
@@ -1023,14 +1890,101 @@ def run_rag_pipeline(
             )
             mmr = _mmr_select(
                 semantic_candidates,
-                k=retrieve_k,
-                lambda_mult=request.lambda_mult,
+                k=min(collection_retrieve_k, collection_mmr_limit),
+                lambda_mult=runtime_settings.retrieval_mmr_lambda,
             )
             for rank, candidate in enumerate(mmr, start=1):
                 row = dict(candidate)
                 row["search_type"] = "mmr"
                 row["search_rank"] = rank
                 raw_results.append(row)
+
+    # Comparative/multi-author requests keep one seed per named source group.
+    # Single unambiguous author/work requests were already constrained above;
+    # the seed remains useful as a coverage guarantee within that closed scope.
+    explicit_scope_seed_ids: set[str] = set()
+    explicit_scope_seed_detail: list[dict[str, Any]] = []
+    scoped_query = "\n".join(
+        value
+        for value in (
+            query_metadata["prompt_query"],
+            query_metadata["prompt_query_fr"],
+            explicit_scope_text,
+        )
+        if value
+    ).strip()
+
+    for group_index, works in enumerate(explicit_scope_groups, start=1):
+        existing = next(
+            (
+                item
+                for item in raw_results
+                if source_work_label(item.get("record") or {}) in works
+            ),
+            None,
+        )
+        seed = existing
+        if seed is None:
+            for collection in collections:
+                try:
+                    scope_metadata_filter = combine_metadata_filters(
+                        metadata_filter,
+                        {"work": {"$in": works}},
+                    )
+                    scope_kwargs: dict[str, Any] = {}
+                    if scope_metadata_filter:
+                        scope_kwargs["where"] = scope_metadata_filter
+                    if document_filter:
+                        scope_kwargs["where_document"] = document_filter
+                    scoped_rows = _scope_rag_candidates(
+                        store.lexical_search(
+                            collection["name"],
+                            scoped_query,
+                            min(4, max(1, int(collection.get("count") or 1))),
+                            **scope_kwargs,
+                        ),
+                        collection,
+                        set(
+                            collection.get("_rag_locales")
+                            or collection.get("language_codes")
+                            or []
+                        ),
+                    )
+                except Exception:
+                    logger.debug(
+                        "Explicit Research scope retrieval failed for %s",
+                        works,
+                        exc_info=True,
+                    )
+                    continue
+                if scoped_rows:
+                    seed = dict(scoped_rows[0])
+                    seed["collection"] = collection["name"]
+                    seed["search_type"] = "explicit_scope"
+                    seed["search_rank"] = 1
+                    raw_results.append(seed)
+                    break
+
+        if seed is None:
+            explicit_scope_seed_detail.append(
+                {"works": works, "matched": False, "record_id": None}
+            )
+            continue
+        record = seed.get("record") if isinstance(seed.get("record"), Mapping) else {}
+        logical = str(record.get("record_id") or seed.get("id") or "")
+        if not logical:
+            continue
+        explicit_scope_seed_ids.add(logical)
+        explicit_scope_seed_detail.append(
+            {
+                "works": works,
+                "matched": True,
+                "record_id": logical,
+                "scope_label": source_work_label(record),
+                "source_document_author": semantic_value(record, SOURCE_AUTHOR_ID),
+                "group": group_index,
+            }
+        )
 
     # Deduplicate by logical record ID, retaining a retrieval-rank fusion score.
     update("deduplicate", 0, 1, f"Fusing {len(raw_results)} retrieval hits")
@@ -1041,7 +1995,7 @@ def run_rag_pipeline(
             record.get("record_id")
             or item.get("id")
         )
-        rrf = 1.0 / (float(request.rrf_k) + float(item.get("search_rank") or 1))
+        rrf = 1.0 / (float(runtime_settings.rrf_k) + float(item.get("search_rank") or 1))
         if logical not in dedup:
             row = dict(item)
             row["rrf_score"] = rrf
@@ -1058,12 +2012,23 @@ def run_rag_pipeline(
                 "search_type": item.get("search_type"),
                 "rank": item.get("search_rank"),
             })
-            old_distance = dedup[logical].get("distance")
-            new_distance = item.get("distance")
-            if new_distance is not None and (
-                old_distance is None or new_distance < old_distance
+            # Distances from cosine, L2, and inner-product collections are
+            # not directly comparable. Prefer the best normalized relevance and
+            # carry the distance/metric that produced it for traceability.
+            old_relevance = dedup[logical].get("relevance")
+            new_relevance = item.get("relevance")
+            if new_relevance is not None and (
+                old_relevance is None or float(new_relevance) > float(old_relevance)
             ):
-                dedup[logical]["distance"] = new_distance
+                dedup[logical]["distance"] = item.get("distance")
+                dedup[logical]["distance_metric"] = item.get("distance_metric")
+                dedup[logical]["relevance"] = float(new_relevance)
+
+    for logical in explicit_scope_seed_ids:
+        if logical not in dedup:
+            continue
+        dedup[logical]["explicit_scope_seed"] = True
+        dedup[logical]["selection_role"] = "explicit_scope_seed"
 
     for item in selected_candidates:
         record = item["record"]
@@ -1078,9 +2043,34 @@ def run_rag_pipeline(
         dedup.values(),
         key=lambda item: (
             item.get("rrf_score", 0.0),
-            _distance_similarity(item.get("distance")),
+            float(
+                item.get("relevance")
+                if item.get("relevance") is not None
+                else _distance_similarity(item.get("distance"))
+            ),
         ),
         reverse=True,
+    )
+    fused_deduplicated_count = len(deduped)
+    ranking_candidates = deduped
+    region_collapse_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing and not request.skip_retrieval),
+        "input_count": len(deduped),
+        "output_count": len(deduped),
+        "collapsed_records": 0,
+    }
+    if request.automatic_sizing and not request.skip_retrieval:
+        collapse_started = time.perf_counter()
+        ranking_candidates, collapse_counts = collapse_adjacent_candidates(deduped)
+        region_collapse_detail.update(collapse_counts)
+        stages.append({
+            "name": "automatic_region_collapse",
+            "seconds": time.perf_counter() - collapse_started,
+            "detail": region_collapse_detail,
+        })
+
+    pre_rerank_diagnostics = (
+        _candidate_diagnostics(ranking_candidates) if stop_after_context else []
     )
     update("deduplicate", 1, 1, f"{len(deduped)} unique records after rank fusion")
     stages.append({
@@ -1093,6 +2083,7 @@ def run_rag_pipeline(
         )),
             "retrieval_skipped": bool(request.skip_retrieval),
             "selected_evidence_count": len(selected_candidates),
+            "filter_plan": filter_detail,
             "routes": [
                 {
                     "collection": item["name"],
@@ -1107,81 +2098,353 @@ def run_rag_pipeline(
     })
     check_cancel()
 
-    # Step 4: rerank.
+    # Step 4: rerank and follow only fallback edges declared by the pipeline.
     stage_start = time.perf_counter()
-    update("rerank", 0, 1, request.reranker)
-    rerank_query = (
-        query_metadata["prompt_query"]
-        + "\n"
-        + query_metadata["prompt_query_fr"]
+
+    requested_reranker = request.reranker
+    if requested_reranker == "cross_encoder" and pipeline_plan.cross_encoder_available:
+        effective_reranker = "cross_encoder"
+    elif requested_reranker == "lexical" and pipeline_plan.lexical_rerank_available:
+        effective_reranker = "lexical"
+    elif (
+        requested_reranker == "cross_encoder"
+        and pipeline_plan.rerank_strategy == "rerank.lexical_fallback"
+    ):
+        effective_reranker = "lexical"
+    else:
+        effective_reranker = "none"
+
+    update("rerank", 0, 1, effective_reranker)
+    rerank_query = "\n".join(
+        value
+        for value in (
+            query_metadata["prompt_query"],
+            query_metadata["prompt_query_fr"],
+            explicit_scope_text,
+        )
+        if value
     ).strip()
-    # ``rerank_top_n`` is the single source of truth. Query decomposition may
-    # transform the wording of the query, but it must not alter pipeline limits.
-    # User-selected evidence is pinned: it is never allowed to disappear merely
-    # because a reranker prefers retrieved neighbors.  Selected records consume
-    # slots first, then the reranker fills the remaining requested slots.
-    requested_top_n = len(deduped) if request.skip_retrieval else max(1, int(request.rerank_top_n))
-    selected_pool = [item for item in deduped if item.get("selected_evidence")]
-    retrieved_pool = [item for item in deduped if not item.get("selected_evidence")]
-    effective_top_n = (
-        len(deduped)
+    requested_top_n = (
+        len(ranking_candidates)
         if request.skip_retrieval
-        else min(max(requested_top_n, len(selected_pool)), max(1, len(deduped)))
+        else runtime_settings.rerank_top_n
     )
-    remaining_slots = max(0, effective_top_n - len(selected_pool))
+    selected_pool = [
+        item for item in ranking_candidates if item.get("selected_evidence")
+    ]
+    scope_seed_pool = [
+        item
+        for item in ranking_candidates
+        if item.get("explicit_scope_seed") and not item.get("selected_evidence")
+    ]
+    pinned_pool = selected_pool + scope_seed_pool
+    retrieved_pool = [
+        item
+        for item in ranking_candidates
+        if not item.get("selected_evidence") and not item.get("explicit_scope_seed")
+    ]
+    effective_top_n = (
+        len(ranking_candidates)
+        if request.skip_retrieval
+        else min(
+            max(requested_top_n, len(pinned_pool)),
+            max(1, len(ranking_candidates)),
+        )
+    )
+    remaining_slots = max(0, effective_top_n - len(pinned_pool))
+    post_diversity = pipeline_plan.post_rerank_diversity
+    rerank_pool_limit = min(
+        len(retrieved_pool),
+        max(
+            remaining_slots,
+            remaining_slots * 3 if post_diversity != "none" else remaining_slots,
+        ),
+    )
+    diversity_slots = min(remaining_slots, runtime_settings.diversity_limit)
+
+    rerank_telemetry: dict[str, Any] = {"mode": effective_reranker}
+    active_rerank_stage_id: str | None = None
+    fallback_condition: str | None = None
+    cross_encoder_calls = 0
 
     if request.skip_retrieval:
-        reranked = selected_pool or deduped
+        reranked = pinned_pool or ranking_candidates
         for item in reranked:
             item["rerank_score"] = item.get("rerank_score", 1.0)
+        reranked_retrieved: list[dict[str, Any]] = []
+        selected_ranked = list(reranked)
     else:
         selected_ranked = []
         for item in selected_pool:
             row = dict(item)
-            row["rerank_score"] = max(1.0, float(item.get("rerank_score") or 0.0))
+            row["rerank_score"] = max(
+                1.0,
+                float(item.get("rerank_score") or 0.0),
+            )
+            selected_ranked.append(row)
+        for item in scope_seed_pool:
+            row = dict(item)
+            row["selection_role"] = "explicit_scope_seed"
+            row["rerank_score"] = float(
+                item.get("rerank_score")
+                if item.get("rerank_score") is not None
+                else item.get("rrf_score") or 0.0
+            )
             selected_ranked.append(row)
 
-        reranked_retrieved: list[dict[str, Any]] = []
-        if remaining_slots and retrieved_pool:
-            if request.reranker == "cross_encoder":
-                reranked_retrieved, rerank_warning = _cross_encoder_rerank(
+        reranked_retrieved = []
+        if rerank_pool_limit and retrieved_pool:
+            if effective_reranker == "cross_encoder":
+                active_rerank_stage_id = pipeline_plan.rerank_stage_id
+                cross_encoder_calls += 1
+                attempted, rerank_warning, rerank_telemetry = _cross_encoder_rerank(
                     rerank_query,
                     retrieved_pool,
-                    remaining_slots,
-                    request.cross_encoder_model,
+                    rerank_pool_limit,
+                    runtime_settings.cross_encoder_model,
+                    timeout_seconds=(
+                        runtime_settings.cross_encoder_timeout_seconds
+                        if runtime_settings.cross_encoder_timeout_seconds is not None
+                        else settings.ollama_timeout_seconds
+                    ),
                 )
-                if rerank_warning:
-                    warnings.append(rerank_warning)
-            elif request.reranker == "lexical":
+                if attempted is not None:
+                    reranked_retrieved = attempted
+                else:
+                    reason = str(
+                        rerank_telemetry.get("fallback_reason") or "unavailable"
+                    )
+                    fallback_condition = classify_cross_encoder_failure(reason)
+                    fallback = pipeline_plan.rerank_fallback(fallback_condition)
+                    if fallback and fallback[1] == "rerank.lexical_fallback":
+                        active_rerank_stage_id = fallback[0]
+                        effective_reranker = "lexical"
+                        reranked_retrieved = _lexical_rerank(
+                            rerank_query,
+                            retrieved_pool,
+                            rerank_pool_limit,
+                        )
+                        rerank_telemetry = {
+                            **rerank_telemetry,
+                            "mode": "lexical_fallback",
+                            "fallback_condition": fallback_condition,
+                            "fallback_stage_id": fallback[0],
+                        }
+                        warnings.append(
+                            f"Cross-encoder fallback ({reason}); followed "
+                            f"{fallback_condition} edge to lexical/vector fallback."
+                        )
+                    elif fallback and fallback[1] == "select.top_k":
+                        active_rerank_stage_id = fallback[0]
+                        effective_reranker = "none"
+                        fallback_limit = max(
+                            1,
+                            int(
+                                pipeline_plan.config_value(
+                                    fallback[0],
+                                    "limit",
+                                    rerank_pool_limit,
+                                )
+                            ),
+                        )
+                        reranked_retrieved = [
+                            dict(item)
+                            for item in retrieved_pool[
+                                : min(rerank_pool_limit, fallback_limit)
+                            ]
+                        ]
+                        for item in reranked_retrieved:
+                            item["rerank_score"] = item.get("rrf_score", 0.0)
+                        rerank_telemetry = {
+                            **rerank_telemetry,
+                            "mode": "top_k_fallback",
+                            "fallback_condition": fallback_condition,
+                            "fallback_stage_id": fallback[0],
+                        }
+                        warnings.append(
+                            f"Cross-encoder fallback ({reason}); followed "
+                            f"{fallback_condition} edge to deterministic top-K."
+                        )
+                    else:
+                        effective_reranker = "none"
+                        reranked_retrieved = [
+                            dict(item) for item in retrieved_pool[:rerank_pool_limit]
+                        ]
+                        for item in reranked_retrieved:
+                            item["rerank_score"] = item.get("rrf_score", 0.0)
+                        rerank_telemetry = {
+                            **rerank_telemetry,
+                            "mode": "none",
+                            "fallback_condition": fallback_condition,
+                        }
+                        if rerank_warning:
+                            warnings.append(
+                                rerank_warning
+                                + f" No {fallback_condition} fallback edge is configured; "
+                                "retained fused retrieval order."
+                            )
+            elif effective_reranker == "lexical":
+                active_rerank_stage_id = pipeline_plan.lexical_rerank_stage_id
                 reranked_retrieved = _lexical_rerank(
-                    rerank_query, retrieved_pool, remaining_slots
+                    rerank_query,
+                    retrieved_pool,
+                    rerank_pool_limit,
                 )
             else:
-                reranked_retrieved = retrieved_pool[:remaining_slots]
+                reranked_retrieved = retrieved_pool[:rerank_pool_limit]
                 for item in reranked_retrieved:
                     item["rerank_score"] = item.get("rrf_score", 0.0)
+
+        if post_diversity == "none":
+            reranked_retrieved = reranked_retrieved[:remaining_slots]
         reranked = selected_ranked + reranked_retrieved
 
     stages.append({
         "name": "rerank",
         "seconds": time.perf_counter() - stage_start,
         "detail": {
-            "mode": request.reranker,
+            "mode": effective_reranker,
+            "requested_mode": requested_reranker,
             "requested_top_n": requested_top_n,
-            "effective_top_n": len(reranked),
+            "rerank_pool_count": len(reranked_retrieved),
             "selected_evidence_pinned": len(selected_pool),
-            "cross_encoder_model": request.cross_encoder_model,
+            "explicit_scope_seeds_pinned": len(scope_seed_pool),
+            "active_stage_id": active_rerank_stage_id,
+            "fallback_condition": fallback_condition,
+            "cross_encoder_calls": cross_encoder_calls,
+            "cross_encoder_model": (
+                runtime_settings.cross_encoder_model
+                if requested_reranker == "cross_encoder"
+                else None
+            ),
+            "reranker_telemetry": rerank_telemetry,
         },
     })
-    update("rerank", 1, 1, f"{len(reranked)} evidence records retained")
+    post_rerank_diagnostics = (
+        _candidate_diagnostics(reranked) if stop_after_context else []
+    )
+    update("rerank", 1, 1, f"{len(reranked)} records after relevance reranking")
     check_cancel()
 
+    if (
+        not request.skip_retrieval
+        and post_diversity != "none"
+        and diversity_slots
+    ):
+        diversity_started = time.perf_counter()
+        if post_diversity == "source_aware":
+            diversified = source_aware_select(
+                reranked_retrieved,
+                limit=diversity_slots,
+                relevance=lambda item: float(
+                    item.get("rerank_score")
+                    if item.get("rerank_score") is not None
+                    else item.get("rrf_score") or 0.0
+                ),
+            )
+        else:
+            ranked_for_diversity: list[dict[str, Any]] = []
+            denominator = max(1, len(reranked_retrieved) - 1)
+            for index, item in enumerate(reranked_retrieved):
+                row = dict(item)
+                row["_diversity_relevance"] = 1.0 - (index / denominator)
+                ranked_for_diversity.append(row)
+            diversified = mmr_select(
+                ranked_for_diversity,
+                limit=diversity_slots,
+                lambda_mult=runtime_settings.diversity_lambda,
+                relevance=lambda item: float(item.get("_diversity_relevance") or 0.0),
+                vector=lambda item: item.get("embedding"),
+            )
+            for item in diversified:
+                item.pop("_diversity_relevance", None)
+
+        reranked = selected_ranked + diversified
+        stages.append({
+            "name": "diversity",
+            "seconds": time.perf_counter() - diversity_started,
+            "detail": {
+                "mode": post_diversity,
+                "stage_id": pipeline_plan.diversity_stage_id,
+                "input_count": len(reranked_retrieved),
+                "output_count": len(diversified),
+                "selected_evidence_pinned": len(selected_pool),
+                "explicit_scope_seeds_pinned": len(scope_seed_pool),
+                "lambda_mult": (
+                    runtime_settings.diversity_lambda
+                    if post_diversity == "mmr"
+                    else None
+                ),
+                "limit": diversity_slots,
+            },
+        })
+        update(
+            "diversity",
+            1,
+            1,
+            f"{len(reranked)} records retained after {post_diversity} diversity",
+        )
+        check_cancel()
+
     # Step 5: build compact evidence context.
+    post_selection_diagnostics = (
+        _candidate_diagnostics(reranked) if stop_after_context else []
+    )
+    context_candidates = list(reranked)
+    context_expansion_detail: dict[str, Any] = {
+        "enabled": bool(request.automatic_sizing),
+        "anchor_count": len(reranked),
+        "neighbor_count": 0,
+    }
+    if request.automatic_sizing:
+        expansion_started = time.perf_counter()
+        context_candidates, expansion_counts = expand_context_neighbors(
+            reranked,
+            load_document_records=store.document_records,
+            total_char_limit=runtime_settings.evidence_total_char_limit,
+        )
+        context_expansion_detail.update(expansion_counts)
+        stages.append({
+            "name": "automatic_context_expansion",
+            "seconds": time.perf_counter() - expansion_started,
+            "detail": context_expansion_detail,
+        })
+
     stage_start = time.perf_counter()
+    context_candidates, excluded_scope_records = partition_scope_compatible_records(
+        context_candidates,
+        exclusive_scope_works,
+        exclusive_scope_authors,
+    )
+    if excluded_scope_records:
+        warnings.append(
+            "Excluded out-of-scope records from inferred author/work scope: "
+            + "; ".join(
+                f"{item['record_id']} ({item['work'] or 'unknown work'})"
+                for item in excluded_scope_records
+            )
+        )
+    context_candidates, insufficient_records = partition_sufficient_records(
+        context_candidates
+    )
+    if not request.automatic_sizing:
+        # Preserve the historical manual-mode meaning of reranked_count: only
+        # provenance-sufficient Records that can enter the evidence packet.
+        reranked = context_candidates
+    if insufficient_records:
+        warnings.append(
+            "Excluded provenance-incomplete records from evidence: "
+            + "; ".join(
+                f"{item['record_id']} missing {item['missing']}"
+                for item in insufficient_records
+            )
+        )
     retrieval_context, works, evidence = _context_string(
-        reranked,
-        record_char_limit=request.evidence_record_char_limit,
-        total_char_limit=request.evidence_total_char_limit,
+        context_candidates,
+        record_char_limit=runtime_settings.evidence_record_char_limit,
+        total_char_limit=runtime_settings.evidence_total_char_limit,
+        prompt_metadata=request.prompt_metadata,
+        skip_overflow=request.automatic_sizing,
     )
     sufficiency_issues = evidence_sufficiency_issues(evidence)
     stages.append({
@@ -1191,9 +2454,20 @@ def run_rag_pipeline(
             "evidence_count": len(evidence),
             "characters": len(retrieval_context),
             "sufficiency_issues": sufficiency_issues,
+            "excluded_out_of_scope_records": excluded_scope_records,
+            "excluded_insufficient_records": insufficient_records,
         },
     })
     update("context", 1, 1, f"{len(evidence)} evidence records packaged")
+    if not evidence and insufficient_records:
+        detail = "; ".join(
+            f"{item['record_id']} missing {item['missing']}"
+            for item in insufficient_records
+        )
+        raise ValueError(
+            "RAG evidence sufficiency failed: every retrieved record lacks required "
+            f"provenance ({detail})."
+        )
     if not evidence:
         raise ValueError("RAG evidence sufficiency failed: retrieval produced no evidence records.")
     if sufficiency_issues:
@@ -1204,30 +2478,235 @@ def run_rag_pipeline(
         raise ValueError(f"RAG evidence sufficiency failed: {detail}")
     check_cancel()
 
+    retrieval_summary = {
+        "raw_count": len(raw_results),
+        # Items in the searched collections (counts only), for scaling fits.
+        "scope_size": sum(max(0, int(item.get("count") or 0)) for item in collections),
+        "deduplicated_count": fused_deduplicated_count,
+        "ranking_region_count": len(ranking_candidates),
+        "reranked_count": len(reranked),
+        "evidence_count": len(evidence),
+        "search_types": list(effective_search_types),
+        "requested_search_types": list(request.search_types),
+        "available_search_types": sorted(available_search_types),
+        "post_rerank_diversity": pipeline_plan.post_rerank_diversity,
+        "k": request.k,
+        "effective_k": effective_retrieve_k,
+        "fetch_k": max(semantic_fetch_k, lexical_fetch_k),
+        "requested_fetch_k": request.fetch_k,
+        "automatic_sizing": automatic_sizing_detail,
+        "automatic_region_collapse": region_collapse_detail,
+        "automatic_context_expansion": context_expansion_detail,
+        "semantic_fetch_k": semantic_fetch_k,
+        "lexical_fetch_k": lexical_fetch_k,
+        "lambda_mult": runtime_settings.retrieval_mmr_lambda,
+        "retrieval_mmr_lambda": runtime_settings.retrieval_mmr_lambda,
+        "diversity_lambda": runtime_settings.diversity_lambda,
+        "rrf_k": runtime_settings.rrf_k,
+        "reranker": effective_reranker,
+        "requested_reranker": request.reranker,
+        "rerank_top_n": runtime_settings.rerank_top_n,
+        "effective_rerank_top_n": len(reranked),
+        "query_decomposition": effective_query_decomposition,
+        "query_transform_model_calls": 1 if effective_query_decomposition else 0,
+        "cross_encoder_calls": cross_encoder_calls,
+        "requested_query_decomposition": request.query_decomposition,
+        "query_decomposition_num_predict": runtime_settings.query_decomposition_num_predict,
+        "skip_retrieval": request.skip_retrieval,
+        "selected_evidence_count": len(selected_candidates),
+        "filter_plan": filter_detail,
+        "explicit_scope_groups": explicit_scope_seed_detail,
+        "explicit_scope_seed_count": len(explicit_scope_seed_ids),
+        "inferred_exclusive_scope_works": exclusive_scope_works,
+        "inferred_source_authors": exclusive_scope_authors,
+        "response_language": request.response_language,
+        "evidence_record_char_limit": runtime_settings.evidence_record_char_limit,
+        "evidence_total_char_limit": runtime_settings.evidence_total_char_limit,
+        "evidence_sufficiency": {"passed": True, "issues": []},
+    }
+
+    if stop_after_context:
+        return {
+            "prompt": request.prompt,
+            "research_thread": thread_audit,
+            "prompt_contract": GENERATION_CONTRACT,
+            "query_contract": QUERY_CONTRACT,
+            "query_metadata": query_metadata,
+            "answer": "",
+            "raw_answer": "",
+            "evidence": evidence,
+            "works": works,
+            "collections": [item["name"] for item in collections],
+            "warnings": warnings,
+            "stages": stages,
+            "provider": provider,
+            "model": model,
+            "pipeline": pipeline_summary,
+            "elapsed_seconds": time.perf_counter() - started,
+            "retrieval": retrieval_summary,
+            "diagnostics": {
+                "candidate_retention": "complete_for_comparison",
+                "pre_rerank": pre_rerank_diagnostics,
+                "post_rerank": post_rerank_diagnostics,
+                "post_selection": post_selection_diagnostics,
+                "context_characters": len(retrieval_context),
+            },
+            "memory": {
+                "mode": "skipped_for_non_persistent_dry_run",
+                "warnings": [],
+            },
+            "dry_run": True,
+        }
+
+    # Advisory memory is chosen after the evidence packet exists so validated-claim
+    # support can be checked against the Records this answer may actually cite.
+    excluded_thread_response_ids: list[str] = []
+    if thread_audit:
+        excluded_thread_response_ids = [
+            str(item["response_id"])
+            for item in (thread_audit.get("context_selection") or {}).get("items", [])
+            if item.get("role") == "assistant" and item.get("response_id")
+        ]
+    prior_response_memory, prior_claim_memory, memory_detail = memory_guidance(
+        query_metadata["prompt_query"],
+        use_responses=request.use_prior_response_memory,
+        use_claims=request.use_prior_claim_memory,
+        owner=owner,
+        evidence=evidence,
+        system_store=system_store,
+        response_index_factory=lambda: ResponseMemoryIndex(store),
+        claim_index_factory=lambda: ClaimMemoryIndex(store),
+        excluded_response_ids=excluded_thread_response_ids,
+    )
+    warnings.extend(memory_detail["warnings"])
+
     # Step 6: generate answer.
     stage_start = time.perf_counter()
     update("generation", 0, 1, f"Invoking {provider} · {model}")
-    generation_prompt = FOCUSED_PROMPT.format(
-        prompt_query=query_metadata["prompt_query"],
+    generation_prompt = (THREAD_FOCUSED_PROMPT if thread_context else FOCUSED_PROMPT).format(
+        prompt_query=request.prompt,
+        thread_context=thread_context or "(none selected)",
         prompt_instructions=query_metadata["prompt_instructions"],
         response_language=("French" if query_metadata.get("response_language") == "fr" else "English"),
+        prior_response_memory=prior_response_memory or "(none selected)",
+        prior_claim_memory=prior_claim_memory or "(none selected)",
         context=retrieval_context,
     )
-    raw_answer = chat_complete(
-        provider=provider,
-        model=model,
-        base_url=request.base_url,
-        api_key=request.api_key,
-        prompt=generation_prompt,
-        options=request.generation,
-        json_mode=False,
-        max_tokens=(
-            request.generation.num_predict
-            if request.generation and request.generation.num_predict
-            else 8192
-        ),
-        cancelled=cancelled,
+    generation_max_tokens = (
+        request.generation.num_predict
+        if request.generation and request.generation.num_predict
+        else 8192
     )
+
+    def generate_answer(
+        prompt_text: str,
+        delta_callback: Callable[[str], None] | None,
+    ) -> str:
+        return chat_complete(
+            provider=provider,
+            model=model,
+            base_url=request.base_url,
+            api_key=request.api_key,
+            prompt=prompt_text,
+            options=request.generation,
+            json_mode=False,
+            max_tokens=generation_max_tokens,
+            cancelled=cancelled,
+            on_delta=delta_callback,
+        )
+
+    raw_answer = generate_answer(generation_prompt, on_generation_delta)
+    generation_attempts = 1
+    prose_required = not _requests_json_output(
+        request.prompt,
+        request.instructions or "",
+    )
+    contract_issues = _generation_contract_issues(
+        raw_answer,
+        evidence,
+        prose_required=prose_required,
+        require_evidence_markers=request.bind_citations,
+    )
+    if _non_substantive_research_opening(
+        raw_answer, request.prompt, request.instructions or "",
+        prose_required=prose_required,
+    ):
+        contract_issues.append("non_substantive_opening")
+    initial_contract_issues = list(contract_issues)
+    output_contract_retry = bool(contract_issues)
+    prose_contract_retry = "structured_json" in contract_issues
+    if contract_issues:
+        generation_attempts += 1
+        if "structured_json" in contract_issues:
+            warnings.append(
+                "Generation returned structured JSON for a prose Research request; regenerated once."
+            )
+        if "missing_evidence_markers" in contract_issues:
+            warnings.append(
+                "Generation omitted required evidence markers; regenerated once before citation binding."
+            )
+        if any(issue.startswith("unknown_evidence_markers:") for issue in contract_issues):
+            warnings.append(
+                "Generation cited evidence markers outside the current evidence packet; regenerated once."
+            )
+        if "non_substantive_opening" in contract_issues:
+            warnings.append(
+                "Generation opened with a formulaic preamble; requested a direct scholarly answer."
+            )
+        correction_prompt = generation_prompt + (
+            """
+
+<OUTPUT_CONTRACT_CORRECTION>
+The previous draft failed the Research output or evidence contract.
+Return only cohesive scholarly prose with current evidence markers. Avoid JSON, schemas,
+field-name wrappers such as title/introduction/themes, and fenced code blocks.
+</OUTPUT_CONTRACT_CORRECTION>
+"""
+            if prose_required
+            else """
+
+<OUTPUT_CONTRACT_CORRECTION>
+The previous draft failed the Research evidence contract.
+Preserve the output form explicitly requested by the researcher. Ground substantive claims
+with current evidence markers such as [[E0]], cite only IDs present in the current evidence
+packet, and do not switch to prose unless the researcher requested prose.
+</OUTPUT_CONTRACT_CORRECTION>
+"""
+        )
+        if "non_substantive_opening" in contract_issues:
+            correction_prompt += (
+                "\n<OPENING_STYLE_CORRECTION>\n"
+                "The previous draft began with a generic self-introduction or plan. "
+                "Start immediately with a substantive finding or an evidence limitation. "
+                "Do not announce what you intend to do. Preserve all source attribution, "
+                "qualifications, and current evidence markers.\n"
+                "</OPENING_STYLE_CORRECTION>"
+            )
+        raw_answer = generate_answer(correction_prompt, None)
+        contract_issues = _generation_contract_issues(
+            raw_answer,
+            evidence,
+            prose_required=prose_required,
+            require_evidence_markers=request.bind_citations,
+        )
+        if _non_substantive_research_opening(
+            raw_answer, request.prompt, request.instructions or "",
+            prose_required=prose_required,
+        ):
+            contract_issues.append("non_substantive_opening")
+            warnings.append(
+                "The regenerated answer retained a generic introduction; its text was preserved."
+            )
+        # Stylistic noncompliance is diagnosable, not a reason to discard a
+        # properly cited scholarly answer after the single bounded retry.
+        blocking_issues = [
+            issue for issue in contract_issues if issue != "non_substantive_opening"
+        ]
+        if blocking_issues:
+            raise ValueError(
+                "Research generation violated the output/evidence contract after one retry: "
+                + ", ".join(blocking_issues)
+            )
     stages.append({
         "name": "generation",
         "seconds": time.perf_counter() - stage_start,
@@ -1235,6 +2714,11 @@ def run_rag_pipeline(
             "provider": provider,
             "model": model,
             "characters": len(raw_answer),
+            "attempts": generation_attempts,
+            "output_contract_retry": output_contract_retry,
+            "prose_contract_retry": prose_contract_retry,
+            "contract_issues_initial": initial_contract_issues,
+            "contract_issues_final": contract_issues,
         },
     })
     update("generation", 1, 1, "Draft generated")
@@ -1246,10 +2730,10 @@ def run_rag_pipeline(
         _bind_sources(
             raw_answer,
             evidence,
-            request.include_works_cited,
+            request.include_works_cited and prose_required,
         )
         if request.bind_citations
-        else raw_answer
+        else _STRAY_MEMORY_TAG_PATTERN.sub("", raw_answer)
     )
     stages.append({
         "name": "bind_sources",
@@ -1263,6 +2747,9 @@ def run_rag_pipeline(
 
     return {
         "prompt": request.prompt,
+        "research_thread": thread_audit,
+        "prompt_contract": GENERATION_CONTRACT,
+        "query_contract": QUERY_CONTRACT,
         "query_metadata": query_metadata,
         "answer": answer,
         "raw_answer": raw_answer,
@@ -1273,26 +2760,8 @@ def run_rag_pipeline(
         "stages": stages,
         "provider": provider,
         "model": model,
+        "pipeline": pipeline_summary,
         "elapsed_seconds": time.perf_counter() - started,
-        "retrieval": {
-            "raw_count": len(raw_results),
-            "deduplicated_count": len(deduped),
-            "reranked_count": len(reranked),
-            "search_types": list(request.search_types),
-            "k": request.k,
-            "fetch_k": request.fetch_k,
-            "lambda_mult": request.lambda_mult,
-            "rrf_k": request.rrf_k,
-            "reranker": request.reranker,
-            "rerank_top_n": request.rerank_top_n,
-            "effective_rerank_top_n": len(reranked),
-            "query_decomposition": request.query_decomposition,
-            "query_decomposition_num_predict": request.query_decomposition_num_predict,
-            "skip_retrieval": request.skip_retrieval,
-            "selected_evidence_count": len(selected_candidates),
-            "response_language": request.response_language,
-            "evidence_record_char_limit": request.evidence_record_char_limit,
-            "evidence_total_char_limit": request.evidence_total_char_limit,
-            "evidence_sufficiency": {"passed": True, "issues": []},
-        },
+        "retrieval": retrieval_summary,
+        "memory": memory_detail,
     }

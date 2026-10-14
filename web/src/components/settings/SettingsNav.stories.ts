@@ -1,47 +1,57 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
-import { ref } from "vue";
 import SettingsNav from "./SettingsNav.vue";
 import type { SettingsSectionId } from "../../domain/settings";
 
 const items = [
-  {id: "workspace" as SettingsSectionId, label: "Workspace and appearance"},
-  {id: "language" as SettingsSectionId, label: "Language and accessibility"},
-  {id: "research" as SettingsSectionId, label: "Research defaults"},
-  {id: "review" as SettingsSectionId, label: "Review and AI behavior"},
-  {id: "providers" as SettingsSectionId, label: "Providers and models"},
-  {id: "retrieval" as SettingsSectionId, label: "Vector stores and retrieval"},
-  {id: "security" as SettingsSectionId, label: "Security, users, and permissions"},
-  {id: "system" as SettingsSectionId, label: "System and operations"},
+  { id: "overview" as SettingsSectionId, label: "Overview" },
+  { id: "preferences" as SettingsSectionId, label: "Preferences" },
+  { id: "research" as SettingsSectionId, label: "Research & review" },
+  { id: "retrieval" as SettingsSectionId, label: "Retrieval & indexing" },
+  { id: "services" as SettingsSectionId, label: "AI & language services" },
+  { id: "data" as SettingsSectionId, label: "Data & storage" },
+  { id: "access" as SettingsSectionId, label: "Access & permissions" },
+  { id: "troubleshooting" as SettingsSectionId, label: "Troubleshooting & recovery" },
 ];
 
 const meta = {
   title: "Settings/Navigation",
   component: SettingsNav,
   render: (args) => ({
-    components: {SettingsNav},
-    setup: () => {
-      const section = ref(args.modelValue);
-      return {args, section};
-    },
-    template: `<div style="display:flex;gap:16px;align-items:flex-start">
-      <div class="settings-nav" style="max-width:240px"><SettingsNav v-bind="args" v-model="section" /></div>
-      <section v-for="item in args.items" :id="'settings-section-' + item.id" :key="item.id" role="tabpanel" :aria-labelledby="'settings-nav-' + item.id" :hidden="section !== item.id">{{ item.label }}</section>
-    </div>`,
+    components: { SettingsNav },
+    setup: () => ({ args }),
+    template: `<div style="max-width:240px"><SettingsNav v-bind="args" /></div>`,
   }),
-  args: {modelValue: "workspace", items, tablistLabel: "Contents"},
+  args: { modelValue: "overview", items, navLabel: "Settings categories" },
 } satisfies Meta<typeof SettingsNav>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Default: Story = {};
 export const French: Story = {
-  parameters: {locale: "fr-CA"},
+  parameters: { locale: "fr-CA" },
   args: {
-    tablistLabel: "Sommaire",
+    navLabel: "Catégories de paramètres",
     items: [
-      {id: "workspace", label: "Espace de travail et apparence"},
-      {id: "language", label: "Langue et accessibilité"},
-      {id: "system", label: "Système et opérations"},
+      { id: "overview", label: "Vue d’ensemble" },
+      { id: "preferences", label: "Préférences" },
+      { id: "data", label: "Données et stockage" },
     ],
   },
 };

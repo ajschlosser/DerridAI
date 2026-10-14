@@ -1,0 +1,336 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Operations dock: bottom-center ambient activity, unmounted when empty. */
+.operation-progress-stack {
+  position: fixed;
+  z-index: 11000;
+  left: 50%;
+  right: auto;
+  bottom: max(14px, env(safe-area-inset-bottom, 0px));
+  translate: -50% 0;
+  width: min(380px, calc(100vw - 28px));
+  max-height: min(70vh, var(--operation-stack-max-height, 70vh));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  pointer-events: auto;
+  border: 1px solid var(--ref-line);
+  border-radius: 16px;
+  background: var(--surface-overlay, #fffdf9);
+  box-shadow: 0 10px 32px rgba(15, 23, 42, 0.12);
+}
+.operation-stack-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ref-line);
+  background: var(--surface-raised, #fffefa);
+  cursor: grab;
+  touch-action: none;
+}
+.operation-drag-grip {
+  width: 12px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+  background-image: radial-gradient(circle, var(--ref-muted, #5b6b80) 1.15px, transparent 1.25px);
+  background-size: 6px 6px;
+  background-position: center;
+  opacity: 0.55;
+}
+
+.operation-drag-help {
+  position: fixed;
+  z-index: 10000;
+  inline-size: max-content;
+  max-inline-size: min(24rem, calc(100vw - 2rem));
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--border-strong, var(--line-strong));
+  border-radius: var(--radius-overlay, 0.625rem);
+  background: var(--surface-overlay, var(--card));
+  color: var(--text);
+  box-shadow: var(--shadow-overlay, 0 12px 30px rgb(0 0 0 / 20%));
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: normal;
+  pointer-events: none;
+}
+.operation-drag-help[hidden] {
+  display: none;
+}
+.operation-dock-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 34px;
+  margin: 0;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ref-text, #17233b);
+  text-align: left;
+  cursor: pointer;
+}
+.operation-dock-toggle:hover {
+  background: var(--ui-accent-soft, #e8f0ec);
+}
+.operation-dock-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.operation-dock-title {
+  font-size: 0.8125rem;
+  font-weight: 750;
+  line-height: 1.3;
+  color: var(--ref-text, #17233b);
+}
+.operation-dock-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #6b7280;
+}
+.operation-progress-stack[data-tone="info"] .operation-dock-dot {
+  background: var(--ui-accent);
+  box-shadow: 0 0 0 4px var(--ui-accent-focus, rgba(53, 95, 82, 0.13));
+}
+.operation-progress-stack[data-tone="danger"] .operation-dock-dot {
+  background: #8a2924;
+  box-shadow: 0 0 0 4px rgba(138, 41, 36, 0.12);
+}
+.operation-progress-stack[data-tone="warning"] .operation-dock-dot {
+  background: #9b6a00;
+  box-shadow: 0 0 0 4px rgba(155, 106, 0, 0.12);
+}
+.operation-progress-stack[data-tone="success"] .operation-dock-dot {
+  background: #287a4c;
+}
+.operation-dock-chevron {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  margin-inline-start: 4px;
+  border-right: 2px solid var(--ref-muted, #5b6b80);
+  border-bottom: 2px solid var(--ref-muted, #5b6b80);
+  transform: rotate(45deg);
+}
+.operation-dock-clear {
+  flex: 0 0 auto;
+}
+.operation-stack-items {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0;
+  overflow: auto;
+  max-height: min(56vh, 420px);
+}
+.operation-progress-stack.minimized .operation-stack-items,
+.operation-progress-stack.minimized .operation-dock-clear {
+  display: none;
+}
+html[data-operations-dock-mode="docked"] #operationProgressStack .operation-stack-toolbar {
+  cursor: default;
+  touch-action: auto;
+}
+html[data-operations-dock-mode="docked"] #operationProgressStack .operation-drag-grip {
+  opacity: 0.35;
+}
+.operation-dock-toggle:focus-visible,
+.operation-dock-clear:focus-visible,
+.operation-stack-toolbar:focus-visible,
+.operation-stack-items:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.operation-dock-clear {
+  min-width: 24px;
+  min-height: 24px;
+}
+@media (forced-colors: active) {
+  .operation-dock-toggle:focus-visible,
+  .operation-dock-clear:focus-visible,
+  .operation-stack-toolbar:focus-visible,
+  .operation-stack-items:focus-visible {
+    outline-color: Highlight;
+  }
+  .operation-progress-stack,
+  .operation-stack-toolbar {
+    border-color: CanvasText;
+  }
+
+  .operation-drag-help {
+    border-color: CanvasText;
+  }
+}
+.operation-progress-stack .operation-progress {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border: 0;
+  border-top: 1px solid var(--ref-line);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.operation-progress-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.operation-progress-head > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.operation-progress-head b {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operation-progress-provider,
+.operation-progress-head span,
+.operation-progress-detail {
+  font-size: 0.8125rem;
+  color: var(--ref-muted, #5b6b80);
+  line-height: 1.4;
+}
+.operation-progress-track {
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--ui-accent-soft, #e8f0ec);
+}
+.operation-progress-track i {
+  display: block;
+  height: 100%;
+  background: var(--ui-accent);
+  transition: width 0.2s ease;
+}
+.operation-progress-detail {
+  margin-top: 6px;
+  min-height: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.operation-toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.operation-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft, #f7f9fc);
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.operation-status-dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+.operation-status-badge[data-tone="info"] {
+  background: var(--tone-info-bg);
+  border-color: var(--tone-info-edge);
+  color: var(--tone-info-fg);
+}
+.operation-status-badge[data-tone="info"] .operation-status-dot {
+  background: #477596;
+}
+.operation-status-badge[data-tone="success"] {
+  background: var(--tone-ok-bg);
+  border-color: var(--tone-ok-edge);
+  color: var(--tone-ok-fg);
+}
+.operation-status-badge[data-tone="success"] .operation-status-dot {
+  background: #287a4c;
+}
+.operation-status-badge[data-tone="warning"] {
+  background: var(--tone-warn-bg);
+  border-color: var(--tone-warn-edge);
+  color: var(--tone-warn-fg);
+}
+.operation-status-badge[data-tone="warning"] .operation-status-dot {
+  background: #9b6a00;
+}
+.operation-status-badge[data-tone="danger"] {
+  background: var(--tone-danger-bg);
+  border-color: var(--tone-danger-edge);
+  color: var(--tone-danger-fg);
+}
+.operation-status-badge[data-tone="danger"] .operation-status-dot {
+  background: #8a2924;
+}
+.operation-progress.failed {
+  background: var(--tone-danger-bg);
+}
+.operation-progress.operation-complete .operation-progress-track i {
+  opacity: 0.85;
+}
+@media (prefers-reduced-motion: reduce) {
+  .operation-progress-stack[data-tone="info"] .operation-dock-dot {
+    box-shadow: none;
+  }
+  .operation-progress-track i {
+    transition: none;
+  }
+}
+.dashboard-corpus-state.blocked,
+.dashboard-corpus-state.failed,
+.dashboard-corpus-state.cancelled {
+  background: var(--tone-danger-fg);
+  box-shadow: 0 0 0 3px var(--tone-danger-bg);
+}
+:where(.operation-progress) {
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-overlay);
+}

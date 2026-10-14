@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { ProviderProfile } from "../api/system";
@@ -67,40 +85,32 @@ function reset() {
   operationMessage.value = "";
 }
 watch(
-  () => props.proposedText,
-  (value) => {
+  () => [props.proposedText, props.recordId] as const,
+  ([value]) => {
     draft.value = String(value || "");
-    if (value)
-      operationMessage.value = i18n.t(
-        "pdf_corpus.llm_touchup_ready",
-        "Touch-up proposal ready for review.",
-      );
+    if (value) operationMessage.value = i18n.t("pdf_corpus.llm_touchup_ready");
   },
   { immediate: true },
 );
 watch(
   () => [props.open, props.recordId] as const,
   (value, old) => {
-    if (value[0] && (!old?.[0] || value[1] !== old?.[1])) reset();
+    if (value[0] && (!old?.[0] || value[1] !== old?.[1])) {
+      reset();
+      draft.value = String(props.proposedText || "");
+    }
   },
 );
 watch(
   () => props.busy,
   (value) => {
-    if (value)
-      operationMessage.value = i18n.t(
-        "pdf_corpus.llm_touchup_contacting",
-        "Contacting the selected LLM and generating a proposal…",
-      );
+    if (value) operationMessage.value = i18n.t("pdf_corpus.llm_touchup_contacting");
   },
 );
 function run() {
   if (!props.providerProfileId) return;
   draft.value = "";
-  operationMessage.value = i18n.t(
-    "pdf_corpus.llm_touchup_contacting",
-    "Contacting the selected LLM and generating a proposal…",
-  );
+  operationMessage.value = i18n.t("pdf_corpus.llm_touchup_contacting");
   emit("run", instructions.value, props.providerProfileId, String(props.modelOverride || ""));
 }
 </script>
@@ -108,26 +118,16 @@ function run() {
   <UiDialog
     :open="open"
     size="xlarge"
-    :title="i18n.t('pdf_corpus.llm_touchup_title', 'LLM touch-up')"
-    :description="
-      i18n.tf(
-        'pdf_corpus.llm_touchup_help',
-        'Use an LLM to conservatively correct formatting, punctuation, OCR artifacts, and extraction errata without paraphrasing the text.',
-      )
-    "
-    :close-label="i18n.t('ui.close', 'Close')"
+    :title="i18n.t('pdf_corpus.llm_touchup_title')"
+    :description="i18n.tf('pdf_corpus.llm_touchup_help')"
+    :close-label="i18n.t('ui.close')"
     @close="emit('close')"
     ><LlmExecutionControl
       :model-value="providerProfileId"
       :model-override="modelOverride"
       :profiles="profiles"
       :disabled="busy"
-      :task="
-        i18n.t(
-          'pdf_corpus.llm_touchup_provider_help',
-          'The selected profile will propose a text correction. Nothing is applied until you approve it.',
-        )
-      "
+      :task="i18n.t('pdf_corpus.llm_touchup_provider_help')"
       :concurrency-risk="concurrencyRisk"
       :active-requests="activeRequests"
       :concurrency-limit="concurrencyLimit"
@@ -135,149 +135,127 @@ function run() {
       @update:model-override="(value) => emit('update:modelOverride', value)" />
     <details class="built-in-policy">
       <summary>
-        {{
-          i18n.t("pdf_corpus.touchup_builtin_policy", "What the LLM is already instructed to do")
-        }}
+        {{ i18n.t("pdf_corpus.touchup_builtin_policy") }}
       </summary>
       <p>
-        {{
-          i18n.t(
-            "pdf_corpus.touchup_builtin_policy_help",
-            "Preserve wording and meaning; do not paraphrase, summarize, translate, or add content; correct only clear OCR, spacing, punctuation, line-wrap, duplicated header/footer/page-number, and extraction artifacts; preserve verse, quotations, footnotes, and deliberate oddities; leave uncertain text unchanged.",
-          )
-        }}
+        {{ i18n.t("pdf_corpus.touchup_builtin_policy_help") }}
       </p>
     </details>
     <div class="touchup-controls">
       <label
-        ><span>{{ i18n.t("pdf_corpus.llm_touchup_instruction", "Optional instruction") }}</span
+        ><span>{{ i18n.t("pdf_corpus.llm_touchup_instruction") }}</span
         ><input
           v-model="instructions"
           class="control"
-          :placeholder="
-            i18n.t(
-              'pdf_corpus.llm_touchup_instruction_placeholder',
-              'For example: preserve this passage as verse',
-            )
-          "
+          :placeholder="i18n.t('pdf_corpus.llm_touchup_instruction_placeholder')"
           aria-describedby="touchup-instruction-help" /></label
       ><UiButton
         variant="primary"
         :disabled="busy || !providerProfileId"
         :label="
-          busy
-            ? i18n.t('pdf_corpus.llm_touchup_running', 'Running touch-up…')
-            : i18n.t('pdf_corpus.run_llm_touchup', 'Run LLM touch-up')
+          busy ? i18n.t('pdf_corpus.llm_touchup_running') : i18n.t('pdf_corpus.run_llm_touchup')
         "
         @click="run"
       />
     </div>
     <p id="touchup-instruction-help" v-if="redundant" class="redundant-warning" role="status">
-      {{
-        i18n.t(
-          "pdf_corpus.touchup_redundant_instruction",
-          "This instruction substantially repeats the built-in touch-up policy. You can leave it blank unless you need a passage-specific exception or emphasis.",
-        )
-      }}
+      {{ i18n.t("pdf_corpus.touchup_redundant_instruction") }}
     </p>
     <p v-if="error" class="operation-error" role="alert">{{ error }}</p>
     <p v-else-if="noChange" class="operation-status" aria-live="polite">
-      {{
-        i18n.t(
-          "pdf_corpus.llm_touchup_no_change",
-          "The LLM returned the source text unchanged. No review or apply action is needed.",
-        )
-      }}
+      {{ i18n.t("pdf_corpus.llm_touchup_no_change") }}
     </p>
     <p v-else-if="operationMessage" class="operation-status" aria-live="polite">
       {{ operationMessage }}
     </p>
     <p v-if="model" class="model-note">
-      {{ i18n.tf("pdf_corpus.llm_touchup_model", "Proposal generated by {model}", { model }) }}
+      {{ i18n.tf("pdf_corpus.llm_touchup_model", { model }) }}
     </p>
     <p v-if="provider || proposalId || runId" class="model-note proposal-context">
       {{
-        i18n.tf(
-          "pdf_corpus.llm_touchup_context",
-          "Provider: {provider} · Proposal: {proposal} · Run: {run}",
-          {
-            provider: provider || "—",
-            proposal: proposalId || "—",
-            run: runId || "—",
-          },
-        )
+        i18n.tf("pdf_corpus.llm_touchup_context", {
+          provider: provider || "—",
+          proposal: proposalId || "—",
+          run: runId || "—",
+        })
       }}
       <span v-if="proposalCreatedAt">
         ·
-        {{
-          i18n.tf("pdf_corpus.llm_touchup_created", "Created {at}", { at: proposalCreatedAt })
-        }}</span
+        {{ i18n.tf("pdf_corpus.llm_touchup_created", { at: proposalCreatedAt }) }}</span
       >
     </p>
-    <div v-if="proposedText && !noChange" class="touchup-grid">
-      <section>
-        <h3>{{ i18n.t("pdf_corpus.cleanup_before", "Before") }}</h3>
-        <pre>{{ sourceText }}</pre>
-      </section>
-      <section>
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}</h3>
-        <div v-if="textDiff" class="touchup-diff" aria-live="polite">
-          <div class="touchup-diff-label">
+    <section
+      v-if="proposedText && !noChange"
+      class="touchup-review"
+      aria-labelledby="touchup-review-title"
+    >
+      <div class="touchup-review-head">
+        <div>
+          <p class="eyebrow">
+            {{ i18n.t("pdf_corpus.llm_touchup_review_eyebrow", "Review workspace") }}
+          </p>
+          <h3 id="touchup-review-title">
             {{ i18n.t("pdf_corpus.llm_touchup_diff_preview", "Highlighted changes") }}
-          </div>
-          <div class="touchup-diff-columns">
-            <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
-            <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
-          </div>
+          </h3>
         </div>
-        <textarea v-model="draft" :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"></textarea>
-      </section>
-    </div>
+        <span class="review-chip">{{
+          i18n.t("pdf_corpus.llm_touchup_not_applied", "Not applied")
+        }}</span>
+      </div>
+      <div v-if="textDiff" class="touchup-diff" aria-live="polite">
+        <div class="touchup-diff-columns">
+          <div class="diff-pane-label">{{ i18n.t("pdf_corpus.cleanup_before", "Before") }}</div>
+          <div class="diff-pane-label proposed-label">
+            {{ i18n.t("pdf_corpus.llm_touchup_proposed", "LLM proposal") }}
+          </div>
+          <pre class="change-diff current-diff" v-html="textDiff.left"></pre>
+          <pre class="change-diff proposed-diff" v-html="textDiff.right"></pre>
+        </div>
+      </div>
+      <label class="proposal-editor">
+        <span>{{ i18n.t("pdf_corpus.llm_touchup_edit_label", "Editable proposal") }}</span>
+        <textarea
+          v-model="draft"
+          :aria-label="i18n.t('pdf_corpus.llm_touchup_proposed', 'LLM proposal')"
+        ></textarea>
+      </label>
+    </section>
     <p v-if="diffSummary" class="touchup-change-summary" role="status">
       {{
-        i18n.tf(
-          "pdf_corpus.llm_touchup_change_summary",
-          "This proposal removes {removed} words and adds {added} words ({before} before, {after} after). Removed text is marked in red; added text is marked in green.",
-          {
-            removed: diffSummary.removed,
-            added: diffSummary.added,
-            before: diffSummary.before,
-            after: diffSummary.after,
-          },
-        )
+        i18n.tf("pdf_corpus.llm_touchup_change_summary", {
+          removed: diffSummary.removed,
+          added: diffSummary.added,
+          before: diffSummary.before,
+          after: diffSummary.after,
+        })
       }}
     </p>
     <div v-if="!noChange && (changes?.length || warnings?.length)" class="touchup-notes">
       <section v-if="changes?.length">
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_changes", "Reported changes") }}</h3>
+        <h3>{{ i18n.t("pdf_corpus.llm_touchup_changes") }}</h3>
         <ul>
           <li v-for="item in changes" :key="item">{{ item }}</li>
         </ul>
       </section>
       <section v-if="warnings?.length">
-        <h3>{{ i18n.t("pdf_corpus.llm_touchup_warnings", "Warnings") }}</h3>
+        <h3>{{ i18n.t("pdf_corpus.llm_touchup_warnings") }}</h3>
         <ul>
           <li v-for="item in warnings" :key="item">{{ item }}</li>
         </ul>
       </section>
     </div>
     <template #footer
-      ><span class="footer-note">{{
-        i18n.t(
-          "pdf_corpus.llm_touchup_source_preserved",
-          "Applying the proposal changes reviewed text only. The immutable extracted source remains preserved.",
-        )
-      }}</span>
+      ><span class="footer-note">{{ i18n.t("pdf_corpus.llm_touchup_source_preserved") }}</span>
       <div>
-        <UiButton :label="i18n.t('ui.cancel', 'Cancel')" @click="emit('close')" /><UiButton
+        <UiButton :label="i18n.t('ui.cancel')" @click="emit('close')" /><UiButton
           v-if="proposalStatus === 'pending_review' && proposalId"
-          :label="i18n.t('pdf_corpus.dismiss_llm_touchup', 'Dismiss proposal')"
+          :label="i18n.t('pdf_corpus.dismiss_llm_touchup')"
           @click="emit('dismiss')"
         /><UiButton
           v-if="proposedText && !noChange"
           variant="primary"
           :disabled="!draft.trim() || busy"
-          :label="i18n.t('pdf_corpus.apply_llm_touchup', 'Apply proposal to draft')"
+          :label="i18n.t('pdf_corpus.apply_llm_touchup')"
           @click="emit('apply', draft)"
         /></div></template
   ></UiDialog>
@@ -339,37 +317,79 @@ function run() {
   font-size: 0.8125rem;
   line-height: 1.45;
 }
-.touchup-grid {
+.touchup-review {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 14px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
 }
-.touchup-grid h3,
-.touchup-notes h3 {
-  font-size: 0.9375rem;
-  margin: 0 0 6px;
+.touchup-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.touchup-grid pre,
-.touchup-grid textarea {
+.touchup-review-head h3 {
+  margin: 3px 0 0;
+  font-size: 1rem;
+}
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.review-chip {
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.diff-pane-label {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.diff-pane-label + .proposed-label {
+  border-left: 1px solid var(--line);
+}
+.proposal-editor {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 750;
+}
+.proposal-editor textarea {
   box-sizing: border-box;
   width: 100%;
-  height: 360px;
-  margin: 0;
-  overflow: auto;
+  min-height: 180px;
+  resize: vertical;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--soft);
-  white-space: pre-wrap;
+  color: var(--text);
   font:
     15px/1.6 Georgia,
     serif;
 }
-.touchup-grid textarea {
-  resize: vertical;
-  background: var(--card);
-  color: var(--text);
+.touchup-notes h3 {
+  font-size: 0.9375rem;
+  margin: 0 0 6px;
 }
 .touchup-diff {
   margin-bottom: 8px;
@@ -387,6 +407,12 @@ function run() {
 .touchup-diff-columns {
   display: grid;
   grid-template-columns: 1fr 1fr;
+}
+.touchup-diff-columns .diff-pane-label:nth-child(2) {
+  border-left: 1px solid var(--line);
+}
+.touchup-diff-columns .change-diff {
+  min-width: 0;
 }
 .touchup-diff-columns pre {
   height: 180px;
@@ -423,20 +449,23 @@ function run() {
   padding-inline-start: 20px;
 }
 .touchup-controls :focus-visible,
-.touchup-grid textarea:focus-visible,
+.proposal-editor textarea:focus-visible,
 summary:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 @media (max-width: 760px) {
   .touchup-controls,
-  .touchup-grid,
   .touchup-notes {
     grid-template-columns: 1fr;
   }
-  .touchup-grid pre,
-  .touchup-grid textarea {
-    height: 260px;
+  .touchup-diff-columns {
+    grid-template-columns: 1fr;
+  }
+  .diff-pane-label + .proposed-label,
+  .touchup-diff-columns pre + pre {
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
 }
 </style>

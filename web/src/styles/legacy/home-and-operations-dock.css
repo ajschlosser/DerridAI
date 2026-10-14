@@ -1,0 +1,415 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.dashboard-corpus-state.running,
+.dashboard-corpus-state.queued,
+.dashboard-corpus-state.cancelling {
+  background: #9b761f;
+  box-shadow: 0 0 0 3px #f8f2df;
+}
+.dashboard-corpus-state.completed {
+  background: #35744c;
+  box-shadow: 0 0 0 3px #e9f3ec;
+}
+.dashboard-corpus-state.blocked,
+.dashboard-corpus-state.failed,
+.dashboard-corpus-state.cancelled {
+  background: #a84b45;
+  box-shadow: 0 0 0 3px #fae9e8;
+}
+.separate-works-body {
+  display: grid;
+  gap: 14px;
+  min-width: min(680px, 80vw);
+}
+.separate-works-list {
+  display: grid;
+  gap: 6px;
+  max-height: 46vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 7px;
+}
+.separate-work-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: start;
+  padding: 9px;
+  border-radius: 8px;
+}
+.separate-work-row:hover {
+  background: var(--soft);
+}
+.separate-work-row span {
+  display: grid;
+  gap: 2px;
+}
+.separate-work-row b {
+  font-size: 0.8125rem;
+}
+.separate-work-row small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@media (prefers-contrast: more) {
+  :root {
+    --line: #a7ada5;
+    --line-strong: #737b73;
+    --muted: #50564f;
+  }
+}
+.empty-inline {
+  padding: 12px 14px;
+  border: 1px dashed var(--ref-line, #d5dde6);
+  border-radius: 8px;
+  color: var(--muted, #526279);
+  font-size: 0.875rem;
+  line-height: 1.4;
+  background: transparent;
+}
+/* The sidebar is a fixed-height column: let the long "More tools" list scroll
+   instead of running underneath the status footer on short viewports. */
+.shell-sidebar > .shell-more-tools {
+  min-height: 0;
+  overflow-y: auto;
+}
+.shell-sidebar > .shell-sidebar-footer,
+.shell-sidebar > .shell-primary-nav {
+  flex: none;
+}
+.operation-progress-stack.user-positioned {
+  right: auto !important;
+  bottom: auto !important;
+  translate: none;
+  max-height: var(--operation-stack-max-height, 70vh) !important;
+}
+.operation-progress-stack.is-dragging {
+  translate: none;
+  will-change: transform;
+  transition: none !important;
+  user-select: none;
+  cursor: grabbing;
+}
+.operation-progress-stack.minimized {
+  width: max-content;
+  max-width: min(420px, calc(100vw - 28px));
+  max-height: none;
+  border-radius: 999px;
+  background: var(--surface-glass, rgba(255, 253, 249, 0.96));
+  overflow: hidden;
+}
+.operation-progress-stack.minimized::after {
+  content: "";
+  display: block;
+  height: 3px;
+  width: var(--operation-dock-progress, 0%);
+  max-width: 100%;
+  background: var(--ui-accent);
+}
+.operation-progress-stack.minimized[data-tone="danger"]::after,
+.operation-progress-stack.minimized[data-tone="warning"]::after {
+  width: 100%;
+}
+.operation-progress-stack.minimized[data-tone="danger"]::after {
+  background: #8a2924;
+}
+.operation-progress-stack.minimized[data-tone="warning"]::after {
+  background: #9b6a00;
+}
+.operation-progress-stack.minimized[data-tone="success"]::after {
+  width: 100%;
+  background: #287a4c;
+}
+.operation-progress-stack.minimized .operation-stack-toolbar {
+  border-bottom: 0;
+  background: transparent;
+  padding: 5px 8px 5px 10px;
+}
+.operation-stack-toolbar.dragging,
+.operation-progress-stack.is-dragging .operation-stack-toolbar {
+  cursor: grabbing;
+}
+#operationStackCount {
+  color: var(--ref-muted, #5b6b80);
+  font-size: 0.8125rem;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.operation-progress-stack.minimized .operation-dock-title {
+  display: none;
+}
+.operation-progress-stack.minimized #operationStackCount {
+  font-weight: 750;
+  color: var(--ref-text, #17233b);
+}
+.operation-progress-stack:not(.minimized) .operation-dock-chevron {
+  transform: rotate(225deg);
+  margin-top: 4px;
+}
+html:not([data-operations-dock-mode]) #operationProgressStack,
+html[data-operations-dock-mode="docked"][data-operations-dock-open="false"]
+  #operationProgressStack {
+  display: none !important;
+}
+html[data-operations-dock-mode="docked"][data-operations-dock-open="true"] #operationProgressStack {
+  top: var(--operations-dock-anchor-top, 58px) !important;
+  right: var(--operations-dock-anchor-right, 18px) !important;
+  bottom: auto !important;
+  left: auto !important;
+  translate: none !important;
+  transform: none !important;
+  width: min(410px, calc(100vw - 36px));
+  max-height: calc(100dvh - var(--operations-dock-anchor-top, 58px) - 8px) !important;
+}
+.operation-progress.failed .operation-progress-track i {
+  background: #8a2924;
+}
+@media (max-width: 650px) {
+  .operation-progress-stack:not(.user-positioned):not(.is-dragging) {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    translate: none;
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+    max-width: none;
+  }
+  .operation-progress-stack.minimized:not(.user-positioned):not(.is-dragging) {
+    left: 50%;
+    right: auto;
+    width: max-content;
+    translate: -50% 0;
+  }
+}
+
+#operationsPanelHost {
+  display: contents;
+}
+
+html[data-color-scheme="dark"] {
+  --bg: #161a18;
+  --panel: #1e2420;
+  --panel-2: #242b27;
+  --card: #1e2420;
+  --soft: #242b27;
+  --surface-solid: #1e2420;
+  --surface-raised: #242b27;
+  --surface-overlay: #222924;
+  --surface-glass: rgba(30, 36, 32, 0.96);
+  --text: #e8ebe6;
+  --muted: #a7aea8;
+  --line: #3a433e;
+  --line-strong: #526058;
+  --warn: #e0b15a;
+  --warn-bg: #3a2e16;
+  --danger: #e08a8a;
+  --danger-bg: #3a1f1f;
+  --ok: #7dba96;
+  --ref-bg: #161a18;
+  --ref-card: #1e2420;
+  --ref-line: #3a433e;
+  --ref-line-strong: #526058;
+  --ref-text: #e8ebe6;
+  --ref-muted: #a7aea8;
+}
+html[data-contrast="more"] {
+  --muted: #4a524c;
+  --line: #9aa39b;
+  --line-strong: #6b746d;
+  --text: #141714;
+}
+html[data-color-scheme="dark"][data-contrast="more"] {
+  --muted: #c5cdc6;
+  --line: #c5cdc6;
+  --line-strong: #e8ebe6;
+  --text: #fff;
+}
+@media (prefers-contrast: more) {
+  :root {
+    --muted: #4a524c;
+    --line: #8b948c;
+  }
+}
+@media (forced-colors: active) {
+  .settings-nav-item[aria-selected="true"],
+  .theme-choice.selected {
+    outline: 2px solid CanvasText;
+  }
+}
+.brand-mark img,
+.dashboard-hero-mark {
+  mix-blend-mode: normal;
+}
+.dashboard-corpus-state.running,
+.dashboard-corpus-state.queued,
+.dashboard-corpus-state.cancelling {
+  background: var(--tone-warn-fg);
+  box-shadow: 0 0 0 3px var(--tone-warn-bg);
+}
+.dashboard-corpus-state.completed {
+  background: var(--tone-ok-fg);
+  box-shadow: 0 0 0 3px var(--tone-ok-bg);
+}
+
+/* Unified workbench surface contract. Keep this bridge at the end while runtime markup is
+   migrated; new Vue components and legacy renderers now share the same visual states. */
+:where(.card, .ui-card, .panel, .section, .card-inset) {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+:where(.btn, .ui-button, .ui-menu-trigger) {
+  min-height: var(--control-height);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-card);
+}
+:where(.btn, .ui-button, .ui-menu-trigger):hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-interactive);
+  box-shadow: var(--elev-2);
+}
+:where(.btn.primary, .ui-button.variant-primary) {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+}
+:where(.btn.primary, .ui-button.variant-primary):hover:not(:disabled) {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+:where(.btn.soft, .ui-button.variant-soft) {
+  background: var(--surface-selected);
+  border-color: var(--border-interactive);
+  color: var(--accent-fg);
+}
+:where(.btn.danger, .ui-button.variant-danger) {
+  background: var(--tone-danger-bg);
+  border-color: var(--tone-danger-border);
+  color: var(--tone-danger-fg);
+}
+:where(.btn.ghost, .ui-button.variant-ghost) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+:where(
+  .control,
+  .search input,
+  .field input,
+  .field textarea,
+  .field select,
+  input[type="text"],
+  input[type="search"],
+  input[type="password"],
+  input[type="url"],
+  input[type="number"],
+  select,
+  textarea
+) {
+  min-height: var(--control-height);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+:where(
+  .control,
+  .search input,
+  .field input,
+  .field textarea,
+  .field select,
+  input[type="text"],
+  input[type="search"],
+  input[type="password"],
+  input[type="url"],
+  input[type="number"],
+  select,
+  textarea
+):focus {
+  border-color: var(--border-interactive);
+  box-shadow: 0 0 0 3px var(--focus-ring-soft);
+}
+:where(.topbar, .shell-topbar, .breadcrumb-bar, .shell-breadcrumb, .file-tabs, .dh, .da) {
+  background: var(--surface-glass);
+  border-color: var(--border-subtle);
+}
+:where(.db, .llm-body, .llm-config, .pdf-canvas-wrap, .pdftext) {
+  background: var(--surface-inset);
+}
+:where(.ui-menu-list, .autocomplete-list, .record-citation-popover) {
+  background: var(--surface-overlay);
+  border-color: var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-overlay);
+}
+:where(.ui-menu-item, .autocomplete-option):hover,
+:where(.ui-menu-item, .autocomplete-option):focus-visible {
+  background: var(--surface-hover);
+}
+:where(th, .work-proposal-table th) {
+  background: var(--surface-inset);
+  color: var(--text-tertiary);
+  border-color: var(--border-subtle);
+}
+:where(td, .work-proposal-table td) {
+  border-color: var(--border-subtle);
+}
+:where(
+  tbody tr.clickable:hover,
+  .dashboard-overview-grid button:hover,
+  .storeitem:hover,
+  .linked-record:hover
+) {
+  background: var(--surface-hover);
+}
+:where(
+  tbody tr.row-selected,
+  .storeitem.active,
+  .dashboard-search-tabs button.active,
+  .view-tab.active
+) {
+  background: var(--surface-selected);
+}
+:where(.shell-sidebar) {
+  background: var(--surface-card);
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+}
+:where(.shell-primary-nav button.active, .shell-more-tools-list button.active) {
+  background: var(--surface-selected);
+  color: var(--accent-fg);
+}

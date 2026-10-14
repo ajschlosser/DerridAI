@@ -1,0 +1,70 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.work-add-jsonl-card {
+  min-height: 156px;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 13px;
+  align-items: center;
+  padding: 18px;
+  border: 1.5px dashed var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.work-add-jsonl-card:hover:not(:disabled) {
+  border-color: var(--ui-accent-border);
+  background: var(--ui-accent-soft);
+}
+.work-add-jsonl-card:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 3px;
+}
+.work-add-jsonl-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+.work-add-jsonl-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--accent-fg);
+}
+.work-add-jsonl-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.work-add-jsonl-card > span:last-child {
+  display: grid;
+  gap: 5px;
+}
+.work-add-jsonl-card b {
+  font-size: 0.875rem;
+}
+.work-add-jsonl-card small {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}

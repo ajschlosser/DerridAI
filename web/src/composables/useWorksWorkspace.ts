@@ -1,128 +1,188 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
-import { ref } from "vue";
-import { annotationsService } from "../services/annotations";
-import * as runtime from "../runtime/runtime.js";
-import type { WorksSnapshot } from "../types/works";
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { onBeforeUnmount, ref } from "vue";
+import { worksService, type WorksViewPatch } from "../services/works";
+import type { WorksSnapshot, WorksViewState } from "../types/works";
 
 /**
- * Transitional boundary for the Works workspace.
+ * Vue orchestration for the Works workspace.
  *
- * The legacy runtime remains the source of truth for loaded JSONL records,
- * corpus-database sync, and bibliographic dialogs. Vue reads a typed snapshot
- * and issues operation-specific commands so a later service migration can
- * replace this module without rewriting the page.
+ * Runtime compatibility is isolated behind `worksService`; components and this
+ * composable depend only on the typed Works command/snapshot contract.
  */
 export function useWorksWorkspace() {
   const snapshot = ref<WorksSnapshot | null>(null);
+  const viewState = ref<WorksViewState>(worksService.getViewState());
   const error = ref("");
 
+  let request = 0;
+  onBeforeUnmount(() => {
+    request += 1;
+  });
+
   function load() {
-    const next = runtime.getWorksWorkspaceSnapshot?.() as WorksSnapshot | undefined;
+    const next = worksService.getSnapshot();
     if (next) snapshot.value = next;
+    viewState.value = worksService.getViewState();
   }
 
-  async function prepare() {
+  async function read(operation: typeof worksService.prepare) {
+    const current = ++request;
     error.value = "";
-    const result = (await runtime.prepareWorksWorkspace?.()) as {error?: string} | undefined;
-    error.value = String(result?.error || "");
-    load();
-    return result;
+    try {
+      const result = await operation();
+      if (current !== request) return result;
+      error.value = String(result?.error || "");
+      if (!error.value) load();
+      return result;
+    } catch (cause) {
+      if (current !== request) return;
+      error.value = cause instanceof Error ? cause.message : String(cause);
+      if (
+        cause &&
+        typeof cause === "object" &&
+        "status" in cause &&
+        [401, 403].includes(Number(cause.status))
+      )
+        snapshot.value = null;
+    }
   }
-
-  async function activate() {
-    runtime.state.view = "works";
-    await prepare();
-  }
+  const prepare = () => read(worksService.prepare);
+  const activate = () =>
+    read(() => {
+      const current = request;
+      return worksService.activate(() => {
+        if (current !== request) return;
+        const next = worksService.getSnapshot();
+        // Local corpus hydration is authoritative; optional database/annotation reads can continue.
+        // Researcher summaries must await their authorized collection read.
+        if (next?.mode === "admin" && next.available) snapshot.value = next;
+      });
+    });
 
   function setQuery(value: string) {
-    runtime.setWorksSearch?.(value);
+    worksService.setQuery(value);
     load();
   }
 
   function setOverview(work: string) {
-    runtime.setWorksOverview?.(work);
+    worksService.setOverview(work);
+    load();
+  }
+
+  function setView(patch: WorksViewPatch) {
+    worksService.setView(patch);
     load();
   }
 
   async function setStore(name: string) {
-    await runtime.setWorksStore?.(name);
-    await prepare();
+    snapshot.value = null;
+    await read(async () => {
+      await worksService.setStore(name);
+      return worksService.prepare();
+    });
+  }
+
+  function reset() {
+    request += 1;
+    snapshot.value = null;
+    viewState.value = worksService.getViewState();
+    error.value = "";
   }
 
   async function syncWork(work: string) {
-    await runtime.syncWork?.(work);
+    await worksService.syncWork(work);
     load();
   }
 
   async function syncAll() {
-    await runtime.syncAllWorks?.();
+    await worksService.syncAll();
     load();
   }
 
   function chooseJsonl() {
-    document.querySelector<HTMLInputElement>("#fileInput")?.click();
+    worksService.chooseFiles();
   }
 
   function separateWorks() {
-    runtime.openSeparateWorksModal?.();
+    worksService.separateWorks();
   }
 
   function populateAll() {
-    runtime.populateAllWorksMetadata?.();
+    worksService.populateAll();
   }
 
   function populateWork(work: string) {
-    runtime.openWorkMetadataLlmDialog?.(work);
+    worksService.populateWork(work);
   }
 
   function editMetadata(work: string) {
-    runtime.openWorkMetadataEditor?.(work);
+    worksService.editMetadata(work);
   }
 
   function openAnnotations(work: string) {
-    annotationsService.openWorkAnnotations(work);
+    worksService.openAnnotations(work);
   }
 
   function searchOverview(work: string) {
-    runtime.searchWorkOverview?.(work);
+    worksService.searchOverview(work);
   }
 
   function searchRecords(work: string, needsReview = false) {
-    runtime.searchWorkRecords?.(work, {needsReview});
+    worksService.searchRecords(work, needsReview);
   }
 
   function inspectMixed(work: string, field: string) {
-    runtime.inspectWorksMixedField?.(work, field);
+    worksService.inspectMixed(work, field);
   }
 
   function searchInsight(field: string, value: string) {
-    runtime.searchWorksInsight?.(field, value);
+    worksService.searchInsight(field, value);
   }
 
   function reviewFlagged(work: string) {
-    runtime.reviewFlaggedWork?.(work);
+    worksService.reviewFlagged(work);
   }
 
   function autoImprove(work: string) {
-    runtime.autoImproveWork?.(work);
+    worksService.autoImprove(work);
   }
 
   function removeWork(work: string) {
-    runtime.removeEntireWork?.(work);
+    worksService.removeWork(work);
   }
 
   function browseResearcher(work: string) {
-    runtime.browseResearcherWork?.(work);
+    worksService.browseResearcher(work);
   }
 
   return {
     snapshot,
+    viewState,
     error,
+    reset,
     load,
     prepare,
     activate,
     setQuery,
     setOverview,
+    setView,
     setStore,
     syncWork,
     syncAll,

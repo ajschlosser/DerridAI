@@ -1,18 +1,50 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
+import {
+  metadataFieldSpec,
+  metadataRegistryFields,
+  metadataRegistryGroups,
+} from "../../domain/metadataFieldRegistry";
+import type { MetadataSchema } from "../../api/metadataSchemas";
 
-const props = withDefaults(defineProps<{ open: boolean; record: Record<string, unknown> }>(), {
-  open: false,
-  record: () => ({}),
-});
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    record: Record<string, unknown>;
+    schema?: MetadataSchema | null;
+  }>(),
+  {
+    open: false,
+    record: () => ({}),
+    schema: null,
+  },
+);
 const emit = defineEmits<{ close: []; save: [changes: Record<string, unknown>] }>();
 const i18n = useI18nStore();
 const dialog = ref<HTMLDialogElement | null>(null);
 const draft = ref<Record<string, unknown>>({});
 const original = ref<Record<string, unknown>>({});
-const groups = [
+const legacyGroups = [
   {
     key: "source",
     label: "record.group_source",
@@ -107,19 +139,41 @@ const groups = [
   },
   { key: "text", label: "record.group_text", fallback: "Text", fields: ["text"] },
 ];
-const knownFields = new Set(groups.flatMap((group) => group.fields));
+
+const schemaRegistryFields = computed(() => metadataRegistryFields(props.schema));
+const schemaRegistryFieldMap = computed(() =>
+  Object.fromEntries(schemaRegistryFields.value.map((field) => [field.name, field])),
+);
+const compatibilityGroups = legacyGroups.filter((group) =>
+  ["source", "quality", "language", "citation", "text"].includes(group.key),
+);
+const groups = computed(() =>
+  props.schema
+    ? [
+        compatibilityGroups[0],
+        ...metadataRegistryGroups(props.schema).map((group) => ({
+          key: `schema:${group.key}`,
+          label: group.label,
+          fallback: group.label,
+          fields: group.fields.map((field) => field.name),
+        })),
+        ...compatibilityGroups.slice(1),
+      ]
+    : legacyGroups,
+);
+const knownFields = computed(() => new Set(groups.value.flatMap((group) => group.fields)));
 const additionalFields = computed(() =>
   Object.keys(draft.value)
     .filter(
       (key) =>
-        !knownFields.has(key) &&
+        !knownFields.value.has(key) &&
         !key.startsWith("_") &&
         !["updates", "annotations", "text_length", "pdf_pages", "pdf_links"].includes(key),
     )
     .sort(),
 );
 const visibleGroups = computed(() =>
-  groups
+  groups.value
     .map((group) => ({
       ...group,
       fields: group.fields.filter((field) =>
@@ -155,35 +209,30 @@ const changes = computed(() => {
 });
 const dirtyCount = computed(() => Object.keys(changes.value).length);
 function fieldLabel(key: string) {
-  return i18n.t(
-    `field.${key}`,
-    key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
-  );
+  const schemaLabel = schemaRegistryFieldMap.value[key]?.label;
+  return schemaLabel ? i18n.t(`field.${key}`, schemaLabel) : i18n.t(`field.${key}`);
 }
 function isArrayField(key: string) {
-  return (
-    Array.isArray(original.value[key]) ||
-    [
-      "topics",
-      "concepts",
-      "persons",
-      "works_referenced",
-      "institutions_referenced",
-      "locations_referenced",
-      "events_referenced",
-      "groups_referenced",
-      "languages_referenced",
-      "quotation_chain",
-    ].includes(key)
-  );
+  const control =
+    schemaRegistryFieldMap.value[key]?.control || metadataFieldSpec(key, [], []).control;
+  if (control === "multi-combobox") return true;
+  // Known first-party fields keep their declared scalar contract even when an
+  // older record happens to contain an array. Only unknown/custom fields fall
+  // back to runtime shape when no schema definition is available here.
+  if (knownFields.value.has(key)) return false;
+  return Array.isArray(original.value[key]);
 }
 function isBooleanField(key: string) {
+  const control = schemaRegistryFieldMap.value[key]?.control;
+  if (control) return control === "boolean";
   return (
     typeof original.value[key] === "boolean" ||
     ["primary_text", "is_direct_quote", "needs_review", "document_is_translation"].includes(key)
   );
 }
 function isNumberField(key: string) {
+  const control = schemaRegistryFieldMap.value[key]?.control;
+  if (control) return control === "number";
   return (
     typeof original.value[key] === "number" ||
     [
@@ -203,6 +252,7 @@ function isLongField(key: string) {
 function displayInputValue(key: string) {
   const value = draft.value[key];
   if (isArrayField(key)) return Array.isArray(value) ? value.join(", ") : String(value ?? "");
+  if (Array.isArray(value)) return value.map((item) => String(item ?? "")).join(" | ");
   return String(value ?? "");
 }
 function updateField(key: string, value: string) {
@@ -242,16 +292,6 @@ watch(
   },
   { immediate: true },
 );
-watch(
-  () => props.record,
-  (record) => {
-    if (!props.open) {
-      original.value = clone(record || {});
-      draft.value = clone(record || {});
-    }
-  },
-  { deep: false },
-);
 function close() {
   emit("close");
 }
@@ -268,18 +308,18 @@ function close() {
     <form method="dialog" @submit.prevent="save">
       <header class="record-edit-head">
         <div>
-          <p>{{ i18n.t("record.edit_kicker", "Record metadata") }}</p>
-          <h2 id="recordEditTitle">{{ i18n.t("record.edit", "Edit record") }}</h2>
+          <p>{{ i18n.t("record.edit_kicker") }}</p>
+          <h2 id="recordEditTitle">{{ i18n.t("record.edit") }}</h2>
           <span>{{
             dirtyCount
-              ? i18n.tf("record.unsaved_fields", "{count} unsaved fields", { count: dirtyCount })
-              : i18n.t("record.no_unsaved_changes", "No unsaved changes")
+              ? i18n.tf("record.unsaved_fields", { count: dirtyCount })
+              : i18n.t("record.no_unsaved_changes")
           }}</span>
         </div>
         <button
           type="button"
           class="record-sheet-close"
-          :aria-label="i18n.t('ui.close', 'Close')"
+          :aria-label="i18n.t('ui.close')"
           @click="close"
         >
           ×
@@ -303,9 +343,9 @@ function close() {
                 "
                 @change="updateField(field, ($event.target as HTMLSelectElement).value)"
               >
-                <option value="">{{ i18n.t("ui.not_set", "Not set") }}</option>
-                <option value="true">{{ i18n.t("runtime.yes", "Yes") }}</option>
-                <option value="false">{{ i18n.t("runtime.no", "No") }}</option></select
+                <option value="">{{ i18n.t("ui.not_set") }}</option>
+                <option value="true">{{ i18n.t("runtime.yes") }}</option>
+                <option value="false">{{ i18n.t("runtime.no") }}</option></select
               ><textarea
                 v-else-if="isLongField(field)"
                 :value="displayInputValue(field)"
@@ -327,13 +367,13 @@ function close() {
                 :value="displayInputValue(field)"
                 @input="updateField(field, ($event.target as HTMLInputElement).value)"
               /><small v-if="isArrayField(field)">{{
-                i18n.t("record.comma_separated", "Separate multiple values with commas.")
+                i18n.t("record.comma_separated")
               }}</small></label
             >
           </div>
         </fieldset>
         <fieldset v-if="additionalFields.length" class="record-edit-group">
-          <legend>{{ i18n.t("record.group_other", "Other fields") }}</legend>
+          <legend>{{ i18n.t("record.group_other") }}</legend>
           <div class="record-edit-grid">
             <label v-for="field in additionalFields" :key="field"
               ><span>{{ fieldLabel(field) }}</span
@@ -347,19 +387,14 @@ function close() {
       <footer class="record-edit-actions">
         <div>
           <button type="button" class="record-reset" :disabled="!dirtyCount" @click="reset">
-            <AppIcon name="refresh" />{{ i18n.t("ui.reset", "Reset") }}</button
-          ><span>{{
-            i18n.t(
-              "record.sparse_save_help",
-              "Only changed fields will be saved and added to the audit trail.",
-            )
-          }}</span>
+            <AppIcon name="refresh" />{{ i18n.t("ui.reset") }}</button
+          ><span>{{ i18n.t("record.sparse_save_help") }}</span>
         </div>
         <div>
           <button type="button" class="record-cancel" @click="close">
-            {{ i18n.t("ui.cancel", "Cancel") }}</button
+            {{ i18n.t("ui.cancel") }}</button
           ><button type="submit" class="record-save" :disabled="!dirtyCount">
-            <AppIcon name="edit" />{{ i18n.t("ui.save", "Save") }}
+            <AppIcon name="edit" />{{ i18n.t("ui.save") }}
           </button>
         </div>
       </footer>

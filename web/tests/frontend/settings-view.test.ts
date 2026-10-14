@@ -1,22 +1,107 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
 
+const systemApi = vi.hoisted(() => ({
+  embeddingDefaults: vi.fn(async () => ({
+    embedding_provider: "ollama",
+    embedding_model: "bge-m3:latest",
+    persisted: true,
+  })),
+  setEmbeddingDefaults: vi.fn(async (payload) => ({ ...payload, persisted: true })),
+}));
+const pipelinesApi = vi.hoisted(() => ({
+  researchOptions: vi.fn(async () => ({
+    assignment: {
+      feature: "research",
+      pipeline_id: "research.current",
+      pipeline_version: 1,
+      scope: "system",
+      override_allowed: true,
+      source: "built_in",
+    },
+    override_allowed: true,
+    pipelines: [
+      {
+        pipeline_id: "research.current",
+        version: 1,
+        name: "Research current",
+        purpose: "research",
+        status: "active",
+        entry_stage_ids: ["rerank"],
+        stages: [
+          {
+            id: "rerank",
+            strategy: "rerank.cross_encoder",
+            enabled: true,
+            config: { top_k: 24 },
+            next: [],
+          },
+        ],
+      },
+    ],
+    strategies: [
+      {
+        strategy_id: "rerank.cross_encoder",
+        version: 1,
+        family: "rerank",
+        scholarly_effect: "none",
+        phase: "rerank",
+        effect_note: "",
+        label: "Cross-encoder reranking",
+        description: "Ranks candidates.",
+        input_type: "candidate_set",
+        output_type: "candidate_set",
+        deterministic: true,
+        invokes_llm: false,
+        capabilities: [],
+        config_schema: {
+          type: "object",
+          properties: { top_k: { type: "integer", minimum: 1, maximum: 500, default: 24 } },
+        },
+      },
+    ],
+  })),
+}));
+
+vi.mock("../../src/api/system", () => ({ systemApi }));
+vi.mock("../../src/api/pipelines", () => ({ pipelinesApi }));
+vi.mock("../../src/domain/sharedBackup", () => ({
+  downloadFullBackup: vi.fn(),
+  restoreFullBackup: vi.fn(),
+  deleteAllDerridaiBrowserState: vi.fn(),
+  backupContainsCredentials: vi.fn(() => false),
+}));
+vi.mock("../../src/domain/sharedAppearance", () => ({ applyAppearance: vi.fn() }));
+
 const runtime = vi.hoisted(() => ({
   persistPrefs: vi.fn(),
   flushWorkspacePrefs: vi.fn(async () => undefined),
-  applyAppearance: vi.fn(),
-  getProviderProfilesForUi: vi.fn(() => [{id: "p1", name: "Local", type: "ollama", model: "gemma", max_concurrent_requests: 1}]),
+  getProviderProfilesForUi: vi.fn(() => [
+    { id: "p1", name: "Local", type: "ollama", model: "gemma", max_concurrent_requests: 1 },
+  ]),
   getDefaultProviderProfileId: vi.fn(() => "p1"),
-  navigateView: vi.fn(),
   toggleSidebar: vi.fn(),
-  downloadFullBackup: vi.fn(),
-  restoreFullBackup: vi.fn(),
   clearAllUpdates: vi.fn(),
-  deleteAllDerridaiBrowserState: vi.fn(),
-  backupContainsCredentials: vi.fn(() => false),
   getShellSnapshot: vi.fn(() => ({})),
   state: {
     storageReady: true,
@@ -32,13 +117,24 @@ const runtime = vi.hoisted(() => ({
       desktop_notifications: false,
     },
     ragConfig: {
-      k: 64, fetch_k: 500, lambda_mult: 0.7, rrf_k: 60, rerank_top_n: 24, reranker: "cross_encoder",
-      cross_encoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2", query_decomposition_num_predict: 768,
-      response_language: "auto", evidence_record_char_limit: 12000, evidence_total_char_limit: 120000,
-      locales: ["en", "fr"], search_types: ["similarity", "lexical", "mmr"], auto_grade: false,
+      pipeline_config_overrides: {},
+      k: 64,
+      fetch_k: 500,
+      lambda_mult: 0.7,
+      rrf_k: 60,
+      rerank_top_n: 24,
+      reranker: "cross_encoder",
+      cross_encoder_model: "cross-encoder/ms-marco-MiniLM-L-6-v2",
+      query_decomposition_num_predict: 768,
+      response_language: "auto",
+      evidence_record_char_limit: 12000,
+      evidence_total_char_limit: 120000,
+      locales: ["en", "fr"],
+      search_types: ["similarity", "lexical", "mmr"],
+      auto_grade: false,
     },
-    health: {chroma: {path: "/data/chroma"}},
-    providerStatuses: {p1: {available: true, checked_at: "2026-01-01T00:00:00Z"}},
+    health: { chroma: { path: "/data/chroma" } },
+    providerStatuses: { p1: { available: true, checked_at: "2026-01-01T00:00:00Z" } },
     files: [],
     jobs: [],
     sidebarCollapsed: false,
@@ -47,81 +143,218 @@ const runtime = vi.hoisted(() => ({
     upsertIgnored: {},
   },
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({...runtime, __v_isRef: false, __v_isReadonly: false, __v_isShallow: false, __v_skip: true, __v_raw: undefined}));
+vi.mock("../../src/domain/sharedNavigation", () => ({ navigateTo: vi.fn() }));
+vi.mock("../../src/domain/sharedProviderProfiles", () => ({
+  getProviderProfilesForUi: runtime.getProviderProfilesForUi,
+  getDefaultProviderProfileId: runtime.getDefaultProviderProfileId,
+}));
+vi.mock("../../src/domain/sharedUrlState", () => ({ state: runtime.state }));
+vi.mock("../../src/domain/sharedWorkspaceStorage", () => ({
+  flushDomainPreferences: runtime.flushWorkspacePrefs,
+  persistJobPreferences: runtime.persistPrefs,
+  persistLayoutPreferences: runtime.persistPrefs,
+  persistListPreferences: runtime.persistPrefs,
+}));
+vi.mock("../../src/domain/sharedRecordEditing", () => ({
+  clearAllUpdates: runtime.clearAllUpdates,
+}));
+// The shell store still reads its snapshot through the runtime bridge.
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
+vi.mock("../../src/domain/appBootstrap", () => ({
+  ...runtime,
+  __v_isRef: false,
+  __v_isReadonly: false,
+  __v_isShallow: false,
+  __v_skip: true,
+  __v_raw: undefined,
+}));
+vi.mock("../../src/domain/sidebarToggle", () => ({ toggleSidebar: runtime.toggleSidebar }));
 
 import SettingsView from "../../src/views/SettingsView.vue";
 import { useAuthStore } from "../../src/stores/auth";
 import { useI18nStore } from "../../src/stores/i18n";
+import { jobsState } from "../../src/state/jobsState";
+import {
+  configState,
+  corpusState,
+  layoutState,
+  listState,
+  statusState,
+  upsertProgressState,
+} from "../../src/state/workspaceState";
 
 async function mountView(role: "admin" | "researcher", query: Record<string, string> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const auth = useAuthStore();
   auth.user = {
-    id: 1, username: "u", role,
-    capabilities: role === "admin" ? [] : ["page.settings", "appearance.manage", "page.research", "page.dashboard"],
+    id: 1,
+    username: "u",
+    role,
+    capabilities:
+      role === "admin"
+        ? []
+        : ["page.settings", "appearance.manage", "page.research", "page.dashboard"],
   } as never;
   const i18n = useI18nStore();
-  i18n.languages = [{code: "en-US", name: "English", flag: "🇺🇸"}, {code: "fr-CA", name: "Français", flag: "🇨🇦"}] as never;
+  i18n.languages = [
+    { code: "en-US", name: "English", flag: "🇺🇸" },
+    { code: "fr-CA", name: "Français", flag: "🇨🇦" },
+  ] as never;
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      {path: "/settings", name: "config", component: SettingsView},
-      {path: "/", name: "home", component: {template: "<div>home</div>"}},
+      { path: "/settings/:section", name: "settings-section", component: SettingsView },
+      { path: "/", name: "home", component: { template: "<div>home</div>" } },
     ],
   });
-  await router.push({path: "/settings", query});
+  const { section = "overview", ...restQuery } = query;
+  await router.push({ name: "settings-section", params: { section }, query: restQuery });
   await router.isReady();
-  const wrapper = mount({template: "<RouterView />"}, {attachTo: document.body, global: {plugins: [pinia, router]}});
+  const wrapper = mount(
+    { template: "<RouterView />" },
+    { attachTo: document.body, global: { plugins: [pinia, router] } },
+  );
   await flushPromises();
-  return {wrapper, router, auth};
+  return { wrapper, router, auth };
 }
 
 describe("SettingsView", () => {
   beforeEach(() => {
+    // Settings now consumes narrow domain stores rather than the compatibility
+    // workspace object. Keep the test fixture objects shared so assertions below
+    // still observe the exact mutations performed by the view.
+    configState.appConfig = runtime.state.appConfig as never;
+    configState.ragConfig = runtime.state.ragConfig as never;
+    statusState.health = runtime.state.health;
+    statusState.providerStatuses = runtime.state.providerStatuses;
+    corpusState.files = runtime.state.files;
+    layoutState.sidebarCollapsed = runtime.state.sidebarCollapsed;
+    layoutState.collapsedPanels = runtime.state.collapsedPanels;
+    listState.tableColumns = runtime.state.tableColumns;
+    upsertProgressState.upsertIgnored = runtime.state.upsertIgnored;
+    jobsState.jobs = runtime.state.jobs as never;
     runtime.flushWorkspacePrefs.mockClear();
     runtime.flushWorkspacePrefs.mockResolvedValue(undefined);
+    systemApi.embeddingDefaults.mockClear();
+    systemApi.embeddingDefaults.mockResolvedValue({
+      embedding_provider: "ollama",
+      embedding_model: "bge-m3:latest",
+      persisted: true,
+    });
+    systemApi.setEmbeddingDefaults.mockClear();
+    pipelinesApi.researchOptions.mockClear();
+    systemApi.setEmbeddingDefaults.mockImplementation(async (payload) => ({
+      ...payload,
+      persisted: true,
+    }));
     runtime.state.appConfig.ui_color_theme = "green";
     runtime.state.appConfig.ui_color_scheme = "system";
     runtime.state.appConfig.ui_contrast = "system";
+    runtime.state.appConfig.embedding_provider = "ollama";
+    runtime.state.appConfig.embedding_model = "bge-m3:latest";
+    runtime.state.ragConfig.pipeline_config_overrides = {};
     runtime.state.ragConfig.k = 64;
     runtime.state.ragConfig.fetch_k = 500;
     runtime.state.ragConfig.locales = ["en", "fr"];
     runtime.state.ragConfig.search_types = ["similarity", "lexical", "mmr"];
   });
 
-  it("keeps researcher accounts off administrative sections", async () => {
-    const {wrapper} = await mountView("researcher");
-    expect(wrapper.get("h1").text()).toContain("Settings");
-    expect(wrapper.text()).toContain("Research workspace");
-    expect(wrapper.text()).not.toContain("NUKE DerridAI workspace");
-    expect(wrapper.text()).not.toContain("Save RAG defaults");
+  it("lands on a task-oriented settings overview", async () => {
+    const { wrapper } = await mountView("admin", { section: "overview" });
+    expect(wrapper.get("#settings-overview-title").text()).toBe("Settings overview");
+    expect(wrapper.text()).toContain("Preferences");
+    expect(wrapper.text()).toContain("Research & review");
+    expect(wrapper.text()).toContain("Data & storage");
   });
 
-  it("shows copyright and version without a git commit for researchers", async () => {
-    const {wrapper} = await mountView("researcher", {section: "workspace"});
+  it("canonicalizes legacy settings section URLs", async () => {
+    const { router } = await mountView("admin", { section: "workspace" });
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe("/settings/preferences");
+  });
+
+  it("does not request server embedding defaults for researcher accounts", async () => {
+    await mountView("researcher");
+    expect(systemApi.embeddingDefaults).not.toHaveBeenCalled();
+    expect(systemApi.setEmbeddingDefaults).not.toHaveBeenCalled();
+  });
+
+  it("keeps researcher accounts off administrative settings categories", async () => {
+    const { wrapper } = await mountView("researcher");
+    expect(wrapper.get("h1").text()).toContain("Settings");
+    expect(wrapper.text()).toContain("Preferences");
+    expect(wrapper.text()).toContain("Research & review");
+    expect(wrapper.text()).not.toContain("Retrieval & indexing");
+    expect(wrapper.text()).not.toContain("Data & storage");
+    expect(wrapper.text()).not.toContain("NUKE DerridAI workspace");
+    expect(wrapper.text()).not.toContain("Save Research configuration");
+  });
+
+  it("shows copyright and version on Overview without a git commit for researchers", async () => {
+    const { wrapper } = await mountView("researcher", { section: "overview" });
     expect(wrapper.text()).toContain("About DerridAI");
     expect(wrapper.text()).toContain("The New England Transcendental Club of California");
     expect(wrapper.text()).not.toContain("Build vitest");
   });
 
-  it("shows the git commit on About for administrators", async () => {
-    const {wrapper} = await mountView("admin", {section: "workspace"});
+  it("shows the git commit on Overview for administrators", async () => {
+    const { wrapper } = await mountView("admin", { section: "overview" });
     expect(wrapper.text()).toContain("Build vitest");
   });
 
   it("deep-links an admin section from the URL", async () => {
-    const {wrapper} = await mountView("admin", {section: "retrieval"});
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
     expect(wrapper.get("#settings-section-retrieval").isVisible()).toBe(true);
-    expect(wrapper.get("#settings-nav-retrieval").attributes("aria-selected")).toBe("true");
+    expect(wrapper.get("#settings-nav-retrieval").attributes("aria-current")).toBe("page");
+  });
+
+  it("shows exact Pipeline Studio targets for global Research overrides", async () => {
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Global pipeline overrides");
+    expect(wrapper.text()).toContain("research.current@1");
+    expect(wrapper.text()).toContain("rerank.top_k");
+    expect(wrapper.text()).toContain("24");
+
+    const override = wrapper.get("#override-settings-rerank-top_k");
+    await override.setValue(true);
+    const row = override.element.closest(".pipeline-override-row");
+    const number = row?.querySelector<HTMLInputElement>('input[type="number"]');
+    expect(number).not.toBeNull();
+    if (!number) throw new Error("Expected stage override number input");
+    number.value = "32";
+    number.dispatchEvent(new Event("input", { bubbles: true }));
+    await flushPromises();
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save Research configuration"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(runtime.state.ragConfig.pipeline_config_overrides).toMatchObject({
+      "research.current@1": {
+        pipeline_id: "research.current",
+        pipeline_version: 1,
+        stages: { rerank: { top_k: 32 } },
+      },
+    });
   });
 
   it("preserves retrieval input after a validation failure", async () => {
-    const {wrapper} = await mountView("admin", {section: "retrieval"});
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
     await wrapper.get("#settings-field-rag-k").setValue(12);
     await wrapper.get("#settings-field-rag-locale-en").setValue(false);
     await wrapper.get("#settings-field-rag-locale-fr").setValue(false);
-    await wrapper.findAll("button").find(button => button.text().includes("Save RAG defaults"))?.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save Research configuration"))
+      ?.trigger("click");
     await flushPromises();
     expect((wrapper.get("#settings-field-rag-k").element as HTMLInputElement).value).toBe("12");
     expect(wrapper.text()).toContain("Some retrieval defaults could not be saved");
@@ -129,30 +362,77 @@ describe("SettingsView", () => {
   });
 
   it("marks appearance unsaved then reports a persistence failure without dropping the draft", async () => {
-    runtime.flushWorkspacePrefs.mockRejectedValueOnce(new Error("IndexedDB preference persistence failed"));
-    const {wrapper} = await mountView("admin", {section: "workspace"});
+    runtime.flushWorkspacePrefs.mockRejectedValueOnce(
+      new Error("IndexedDB preference persistence failed"),
+    );
+    const { wrapper } = await mountView("admin", { section: "preferences" });
     const dark = wrapper.get("#settings-field-scheme");
     await dark.setValue("dark");
     await flushPromises();
     expect(wrapper.text()).toContain("Unsaved changes");
-    await wrapper.findAll("button").find(button => button.text().includes("Save appearance"))?.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save appearance"))
+      ?.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("Save failed");
     expect(wrapper.text()).toContain("IndexedDB preference persistence failed");
     expect((dark.element as HTMLSelectElement).value).toBe("dark");
   });
 
+  it("persists provider-profile embedding defaults to the backend", async () => {
+    const { wrapper } = await mountView("admin", { section: "retrieval" });
+    await wrapper.get("#settings-field-embedding-provider").setValue("profile:p1");
+    await flushPromises();
+
+    expect((wrapper.get("#settings-field-embedding-model").element as HTMLInputElement).value).toBe(
+      "gemma",
+    );
+
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Save embedding defaults"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(systemApi.setEmbeddingDefaults).toHaveBeenCalledWith({
+      embedding_provider: "profile:p1",
+      embedding_model: "gemma",
+    });
+    expect(runtime.state.appConfig.embedding_provider).toBe("profile:p1");
+    expect(runtime.state.appConfig.embedding_model).toBe("gemma");
+  });
+
+  it("migrates a browser embedding default to the server once", async () => {
+    systemApi.embeddingDefaults.mockResolvedValueOnce({
+      embedding_provider: "ollama",
+      embedding_model: "bge-m3:latest",
+      persisted: false,
+    });
+    runtime.state.appConfig.embedding_provider = "chroma";
+    runtime.state.appConfig.embedding_model = "";
+
+    await mountView("admin", { section: "retrieval" });
+
+    expect(systemApi.setEmbeddingDefaults).toHaveBeenCalledWith({
+      embedding_provider: "chroma",
+      embedding_model: null,
+    });
+  });
+
   it("warns before leaving with unsaved changes", async () => {
-    const {wrapper, router} = await mountView("admin", {section: "workspace"});
+    const { wrapper, router } = await mountView("admin", { section: "preferences" });
     await wrapper.get("#settings-field-scheme").setValue("dark");
     await flushPromises();
     const pending = router.push("/");
     await flushPromises();
     expect(document.body.textContent || "").toContain("Discard unsaved settings");
-    const cancel = Array.from(document.body.querySelectorAll("button")).find(button => button.textContent === "Cancel");
-    cancel?.dispatchEvent(new MouseEvent("click", {bubbles: true}));
+    const cancel = Array.from(document.body.querySelectorAll("button")).find(
+      (button) => button.textContent === "Cancel",
+    );
+    cancel?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await pending.catch(() => undefined);
     await flushPromises();
-    expect(router.currentRoute.value.path).toBe("/settings");
+    expect(router.currentRoute.value.path).toBe("/settings/preferences");
   });
 });

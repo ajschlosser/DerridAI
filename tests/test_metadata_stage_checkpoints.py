@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Metadata stage timeouts, progress, checkpoints, and concurrent writes.
 
 Why: enrichment runs three LLM "families" per record (discourse, quotation, indexing).
@@ -28,11 +44,11 @@ from app import corpus_builder as cb
 
 def test_metadata_stage_timeouts_are_configurable_and_reasonable():
     """Default family timeouts are at most 300 seconds and can be overridden per family."""
-    limits=cb.PdfCorpusBuildManager._stage_timeouts({})
+    limits=cb._stage_timeouts({})
     assert limits['discourse'] <= 300
     assert limits['quotation'] <= 300
     assert limits['indexing'] <= 300
-    custom=cb.PdfCorpusBuildManager._stage_timeouts({'stage_timeouts':{'discourse':90,'indexing':45}})
+    custom=cb._stage_timeouts({'stage_timeouts':{'discourse':90,'indexing':45}})
     assert custom['discourse']==90
     assert custom['indexing']==45
 
@@ -47,7 +63,7 @@ def test_operations_surface_metadata_task_progress():
     4 done + 1 failed + 1 skipped = 6 of 33 settled, 3 active, 24 queued, 2 needing
     review; the stage detail string and running count must reflect that.
     """
-    operation=cb.PdfCorpusBuildManager._operation_from_build({
+    operation=cb._operation_from_build({
         'build_id':'build-test','status':'running','stage':'enriching','progress':0.5,
         'metadata_tasks_total':33,'metadata_tasks_completed':4,'metadata_tasks_failed':1,
         'metadata_tasks_skipped':1,'metadata_tasks_running':3,'metadata_tasks_queued':24,
@@ -77,6 +93,243 @@ def _metadata_result(schema_name:str):
     return {"metadata":{"topics":["hospitality"]},"review_reason":""}
 
 
+def test_metadata_stage_checkpoint_updates_only_target_record_and_counters(tmp_path, monkeypatch):
+    """A family checkpoint must not deserialize/rewrite the complete corpus.
+
+    The build-level counters are initialized once by the scheduler. Each callback then
+    moves exactly one family between queued/running/terminal buckets while persisting
+    only that Record through the SQLite-backed targeted repository path.
+    """
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "Derrida discusses hospitality.",
+        "text_length": 30,
+        "source_asset_id": "asset-elephant",
+        "source_block_ids": ["b1"],
+        "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}],
+        "metadata_stage_status": {
+            "discourse": "queued",
+            "quotation": "queued",
+            "indexing": "queued",
+        },
+        "metadata_execution_ledger": {},
+        "metadata_enrichment_state": "queued",
+    }
+    repo.save_records(build["build_id"], [record])
+    build = repo.get_build(build["build_id"])
+    build.update({
+        "metadata_tasks_total": 3,
+        "metadata_tasks_completed": 0,
+        "metadata_tasks_failed": 0,
+        "metadata_tasks_skipped": 0,
+        "metadata_tasks_running": 0,
+        "metadata_tasks_queued": 3,
+        "metadata_active_tasks": [],
+    })
+    repo.save_build(build)
+
+    # A checkpoint is Record-local. Any regression to the previous full-corpus
+    # path should fail this test immediately.
+    monkeypatch.setattr(
+        repo,
+        "load_records",
+        lambda _build_id: (_ for _ in ()).throw(AssertionError("full-corpus read is not allowed")),
+    )
+
+    running = dict(record)
+    running["metadata_stage_status"] = dict(record["metadata_stage_status"])
+    running["metadata_stage_status"]["discourse"] = "running"
+    running["metadata_execution_ledger"] = {
+        "discourse": {"state": "running", "started_at": "2026-01-01T00:00:00+00:00"}
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, running, "discourse", "running", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    after_running = repo.get_build(build["build_id"])
+    assert stored["metadata_stage_status"]["discourse"] == "running"
+    assert after_running["metadata_tasks_queued"] == 2
+    assert after_running["metadata_tasks_running"] == 1
+    assert after_running["metadata_tasks_completed"] == 0
+    assert after_running["metadata_active_tasks"] == [{
+        "record_id": "r1",
+        "task": "discourse",
+        "started_at": "2026-01-01T00:00:00+00:00",
+    }]
+
+    complete = dict(stored)
+    complete["metadata_stage_status"] = dict(stored["metadata_stage_status"])
+    complete["metadata_stage_status"]["discourse"] = "complete"
+    complete["metadata_execution_ledger"] = dict(stored["metadata_execution_ledger"])
+    complete["metadata_execution_ledger"]["discourse"] = {
+        **complete["metadata_execution_ledger"]["discourse"],
+        "state": "complete",
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, complete, "discourse", "complete", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    after_complete = repo.get_build(build["build_id"])
+    assert stored["metadata_stage_status"]["discourse"] == "complete"
+    assert after_complete["metadata_tasks_queued"] == 2
+    assert after_complete["metadata_tasks_running"] == 0
+    assert after_complete["metadata_tasks_completed"] == 1
+    assert after_complete["metadata_active_tasks"] == []
+
+
+def test_stale_terminal_checkpoint_clears_matching_active_task(tmp_path):
+    """A rejected stale result must not leave its old run visible as active.
+
+    Reviewer edits requeue the canonical Record while an older worker may still
+    finish against the previous revision. The scholarly result is discarded, but
+    the operational active-task projection must also retire that exact run and
+    restore its family to the queued counter.
+    """
+    from app.corpus_review_mutations import requeue_record_metadata
+
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "Derrida discusses hospitality.",
+        "source_asset_id": "asset-elephant",
+        "source_block_ids": ["b1"],
+        "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}],
+        "metadata_stage_status": {
+            "discourse": "queued",
+            "quotation": "queued",
+            "indexing": "queued",
+        },
+        "metadata_execution_ledger": {},
+        "metadata_enrichment_state": "queued",
+    }
+    repo.save_records(build["build_id"], [record])
+    current = repo.get_build(build["build_id"])
+    current.update({
+        "metadata_tasks_total": 3,
+        "metadata_tasks_completed": 0,
+        "metadata_tasks_failed": 0,
+        "metadata_tasks_skipped": 0,
+        "metadata_tasks_running": 0,
+        "metadata_tasks_queued": 3,
+        "metadata_active_tasks": [],
+    })
+    repo.save_build(current)
+
+    running = json.loads(json.dumps(record))
+    running["metadata_stage_status"]["discourse"] = "running"
+    running["metadata_execution_ledger"]["discourse"] = {
+        "state": "running",
+        "started_at": "2026-01-01T00:00:00+00:00",
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, running, "discourse", "running", None,
+    )
+    after_running = repo.get_build(build["build_id"])
+    assert after_running["metadata_tasks_running"] == 1
+    assert after_running["metadata_tasks_queued"] == 2
+    assert len(after_running["metadata_active_tasks"]) == 1
+
+    live = repo.get_record(build["build_id"], "r1")
+    live["record_revision"] = 2
+    live["text"] = "Reviewer-corrected documentary text."
+    assert requeue_record_metadata(live, "Record text changed while enrichment was active.")
+    repo.update_record(build["build_id"], live)
+
+    stale_complete = json.loads(json.dumps(running))
+    stale_complete["metadata_stage_status"]["discourse"] = "complete"
+    stale_complete["metadata_execution_ledger"]["discourse"]["state"] = "complete"
+    stale_complete["metadata_execution_ledger"]["discourse"]["finished_at"] = (
+        "2026-01-01T00:00:10+00:00"
+    )
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, stale_complete, "discourse", "complete", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    summary = repo.get_build(build["build_id"])
+    assert stored["record_revision"] == 2
+    assert stored["text"] == "Reviewer-corrected documentary text."
+    assert stored["metadata_stage_status"]["discourse"] == "queued"
+    assert summary["metadata_active_tasks"] == []
+    assert summary["metadata_tasks_running"] == 0
+    assert summary["metadata_tasks_queued"] == 3
+    assert summary["metadata_tasks_completed"] == 0
+
+
+def test_concurrent_family_checkpoint_does_not_regress_sibling_state(tmp_path):
+    """A stale sibling snapshot may update only its own family checkpoint."""
+    repo = cb.PdfCorpusRepository(tmp_path / "repo")
+    build = _install_minimal_build(repo)
+    manager = cb.PdfCorpusBuildManager(repo, max_workers=1)
+    record = {
+        "record_id": "r1",
+        "record_revision": 1,
+        "text": "Derrida discusses hospitality.",
+        "source_asset_id": "asset-elephant",
+        "source_block_ids": ["b1"],
+        "source_spans": [{"block_id": "b1", "page": 1, "confidence": 1.0}],
+        "metadata_stage_status": {
+            "discourse": "queued",
+            "quotation": "queued",
+            "indexing": "queued",
+        },
+        "metadata_execution_ledger": {},
+        "metadata_enrichment_state": "queued",
+    }
+    repo.save_records(build["build_id"], [record])
+    current = repo.get_build(build["build_id"])
+    current.update({
+        "metadata_tasks_total": 3,
+        "metadata_tasks_completed": 0,
+        "metadata_tasks_failed": 0,
+        "metadata_tasks_skipped": 0,
+        "metadata_tasks_running": 0,
+        "metadata_tasks_queued": 3,
+        "metadata_active_tasks": [],
+    })
+    repo.save_build(current)
+
+    discourse = json.loads(json.dumps(record))
+    discourse["metadata_stage_status"]["discourse"] = "running"
+    discourse["metadata_execution_ledger"]["discourse"] = {
+        "state": "running",
+        "started_at": "2026-01-01T00:00:00+00:00",
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, discourse, "discourse", "running", None,
+    )
+
+    # This quotation worker began from the pre-discourse snapshot and therefore
+    # still thinks discourse is queued. Persisting quotation must not restore it.
+    quotation = json.loads(json.dumps(record))
+    quotation["metadata_stage_status"]["quotation"] = "running"
+    quotation["metadata_execution_ledger"]["quotation"] = {
+        "state": "running",
+        "started_at": "2026-01-01T00:00:01+00:00",
+    }
+    manager._persist_build_metadata_stage(
+        build["build_id"], 3, quotation, "quotation", "running", None,
+    )
+
+    stored = repo.get_record(build["build_id"], "r1")
+    assert stored["metadata_stage_status"]["discourse"] == "running"
+    assert stored["metadata_stage_status"]["quotation"] == "running"
+    assert stored["metadata_execution_ledger"]["discourse"]["state"] == "running"
+    assert stored["metadata_execution_ledger"]["quotation"]["state"] == "running"
+    counters = repo.get_build(build["build_id"])
+    assert counters["metadata_tasks_running"] == 2
+    assert counters["metadata_tasks_queued"] == 1
+
+
 def test_metadata_families_checkpoint_independently_and_record_execution_ledger(tmp_path,monkeypatch):
     """Each family runs in order, reports events, and leaves an execution ledger.
 
@@ -89,8 +342,8 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={"record_id":"r1","record_revision":1,"text":"Derrida discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
     events=[]
-    monkeypatch.setattr(manager,'_chat_json',lambda _request,prompt,*,response_model,max_tokens,schema_name,build_id='':_metadata_result(schema_name))
-    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","stage_timeouts":{"discourse":90}},build_id=build['build_id'],stage_callback=lambda snapshot,task,state,error:events.append((task,state,dict(snapshot.get('metadata_stage_status') or {}))))
+    monkeypatch.setattr(manager,'_chat_json',lambda _request,prompt,*,response_model,max_tokens,schema_name,build_id='',**_kwargs:_metadata_result(schema_name))
+    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","stage_timeouts":{"discourse":90},"families":["discourse","quotation","indexing"]},build_id=build['build_id'],stage_callback=lambda snapshot,task,state,error:events.append((task,state,dict(snapshot.get('metadata_stage_status') or {}))))
     assert [(task,state) for task,state,_ in events]==[("discourse","running"),("discourse","complete"),("quotation","running"),("quotation","complete"),("indexing","running"),("indexing","complete")]
     assert record['metadata_stage_status']=={'discourse':'complete','quotation':'complete','indexing':'complete'}
     assert record['metadata_execution_ledger']['discourse']['provider']=='ollama'
@@ -98,25 +351,33 @@ def test_metadata_families_checkpoint_independently_and_record_execution_ledger(
     assert record['metadata_execution_ledger']['discourse']['timeout_seconds']==90
     assert record['metadata_execution_ledger']['discourse']['input_chars']>0
     assert 'metadata_stage_results' not in record
+    from app.corpus_metadata_enrichment_execution import (
+        _materialized_family_fingerprint,
+    )
+
+    for entry in record["metadata_execution_ledger"].values():
+        assert entry["materialized_fingerprint"] == _materialized_family_fingerprint(
+            record, entry["requested_fields"],
+        )
 
 
-def test_metadata_resume_reuses_completed_family_checkpoint(tmp_path,monkeypatch):
-    """A family with a saved checkpoint is not sent to the LLM again.
+def test_metadata_resume_recomputes_legacy_raw_family_checkpoint(tmp_path,monkeypatch):
+    """A raw checkpoint without exact dependency provenance must be recomputed.
 
-    With the discourse result already stored, only quotation and indexing are called and
-    the record ends metadata-complete. Why: resuming a long build must not repeat paid work.
+    Legacy materialized values remain intact, but a raw response cannot be
+    reconciled as current evidence solely because it was once marked complete.
     """
     repo=cb.PdfCorpusRepository(tmp_path/'repo')
     build=_install_minimal_build(repo)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={"record_id":"r1","record_revision":1,"text":"Derrida discusses hospitality.","text_length":30,"source_asset_id":"asset-elephant","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"metadata_stage_results":{"discourse":_metadata_result('derridai_record_discourse')},"metadata_stage_status":{"discourse":"complete"}}
     called=[]
-    def fake(_request,prompt,*,response_model,max_tokens,schema_name,build_id=''):
+    def fake(_request,prompt,*,response_model,max_tokens,schema_name,build_id='', **_kwargs):
         called.append(schema_name)
         return _metadata_result(schema_name)
     monkeypatch.setattr(manager,'_chat_json',fake)
-    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model"},build_id=build['build_id'])
-    assert called==['derridai_record_quotation','derridai_record_indexing']
+    manager._enrich_record(record,{}, {"provider":"ollama","model":"test-model","families":["discourse","quotation","indexing"]},build_id=build['build_id'])
+    assert called==['derridai_record_discourse','derridai_record_quotation','derridai_record_indexing']
     assert record['metadata_complete'] is True
 
 
@@ -165,5 +426,3 @@ def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
         thread.join()
     assert not failures
     assert repo.load_records(build_id) in (rows_a, rows_b)
-
-

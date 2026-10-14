@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, ref, useId } from "vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -120,33 +137,25 @@ defineExpose({ open, close });
   <UiDialog
     :open="isOpen"
     size="medium"
-    :title="title || i18n.t('records.configure_columns', 'Configure columns')"
+    :title="title || i18n.t('records.configure_columns')"
     :description="
       description ||
-      (sizing
-        ? i18n.t(
-            'table.columns_help_widths',
-            'Choose the fields shown in the table, their order, and how much of the table width each one takes. Widths always add up to 100%: widening one column narrows the others in proportion.',
-          )
-        : i18n.t(
-            'records.configure_columns_help',
-            'Choose the fields shown in the records table. Order is preserved.',
-          ))
+      (sizing ? i18n.t('table.columns_help_widths') : i18n.t('records.configure_columns_help'))
     "
-    :close-label="i18n.t('common.close', 'Close')"
+    :close-label="i18n.t('common.close')"
     @close="close"
   >
     <div class="ui-columns">
       <section class="ui-columns-shown" :aria-labelledby="`${id}-shown`">
         <div class="ui-columns-section-head">
-          <h3 :id="`${id}-shown`">{{ i18n.t("records.visible_columns", "Visible columns") }}</h3>
+          <h3 :id="`${id}-shown`">{{ i18n.t("records.visible_columns") }}</h3>
           <button
             v-if="sizing && modelValue.length > 1"
             type="button"
             class="btn tiny"
             @click="evenWidths"
           >
-            {{ i18n.t("table.even_widths", "Even widths") }}
+            {{ i18n.t("table.even_widths") }}
           </button>
         </div>
         <div v-if="sizing" class="ui-columns-preview" aria-hidden="true">
@@ -163,7 +172,7 @@ defineExpose({ open, close });
             <span class="ui-columns-name">{{ column.label }}</span>
             <label v-if="sizing" class="ui-columns-width">
               <span class="sr-only">{{
-                i18n.tf("table.column_width", "Width of {column}, percent of the table", {
+                i18n.tf("table.column_width", {
                   column: column.label,
                 })
               }}</span>
@@ -185,9 +194,7 @@ defineExpose({ open, close });
                 type="button"
                 class="btn tiny"
                 :disabled="index === 0"
-                :aria-label="
-                  i18n.tf('search.move_column_up', 'Move {column} up', { column: column.label })
-                "
+                :aria-label="i18n.tf('search.move_column_up', { column: column.label })"
                 @click="move(column.key, -1)"
               >
                 ↑
@@ -197,7 +204,7 @@ defineExpose({ open, close });
                 class="btn tiny"
                 :disabled="index === visible.length - 1"
                 :aria-label="
-                  i18n.tf('search.move_column_down', 'Move {column} down', {
+                  i18n.tf('search.move_column_down', {
                     column: column.label,
                   })
                 "
@@ -209,12 +216,10 @@ defineExpose({ open, close });
                 type="button"
                 class="btn tiny"
                 :disabled="modelValue.length <= 1"
-                :aria-label="
-                  i18n.tf('records.hide_column', 'Hide {column}', { column: column.label })
-                "
+                :aria-label="i18n.tf('records.hide_column', { column: column.label })"
                 @click="hide(column.key)"
               >
-                {{ i18n.t("ui.remove", "Remove") }}
+                {{ i18n.t("ui.remove") }}
               </button>
             </div>
           </li>
@@ -222,15 +227,15 @@ defineExpose({ open, close });
       </section>
       <section class="ui-columns-available" :aria-labelledby="`${id}-available`">
         <h3 :id="`${id}-available`">
-          {{ i18n.t("records.available_fields", "Available fields") }}
+          {{ i18n.t("records.available_fields") }}
         </h3>
         <label class="ui-columns-find">
-          <span class="sr-only">{{ i18n.t("records.find_column", "Find a field") }}</span>
+          <span class="sr-only">{{ i18n.t("records.find_column") }}</span>
           <input
             class="control"
             type="search"
             :value="find"
-            :placeholder="i18n.t('records.find_column', 'Find a field')"
+            :placeholder="i18n.t('records.find_column')"
             @input="find = ($event.target as HTMLInputElement).value"
           />
         </label>
@@ -242,21 +247,21 @@ defineExpose({ open, close });
             </button>
           </li>
           <li v-if="!hidden.length" class="ui-columns-empty">
-            {{ i18n.t("records.no_fields_to_add", "No additional fields match.") }}
+            {{ i18n.t("records.no_fields_to_add") }}
           </li>
         </ul>
       </section>
     </div>
     <template #footer>
       <button type="button" class="btn" @click="emit('reset')">
-        {{ i18n.t("records.reset_columns", "Reset defaults") }}
+        {{ i18n.t("records.reset_columns") }}
       </button>
       <div class="ui-columns-commit">
         <button type="button" class="btn" @click="close">
-          {{ i18n.t("common.cancel", "Cancel") }}
+          {{ i18n.t("common.cancel") }}
         </button>
         <button type="button" class="btn primary" :disabled="!modelValue.length" @click="apply">
-          {{ i18n.t("records.save_columns", "Save columns") }}
+          {{ i18n.t("records.save_columns") }}
         </button>
       </div>
     </template>

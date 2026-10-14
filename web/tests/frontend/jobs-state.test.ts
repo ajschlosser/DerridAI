@@ -1,8 +1,25 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { jobsState, subscribeToJobChanges, touchJobs } from "../../src/state/jobsState";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { useJobsStore } from "../../src/stores/jobs";
 
 describe("jobs state shared between the runtime and Vue", () => {
@@ -48,7 +65,7 @@ describe("jobs state shared between the runtime and Vue", () => {
     expect(store.jobs.map((job) => job.id)).toEqual(["a", "b"]);
     expect(store.activeJobs.map((job) => job.id)).toEqual(["a"]);
     // In-place edits are invisible to Vue until the runtime says something changed.
-    (state.jobs[1] as { status: string }).status = "running";
+    (state.jobs[1] as unknown as { status: string }).status = "running";
     expect(store.activeJobs).toHaveLength(1);
     touchJobs();
     expect(store.version).toBe(1);

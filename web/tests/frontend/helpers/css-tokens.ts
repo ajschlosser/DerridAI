@@ -1,5 +1,24 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { readGlobalCss } from "./global-css";
 
 // Contrast tests read colours straight from the CSS. Rules now say var(--muted) rather than a hex,
 // so these helpers resolve a value to the light-theme colour the token stands for.
@@ -17,7 +36,7 @@ function lightDefinitions(source: string, into: Map<string, string>) {
 }
 export function lightTokens(extraCss = ""): Map<string, string> {
   const tokens = new Map<string, string>();
-  for (const css of [read("src/style.css"), read("src/styles/tokens.css"), extraCss])
+  for (const css of [readGlobalCss(), read("src/styles/tokens.css"), extraCss])
     lightDefinitions(css, tokens);
   return tokens;
 }

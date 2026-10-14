@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, useId } from "vue";
 import AppBuildInfo from "../AppBuildInfo.vue";
@@ -46,8 +63,7 @@ const titleId = `${dialogId}-title`;
 const heading = ref<HTMLElement | null>(null);
 const initials = () => userInitials(props.username);
 const translatedRole = () => roleLabel(props.role, props.roleName, i18n.t);
-const accountName = () =>
-  i18n.tf("ui.account_menu_named", "Account menu for {name}", { name: props.username });
+const accountName = () => i18n.tf("ui.account_menu_named", { name: props.username });
 
 function focusable(): HTMLElement[] {
   if (!panel.value) return [];
@@ -150,7 +166,9 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       :aria-labelledby="titleId"
       @keydown="onPanelKey"
     >
-      <h2 :id="titleId" ref="heading" class="sr-only" tabindex="-1">{{ i18n.t("ui.account_menu", "Account menu") }}</h2>
+      <h2 :id="titleId" ref="heading" class="sr-only" tabindex="-1">
+        {{ i18n.t("ui.account_menu") }}
+      </h2>
       <div class="topbar-account-identity">
         <span class="shell-avatar" aria-hidden="true">{{ initials() }}</span>
         <div>
@@ -162,18 +180,13 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
       <div class="topbar-account-actions">
         <UiButton
           v-if="canSettings"
-          :label="i18n.t('nav.config', 'Settings')"
+          :label="i18n.t('nav.config')"
           icon="gear"
           @click="go('config')"
         />
-        <UiButton
-          v-if="compact"
-          :label="i18n.t('ui.help', 'Help')"
-          icon="help"
-          @click="openHelp"
-        />
+        <UiButton v-if="compact" :label="i18n.t('ui.help')" icon="help" @click="openHelp" />
         <div v-if="compact && languages.length" class="topbar-account-locale">
-          <p id="account-locale-label">{{ i18n.t("ui.language_menu", "Interface language") }}</p>
+          <p id="account-locale-label">{{ i18n.t("ui.language_menu") }}</p>
           <div role="radiogroup" aria-labelledby="account-locale-label">
             <label v-for="language in languages" :key="language.code">
               <input
@@ -188,7 +201,7 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", outside, true)
             </label>
           </div>
         </div>
-        <UiButton variant="danger" :label="i18n.t('ui.sign_out', 'Sign out')" @click="signOut" />
+        <UiButton variant="danger" :label="i18n.t('ui.sign_out')" @click="signOut" />
       </div>
     </div>
   </div>

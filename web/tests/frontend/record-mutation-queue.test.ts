@@ -1,0 +1,254 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { describe, expect, it, vi } from "vitest";
+import { RecordMutationQueue } from "../../src/domain/recordMutationQueue";
+
+describe("RecordMutationQueue", () => {
+  it("serializes mutations for one record and releases the key when done", async () => {
+    const queue = new RecordMutationQueue();
+    const order: string[] = [];
+    let release!: () => void;
+    const first = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    queue.enqueue(
+      "r1",
+      async () => {
+        order.push("first-start");
+        await first;
+        order.push("first-end");
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r1",
+      async () => {
+        order.push("second");
+      },
+      vi.fn(),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["first-start"]);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["first-start", "first-end", "second"]);
+    expect(queue.hasPending("r1")).toBe(false);
+  });
+
+  it("allows different records to proceed independently", async () => {
+    const queue = new RecordMutationQueue();
+    const order: string[] = [];
+    queue.enqueue(
+      "r1",
+      async () => {
+        order.push("r1");
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r2",
+      async () => {
+        order.push("r2");
+      },
+      vi.fn(),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["r1", "r2"]);
+  });
+
+  it("reports failures without blocking the next mutation", async () => {
+    const queue = new RecordMutationQueue();
+    const errors: unknown[] = [];
+    const onError = (error: unknown) => errors.push(error);
+    queue.enqueue(
+      "r1",
+      async () => {
+        throw new Error("failed");
+      },
+      onError,
+    );
+    queue.enqueue("r1", async () => undefined, onError);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(errors).toHaveLength(1);
+  });
+
+  it("locks every record in a multi-record mutation", async () => {
+    const queue = new RecordMutationQueue();
+    const order: string[] = [];
+    let release!: () => void;
+    const first = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    queue.enqueue(
+      ["r1", "r2"],
+      async () => {
+        order.push("boundary-start");
+        await first;
+        order.push("boundary-end");
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r2",
+      async () => {
+        order.push("r2-after");
+      },
+      vi.fn(),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["boundary-start"]);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(order).toEqual(["boundary-start", "boundary-end", "r2-after"]);
+  });
+
+  it("retries a failed field mutation with a rebased request", async () => {
+    const queue = new RecordMutationQueue();
+    const contexts: boolean[] = [];
+    const errors: unknown[] = [];
+    let attempts = 0;
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+        attempts += 1;
+        if (attempts === 1) throw new Error("transport");
+      },
+      (error) => errors.push(error),
+      { retryOnFailure: true },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contexts).toEqual([false, true]);
+    expect(errors).toHaveLength(0);
+  });
+
+  it("rebases a later mutation queued behind a successful save", async () => {
+    const queue = new RecordMutationQueue();
+    const contexts: boolean[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+        await gate;
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+      },
+      vi.fn(),
+      { retryOnFailure: false },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contexts).toEqual([false]);
+    release();
+    await queue.waitFor("r1");
+    expect(contexts).toEqual([false, true]);
+    expect(queue.hasPending("r1")).toBe(false);
+  });
+
+  it("rebases the next queued mutation after an exhausted failure", async () => {
+    const queue = new RecordMutationQueue();
+    const contexts: boolean[] = [];
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+        throw new Error("offline");
+      },
+      vi.fn(),
+      { retryOnFailure: false },
+    );
+    queue.enqueue(
+      "r1",
+      async ({ rebase }) => {
+        contexts.push(rebase);
+      },
+      vi.fn(),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(contexts).toEqual([false, true]);
+  });
+
+  it("waits for every in-flight review mutation before cleanup continues", async () => {
+    const queue = new RecordMutationQueue();
+    const finished: string[] = [];
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    const first = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const second = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+
+    queue.enqueue(
+      "r1",
+      async () => {
+        await first;
+        finished.push("r1");
+      },
+      vi.fn(),
+    );
+    queue.enqueue(
+      "r2",
+      async () => {
+        await second;
+        finished.push("r2");
+      },
+      vi.fn(),
+    );
+
+    let settled = false;
+    const waiting = queue.waitForAll().then(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    releaseFirst();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(settled).toBe(false);
+
+    releaseSecond();
+    await waiting;
+    expect(finished.sort()).toEqual(["r1", "r2"]);
+    expect(settled).toBe(true);
+  });
+
+  it("reports whether another mutation is queued behind the running one", async () => {
+    const queue = new RecordMutationQueue();
+    const seen: boolean[] = [];
+    queue.enqueue("r1", async () => void seen.push(queue.hasQueuedBehind("r1")), vi.fn());
+    queue.enqueue("r1", async () => void seen.push(queue.hasQueuedBehind("r1")), vi.fn());
+    await queue.waitFor("r1");
+    expect(seen).toEqual([true, false]);
+    expect(queue.hasQueuedBehind("r1")).toBe(false);
+  });
+});

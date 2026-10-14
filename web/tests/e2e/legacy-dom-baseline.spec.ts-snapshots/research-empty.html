@@ -14,6 +14,7 @@
 </div>
 </div>
 </header>
+<button type="button" class="btn" aria-expanded="false" aria-controls="research-thread-browser">Research threads</button>
 <section class="research-composer-v031 card" aria-labelledby="research-compose-title">
 <header class="research-composer-heading">
 <div>
@@ -62,8 +63,36 @@
 <textarea id="researchInstructions" placeholder="Optional constraints on framing, comparison, citation, or answer form." value="">
 </textarea>
 </details>
+<details class="research-instructions-disclosure">
+<summary>Retrieval scope filter<span>Optional</span>
+</summary>
+<section class="research-filter-editor" aria-labelledby="research-filter-<id>-title">
+<h3 id="research-filter-<id>-title">Retrieval scope filter</h3>
+<p class="note">Optional. Limits which Records can be retrieved, before ranking. Pinned evidence is never removed by this filter.</p>
+<label class="research-filter-label" for="research-filter-<id>">Filter expression</label>
+<textarea id="research-filter-<id>" class="research-filter-input" rows="2" spellcheck="false" autocomplete="off" placeholder="work = &quot;Of Grammatology&quot; and page_start &gt;= 100" aria-invalid="false" aria-describedby="research-filter-help-<id> research-filter-status-<id>" value="">
+</textarea>
+<p id="research-filter-help-<id>" class="note">This collection declares no filter fields.</p>
+<div class="research-filter-suggestions">
+<span>Suggestions</span>
+<button type="button" class="btn" aria-label="Insert document">document</button>
+</div>
+<div id="research-filter-status-<id>" class="research-filter-status" role="status" aria-live="polite">
+<p>No filter. Research searches the whole collection.</p>
+</div>
+</section>
+</details>
 <fieldset class="research-compose-context">
 <legend class="sr-only">Research context</legend>
+<div class="research-pipeline-action research-pipeline-context">
+<span>Pipeline chain</span>
+<button class="btn research-pipeline-action-button" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M8 7h11M16 4l3 3-3 3M16 17H5M8 14l-3 3 3 3">
+</path>
+</svg> System default</button>
+<small>System assignment</small>
+</div>
 <label>
 <span>Corpus</span>
 <select class="control" value="derrida_primary">
@@ -86,10 +115,22 @@
 <option value="precision">High precision</option>
 <option value="recall">High recall</option>
 <option disabled="" value="evidence">Selected evidence only</option>
+<option disabled="" value="hybrid">Search + my selected evidence (hybrid)</option>
 <option value="custom">Custom</option>
 </select>
 <small>0 selected evidence</small>
 </label>
+<div class="research-context-action">
+<span>Prompt metadata</span>
+<button class="btn research-context-action-button" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<rect x="5" y="3" width="14" height="18" rx="2">
+</rect>
+<path d="M8 8h8M8 12h8M8 16h5">
+</path>
+</svg>Configure prompt metadata</button>
+<small>Evidence 10 · Context 0 · Record 0</small>
+</div>
 <label>
 <span>Answer language</span>
 <select class="control" value="auto">
@@ -118,28 +159,7 @@
 </span>
 </footer>
 </section>
-<div class="research-thread-layout">
-<nav class="research-thread-list card" aria-label="Research threads">
-<header class="research-thread-head">
-<b>Threads</b>
-<button class="btn" type="button">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M12 5v14M5 12h14">
-</path>
-</svg>New question</button>
-</header>
-<p class="research-thread-empty">Completed and active runs will appear here.</p>
-<footer class="research-thread-foot">
-<button class="research-text-action" type="button">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
-</path>
-<path d="M3 3v5h5M12 7v5l3 2">
-</path>
-</svg>View all runs</button>
-</footer>
-</nav>
-<div class="research-workspace-grid research-result-presentation">
+<div class="research-workspace-grid research-result-presentation" id="research-selected-run" tabindex="-1" role="region" aria-label="Answer">
 <section class="research-answer-workspace card" aria-live="polite">
 <div class="research-answer-empty">
 <div aria-hidden="true">∴</div>
@@ -160,7 +180,6 @@
 <p>Add records from Search, Works, or Record View. Retrieval can still find evidence automatically.</p>
 </div>
 </aside>
-</div>
 </div>
 <dialog class="research-settings-dialog research-settings-studio-dialog" aria-labelledby="research-settings-title">
 <div class="research-settings-studio-shell">
@@ -183,7 +202,7 @@
 <b>Local Ollama</b>
 </span>
 </span>
-<button class="btn icon-only" type="button" aria-label="Close">×</button>
+<button class="btn icon-only" type="button" aria-label="Close"> × </button>
 </div>
 </header>
 <div class="research-settings-studio-body">
@@ -238,9 +257,9 @@
 <section class="research-settings-page" aria-labelledby="research-settings-retrieval-title">
 <div class="research-settings-page-head">
 <div>
-<span class="section-label">01</span>
+<span class="section-label">02</span>
 <h3 id="research-settings-retrieval-title">Retrieval</h3>
-<p>Tune recall, rank fusion, reranking, and multilingual query routing.</p>
+<p>Choose request-level routing and scope for this run. To override a Pipeline Studio stage value, use Run overrides under Pipeline chain.</p>
 </div>
 <button class="research-text-action" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -290,64 +309,31 @@
 </div>
 </fieldset>
 <fieldset class="research-settings-card">
-<legend>Candidate pool</legend>
-<p>Control how broadly DerridAI searches before fusion and reranking.</p>
+<legend>Run inputs</legend>
+<p>These values shape this Research request without rewriting stage configuration. Stage-level changes belong under Run overrides in Pipeline chain.</p>
+<label class="research-toggle-setting automatic-sizing-toggle">
+<input type="checkbox">
+<span>
+<b>Automatic sizing</b>
+<small>Adapt retrieval depth to Record size while preserving the effective pipeline configuration.</small>
+</span>
+</label>
 <div class="research-settings-grid compact">
 <label>
 <span>
-<code>k</code>Candidates retained</span>
-<input class="control" type="number" min="1" max="500">
-<small>Candidates retained per retrieval route</small>
-</label>
-<label>
-<span>
-<code>fetch_k</code>MMR candidate pool</span>
-<input class="control" type="number" min="1" max="5000">
-<small>MMR candidate pool</small>
-</label>
-<label>
-<span>
-<code>MMR λ</code>Relevance balance</span>
-<input class="control" type="number" step="0.05" min="0" max="1">
-<small>Relevance vs. diversity</small>
-</label>
-<label>
-<span>
-<code>RRF k</code>Fusion smoothing</span>
-<input class="control" type="number" min="1">
-<small>Rank-fusion smoothing constant</small>
-</label>
-</div>
-</fieldset>
-<fieldset class="research-settings-card wide">
-<legend>Reranking &amp; query decomposition</legend>
-<p>Refine the fused candidate set and optionally expand the question into multilingual subqueries.</p>
-<div class="research-settings-grid three">
-<label>
-<span>Rerank top N</span>
+<code>k</code>Candidates retained <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Candidates retained per retrieval route" aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="1" max="500">
 </label>
-<label>
-<span>Reranker</span>
-<select class="control">
-<option value="cross_encoder">Cross-encoder</option>
-<option value="lexical">Lexical/vector fallback</option>
-<option value="none">None</option>
-</select>
-</label>
-<label>
-<span>Query-decomposition tokens</span>
-<input class="control" type="number" min="64" max="8192">
-</label>
-<label class="wide">
-<span>Cross-encoder model</span>
-<input class="control">
-</label>
-<label class="research-toggle-setting wide">
+<label class="research-toggle-setting">
 <input type="checkbox">
 <span>
 <b>Query decomposition</b>
-<small>Generate subqueries and French formulations before retrieval.</small>
+<small>Allow the selected pipeline's query-decomposition stage for this run. Its stage configuration is overridden separately.</small>
 </span>
 </label>
 </div>
@@ -357,9 +343,9 @@
 <section class="research-settings-page" aria-labelledby="research-settings-evidence-title" style="display: none;">
 <div class="research-settings-page-head">
 <div>
-<span class="section-label">02</span>
+<span class="section-label">03</span>
 <h3 id="research-settings-evidence-title">Evidence &amp; citations</h3>
-<p>Control evidence packet size and deterministic source binding.</p>
+<p>Citation, memory, metadata, and evaluation controls apply to this run. Evidence-packing stage limits are configured under Run overrides.</p>
 </div>
 <button class="research-text-action" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -374,22 +360,6 @@
 </svg>Reset section</button>
 </div>
 <div class="research-settings-card-grid">
-<fieldset class="research-settings-card wide">
-<legend>Evidence budget</legend>
-<p>Set an upper bound for each passage and for the full evidence packet sent to generation.</p>
-<div class="research-settings-grid two">
-<label>
-<span>Chars / evidence record</span>
-<input class="control" type="number" min="500" max="100000">
-<small>0 characters</small>
-</label>
-<label>
-<span>Total evidence chars</span>
-<input class="control" type="number" min="5000" max="1000000">
-<small>0 characters</small>
-</label>
-</div>
-</fieldset>
 <fieldset class="research-settings-card">
 <legend>Source binding</legend>
 <p>Keep generated claims auditable against deterministic evidence identifiers and citations.</p>
@@ -406,6 +376,30 @@
 <span>
 <b>Append Works Cited</b>
 <small>Add a deterministic bibliography after the answer.</small>
+</span>
+</label>
+<label class="research-toggle-setting">
+<input type="checkbox">
+<span>
+<b>Use cached responses to steer answers <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Finds earlier answers to similar questions and shows them to the model as advisory context. Only answers graded at or above the configured minimum are used; ungraded answers never steer. Prior answers are never cited as evidence." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</b>
+<small>Uses sufficiently graded prior answers as advisory context; never as source evidence.</small>
+</span>
+</label>
+<label class="research-toggle-setting">
+<input type="checkbox">
+<span>
+<b>Use cached provenance to steer claims <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Finds reviewer-validated claims similar to your question, with the citations they were bound to. Each cited record is checked against this run’s evidence; support that is not in the current evidence cannot be cited." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</b>
+<small>Uses validated prior claims as guidance only when their support is present in this run’s evidence.</small>
 </span>
 </label>
 </div>
@@ -428,7 +422,7 @@
 <section class="research-settings-page" aria-labelledby="research-settings-generation-title" style="display: none;">
 <div class="research-settings-page-head">
 <div>
-<span class="section-label">03</span>
+<span class="section-label">04</span>
 <h3 id="research-settings-generation-title">Generation</h3>
 <p>Optional per-run overrides; the saved provider profile is not changed.</p>
 </div>
@@ -477,16 +471,31 @@
 <div class="research-settings-grid three">
 <label>
 <span>
-<code>num_ctx</code>Context window</span>
+<code>num_ctx</code>Context window <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="The maximum amount of tokenized input a model can consider in one request, usually including instructions, evidence, history, and the model’s output allowance." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="512">
 </label>
 <label>
 <span>
-<code>num_predict</code>Maximum output</span>
+<code>num_predict</code>Maximum output <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Maximum number of tokens the model may generate in one response. This is an output limit, not the context-window size." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="16">
 </label>
 <label>
-<span>Thinking</span>
+<span>Thinking <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Requests the provider's supported reasoning mode. Availability and accepted levels depend on the selected model and provider." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <select class="control">
 <option value="false">Off</option>
 <option value="true">On</option>
@@ -496,17 +505,32 @@
 </select>
 </label>
 <label>
-<span>Temperature</span>
+<span>Temperature <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A generation setting that controls how strongly a model favors its most likely next token. Lower values are usually more predictable; higher values allow more variation." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" step="0.01" min="0" max="2">
 </label>
 <label>
 <span>
-<code>top_p</code>Nucleus sampling</span>
+<code>top_p</code>Nucleus sampling <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A sampling setting that limits generation to a probability mass of likely next tokens, sometimes called nucleus sampling." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" step="0.01" min="0" max="1">
 </label>
 <label>
 <span>
-<code>top_k</code>Top-k sampling</span>
+<code>top_k</code>Top-k sampling <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Sampling control that limits each generated token to the K most likely choices. Lower values narrow variation; provider support varies." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number" min="0">
 </label>
 <label>
@@ -520,19 +544,33 @@
 <input class="control" type="number" step="0.01">
 </label>
 <label>
-<span>Seed</span>
+<span>Seed <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="A number used by models that support seeded sampling to make random choices more repeatable." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control" type="number">
 </label>
 <label>
 <span>
-<code>keep_alive</code>Keep model loaded</span>
+<code>keep_alive</code>Keep model loaded <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="How long a local provider should keep the model loaded after a request. Longer values can reduce warm-up time but keep memory occupied." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <input class="control">
 </label>
 <label class="wide">
-<span>Provider options JSON</span>
+<span>Provider options JSON <span class="ui-tooltip" data-trigger-mode="icon">
+<button type="button" class="ui-tooltip-trigger" aria-label="Provider-specific JSON sent with requests from this profile. Use only options supported by the selected provider; these settings are advanced and model-dependent." aria-describedby="ui-tooltip-<id>">
+<span aria-hidden="true">i</span>
+</button>
+</span>
+</span>
 <textarea spellcheck="false">
 </textarea>
-<small>Advanced provider-specific options are merged into this run only.</small>
 </label>
 </div>
 </div>

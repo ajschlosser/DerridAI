@@ -1,13 +1,31 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryHistory, createRouter } from "vue-router";
+import { VueQueryPlugin } from "@tanstack/vue-query";
 
 const notifications = vi.hoisted(() => ({
   notify: vi.fn(),
 }));
-vi.mock("../../src/composables/notifications", () => ({...notifications}));
+vi.mock("../../src/composables/notifications", () => ({ ...notifications }));
 
 const authApi = vi.hoisted(() => ({
   listRoles: vi.fn(),
@@ -18,103 +36,291 @@ const authApi = vi.hoisted(() => ({
 }));
 vi.mock("../../src/api/auth", async () => {
   const actual = await vi.importActual<typeof import("../../src/api/auth")>("../../src/api/auth");
-  return {...actual, authApi};
+  return { ...actual, authApi };
 });
 
+import { queryClient } from "../../src/realtime/dataQuery";
 import RolesView from "../../src/views/RolesView.vue";
 import { useAuthStore } from "../../src/stores/auth";
+import { useI18nStore } from "../../src/stores/i18n";
 
 const capabilities = [
-  {id: "page.dashboard", category: "Pages", label: "Dashboard", description: "Open the dashboard.", configurable: true},
-  {id: "page.research", category: "Pages", label: "Research", description: "Open Research.", configurable: true},
-  {id: "users.manage", category: "Administration", label: "Manage users", description: "Administrator-only.", configurable: false},
+  {
+    id: "page.dashboard",
+    category: "Pages",
+    label: "Dashboard",
+    description: "Open the dashboard.",
+    configurable: true,
+  },
+  {
+    id: "page.research",
+    category: "Pages",
+    label: "Research",
+    description: "Open Research.",
+    configurable: true,
+  },
+  {
+    id: "users.manage",
+    category: "Administration",
+    label: "Manage users",
+    description: "Administrator-only.",
+    configurable: false,
+  },
 ];
 const roles = [
-  {id: "admin", name: "Administrator", description: "Full access.", locked: true, builtin: true, permissions: ["*"]},
-  {id: "researcher", name: "Researcher", description: "Default non-admin.", locked: false, builtin: true, permissions: ["page.dashboard", "page.research"]},
-  {id: "reviewer", name: "Reviewer", description: "Custom review role.", locked: false, builtin: false, permissions: ["page.dashboard"]},
+  {
+    id: "admin",
+    name: "Administrator",
+    description: "Full access.",
+    locked: true,
+    builtin: true,
+    permissions: ["*"],
+  },
+  {
+    id: "researcher",
+    name: "Researcher",
+    description: "Default non-admin.",
+    locked: false,
+    builtin: true,
+    permissions: ["page.dashboard", "page.research"],
+  },
+  {
+    id: "reviewer",
+    name: "Reviewer",
+    description: "Custom review role.",
+    locked: false,
+    builtin: false,
+    permissions: ["page.dashboard"],
+  },
 ];
 
-async function mountView() {
+// Realtime invalidation (or a window refocus) is what refreshes the page; the tests invalidate directly.
+async function invalidate() {
+  await queryClient.invalidateQueries({ queryKey: ["data"] });
+  await flushPromises();
+}
+
+async function mountView(translations: Record<string, string> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  useAuthStore().user = {id: 1, username: "admin", role: "admin", capabilities: []} as never;
+  useAuthStore().user = { id: 1, username: "admin", role: "admin", capabilities: [] } as never;
+  useI18nStore().dictionary = translations;
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
-      {path: "/roles", name: "roles", component: RolesView},
-      {path: "/users", name: "users", component: {template: "<div>users</div>"}},
+      { path: "/roles", name: "roles", component: RolesView },
+      { path: "/users", name: "users", component: { template: "<div>users</div>" } },
     ],
   });
   await router.push("/roles");
   await router.isReady();
-  const wrapper = mount({template: "<RouterView />"}, {attachTo: document.body, global: {plugins: [pinia, router]}});
+  const wrapper = mount(
+    { template: "<RouterView />" },
+    {
+      attachTo: document.body,
+      global: { plugins: [pinia, router, [VueQueryPlugin, { queryClient }]] },
+    },
+  );
   await flushPromises();
-  return {wrapper, router};
+  return { wrapper, router };
 }
 
 describe("RolesView", () => {
   beforeEach(() => {
+    queryClient.clear();
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: 30_000 } });
     notifications.notify.mockClear();
-    authApi.listRoles.mockResolvedValue({roles, capabilities});
+    authApi.listRoles.mockResolvedValue({ roles, capabilities });
     authApi.listUsers.mockResolvedValue({
       users: [
-        {id: 1, username: "admin", role: "admin", active: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", login_count: 1, capabilities: []},
-        {id: 2, username: "ada", role: "reviewer", active: true, created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z", login_count: 1, capabilities: []},
+        {
+          id: 1,
+          username: "admin",
+          role: "admin",
+          active: true,
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+          login_count: 1,
+          capabilities: [],
+        },
+        {
+          id: 2,
+          username: "ada",
+          role: "reviewer",
+          active: true,
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+          login_count: 1,
+          capabilities: [],
+        },
       ],
     });
-    authApi.updateRolePermissions.mockImplementation(async (_role: string, permissions: string[]) => ({
-      role: "researcher",
-      permissions,
-      roles: roles.map(item => item.id === "researcher" ? {...item, permissions} : item),
-      capabilities,
-    }));
+    authApi.updateRolePermissions.mockImplementation(
+      async (_role: string, permissions: string[]) => ({
+        role: "researcher",
+        permissions,
+        roles: roles.map((item) => (item.id === "researcher" ? { ...item, permissions } : item)),
+        capabilities,
+      }),
+    );
     authApi.createRole.mockResolvedValue({
-      role: {id: "editor", name: "Editor", description: "", locked: false, builtin: false, permissions: ["page.dashboard"]},
-      roles: [...roles, {id: "editor", name: "Editor", description: "", locked: false, builtin: false, permissions: ["page.dashboard"]}],
+      role: {
+        id: "editor",
+        name: "Editor",
+        description: "",
+        locked: false,
+        builtin: false,
+        permissions: ["page.dashboard"],
+      },
+      roles: [
+        ...roles,
+        {
+          id: "editor",
+          name: "Editor",
+          description: "",
+          locked: false,
+          builtin: false,
+          permissions: ["page.dashboard"],
+        },
+      ],
       capabilities,
     });
-    authApi.deleteRole.mockResolvedValue({deleted: "reviewer", roles: roles.filter(item => item.id !== "reviewer"), capabilities});
+    authApi.deleteRole.mockResolvedValue({
+      deleted: "reviewer",
+      roles: roles.filter((item) => item.id !== "reviewer"),
+      capabilities,
+    });
+  });
+
+  it("has no manual refresh control", async () => {
+    const { wrapper } = await mountView();
+    expect(wrapper.findAll("button").some((b) => b.text() === "Refresh")).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("marks a failed atomic refresh stale, retains the editor and retries", async () => {
+    const { wrapper } = await mountView();
+    const editor = wrapper.find(".role-editor").element;
+    authApi.listUsers.mockRejectedValueOnce(new Error("offline"));
+    await invalidate();
+    expect(wrapper.find(".role-editor").element).toBe(editor);
+    expect(wrapper.text()).toContain("The refresh failed. Previously loaded content is shown.");
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Create role")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Retry")!
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.find(".role-editor").element).toBe(editor);
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Create role")
+        ?.attributes("disabled"),
+    ).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("keeps an unsaved permission draft during atomic refresh", async () => {
+    const { wrapper } = await mountView();
+    const checkbox = wrapper.findAll("input[type=checkbox]")[1]!;
+    await checkbox.setValue(false);
+    await invalidate();
+    expect((wrapper.findAll("input[type=checkbox]")[1]!.element as HTMLInputElement).checked).toBe(
+      false,
+    );
+    wrapper.unmount();
+  });
+
+  it("clears the retained role snapshot on forbidden refresh", async () => {
+    const { wrapper } = await mountView();
+    authApi.listUsers.mockRejectedValueOnce(Object.assign(new Error("forbidden"), { status: 403 }));
+    await invalidate();
+    expect(wrapper.find(".role-editor").exists()).toBe(false);
+    expect(
+      wrapper
+        .findAll("button")
+        .find((b) => b.text() === "Create role")
+        ?.attributes("disabled"),
+    ).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it("localizes built-in role descriptions", async () => {
+    const { wrapper } = await mountView({
+      "roles.admin_description": "Accès administratif entièrement localisé.",
+    });
+    await wrapper
+      .findAll(".role-selector button")
+      .find((button) => button.text().includes("Administrator"))
+      ?.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Accès administratif entièrement localisé.");
+    expect(wrapper.text()).not.toContain("Full access.");
   });
 
   it("shows the administrator role as locked full access with every capability checked", async () => {
-    const {wrapper} = await mountView();
-    const admin = wrapper.findAll("button").find(button => button.text().includes("Administrator"));
+    const { wrapper } = await mountView();
+    const admin = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Administrator"));
     await admin?.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("Full access");
     expect(wrapper.text()).toContain("Administrator access is fixed");
-    const checked = wrapper.findAll("input[type=checkbox]").filter(input => (input.element as HTMLInputElement).checked);
+    const checked = wrapper
+      .findAll("input[type=checkbox]")
+      .filter((input) => (input.element as HTMLInputElement).checked);
     expect(checked).toHaveLength(capabilities.length);
-    expect(wrapper.findAll("input[type=checkbox]").every(input => input.attributes("disabled") !== undefined)).toBe(true);
+    expect(
+      wrapper
+        .findAll("input[type=checkbox]")
+        .every((input) => input.attributes("disabled") !== undefined),
+    ).toBe(true);
   });
 
   it("saves only after a permission change and records the dirty state", async () => {
-    const {wrapper} = await mountView();
+    const { wrapper } = await mountView();
     expect(wrapper.text()).toContain("Saved");
-    const save = wrapper.findAll("button").find(button => button.text() === "Save");
+    const save = wrapper.findAll("button").find((button) => button.text() === "Save");
     expect(save?.attributes("disabled")).toBeDefined();
     const research = wrapper.findAll("input[type=checkbox]")[1];
     await research?.setValue(false);
     await flushPromises();
     expect(wrapper.text()).toContain("Unsaved changes");
-    await wrapper.findAll("button").find(button => button.text() === "Save")?.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text() === "Save")
+      ?.trigger("click");
     await flushPromises();
     expect(authApi.updateRolePermissions).toHaveBeenCalledWith("researcher", ["page.dashboard"]);
     expect(notifications.notify).toHaveBeenCalled();
   });
 
   it("creates a role from the dialog and selects it", async () => {
-    const {wrapper} = await mountView();
-    await wrapper.findAll("button").find(button => button.text().includes("Create role"))?.trigger("click");
+    const { wrapper } = await mountView();
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Create role"))
+      ?.trigger("click");
     await flushPromises();
     const name = document.querySelector<HTMLInputElement>("#newRoleName");
     expect(name).toBeTruthy();
     name!.value = "Editor";
-    name!.dispatchEvent(new Event("input", {bubbles: true}));
+    name!.dispatchEvent(new Event("input", { bubbles: true }));
     await flushPromises();
     const submit = [...document.querySelectorAll("button")]
-      .filter(button => (button.textContent || "").includes("Create role") && !(button as HTMLButtonElement).disabled)
+      .filter(
+        (button) =>
+          (button.textContent || "").includes("Create role") &&
+          !(button as HTMLButtonElement).disabled,
+      )
       .at(-1);
     submit?.click();
     await flushPromises();
@@ -123,11 +329,35 @@ describe("RolesView", () => {
   });
 
   it("refuses to delete a custom role that still has assigned users", async () => {
-    const {wrapper} = await mountView();
-    await wrapper.findAll("button").find(button => button.text().includes("Reviewer"))?.trigger("click");
+    const { wrapper } = await mountView();
+    await wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Reviewer"))
+      ?.trigger("click");
     await flushPromises();
-    const remove = wrapper.findAll("button").find(button => button.text() === "Delete role");
+    const remove = wrapper.findAll("button").find((button) => button.text() === "Delete role");
     expect(remove?.attributes("disabled")).toBeDefined();
     expect(wrapper.text()).toContain("1 account uses this role");
+  });
+
+  it("keeps role actions locked when account assignments could not be loaded", async () => {
+    authApi.listUsers.mockRejectedValueOnce(new Error("Account list unavailable"));
+    const { wrapper } = await mountView();
+    expect(wrapper.text()).toContain("The request could not be completed. Try again.");
+    expect(wrapper.text()).not.toContain("Account list unavailable");
+    const create = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("Create role"));
+    expect(create?.attributes("disabled")).toBeDefined();
+    expect(
+      wrapper
+        .findAll(".role-selector button")
+        .every((button) => button.attributes("disabled") !== undefined),
+    ).toBe(true);
+    expect(
+      wrapper
+        .findAll("input[type=checkbox]")
+        .every((input) => input.attributes("disabled") !== undefined),
+    ).toBe(true);
   });
 });

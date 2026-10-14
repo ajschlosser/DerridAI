@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it, vi } from "vitest";
 import { createRecordSubsets, subsetFileName } from "../../src/domain/recordSubsets";
 
@@ -22,6 +39,7 @@ function setup() {
     cloneAuditValue: <T>(value: T) => structuredClone(value),
     downloadBlob: vi.fn(),
     label: (field: string) => `Label ${field}`,
+    invalidateCorpusCache: vi.fn(),
     navigateTo: vi.fn(),
     persistFileNow: vi.fn(async () => undefined),
     uid: () => "new-file",
@@ -62,7 +80,7 @@ describe("record subsets", () => {
       download: true,
     });
     expect(created).toEqual({ name: "only-glas.jsonl", count: 1 });
-    const file = state.files[2] as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+    const file = state.files[2] as Record<string, any>;
     expect(file.records).toEqual([{ record_id: "glas-1", work: "Glas", _audit: [{ at: "t" }] }]);
     expect(file.records[0]).not.toBe(state.files[0].records[0]);
     // "active" is resolved to the file it meant at creation time.

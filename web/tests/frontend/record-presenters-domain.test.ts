@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import { createRecordPresenters } from "../../src/domain/recordPresenters";
 
@@ -58,38 +75,6 @@ const metric = {
   valueLabel: "V",
   note: "n",
 };
-const pool: unknown[] = [
-  undefined,
-  null,
-  "",
-  "W",
-  "topics",
-  3,
-  [],
-  [row, { ...row, index: 0, record: { ...rec, work: "V", topics: "x;y" } }],
-  rec,
-  row,
-  metric,
-  [
-    ["a", 3],
-    ["b", 1],
-  ],
-  {
-    annotation: {
-      note: "n",
-      quote: "q",
-      tags: ["t"],
-      created_at: "2026-01-01T00:00:00Z",
-      author: "a",
-    },
-    record: rec,
-    work: "W",
-    file: row.file,
-  },
-  { selected: true },
-  { key: "a", label: "Alpha", search: "alpha", record: rec },
-];
-
 describe("record presenters", () => {
   it("renders the pager", () => {
     expect(
@@ -109,10 +94,86 @@ describe("record presenters", () => {
   it("builds dashboard and work insight fragments", () => {
     expect(presenters.dashboardMetricBody(metric)).toMatchSnapshot();
     expect(presenters.workInsightMetrics([row], "W")).toMatchSnapshot();
-    expect(presenters.workInsightsPanelHtml([row], "W")).toMatchSnapshot();
+  });
+  it("uses semantic labels from structured metadata values", () => {
+    const insights = presenters.workInsightMetrics(
+      [
+        {
+          record: {
+            work: "W",
+            persons: [{ term: "Levinas", occurrences: 3 }],
+            concepts: [{ label: "hospitality", occurrences: 2 }],
+            topics: [{ name: "ethics", occurrences: 4 }],
+          },
+        },
+      ],
+      "W",
+    ) as Array<{ id: string; values: Array<{ key: string; value: number }> }>;
+
+    expect(insights.find((item) => item.id === "persons")?.values).toEqual([
+      { key: "Levinas", value: 1 },
+    ]);
+    expect(insights.find((item) => item.id === "concepts")?.values).toEqual([
+      { key: "hospitality", value: 1 },
+    ]);
+    expect(insights.find((item) => item.id === "topics")?.values).toEqual([
+      { key: "ethics", value: 1 },
+    ]);
+  });
+  it("localizes empty dashboard pie charts at render time", () => {
+    const french = createRecordPresenters({
+      tr: (key: string, fallback = "") =>
+        key === "dashboard.no_data_yet" ? "aucune donnée pour le moment" : fallback,
+      trf,
+      pages: (record: { page_start?: unknown }) => `p${record?.page_start ?? "-"}`,
+      recordDbStatus: () => ({ kind: "absent", label: "L", title: "T" }),
+      label: (key: string) => `L(${key})`,
+      display: (value: unknown) => (value == null || value === "" ? "—" : String(value)),
+      allAnnotations: () => [],
+      compareSearchIndex: () => [],
+    } as never) as Record<string, (...args: unknown[]) => unknown>;
+    const html = String(french.dashboardMetricBody({ type: "pie", title: "Share", values: [] }));
+    expect(html).toContain("aucune donnée pour le moment");
+    expect(html).not.toContain("no data yet");
   });
   it("searches compare options", () => {
     expect(presenters.searchRecordOptions("alpha")).toMatchSnapshot();
     expect(presenters.searchRecordOptions("")).toHaveLength(2);
+  });
+});
+
+describe("workMetadataControlSpec", () => {
+  const rowsOf = (field: string, ...values: unknown[]) =>
+    values.map((value, index) => ({ file: { name: "f" }, index, record: { [field]: value } }));
+  const spec = (field: string, rows: unknown[]) =>
+    presenters.workMetadataControlSpec(field, rows) as Record<string, unknown>;
+
+  it("chooses the control kind from the value, matching the parser", () => {
+    expect(spec("document_is_translation", rowsOf("document_is_translation", true))).toMatchObject({
+      kind: "boolean",
+      initial: "true",
+      mixed: false,
+    });
+    expect(spec("keywords", rowsOf("keywords", ["a"]))).toMatchObject({
+      kind: "json",
+      initial: JSON.stringify(["a"], null, 2),
+    });
+    expect(spec("year", rowsOf("year", undefined))).toMatchObject({ kind: "number", initial: "" });
+    expect(spec("edition", rowsOf("edition", "2nd"))).toMatchObject({
+      kind: "textarea",
+      initial: "2nd",
+    });
+    expect(spec("publisher", rowsOf("publisher", "P"))).toMatchObject({
+      kind: "text",
+      initial: "P",
+    });
+  });
+
+  it("starts blank and reports the variant count when records disagree", () => {
+    expect(spec("publisher", rowsOf("publisher", "A", "B", "A"))).toMatchObject({
+      mixed: true,
+      mixedCount: 2,
+      initial: "",
+    });
   });
 });

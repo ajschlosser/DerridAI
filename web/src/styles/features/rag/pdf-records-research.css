@@ -1,0 +1,463 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* 0.7.0 — RAG research runner */
+.rag-runner-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 14px;
+}
+.rag-runner-main,
+.rag-runner-side {
+  padding: 15px;
+  min-width: 0;
+}
+.rag-prompt {
+  min-height: 130px;
+}
+.rag-config-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+.rag-options {
+  display: grid;
+  gap: 11px;
+  margin-top: 12px;
+}
+.rag-option-section {
+  display: grid;
+  gap: 6px;
+}
+.rag-option-section > b {
+  font-size: 0.8125rem;
+}
+.rag-number-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.rag-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.rag-result-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.rag-result-section-head > b,
+.rag-result-section-head div > b {
+  font-size: 0.8125rem;
+}
+.rag-answer-prose {
+  max-width: 1000px;
+  font:
+    14px/1.62 Georgia,
+    serif;
+  color: var(--text);
+}
+.rag-answer-prose p {
+  margin: 0 0 12px;
+}
+.rag-answer-prose h3 {
+  margin: 18px 0 8px;
+  font:
+    600 14px/1.2 system-ui,
+    -apple-system,
+    sans-serif;
+}
+.rag-bibliography {
+  display: grid;
+  gap: 5px;
+  font:
+    12px/1.5 system-ui,
+    -apple-system,
+    sans-serif;
+}
+.rag-result-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.rag-json {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.rag-evidence-list {
+  display: grid;
+  gap: 7px;
+}
+.rag-evidence-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  overflow: hidden;
+}
+.rag-evidence-card summary {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 70px;
+  gap: 9px;
+  align-items: center;
+  cursor: pointer;
+  padding: 9px 10px;
+  background: var(--card);
+}
+.rag-evidence-id {
+  color: var(--accent-fg);
+  font-weight: 900;
+  font:
+    12px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.rag-evidence-title {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rag-evidence-title b,
+.rag-evidence-title small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rag-evidence-title b {
+  font-size: 0.8125rem;
+}
+.rag-evidence-title small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.rag-evidence-score {
+  justify-self: end;
+  font:
+    12px/1 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  color: var(--muted);
+}
+.rag-evidence-body {
+  display: grid;
+  gap: 9px;
+  padding: 10px;
+}
+.rag-evidence-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.rag-evidence-meta > div {
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.rag-evidence-meta span,
+.rag-evidence-source span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.rag-evidence-meta b,
+.rag-evidence-source b {
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+.rag-evidence-source {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 90px minmax(0, 2fr);
+  gap: 6px;
+  align-items: start;
+}
+.rag-evidence-body > pre {
+  margin: 0;
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  white-space: pre-wrap;
+  background: var(--soft);
+  border-radius: 8px;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+.rag-page {
+  display: grid;
+  gap: 14px;
+}
+.rag-live-panel {
+  padding: 14px;
+}
+.rag-live-jobs {
+  display: grid;
+  gap: 9px;
+}
+.rag-live-job {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--card);
+}
+.rag-live-job-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rag-live-job-head > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rag-live-job-head b {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rag-live-job-head span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.rag-stage-rail {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(100px, 1fr));
+  gap: 5px;
+  overflow-x: auto;
+  padding-bottom: 3px;
+}
+.rag-stage-node {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  min-width: 120px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  opacity: 0.72;
+}
+.rag-stage-node > i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--muted);
+  font-style: normal;
+  font-size: 0.8125rem;
+  font-weight: 900;
+}
+.rag-stage-node > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rag-stage-node b {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rag-stage-node span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rag-live-detail {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.rag-number-grid-wide {
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+}
+.rag-generation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.rag-generation-grid textarea {
+  min-height: 92px;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+/* The former PDF context strip was redundant and is no longer rendered. */
+
+@media (max-width: 1050px) {
+  .job-detail-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rag-generation-grid,
+  .rag-number-grid-wide {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 680px) {
+  .provider-config-head,
+  .rag-live-job-head {
+    display: grid;
+  }
+  .job-detail-summary {
+    grid-template-columns: 1fr;
+  }
+  .job-event {
+    grid-template-columns: 1fr;
+  }
+  .rag-generation-grid,
+  .rag-number-grid-wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rag-live-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: -2px;
+}
+.rag-live-params span {
+  display: inline-flex;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--text-2);
+  font:
+    12px/1.2 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+.rag-live-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.rag-live-timing {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 780px) {
+  .rag-live-footer {
+    display: grid;
+  }
+  .work-meta-row {
+    grid-template-columns: 70px 1fr;
+  }
+  .work-meta-value {
+    grid-column: 1/-1;
+  }
+}
+
+/* 0.9.0 — compact RAG launch layout and remembered prompts/instructions */
+
+.rag-memory {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+.rag-history-recall {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+.rag-memory textarea {
+  width: 100%;
+}
+.rag-page > .rag-live-panel {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .rag-history-recall {
+    grid-template-columns: 1fr;
+  }
+}
+.rag-grade-dialog {
+  width: min(980px, calc(100% - 24px));
+}
+.rag-grade-content {
+  display: grid;
+  gap: 10px;
+}
+.rag-grade-scores {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.rag-grade-scores > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px;
+  align-items: baseline;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+.rag-grade-scores span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.rag-grade-scores strong {
+  font-size: 1.125rem;
+}
+.rag-grade-scores small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}

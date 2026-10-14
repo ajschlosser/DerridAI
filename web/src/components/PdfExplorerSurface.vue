@@ -1,18 +1,95 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+// Load the runtime before the shared modules built on it, as the app does (the Step 3b gotcha in the retirement plan).
+import "../domain/appBootstrap";
+import { toast } from "../composables/notifications";
+import { openMessageDialog } from "../composables/messageDialog";
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
+import { translateLegacyDom } from "../domain/legacyCompat";
+import {
+  cleanPdfPageWithLlm,
+  draftPdfPageWithLlm,
+  linkPdfPageWithLlm,
+} from "../domain/pdfPageLlmActions";
+import {
+  extractPdfAllSmart,
+  extractPdfPageSmart,
+  renderPdfCanvas,
+} from "../domain/sharedPdfExplorerRenderer";
+import { decorateDisabledControls } from "../domain/disabledControls";
+import { sharedPdfLinking } from "../domain/sharedPdfLinking";
+import { lookupRecord } from "../domain/sharedCompareLibrary";
+import { recordPresenters } from "../domain/sharedRecordPresenters";
+import { pages } from "../domain/sharedRecordHelpers";
+import { activeFile, selectedRecord } from "../domain/sharedRecordScopes";
+import { evidenceSelection } from "../domain/sharedSearchSupport";
+import { shell } from "../domain/sharedWorkspaceStorage";
+import { recordOptionLabel } from "../domain/recordOptionLabel";
+import { defaultProviderProfile, providerDisplayName } from "../domain/sharedProviderProfiles";
+import { reviewKey } from "../domain/evidenceSelection";
+import { enhanceCollapsibles } from "../domain/collapsiblePanels";
+import { persistCurrentPdfAsset } from "../domain/pdfAssetPersistence";
+import { loadPdfMetadata } from "../domain/pdfMetadata";
+import { navigateTo, syncUrl } from "../domain/sharedNavigation";
 import { fullCitation } from "../domain/citations";
 import { highlight } from "../domain/recordFormatting";
 import AppIcon from "./AppIcon.vue";
+import UiTooltip from "./ui/UiTooltip.vue";
 import { useI18nStore } from "../stores/i18n";
-import { corpusState } from "../state/workspaceState";
+import { corpusState, translationState } from "../state/workspaceState";
+import { useListsStore, usePdfStore, useReviewStore } from "../stores/workspace";
+import { createPdfExplorerCopy } from "../domain/pdfExplorerCopy";
 
 const i18n = useI18nStore();
+const lists = useListsStore();
+const pdfStore = usePdfStore();
+const review = useReviewStore();
+const copy = computed(() =>
+  createPdfExplorerCopy(
+    (key, fallback) => i18n.t(key, fallback),
+    (key, fallback, values) =>
+      i18n.tf(key, fallback, (values || {}) as Record<string, string | number>),
+  ),
+);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
-const state = runtime.state as unknown as Any;
+const pdf = pdfStore.pdf as Any;
+const selectedAsEvidence = (key: string) => Boolean(review.selectedEvidence?.[key]);
+const selectedRecordIndex = (file: Any) =>
+  Math.max(
+    0,
+    Math.min(
+      (file?.records?.length || 1) - 1,
+      Number((lists.selected as Record<string, unknown>)?.[file?.id] ?? 0),
+    ),
+  );
 
 const mainEl = ref<HTMLElement>();
 const fileInputEl = ref<HTMLInputElement>();
@@ -43,7 +120,7 @@ const recordSearchInput = ref("");
 const recordSearchKey = ref("");
 const suggestionsOpen = ref(false);
 
-// state.pdf is the legacy runtime's own (non-reactive) object; a computed() that reads it directly would cache its
+// pdf is the legacy runtime's own (non-reactive) object; a computed() that reads it directly would cache its
 // first value forever, since nothing marks it dirty. Mirror the fields the template needs live into plain refs,
 // refreshed whenever refresh() runs, and write both the ref and the shared state back together on input.
 const relatedSearchQuery = ref("");
@@ -51,11 +128,11 @@ const searchQuery = ref("");
 const pdfText = ref("");
 function setRelatedSearchQuery(value: string) {
   relatedSearchQuery.value = value;
-  state.pdf.relatedSearch = value;
+  pdf.relatedSearch = value;
 }
 function setSearchQuery(value: string) {
   searchQuery.value = value;
-  state.pdf.search = value;
+  pdf.search = value;
 }
 
 const related = computed(() => {
@@ -83,19 +160,14 @@ const relatedShown = computed(() => related.value.slice(0, 80));
 const highlightedText = computed(() => {
   const highlighted = highlight(pdfText.value || "", searchQuery.value || "");
   if (highlighted) return highlighted;
-  return '<span class="note">Use “Extract current page” or “Extract all text.” If both PDF.js and PyMuPDF find no text, the page likely requires OCR.</span>';
+  return `<span class="note">${copy.value.emptyExtract}</span>`;
 });
 const viewerNoteText = computed(
   () =>
-    `${canRender.value ? "PDF.js renderer" : "Browser fallback"} · ${linked.value.length} linked record${linked.value.length === 1 ? "" : "s"} on this page`,
+    `${canRender.value ? copy.value.renderer : copy.value.fallbackRenderer} · ${copy.value.linkedOnPage(linked.value.length)}`,
 );
-const linkedCountText = computed(
-  () => `${linked.value.length} linked record${linked.value.length === 1 ? "" : "s"}`,
-);
-const relatedCountText = computed(
-  () =>
-    `${allRelated.value.length} record${allRelated.value.length === 1 ? "" : "s"} · jump directly between source pages and records`,
-);
+const linkedCountText = computed(() => copy.value.linkedCount(linked.value.length));
+const relatedCountText = computed(() => copy.value.relatedNote(allRelated.value.length));
 
 // AppIcon's "gear" and "copy" paths have each drifted from domain/html.ts's icon() by small path-data differences,
 // and that drift is already baked into other components' currently-passing baseline snapshots (SearchView,
@@ -108,50 +180,54 @@ const copyIconInner =
 const closeIconInner = '<path d="m6 6 12 12M18 6 6 18"/>';
 
 const suggestions = computed(() =>
-  suggestionsOpen.value ? runtime.searchRecordOptions(recordSearchInput.value.trim(), 12) : [],
+  suggestionsOpen.value
+    ? recordPresenters.searchRecordOptions(recordSearchInput.value.trim(), 12)
+    : [],
 );
 
 function selectedRelated() {
   return Boolean(
-    selectedFile.value && selected.value && runtime.loadedPdfPagesForRecord(selected.value).length,
+    selectedFile.value &&
+      selected.value &&
+      sharedPdfLinking.loadedPdfPagesForRecord(selected.value).length,
   );
 }
 
 async function refresh() {
-  loaded.value = Boolean(state.pdf.file);
-  canRender.value = Boolean(state.pdf.doc);
-  extractReady.value = Boolean(state.pdf.doc || state.pdf.file);
-  linked.value = loaded.value ? runtime.linkedPdfRows(state.pdf.page) : [];
-  allRelated.value = loaded.value ? runtime.allLinkedRowsForLoadedPdf() : [];
-  selectedFile.value = runtime.activeFile();
-  selected.value = runtime.selectedRecord();
-  hasRecordOptions.value = state.files.some((file: Any) => file.records.length > 0);
+  loaded.value = Boolean(pdf.file);
+  canRender.value = Boolean(pdf.doc);
+  extractReady.value = Boolean(pdf.doc || pdf.file);
+  linked.value = loaded.value ? sharedPdfLinking.linkedPdfRows(pdf.page) : [];
+  allRelated.value = loaded.value ? sharedPdfLinking.allLinkedRowsForLoadedPdf() : [];
+  selectedFile.value = activeFile();
+  selected.value = selectedRecord();
+  hasRecordOptions.value = corpusState.files.some((file: Any) => file.records.length > 0);
   const currentRecordKey =
     selectedFile.value && selected.value
-      ? `${selectedFile.value.id}::${runtime.selectedIndex(selectedFile.value)}`
+      ? `${selectedFile.value.id}::${selectedRecordIndex(selectedFile.value)}`
       : "";
   currentOption.value =
     selectedFile.value && selected.value
       ? {
           value: currentRecordKey,
-          label: runtime.recordOptionLabel(
+          label: recordOptionLabel(
             selectedFile.value,
             selected.value,
-            runtime.selectedIndex(selectedFile.value),
+            selectedRecordIndex(selectedFile.value),
           ),
         }
       : null;
-  pdfTitle.value = runtime.pdfDisplayTitle();
+  pdfTitle.value = sharedPdfLinking.pdfDisplayTitle();
   relatedWorks.value = [
     ...new Set(allRelated.value.map((item: Any) => String(item.record.work || "")).filter(Boolean)),
   ].sort((a, b) => a.localeCompare(b));
-  pdfProvider.value = runtime.defaultProviderProfile();
-  pageInputValue.value = state.pdf.page;
+  pdfProvider.value = defaultProviderProfile();
+  pageInputValue.value = pdf.page;
   recordSearchInput.value = currentOption.value?.label || "";
   recordSearchKey.value = currentOption.value?.value || "";
-  pdfText.value = state.pdf.text || "";
-  searchQuery.value = state.pdf.search || "";
-  relatedSearchQuery.value = state.pdf.relatedSearch || "";
+  pdfText.value = pdf.text || "";
+  searchQuery.value = pdf.search || "";
+  relatedSearchQuery.value = pdf.relatedSearch || "";
 
   await nextTick();
   // The legacy renderer only ran this after the one code path that happened to route through renderView() (which
@@ -161,15 +237,16 @@ async function refresh() {
   // in-flight canvas render -- not on anything about the action itself. Checked this against the legacy source
   // before changing it: nothing else reads or depends on that inconsistency, so it is a bug, not a feature. Calling
   // it after every refresh makes the affordance reliably present whenever a card is actually tall enough for it.
-  runtime.enhanceCollapsibles(mainEl.value);
-  runtime.decorateDisabledControls(mainEl.value);
+  enhanceCollapsibles(mainEl.value);
+  decorateDisabledControls(mainEl.value);
+  translateLegacyDom({ translations: translationState.translations }, mainEl.value);
   if (canRender.value) void renderCanvas();
 }
 
 async function renderCanvas() {
   await nextTick();
   if (!canvasEl.value) return;
-  await runtime.renderPdfCanvas(state.pdf.page);
+  await renderPdfCanvas(pdf.page);
 }
 
 function openPdfPicker() {
@@ -182,38 +259,38 @@ async function onFileChange(event: Event) {
   if (!file) return;
   openingPdf.value = true;
   try {
-    if (state.pdf.url) URL.revokeObjectURL(state.pdf.url);
+    if (pdf.url) URL.revokeObjectURL(pdf.url);
     const buffer = await file.arrayBuffer();
-    state.pdf.file = file;
-    state.pdf.url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
-    state.pdf.name = file.name;
-    state.pdf.title = file.name.replace(/\.pdf$/i, "");
-    state.pdf.author = "";
-    state.pdf.page = 1;
-    state.pdf.rotation = 0;
-    state.pdf.text = "";
-    state.pdf.search = "";
-    state.pdf.relatedSearch = "";
-    state.pdf.extractError = "";
-    state.pdf.extractionSource = "";
+    pdf.file = file;
+    pdf.url = URL.createObjectURL(new Blob([buffer], { type: "application/pdf" }));
+    pdf.name = file.name;
+    pdf.title = file.name.replace(/\.pdf$/i, "");
+    pdf.author = "";
+    pdf.page = 1;
+    pdf.rotation = 0;
+    pdf.text = "";
+    pdf.search = "";
+    pdf.relatedSearch = "";
+    pdf.extractError = "";
+    pdf.extractionSource = "";
     try {
       const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      state.pdf.doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
-      const metadata = await runtime.loadPdfMetadata(state.pdf.doc, file.name);
-      state.pdf.title = metadata.title || state.pdf.title;
-      state.pdf.author = metadata.author || "";
+      pdf.doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
+      const metadata = await loadPdfMetadata(pdf.doc, file.name);
+      pdf.title = metadata.title || pdf.title;
+      pdf.author = metadata.author || "";
     } catch (error: Any) {
       console.error("PDF.js initialization failed", error);
-      state.pdf.doc = null;
-      state.pdf.extractError = `PDF.js could not initialize (${error.message}). Rendering and extraction will use fallbacks where possible.`;
+      pdf.doc = null;
+      pdf.extractError = copy.value.jsInitFailed(error.message);
     }
-    await runtime.persistCurrentPdfAsset();
-    runtime.shell();
+    await persistCurrentPdfAsset();
+    shell();
     await refresh();
   } catch (error: Any) {
     console.error("Could not open PDF", error);
-    await runtime.openMessageModal({
-      title: "Could not open PDF",
+    await openMessageDialog({
+      title: copy.value.couldNotOpen,
       message: error.message || String(error),
       tone: "danger",
     });
@@ -224,21 +301,21 @@ async function onFileChange(event: Event) {
 }
 
 async function setPage(page: Any) {
-  const max = state.pdf.doc?.numPages || Math.max(1, page);
-  state.pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
-  state.pdf.text = "";
-  state.pdf.extractError = "";
-  state.pdf.extractionSource = "";
-  await runtime.persistCurrentPdfAsset();
-  runtime.syncUrl({ replace: true });
+  const max = pdf.doc?.numPages || Math.max(1, page);
+  pdf.page = Math.max(1, Math.min(max, Number(page) || 1));
+  pdf.text = "";
+  pdf.extractError = "";
+  pdf.extractionSource = "";
+  await persistCurrentPdfAsset();
+  syncUrl({ replace: true });
   await refresh();
 }
 
 function goPrev() {
-  void setPage(state.pdf.page - 1);
+  void setPage(pdf.page - 1);
 }
 function goNext() {
-  void setPage(state.pdf.page + 1);
+  void setPage(pdf.page + 1);
 }
 function goToPage() {
   void setPage(pageInputEl.value?.value);
@@ -250,27 +327,27 @@ function onPageInputKeydown(event: KeyboardEvent) {
 }
 
 async function rotateLeft() {
-  state.pdf.rotation = (Number(state.pdf.rotation || 0) + 270) % 360;
-  await runtime.persistCurrentPdfAsset();
+  pdf.rotation = (Number(pdf.rotation || 0) + 270) % 360;
+  await persistCurrentPdfAsset();
   await refresh();
 }
 async function rotateRight() {
-  state.pdf.rotation = (Number(state.pdf.rotation || 0) + 90) % 360;
-  await runtime.persistCurrentPdfAsset();
+  pdf.rotation = (Number(pdf.rotation || 0) + 90) % 360;
+  await persistCurrentPdfAsset();
   await refresh();
 }
 
 async function extractPage() {
-  const pageToExtract = Number(pageInputEl.value?.value || state.pdf.page);
-  state.pdf.page = Math.max(1, Math.min(state.pdf.doc?.numPages || pageToExtract, pageToExtract));
+  const pageToExtract = Number(pageInputEl.value?.value || pdf.page);
+  pdf.page = Math.max(1, Math.min(pdf.doc?.numPages || pageToExtract, pageToExtract));
   extractingPage.value = true;
   try {
-    const result = await runtime.extractPdfPageSmart(state.pdf.page);
-    state.pdf.text = result.text;
-    state.pdf.extractionSource = result.source;
-    state.pdf.extractError = result.warning || "";
+    const result = await extractPdfPageSmart(pdf.page);
+    pdf.text = result.text;
+    pdf.extractionSource = result.source;
+    pdf.extractError = result.warning || "";
   } catch (error: Any) {
-    state.pdf.extractError = error.message;
+    pdf.extractError = error.message;
   }
   extractingPage.value = false;
   await refresh();
@@ -279,55 +356,55 @@ async function extractPage() {
 async function extractAll() {
   extractingAll.value = true;
   try {
-    const result = await runtime.extractPdfAllSmart();
-    state.pdf.text = result.text;
-    state.pdf.extractionSource = result.source;
-    state.pdf.extractError = result.warning || "";
+    const result = await extractPdfAllSmart();
+    pdf.text = result.text;
+    pdf.extractionSource = result.source;
+    pdf.extractError = result.warning || "";
   } catch (error: Any) {
-    state.pdf.extractError = error.message;
+    pdf.extractError = error.message;
   }
   extractingAll.value = false;
   await refresh();
 }
 
 function openLlmClean() {
-  runtime.cleanPdfPageWithLlm();
+  cleanPdfPageWithLlm();
 }
 function openLlmDraft() {
-  runtime.draftPdfPageWithLlm();
+  draftPdfPageWithLlm();
 }
 function openLlmLink() {
-  runtime.linkPdfPageWithLlm();
+  linkPdfPageWithLlm();
 }
 function openProviders() {
-  runtime.navigateTo("providers");
+  navigateTo("providers");
 }
 function openCorpusBuilder() {
   window.dispatchEvent(new CustomEvent("derridai:pdf-builder"));
 }
 function returnToSelectedRecord() {
   if (!selectedFile.value) return;
-  runtime.navigateTo("record", {
+  navigateTo("record", {
     fileId: selectedFile.value.id,
-    index: runtime.selectedIndex(selectedFile.value),
+    index: selectedRecordIndex(selectedFile.value),
   });
 }
 function openLinkedRecord(fileId: string, index: number) {
-  runtime.navigateTo("record", { fileId, index });
+  navigateTo("record", { fileId, index });
 }
 function unlinkRecord(fileId: string, index: number) {
-  const file = state.files.find((item: Any) => item.id === fileId);
+  const file = corpusState.files.find((item: Any) => item.id === fileId);
   if (!file) return;
-  runtime.unlinkPdfLink(
+  sharedPdfLinking.unlinkPdfLink(
     file,
     index,
-    { pdf_file: state.pdf.name, pdf_page: state.pdf.page },
+    { pdf_file: pdf.name, pdf_page: pdf.page },
     { stayInPdf: true },
   );
 }
 function evidenceKey(fileId: string, index: number) {
-  const file = state.files.find((item: Any) => item.id === fileId);
-  return file ? runtime.workspaceEvidenceSelectionKey(file, index) : "";
+  const file = corpusState.files.find((item: Any) => item.id === fileId);
+  return file ? evidenceSelection.workspaceEvidenceSelectionKey(file, index) : "";
 }
 
 function onRecordSearchFocus() {
@@ -354,38 +431,66 @@ function onDocumentClick(event: MouseEvent) {
 function linkCurrentPdf() {
   let key = recordSearchKey.value;
   if (!key) {
-    const exact = runtime
+    const exact = recordPresenters
       .searchRecordOptions(recordSearchInput.value, 24)
       .find((option: Any) => option.label === recordSearchInput.value);
     key = exact?.value || "";
   }
-  const item = runtime.lookupRecord(key);
-  if (item) runtime.linkPdfPage(item.file, item.index, state.pdf.page);
-  else runtime.toast("Choose a record from the autocomplete list");
+  const item = lookupRecord(key);
+  if (item) sharedPdfLinking.linkPdfPage(item.file, item.index, pdf.page);
+  else toast(copy.value.chooseAutocomplete, { tone: "warning" });
 }
 
 // Some runtime code (unlinking a record, applying LLM cleanup results) still asks the PDF Explorer to refresh this
 // way; it used to call the legacy renderer directly, and now dispatches this event instead of reaching into a Vue
 // component -- the same bridge pattern already used for the dashboard.
+let explorerActive = true;
+let explorerListenersAttached = false;
+function attachExplorerListeners() {
+  if (explorerListenersAttached) return;
+  document.addEventListener("click", onDocumentClick);
+  window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  explorerListenersAttached = true;
+}
+function detachExplorerListeners() {
+  if (!explorerListenersAttached) return;
+  document.removeEventListener("click", onDocumentClick);
+  window.removeEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  explorerListenersAttached = false;
+}
 function onPdfExplorerRefreshRequested() {
-  void refresh();
+  if (explorerActive) void refresh();
 }
 
 watch(
   () => [corpusState.version, corpusState.activeFileId],
-  () => void refresh(),
+  () => {
+    if (explorerActive) void refresh();
+  },
   { flush: "post" },
 );
 
 onMounted(async () => {
-  runtime.syncUrl({ replace: true });
+  syncUrl({ replace: true });
   await refresh();
-  document.addEventListener("click", onDocumentClick);
-  window.addEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  attachExplorerListeners();
+});
+onDeactivated(() => {
+  explorerActive = false;
+  detachExplorerListeners();
+});
+onActivated(() => {
+  if (explorerActive) return;
+  explorerActive = true;
+  attachExplorerListeners();
+  // The component stayed mounted, so refresh the lightweight mirrors/canvas
+  // without replaying PDF initialization or other cold-start work.
+  syncUrl({ replace: true });
+  void refresh();
 });
 onBeforeUnmount(() => {
-  document.removeEventListener("click", onDocumentClick);
-  window.removeEventListener("derridai:pdf-explorer-refresh", onPdfExplorerRefreshRequested);
+  explorerActive = false;
+  detachExplorerListeners();
 });
 </script>
 
@@ -403,37 +508,35 @@ onBeforeUnmount(() => {
       <div class="pdf-document-primary">
         <button class="btn primary" id="openPdf" @click="openPdfPicker">
           <template v-if="openingPdf"
-            ><span class="spinner small-spinner"></span>Opening PDF…</template
+            ><span class="spinner small-spinner"></span>{{ copy.opening }}</template
           ><template v-else
-            ><AppIcon name="pdf" />{{ loaded ? "Open another" : "Open PDF" }}</template
+            ><AppIcon name="pdf" />{{ loaded ? copy.openAnother : copy.openPdf }}</template
           >
         </button>
         <div class="pdf-document-title">
           <template v-if="loaded">
-            <span>PDF document</span>
+            <span>{{ copy.document }}</span>
             <h2>{{ pdfTitle }}</h2>
             <p>
-              {{ state.pdf.name }}{{ state.pdf.author ? ` · ${state.pdf.author}` : ""
-              }}{{ state.pdf.doc ? ` · ${state.pdf.doc.numPages} pages` : "" }}
+              {{ pdf.name }}{{ pdf.author ? ` · ${pdf.author}` : ""
+              }}{{ pdf.doc ? ` · ${copy.pagesCount(pdf.doc.numPages)}` : "" }}
             </p>
           </template>
           <template v-else>
-            <span>PDF Explorer</span>
-            <h2>Open a source PDF</h2>
-            <p
-              v-text="'Render pages, extract text, connect pages to records, and run LLM-assisted source workflows.'"
-            ></p>
+            <span>{{ copy.explorer }}</span>
+            <h2>{{ copy.openSource }}</h2>
+            <p v-text="copy.openHelp"></p>
           </template>
         </div>
         <div v-if="loaded" class="pdf-document-status">
           <span
-            ><b>{{ relatedWorks.length }}</b> linked works</span
+            ><b>{{ relatedWorks.length }}</b> {{ copy.linkedWorks }}</span
           >
           <span
-            ><b>{{ allRelated.length }}</b> linked records</span
+            ><b>{{ allRelated.length }}</b> {{ copy.linkedRecords }}</span
           >
           <span
-            ><b>{{ linked.length }}</b> on this page</span
+            ><b>{{ linked.length }}</b> {{ copy.onThisPage }}</span
           >
         </div>
       </div>
@@ -443,50 +546,64 @@ onBeforeUnmount(() => {
             <button
               class="btn small icon-only"
               id="pdfPrev"
-              :disabled="state.pdf.page <= 1"
+              :disabled="pdf.page <= 1"
               @click="goPrev"
               v-text="'←'"
             ></button>
             <label
-              ><span>Page</span
+              ><span>{{ copy.page }}</span
               ><input
                 class="control pdf-page-input"
                 id="pdfPageInput"
                 ref="pageInputEl"
                 type="number"
                 min="1"
-                :max="state.pdf.doc?.numPages || 999999"
+                :max="pdf.doc?.numPages || 999999"
                 :value.attr="pageInputValue"
                 @keydown="onPageInputKeydown"
             /></label>
-            <span class="pdf-page-total">/ {{ state.pdf.doc?.numPages || "?" }}</span>
-            <button class="btn small" id="pdfGo" @click="goToPage">Go</button>
+            <span class="pdf-page-total">/ {{ pdf.doc?.numPages || "?" }}</span>
+            <button class="btn small" id="pdfGo" @click="goToPage">{{ copy.go }}</button>
             <button
               class="btn small icon-only"
               id="pdfNext"
-              :disabled="state.pdf.doc && state.pdf.page >= state.pdf.doc.numPages"
+              :disabled="pdf.doc && pdf.page >= pdf.doc.numPages"
               @click="goNext"
               v-text="'→'"
             ></button>
           </div>
           <div class="pdf-command-divider"></div>
           <div class="pdf-view-actions">
-            <button
-              class="btn small icon-only"
-              id="pdfRotateLeft"
-              title="Rotate left 90°"
-              @click="rotateLeft"
-              v-text="'↶'"
-            ></button>
-            <button
-              class="btn small icon-only"
-              id="pdfRotateRight"
-              title="Rotate right 90°"
-              @click="rotateRight"
-              v-text="'↷'"
-            ></button>
+            <UiTooltip
+              :text="copy.rotateLeft"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
+            >
+              <button
+                class="btn small icon-only"
+                id="pdfRotateLeft"
+                :aria-label="copy.rotateLeft"
+                @click="rotateLeft"
+                v-text="'↶'"
+              ></button>
+            </UiTooltip>
+            <UiTooltip
+              :text="copy.rotateRight"
+              trigger-mode="content"
+              :content-focusable="false"
+              placement="bottom"
+            >
+              <button
+                class="btn small icon-only"
+                id="pdfRotateRight"
+                :aria-label="copy.rotateRight"
+                @click="rotateRight"
+                v-text="'↷'"
+              ></button>
+            </UiTooltip>
             <span class="note">{{
-              state.pdf.rotation ? `${state.pdf.rotation}°` : "upright"
+              pdf.rotation ? copy.rotationAmount(pdf.rotation) : copy.upright
             }}</span>
           </div>
           <div class="pdf-command-divider"></div>
@@ -495,47 +612,47 @@ onBeforeUnmount(() => {
             id="extractPage"
             :disabled="!extractReady"
             @click="extractPage"
-            v-text="extractingPage ? `Extracting page ${state.pdf.page}…` : 'Extract page text'"
+            v-text="extractingPage ? copy.extractingPage(pdf.page) : copy.extractPage"
           ></button>
           <details class="pdf-toolbar-menu">
-            <summary class="btn small">More text tools</summary>
+            <summary class="btn small">{{ copy.moreTextTools }}</summary>
             <div class="pdf-toolbar-menu-popover">
               <button
                 class="btn small"
                 id="extractAll"
                 :disabled="!extractReady"
                 @click="extractAll"
-                v-text="extractingAll ? 'Extracting…' : 'Extract all text'"
+                v-text="extractingAll ? copy.extracting : copy.extractAll"
               ></button>
             </div>
           </details>
           <details class="pdf-toolbar-menu llm-menu">
-            <summary class="btn small soft"><AppIcon name="spark" />LLM tools</summary>
+            <summary class="btn small soft"><AppIcon name="spark" />{{ copy.llmTools }}</summary>
             <div class="pdf-toolbar-menu-popover">
               <div class="pdf-menu-context">
-                <b>{{ runtime.providerDisplayName(pdfProvider) }}</b>
-                <span>Each action lets you choose provider, model, parameters, and run mode.</span>
+                <b>{{ providerDisplayName(pdfProvider) }}</b>
+                <span>{{ copy.llmToolsHelp }}</span>
               </div>
               <button
                 class="btn small"
                 id="pdfLlmClean"
                 :disabled="!extractReady"
                 @click="openLlmClean"
-                v-text="'Clean current page text'"
+                v-text="copy.cleanPage"
               ></button>
               <button
                 class="btn small"
                 id="pdfLlmDraft"
                 :disabled="!extractReady"
                 @click="openLlmDraft"
-                v-text="'Create draft record'"
+                v-text="copy.draftRecord"
               ></button>
               <button
                 class="btn small"
                 id="pdfLlmLink"
-                :disabled="!state.files.length"
+                :disabled="!corpusState.files.length"
                 @click="openLlmLink"
-                v-text="'Match & link page to record'"
+                v-text="copy.matchLink"
               ></button>
               <button class="btn small" id="pdfProviders" @click="openProviders">
                 <!-- AppIcon's own "gear" path has drifted from this one by a coordinate, and that drift is already
@@ -551,27 +668,29 @@ onBeforeUnmount(() => {
                   aria-hidden="true"
                   v-html="gearIconInner"
                 ></svg
-                >Manage LLM providers</button
-              >
+                >{{ copy.manageProviders }}
+              </button>
             </div>
           </details>
-          <button class="btn small primary" id="pdfCorpusBuilder" @click="openCorpusBuilder"
-            ><AppIcon name="spark" />Build record set</button
-          >
+          <button class="btn small primary" id="pdfCorpusBuilder" @click="openCorpusBuilder">
+            <AppIcon name="spark" />{{ copy.buildRecordSet }}
+          </button>
         </div>
         <div class="pdf-context-row">
           <div class="pdf-context-pill">
-            <span>Source</span><b>p. {{ state.pdf.page }}</b>
+            <span>{{ copy.source }}</span
+            ><b>p. {{ pdf.page }}</b>
           </div>
           <div class="pdf-context-pill">
-            <span>Works</span>
+            <span>{{ copy.works }}</span>
             <b
-              >{{ relatedWorks.slice(0, 2).join(" · ") || "None linked"
+              >{{ relatedWorks.slice(0, 2).join(" · ") || copy.noneLinked
               }}{{ relatedWorks.length > 2 ? ` +${relatedWorks.length - 2}` : "" }}</b
             >
           </div>
           <div class="pdf-context-pill">
-            <span>Current-page records</span><b>{{ linked.length }}</b>
+            <span>{{ copy.currentPageRecords }}</span
+            ><b>{{ linked.length }}</b>
           </div>
           <button
             v-if="selectedRelated()"
@@ -579,7 +698,7 @@ onBeforeUnmount(() => {
             id="returnToSelectedRecord"
             @click="returnToSelectedRecord"
           >
-            <AppIcon name="record" />Back to {{ selected?.record_id || "record" }}
+            <AppIcon name="record" />{{ copy.backTo(selected?.record_id || copy.recordFallback) }}
           </button>
         </div>
       </template>
@@ -588,11 +707,11 @@ onBeforeUnmount(() => {
       <article class="card pdf-viewer-card">
         <div class="cardhead pdf-viewer-head">
           <div>
-            <b>Page {{ state.pdf.page }}</b>
+            <b>{{ copy.page }} {{ pdf.page }}</b>
             <div class="note" v-text="viewerNoteText"></div>
           </div>
           <span class="pdf-view-badge">{{
-            state.pdf.rotation ? `${state.pdf.rotation}° rotation` : "Fit width"
+            pdf.rotation ? copy.rotation(pdf.rotation) : copy.fitWidth
           }}</span>
         </div>
         <div v-if="canRender" class="pdf-canvas-wrap">
@@ -604,19 +723,19 @@ onBeforeUnmount(() => {
           class="pdf-frame"
           id="pdfFrame"
           :title="pdfTitle"
-          :src="`${state.pdf.url}#page=${state.pdf.page}`"
+          :src="`${pdf.url}#page=${pdf.page}`"
         ></iframe>
       </article>
       <aside class="pdf-side-stack">
         <article class="card pdf-text-card">
           <div class="cardhead">
             <div>
-              <b>Page text</b>
+              <b>{{ copy.pageText }}</b>
               <div class="note">
                 {{
-                  state.pdf.extractionSource
-                    ? `Source: ${state.pdf.extractionSource}`
-                    : "Extract the current page, then optionally clean it with an LLM."
+                  pdf.extractionSource
+                    ? copy.sourceLabel(pdf.extractionSource)
+                    : copy.extractThenClean
                 }}
               </div>
             </div>
@@ -624,20 +743,20 @@ onBeforeUnmount(() => {
               <input
                 id="pdfSearch"
                 :value.attr="searchQuery"
-                placeholder="Search page text"
+                :placeholder="copy.searchPage"
                 @input="setSearchQuery(($event.target as HTMLInputElement).value)"
               />
             </div>
           </div>
-          <div v-if="state.pdf.extractError" class="info warn" style="margin: 14px">
-            {{ state.pdf.extractError }}
+          <div v-if="pdf.extractError" class="info warn" style="margin: 14px">
+            {{ pdf.extractError }}
           </div>
           <div class="pdftext" v-html="highlightedText"></div>
         </article>
         <article class="card panel pdf-current-links">
           <div class="toolbar compact-toolbar">
             <div>
-              <b>Records on page {{ state.pdf.page }}</b>
+              <b>{{ copy.recordsOnPage(pdf.page) }}</b>
               <div class="note" v-text="linkedCountText"></div>
             </div>
           </div>
@@ -648,7 +767,7 @@ onBeforeUnmount(() => {
                 id="pdfRecordSearch"
                 ref="recordSearchEl"
                 autocomplete="off"
-                placeholder="Search record ID, work, or source file"
+                :placeholder="copy.searchRecord"
                 :value.attr="recordSearchInput"
                 @focus="onRecordSearchFocus"
                 @input="onRecordSearchInput"
@@ -674,7 +793,7 @@ onBeforeUnmount(() => {
                       <span>{{ option.label }}</span>
                     </button>
                   </template>
-                  <div v-else class="autocomplete-empty">No matching records</div>
+                  <div v-else class="autocomplete-empty">{{ copy.noMatching }}</div>
                 </template>
               </div>
             </div>
@@ -684,7 +803,7 @@ onBeforeUnmount(() => {
               :disabled="!hasRecordOptions"
               @click="linkCurrentPdf"
             >
-              <AppIcon name="plus" />Link page {{ state.pdf.page }}
+              <AppIcon name="plus" />{{ copy.linkPage(pdf.page) }}
             </button>
           </div>
           <div class="pdf-linked-list">
@@ -700,14 +819,14 @@ onBeforeUnmount(() => {
                   :data-linked-index="index"
                   @click="openLinkedRecord(file.id, index)"
                 >
-                  <b>{{ record.record_id || `Record ${index + 1}` }}</b>
+                  <b>{{ record.record_id || copy.recordN(index + 1) }}</b>
                   <span
                     >{{ record.work || file.name }} ·
-                    {{ record.inline_citation || runtime.pages(record) }}</span
+                    {{ record.inline_citation || pages(record) }}</span
                   >
                 </button>
                 <div class="tools">
-                  <button class="btn small" :data-copy-row-key="runtime.reviewKey(file, index)">
+                  <button class="btn small" :data-copy-row-key="reviewKey(file, index)">
                     <svg
                       viewBox="0 0 24 24"
                       fill="none"
@@ -718,52 +837,52 @@ onBeforeUnmount(() => {
                       aria-hidden="true"
                       v-html="copyIconInner"
                     ></svg
-                    >Copy</button
-                  >
+                    >{{ copy.copy }}
+                  </button>
                   <button
                     class="btn small"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="inline"
-                    :title="i18n.t('ui.copy_inline', 'Copy inline citation')"
-                    v-text="'Inline'"
+                    :title="i18n.t('ui.copy_inline')"
+                    v-text="copy.inline"
                   ></button>
                   <button
                     class="btn small"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="full"
-                    :title="i18n.t('ui.copy_full', 'Copy full citation')"
-                    v-text="'Full'"
+                    :title="i18n.t('ui.copy_full')"
+                    v-text="copy.full"
                   ></button>
                   <button
                     class="btn small"
-                    :class="{ soft: runtime.evidenceIsSelected(evidenceKey(file.id, index)) }"
-                    :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
+                    :class="{ soft: selectedAsEvidence(evidenceKey(file.id, index)) }"
+                    :data-toggle-workspace-evidence="reviewKey(file, index)"
                     :title="
-                      runtime.evidenceIsSelected(evidenceKey(file.id, index))
-                        ? i18n.t('ui.remove_evidence', 'Remove from evidence')
-                        : i18n.t('ui.add_evidence', 'Add to evidence')
+                      selectedAsEvidence(evidenceKey(file.id, index))
+                        ? i18n.t('ui.remove_evidence')
+                        : i18n.t('ui.add_evidence')
                     "
                   >
                     <AppIcon
-                      :name="
-                        runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? 'check' : 'plus'
-                      "
-                      />Evidence</button
-                  >
+                      :name="selectedAsEvidence(evidenceKey(file.id, index)) ? 'check' : 'plus'"
+                    />{{ copy.evidence }}
+                  </button>
                   <button
                     class="btn small"
                     :data-linked-open-file="file.id"
                     :data-linked-open-index="index"
                     @click="openLinkedRecord(file.id, index)"
-                    ><AppIcon name="record" />Open record</button
                   >
+                    <AppIcon name="record" />{{ copy.openRecord }}
+                  </button>
                   <button
                     class="btn small danger unlink-pdf-link"
                     :data-unlink-file="file.id"
                     :data-unlink-index="index"
-                    title="Unlink record from PDF"
+                    :title="copy.unlinkTitle"
                     @click="unlinkRecord(file.id, index)"
-                    ><svg
+                  >
+                    <svg
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -773,18 +892,18 @@ onBeforeUnmount(() => {
                       aria-hidden="true"
                       v-html="closeIconInner"
                     ></svg
-                    >Unlink</button
-                  >
+                    >{{ copy.unlink }}
+                  </button>
                 </div>
               </div>
             </template>
-            <div v-else class="note">No records linked to this page yet.</div>
+            <div v-else class="note">{{ copy.noLinkedYet }}</div>
           </div>
         </article>
         <article class="card panel pdf-related-records">
           <div class="toolbar compact-toolbar">
             <div>
-              <b>Records linked anywhere in this PDF</b>
+              <b>{{ copy.recordsAnywhere }}</b>
               <div class="note" v-text="relatedCountText"></div>
             </div>
           </div>
@@ -792,7 +911,7 @@ onBeforeUnmount(() => {
             <input
               id="pdfRelatedSearch"
               :value.attr="relatedSearchQuery"
-              placeholder="Filter linked records"
+              :placeholder="copy.filterLinked"
               @input="setRelatedSearchQuery(($event.target as HTMLInputElement).value)"
             />
           </div>
@@ -809,15 +928,15 @@ onBeforeUnmount(() => {
                   :data-related-record-index="index"
                   @click="openLinkedRecord(file.id, index)"
                 >
-                  <b>{{ record.record_id || `Record ${index + 1}` }}</b>
+                  <b>{{ record.record_id || copy.recordN(index + 1) }}</b>
                   <span>{{ record.work || file.name }}</span>
                   <small>{{ fullCitation(record) || file.name }}</small>
                 </button>
                 <div class="pdf-related-pages">
                   <button
                     class="copy-record-mini"
-                    :data-copy-row-key="runtime.reviewKey(file, index)"
-                    title="Copy entire record"
+                    :data-copy-row-key="reviewKey(file, index)"
+                    :title="copy.copyEntire"
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -828,51 +947,50 @@ onBeforeUnmount(() => {
                       stroke-linejoin="round"
                       aria-hidden="true"
                       v-html="copyIconInner"
-                    ></svg
-                  ></button>
+                    ></svg>
+                  </button>
                   <button
                     class="copy-record-mini"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="inline"
-                    :title="i18n.t('ui.copy_inline', 'Copy inline citation')"
+                    :title="i18n.t('ui.copy_inline')"
                     v-text="'I'"
                   ></button>
                   <button
                     class="copy-record-mini"
-                    :data-cite-row-key="runtime.reviewKey(file, index)"
+                    :data-cite-row-key="reviewKey(file, index)"
                     data-cite-kind="full"
-                    :title="i18n.t('ui.copy_full', 'Copy full citation')"
+                    :title="i18n.t('ui.copy_full')"
                     v-text="'F'"
                   ></button>
                   <button
                     class="copy-record-mini"
-                    :class="{ selected: runtime.evidenceIsSelected(evidenceKey(file.id, index)) }"
-                    :data-toggle-workspace-evidence="runtime.reviewKey(file, index)"
+                    :class="{ selected: selectedAsEvidence(evidenceKey(file.id, index)) }"
+                    :data-toggle-workspace-evidence="reviewKey(file, index)"
                     :title="
-                      runtime.evidenceIsSelected(evidenceKey(file.id, index))
-                        ? i18n.t('ui.remove_evidence', 'Remove from evidence')
-                        : i18n.t('ui.add_evidence', 'Add to evidence')
+                      selectedAsEvidence(evidenceKey(file.id, index))
+                        ? i18n.t('ui.remove_evidence')
+                        : i18n.t('ui.add_evidence')
                     "
-                    v-text="runtime.evidenceIsSelected(evidenceKey(file.id, index)) ? '✓' : '+'"
+                    v-text="selectedAsEvidence(evidenceKey(file.id, index)) ? '✓' : '+'"
                   ></button>
                   <button
                     v-for="page in recordPages"
                     :key="page"
                     class="pdf-page-chip"
-                    :class="{ active: Number(page) === Number(state.pdf.page) }"
+                    :class="{ active: Number(page) === Number(pdf.page) }"
                     :data-related-page="page"
-                    :title="`Open PDF page ${page}`"
+                    :title="copy.openPdfPage(page)"
                     @click="setPage(page)"
                     v-text="`p. ${page}`"
                   ></button>
                 </div>
               </div>
             </template>
-            <div v-else class="note">No linked records match this filter.</div>
+            <div v-else class="note">{{ copy.noFilterMatch }}</div>
           </div>
           <div v-if="related.length > 80" class="note" style="padding-top: 8px">
-            Showing first 80 of {{ related.length }} matches. Narrow the filter to see a specific
-            record.
+            {{ copy.showingFirst(80, related.length) }}
           </div>
         </article>
       </aside>
@@ -880,15 +998,11 @@ onBeforeUnmount(() => {
     <section v-else class="empty">
       <div class="drop">
         <div class="drop-icon"><AppIcon name="pdf" /></div>
-        <h1>PDF Explorer</h1>
-        <p
-          v-text="
-            'Open a PDF to render pages, read its embedded title metadata, extract text, and move directly between linked PDF pages and corpus records.'
-          "
-        ></p>
-        <button class="btn primary" id="openPdf2" @click="openPdfPicker"
-          ><AppIcon name="pdf" />Choose PDF</button
-        >
+        <h1>{{ copy.explorer }}</h1>
+        <p v-text="copy.emptyHelp"></p>
+        <button class="btn primary" id="openPdf2" @click="openPdfPicker">
+          <AppIcon name="pdf" />{{ copy.choosePdf }}
+        </button>
       </div>
     </section>
   </main>

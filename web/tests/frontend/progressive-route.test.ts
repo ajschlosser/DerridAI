@@ -1,0 +1,157 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia } from "pinia";
+import { defineComponent, h, type Component } from "vue";
+import { createMemoryHistory, createRouter, RouterView } from "vue-router";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { APP_ROUTES } from "../../src/router";
+import { progressiveRouteComponent } from "../../src/router/progressiveRoute";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+const Root = defineComponent({
+  name: "ProgressiveRouteTestRoot",
+  setup: () => () => h(RouterView),
+});
+
+const LoadedPage = defineComponent({
+  name: "LoadedPage",
+  setup: () => () => h("div", { "data-test": "loaded-page" }, "Loaded page"),
+});
+
+function controlAnimationFrames() {
+  let nextId = 0;
+  const callbacks = new Map<number, FrameRequestCallback>();
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    const id = ++nextId;
+    callbacks.set(id, callback);
+    return id;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+    callbacks.delete(id);
+  });
+  return {
+    runFrame() {
+      const current = [...callbacks.entries()];
+      callbacks.clear();
+      for (const [, callback] of current) callback(performance.now());
+    },
+  };
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+async function setup(loader: () => Promise<{ default: Component } | Component>) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: "/", component: { render: () => null } },
+      {
+        path: "/slow",
+        component: progressiveRouteComponent(loader),
+      },
+    ],
+  });
+  await router.push("/");
+  await router.isReady();
+  const wrapper = mount(Root, {
+    global: {
+      plugins: [createPinia(), router],
+    },
+  });
+  return { router, wrapper };
+}
+
+describe("progressive route components", () => {
+  it("keeps application page records synchronous at the router boundary", () => {
+    const renderedRoutes = APP_ROUTES.filter((route) => route.component);
+    expect(renderedRoutes.length).toBeGreaterThan(20);
+    for (const route of renderedRoutes) {
+      expect(typeof route.component, String(route.name || route.path)).not.toBe("function");
+    }
+
+    const builder = APP_ROUTES.find((route) => route.name === "corpus-builder");
+    const explorer = APP_ROUTES.find((route) => route.name === "source-explorer");
+    expect(builder?.component).toBe(explorer?.component);
+
+    const systemData = APP_ROUTES.filter((route) =>
+      String(route.name || "").startsWith("system-data-"),
+    ).filter((route) => route.component);
+    expect(new Set(systemData.map((route) => route.component)).size).toBe(1);
+  });
+
+  it("commits navigation and paints its shell before the destination chunk mounts", async () => {
+    const frames = controlAnimationFrames();
+    const pending = deferred<{ default: Component }>();
+    const { router, wrapper } = await setup(() => pending.promise);
+
+    const navigation = router.push("/slow");
+    await navigation;
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/slow");
+    expect(wrapper.find(".progressive-route-loading").exists()).toBe(true);
+    expect(wrapper.text()).toContain("Loading page content");
+
+    pending.resolve({ default: LoadedPage });
+    await flushPromises();
+    expect(wrapper.find('[data-test="loaded-page"]').exists()).toBe(false);
+
+    frames.runFrame();
+    await flushPromises();
+    expect(wrapper.find('[data-test="loaded-page"]').exists()).toBe(false);
+
+    frames.runFrame();
+    await flushPromises();
+    expect(wrapper.get('[data-test="loaded-page"]').text()).toBe("Loaded page");
+    wrapper.unmount();
+  });
+
+  it("keeps a page-module failure on the committed destination with explicit recovery", async () => {
+    const frames = controlAnimationFrames();
+    const loader = vi
+      .fn<() => Promise<{ default: Component }>>()
+      .mockRejectedValueOnce(new Error("temporary chunk failure"));
+    const { router, wrapper } = await setup(loader);
+
+    await router.push("/slow");
+    await flushPromises();
+    frames.runFrame();
+    frames.runFrame();
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/slow");
+    expect(wrapper.find(".progressive-route-error").exists()).toBe(true);
+    const retry = wrapper
+      .findAllComponents({ name: "UiButton" })
+      .find((button) => button.props("label") === "Retry");
+    expect(retry).toBeTruthy();
+    expect(loader).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+});

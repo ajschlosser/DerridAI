@@ -1,10 +1,23 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 services:
   web:
     build:
       context: ./web
-      additional_contexts:
-        gitmeta: ./.git
       args:
         GIT_COMMIT: ${GIT_COMMIT:-}
     ports:
@@ -36,14 +49,27 @@ services:
   api:
     build:
       context: ./api
-      additional_contexts:
-        gitmeta: ./.git
       args:
         GIT_COMMIT: ${GIT_COMMIT:-}
     user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     ports:
       - "${API_BIND:-127.0.0.1}:${API_PORT:-8000}:8000"
+    # Docker Desktop provides this hostname automatically. The explicit
+    # host-gateway mapping also makes the documented host-Ollama defaults work
+    # with native Docker Engine on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
+      # The API already schedules application work explicitly. Keep native
+      # runtimes from creating nested worker pools and glibc from retaining a
+      # separate large malloc arena for each short-lived native worker thread.
+      MALLOC_ARENA_MAX: ${MALLOC_ARENA_MAX:-4}
+      OMP_NUM_THREADS: ${OMP_NUM_THREADS:-1}
+      OPENBLAS_NUM_THREADS: ${OPENBLAS_NUM_THREADS:-1}
+      MKL_NUM_THREADS: ${MKL_NUM_THREADS:-1}
+      NUMEXPR_NUM_THREADS: ${NUMEXPR_NUM_THREADS:-1}
+      RAYON_NUM_THREADS: ${RAYON_NUM_THREADS:-2}
+      TOKENIZERS_PARALLELISM: ${TOKENIZERS_PARALLELISM:-false}
       HOME: /data/.home
       CHROMA_PATH: /data/chroma
       CHROMA_DATA_ROOT: /data
@@ -53,6 +79,21 @@ services:
       AUTH_LOGIN_LOCKOUT_SECONDS: ${AUTH_LOGIN_LOCKOUT_SECONDS:-300}
       SYSTEM_DB_PATH: ${SYSTEM_DB_PATH:-/data/.home/derridai-system.sqlite3}
       RESEARCHER_TEXT_MAX_CHARS: ${RESEARCHER_TEXT_MAX_CHARS:-1600}
+      PDF_MAX_UPLOAD_MB: ${PDF_MAX_UPLOAD_MB:-500}
+      ENRICHMENT_MAX_CONCURRENT_RUNS: ${ENRICHMENT_MAX_CONCURRENT_RUNS:-1}
+      GRAPHQL_IDE_ENABLED: ${GRAPHQL_IDE_ENABLED:-false}
+      GRAPHQL_INTROSPECTION_ENABLED: ${GRAPHQL_INTROSPECTION_ENABLED:-false}
+      GRAPHQL_MAX_DEPTH: ${GRAPHQL_MAX_DEPTH:-8}
+      GRAPHQL_MAX_ALIASES: ${GRAPHQL_MAX_ALIASES:-20}
+      GRAPHQL_MAX_TOKENS: ${GRAPHQL_MAX_TOKENS:-2000}
+      REALTIME_ENABLED: ${REALTIME_ENABLED:-true}
+      REALTIME_MAX_CLIENT_MESSAGE_BYTES: ${REALTIME_MAX_CLIENT_MESSAGE_BYTES:-65536}
+      REALTIME_MAX_QUEUE_EVENTS: ${REALTIME_MAX_QUEUE_EVENTS:-256}
+      REALTIME_REPLAY_EVENTS: ${REALTIME_REPLAY_EVENTS:-512}
+      REALTIME_PROGRESS_MAX_HZ: ${REALTIME_PROGRESS_MAX_HZ:-8}
+      REALTIME_HEARTBEAT_SECONDS: ${REALTIME_HEARTBEAT_SECONDS:-20}
+      REALTIME_IDLE_TIMEOUT_SECONDS: ${REALTIME_IDLE_TIMEOUT_SECONDS:-60}
+      REALTIME_ALLOWED_ORIGINS: ${REALTIME_ALLOWED_ORIGINS:-}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
       CHROMA_MODE: ${CHROMA_MODE:-embedded}
       CHROMA_BASE_URL: ${CHROMA_BASE_URL:-http://chroma:8000}
@@ -62,6 +103,7 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma4:e2b}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3:latest}
+      OLLAMA_EMBED_BATCH_SIZE: ${OLLAMA_EMBED_BATCH_SIZE:-256}
       API_BATCH_SIZE: ${API_BATCH_SIZE:-128}
       OLLAMA_CONNECT_TIMEOUT_SECONDS: ${OLLAMA_CONNECT_TIMEOUT_SECONDS:-8}
       OLLAMA_STATUS_TIMEOUT_SECONDS: ${OLLAMA_STATUS_TIMEOUT_SECONDS:-3}
@@ -73,6 +115,9 @@ services:
       OPENAI_CONNECT_TIMEOUT_SECONDS: ${OPENAI_CONNECT_TIMEOUT_SECONDS:-10}
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-1800}
       LLM_MAX_TEXT_CHARS: ${LLM_MAX_TEXT_CHARS:-50000}
+      LLM_METADATA_NUM_PREDICT: ${LLM_METADATA_NUM_PREDICT:-768}
+      LLM_TEXT_NUM_PREDICT: ${LLM_TEXT_NUM_PREDICT:-4096}
+      LLM_MAX_FIELDS: ${LLM_MAX_FIELDS:-12}
       RAG_DEFAULT_K: ${RAG_DEFAULT_K:-64}
       RAG_DEFAULT_FETCH_K: ${RAG_DEFAULT_FETCH_K:-500}
       RAG_DEFAULT_RERANK_TOP_N: ${RAG_DEFAULT_RERANK_TOP_N:-24}
@@ -82,16 +127,63 @@ services:
       RAG_DEFAULT_RECORD_CHAR_LIMIT: ${RAG_DEFAULT_RECORD_CHAR_LIMIT:-12000}
       RAG_DEFAULT_TOTAL_CHAR_LIMIT: ${RAG_DEFAULT_TOTAL_CHAR_LIMIT:-120000}
       RAG_OLLAMA_MAX_CONCURRENT: ${RAG_OLLAMA_MAX_CONCURRENT:-1}
+      RAG_AUTO_GRADE_MAX_ATTEMPTS: ${RAG_AUTO_GRADE_MAX_ATTEMPTS:-2}
+      RAG_AUTO_GRADE_RETRY_DELAY_SECONDS: ${RAG_AUTO_GRADE_RETRY_DELAY_SECONDS:-1.5}
       RAG_CROSS_ENCODER_MODEL: ${RAG_CROSS_ENCODER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
       RAG_MODEL_CACHE: ${RAG_MODEL_CACHE:-/data/models}
+      DOCUMENT_NLP_BASE_URL: ${DOCUMENT_NLP_BASE_URL:-}
+      DOCUMENT_NLP_LANGUAGES: ${DOCUMENT_NLP_LANGUAGES:-en}
+      DOCUMENT_NLP_BASE_URL_FR: ${DOCUMENT_NLP_BASE_URL_FR:-}
+      DOCUMENT_NLP_BASE_URL_DE: ${DOCUMENT_NLP_BASE_URL_DE:-}
+      DOCUMENT_NLP_TIMEOUT_SECONDS: ${DOCUMENT_NLP_TIMEOUT_SECONDS:-900}
     volumes:
       - ./data:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/live', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
+    restart: unless-stopped
+
+  # Optional English-only BookNLP enhancement (spaCy in the API covers every
+  # language).  Enable with --profile document-nlp and set
+  # DOCUMENT_NLP_BASE_URL=http://document-nlp:8090 on the API.  Models come from
+  # an administrator-installed language pack (Settings -> System) or explicit
+  # BOOKNLP_* paths; the worker never downloads weights itself.
+  document-nlp:
+    build:
+      context: ./booknlp-worker
+    profiles: ["document-nlp"]
+    environment:
+      BOOKNLP_LANGUAGE: ${BOOKNLP_LANGUAGE:-en}
+      BOOKNLP_ENTITY_MODEL: ${BOOKNLP_ENTITY_MODEL:-}
+      BOOKNLP_COREF_MODEL: ${BOOKNLP_COREF_MODEL:-}
+      BOOKNLP_QUOTE_MODEL: ${BOOKNLP_QUOTE_MODEL:-}
+      BOOKNLP_ENTITY_SHA256: ${BOOKNLP_ENTITY_SHA256:-}
+      BOOKNLP_COREF_SHA256: ${BOOKNLP_COREF_SHA256:-}
+      BOOKNLP_QUOTE_SHA256: ${BOOKNLP_QUOTE_SHA256:-}
+      BOOKNLP_SPACY_MODEL: ${BOOKNLP_SPACY_MODEL:-en_core_web_sm}
+    volumes:
+      - ./data/models/booknlp:/models/booknlp:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=3)); raise SystemExit(0 if d.get('ready') else 1)",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
     restart: unless-stopped
 
   ollama:
@@ -116,7 +208,13 @@ services:
     volumes:
       - ./data/chroma-server:/data
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v2/heartbeat', timeout=3)",
+        ]
       interval: 15s
       timeout: 5s
       retries: 8

@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Every place the app declares its version must agree, and the release must have notes."""
 from __future__ import annotations
 
@@ -27,29 +42,50 @@ def test_all_declared_versions_agree():
     The FastAPI constructor, backup manifest, AppBuildInfo (sign-in, account menu,
     and Settings), and AuthScreen read APP_VERSION / the Vite-injected build stamp
     rather than duplicating the string.
-    docs/notes/<version>.md must exist and start with "# <version> —". When cutting a
-    release, bump the declared copies and create annotated git tag v<version> on that
+    docs/notes/<version>.md must contain its release heading after the standardized
+    repository copyright header. When cutting a release, bump the declared copies and
+    create annotated git tag v<version> on that
     commit (see AGENTS.md). This test checks the working tree, not git tags. Do not
     hard-code the version in other tests.
     """
-    version = json.loads(read("web/package.json"))["version"]
+    package = json.loads(read("web/package.json"))
+    version = package["version"]
+    codename = package["codename"]
     assert re.fullmatch(SEMVER, version)
+    assert isinstance(codename, str) and codename.strip()
     declared = {
         "api/app/config.py": find_all(rf'APP_VERSION = "({SEMVER})"', "api/app/config.py"),
-        "web/index.html": find_all(rf"<title>DerridAI ({SEMVER})</title>", "web/index.html"),
-        "README.md": find_all(rf"Current version: \*\*({SEMVER})", "README.md"),
+        "web/index.html": find_all(
+            rf"<title>DerridAI ({SEMVER}) - [^<]+</title>", "web/index.html"
+        ),
+        "README.md": find_all(rf"Current version: \*\*({SEMVER}) — [^*]+\*\*", "README.md"),
     }
     for path, found in declared.items():
         assert found, f"{path} does not declare a version"
         assert set(found) == {version}, f"{path} declares {found}, expected {version}"
-    main = read("api/app/main.py")
-    assert "version=app_version_label()" in main
-    assert '"app_version": APP_VERSION' in main
-    assert '"git_commit": APP_GIT_COMMIT or None' in main
+    assert find_all(r'APP_CODENAME = "([^"]+)"', "api/app/config.py") == [codename]
+    assert find_all(
+        rf"<title>DerridAI {re.escape(version)} - ([^<]+)</title>", "web/index.html"
+    ) == [codename]
+    assert find_all(
+        rf"Current version: \*\*{re.escape(version)} — ([^*]+)\*\*", "README.md"
+    ) == [codename]
+    application = read("api/app/application.py")
+    admin_routes = read("api/app/routers/admin.py")
+    health_routes = read("api/app/routers/health.py")
+    assert "version=app_version_label()" in application
+    assert '"app_version": APP_VERSION' in admin_routes
+    assert '"git_commit": APP_GIT_COMMIT or None' in health_routes
     assert "AppBuildInfo" in read("web/src/components/shell/TopbarAccount.vue")
     assert "AppBuildInfo" in read("web/src/components/AuthScreen.vue")
     assert "AppBuildInfo" in read("web/src/views/SettingsView.vue")
-    assert "APP_VERSION" in read("web/src/components/AppBuildInfo.vue")
+    build_info = read("web/src/components/AppBuildInfo.vue")
+    assert "APP_VERSION" in build_info
+    assert "APP_CODENAME" in build_info
     notes = ROOT / "docs" / "notes" / f"{version}.md"
     assert notes.is_file(), f"missing {notes.relative_to(ROOT)}"
-    assert notes.read_text(encoding="utf-8").lstrip().startswith(f"# {version} —")
+    note_text = notes.read_text(encoding="utf-8")
+    expected_heading = f"# {version} — {codename}"
+    assert expected_heading in note_text.splitlines(), (
+        f"{notes.relative_to(ROOT)} does not contain the expected release heading"
+    )

@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { describe, expect, it } from "vitest";
@@ -129,7 +147,8 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         },
       },
     });
-    expect((wrapper.get("input").element as HTMLInputElement).value).toBe("");
+    // List values wrap in a growing text box rather than clipping in a one-line input.
+    expect((wrapper.get("textarea[role=combobox]").element as HTMLTextAreaElement).value).toBe("");
     wrapper.unmount();
   });
 
@@ -165,13 +184,139 @@ describe("CorpusMetadataFieldEditor auto-population", () => {
         status: { status: "model_inferred", method: "llm", confidence: 0.72, auto_populated: true },
       },
     });
-    const input = wrapper.get("input");
+    const input = wrapper.get("textarea");
     await input.setValue("cities of refuge, hospitality");
     await input.trigger("change");
     await nextTick();
-    expect((wrapper.get("input").element as HTMLInputElement).value).toBe(
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe(
       "cities of refuge, hospitality",
     );
     wrapper.unmount();
+  });
+
+  it("keeps canonical FieldAssertion provenance editable", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: "Jacques Derrida",
+        control: "text",
+        status: {
+          status: "model_inferred",
+          method: "llm",
+          assertion_id: "assertion-1",
+          field_id: "derridai.speaker",
+          derivation_method: "model",
+          evaluation_status: "value_supported",
+          authority_status: "unreviewed",
+          value_status: "present",
+        },
+      },
+    });
+
+    expect(wrapper.find("textarea").exists()).toBe(false);
+    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
+    expect(edit).toBeTruthy();
+    await edit!.trigger("click");
+    await nextTick();
+    expect(wrapper.find("textarea").exists()).toBe(true);
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
+    expect(wrapper.find(".assertion-provenance").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("requires an explicit reviewer decision for a legacy multi-value array on a scalar field", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "quoted_speaker",
+        value: ["Emmanuel Levinas", "Martin Heidegger"],
+        control: "combobox",
+        open: true,
+        status: { status: "model_inferred", method: "llm" },
+      },
+    });
+
+    await nextTick();
+    const input = wrapper.get("textarea[role=combobox]");
+    expect((input.element as HTMLTextAreaElement).value).toBe("Emmanuel Levinas\nMartin Heidegger");
+    expect(wrapper.text()).toContain("accepts one value");
+    expect(wrapper.get("[data-primary-action]").attributes("disabled")).toBeDefined();
+
+    await input.setValue("Emmanuel Levinas");
+    await nextTick();
+    expect(wrapper.get("[data-primary-action]").attributes("disabled")).toBeUndefined();
+    await wrapper.get("[data-primary-action]").trigger("click");
+    expect(wrapper.emitted("save")?.at(-1)).toEqual(["Emmanuel Levinas"]);
+    wrapper.unmount();
+  });
+
+  it("losslessly unwraps a one-item legacy array for a scalar field", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "quoted_speaker",
+        value: ["Emmanuel Levinas"],
+        control: "combobox",
+        open: true,
+      },
+    });
+
+    await nextTick();
+    expect((wrapper.get("textarea[role=combobox]").element as HTMLTextAreaElement).value).toBe(
+      "Emmanuel Levinas",
+    );
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("unwraps structured compatibility values instead of rendering object Object", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "speaker",
+        value: { value: "Jacques Derrida", reason: "model proposal" },
+        control: "text",
+        status: { status: "model_inferred", method: "llm" },
+      },
+    });
+
+    expect(wrapper.text()).toContain("Jacques Derrida");
+    expect(wrapper.text()).not.toContain("[object Object]");
+    const edit = wrapper.findAll("button").find((button) => button.text().includes("Edit"));
+    await edit!.trigger("click");
+    await nextTick();
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("Jacques Derrida");
+    wrapper.unmount();
+  });
+});
+
+describe("CorpusMetadataFieldEditor memory hints", () => {
+  it("offers less certain earlier values as chips that fill the draft, and labels namespaced derivations", async () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: {
+        field: "stance",
+        value: "",
+        control: "enum",
+        options: stanceOptions,
+        open: true,
+        status: {
+          status: "model_inferred",
+          derivation_method: "derridai:memory",
+          assertion_id: "a1",
+          confidence: 0.8,
+        },
+        hints: [{ value: "criticize", similarity: 0.81, support: 1 }],
+      },
+    });
+    expect(wrapper.get(".memory-hints").text()).toContain("81%");
+    await wrapper.get(".hint-chip").trigger("click");
+    await nextTick();
+    expect((wrapper.get("select").element as HTMLSelectElement).value).toBe("criticize");
+    expect(wrapper.text()).toContain("Metadata memory");
+    expect(wrapper.text()).not.toContain("LLM source");
+  });
+
+  it("shows no hint strip when there are none", () => {
+    const wrapper = mount(CorpusMetadataFieldEditor, {
+      props: { field: "stance", value: "", control: "enum", options: stanceOptions, open: true },
+    });
+    expect(wrapper.find(".memory-hints").exists()).toBe(false);
   });
 });

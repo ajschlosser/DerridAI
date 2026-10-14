@@ -1,0 +1,118 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.pie-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+.pie-chart svg {
+  width: 180px;
+  height: 180px;
+}
+.pie-track {
+  fill: none;
+  stroke: #eef0ed;
+  stroke-width: 28;
+}
+.pie-slice {
+  fill: none;
+  stroke-width: 28;
+  transition: stroke-width 0.15s ease;
+}
+.pie-slice:hover {
+  stroke-width: 34;
+}
+.pie-total {
+  font-size: 1.125rem;
+  font-weight: 850;
+  fill: var(--text);
+}
+.pie-total-label {
+  font-size: 0.8125rem;
+  fill: var(--muted);
+}
+.pie-legend {
+  display: grid;
+  gap: 4px;
+}
+.pie-legend > div {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 46px 48px;
+  gap: 5px;
+  align-items: center;
+  font-size: 0.8125rem;
+}
+.pie-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+.pie-legend span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pie-legend b {
+  text-align: right;
+}
+.pie-legend small {
+  text-align: right;
+  color: var(--muted);
+}
+.pie-series-0 {
+  stroke: var(--text-2);
+  background: #315f7a;
+}
+.pie-series-1 {
+  stroke: var(--tone-danger-fg);
+  background: #8b5b43;
+}
+.pie-series-2 {
+  stroke: var(--tone-ok-fg);
+  background: #4e7658;
+}
+.pie-series-3 {
+  stroke: var(--tone-info-fg);
+  background: #79608e;
+}
+.pie-series-4 {
+  stroke: var(--tone-warn-fg);
+  background: #9a7a2f;
+}
+.pie-series-5 {
+  stroke: var(--tone-info-fg);
+  background: #487d82;
+}
+.pie-series-6 {
+  stroke: var(--tone-danger-fg);
+  background: #9a586e;
+}
+.pie-series-7 {
+  stroke: var(--tone-ok-fg);
+  background: #64714a;
+}
+.pie-series-8 {
+  stroke: var(--tone-warn-fg);
+  background: #775f4d;
+}
+.pie-series-9 {
+  stroke: var(--tone-info-fg);
+  background: #6e6c93;
+}

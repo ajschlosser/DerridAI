@@ -1,172 +1,539 @@
-<script setup lang="ts">
-import { computed, ref } from "vue";
-import AppIcon from "../AppIcon.vue";
-import { useI18nStore } from "../../stores/i18n";
-import type { ResearchProfile, ResearchStore } from "../../types/research";
-import { researchPresetLabel } from "./researchPreset";
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
 
-const props=withDefaults(defineProps<{
-  prompt:string;
-  instructions:string;
-  sourceCollection:string;
-  providerProfileId:string;
-  responseLanguage:string;
-  preset:string;
-  evidenceCount:number;
-  stores:ResearchStore[];
-  profiles:ResearchProfile[];
-  history:Array<Record<string,unknown>>;
-  busy?:boolean;
-  canRun?:boolean;
-  canConfigure?:boolean;
-  canManageRuns?:boolean;
-  disabledReason?:string;
-  compact?:boolean;
-}>(),{compact:false,busy:false,canRun:true,canConfigure:true,canManageRuns:true,disabledReason:""});
-const emit=defineEmits<{
-  "update:prompt":[value:string];
-  "update:instructions":[value:string];
-  "update:sourceCollection":[value:string];
-  "update:providerProfileId":[value:string];
-  "update:responseLanguage":[value:string];
-  "update:preset":[value:string];
-  run:[];
-  settings:[];
-  runs:[];
-  expand:[];
-  history:[item:Record<string,unknown>];
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<script setup lang="ts">
+import { computed, ref, watch, onBeforeUnmount } from "vue";
+import { researchFiltersApi } from "../../api/researchFilters";
+import type { ResearchFilterInventory } from "../../api/researchFilters";
+import AppIcon from "../AppIcon.vue";
+import ResearchFilterEditor from "./ResearchFilterEditor.vue";
+import ResearchScopeSuggestions from "./ResearchScopeSuggestions.vue";
+import type { ResearchFilterChange } from "./ResearchFilterEditor.vue";
+import { useI18nStore } from "../../stores/i18n";
+import { measureInteractionToNextFrame } from "../../domain/interactionTiming";
+import type {
+  ResearchProfile,
+  ResearchPromptMetadataPolicy,
+  ResearchStore,
+} from "../../types/research";
+
+const props = withDefaults(
+  defineProps<{
+    prompt: string;
+    instructions: string;
+    filterExpression?: string;
+    sourceCollection: string;
+    providerProfileId: string;
+    responseLanguage: string;
+    preset: string;
+    evidenceCount: number;
+    promptMetadata: ResearchPromptMetadataPolicy;
+    pipelineName?: string;
+    pipelineVersion?: number | null;
+    pipelineOverride?: boolean;
+    stores: ResearchStore[];
+    profiles: ResearchProfile[];
+    history: Array<Record<string, unknown>>;
+    busy?: boolean;
+    compact?: boolean;
+    canRun?: boolean;
+    canConfigure?: boolean;
+    canDraft?: boolean;
+    canManageRuns?: boolean;
+    disabledReason?: string;
+    /** Explicit follow-up context turns; null keeps automatic selection. */
+    contextScope?: Array<{ turn_id: string; ordinal: number; question: string }> | null;
+  }>(),
+  {
+    busy: false,
+    compact: false,
+    canRun: true,
+    canConfigure: true,
+    canManageRuns: true,
+    disabledReason: "",
+    filterExpression: "",
+    pipelineName: "",
+    pipelineVersion: null,
+    pipelineOverride: false,
+    contextScope: null,
+  },
+);
+const emit = defineEmits<{
+  "update:prompt": [value: string];
+  removeContextTurn: [turnId: string];
+  resetContext: [];
+  "update:instructions": [value: string];
+  "update:filterExpression": [value: string];
+  scopeAccepted: [source: "deterministic_natural_language" | "model_assisted"];
+  filterChange: [value: ResearchFilterChange];
+  "update:sourceCollection": [value: string];
+  "update:providerProfileId": [value: string];
+  "update:responseLanguage": [value: string];
+  "update:preset": [value: string];
+  run: [];
+  settings: [];
+  pipelineSettings: [];
+  promptMetadata: [];
+  runs: [];
+  history: [item: Record<string, unknown>];
 }>();
-const i18n=useI18nStore();
-const historyOpen=ref(false);
-const historyQuery=ref("");
-const filteredHistory=computed(()=>{
-  const needle=historyQuery.value.trim().toLocaleLowerCase();
-  const rows=props.history.slice(0,40);
-  if(!needle)return rows.slice(0,8);
-  return rows.filter(item=>`${item.prompt||""} ${item.instructions||""}`.toLocaleLowerCase().includes(needle)).slice(0,12);
+const i18n = useI18nStore();
+const filterInventory = ref<ResearchFilterInventory | null>(null);
+let inventoryRequest: AbortController | null = null;
+watch(
+  () => props.sourceCollection,
+  async (collection) => {
+    inventoryRequest?.abort();
+    filterInventory.value = null;
+    if (!collection) return;
+    const controller = new AbortController();
+    inventoryRequest = controller;
+    try {
+      const result = await researchFiltersApi.inventory({ collection }, controller.signal);
+      if (!controller.signal.aborted) filterInventory.value = result;
+    } catch {
+      if (!controller.signal.aborted)
+        filterInventory.value = { works: [], fields: [], truncated: false };
+    }
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => inventoryRequest?.abort());
+const historyOpen = ref(false);
+const historyQuery = ref("");
+const filteredHistory = computed(() => {
+  const needle = historyQuery.value.trim().toLocaleLowerCase();
+  const rows = props.history.slice(0, 40);
+  if (!needle) return rows.slice(0, 8);
+  return rows
+    .filter((item) =>
+      `${item.prompt || ""} ${item.instructions || ""}`.toLocaleLowerCase().includes(needle),
+    )
+    .slice(0, 12);
 });
-const selectedProfile=computed(()=>props.profiles.find(profile=>profile.id===props.providerProfileId));
-const selectedStore=computed(()=>props.stores.find(store=>store.name===props.sourceCollection));
-function historyLabel(item:Record<string,unknown>){
-  const value=String(item.prompt||item.instructions||i18n.t("research.saved_prompt","Saved prompt")).replace(/\s+/g," ").trim();
-  return value.length>92?`${value.slice(0,89)}…`:value;
+const selectedProfile = computed(() =>
+  props.profiles.find((profile) => profile.id === props.providerProfileId),
+);
+const selectedStore = computed(() =>
+  props.stores.find((store) => store.name === props.sourceCollection),
+);
+const promptMetadataCounts = computed(() => ({
+  evidence: props.promptMetadata?.evidence?.length || 0,
+  context: props.promptMetadata?.context?.length || 0,
+  record: props.promptMetadata?.record?.length || 0,
+}));
+// Follow-ups keep the full settings collapsed but always state what the run will use.
+const settingsOpen = ref(false);
+const presetLabel = computed(() => {
+  const key = `research.preset_${props.preset}`;
+  const label = i18n.t(key);
+  return label === key ? props.preset : label;
+});
+// Only the evidence and hybrid presets send selected passages as documentary evidence.
+const usesSelectedEvidence = computed(() => ["evidence", "hybrid"].includes(props.preset));
+const evidenceModeLabel = computed(() => {
+  if (!props.evidenceCount) return i18n.t("research.effective_evidence_retrieval");
+  return i18n.tf(
+    usesSelectedEvidence.value
+      ? "research.effective_evidence_used"
+      : "research.effective_evidence_unused",
+    { count: props.evidenceCount },
+  );
+});
+function historyLabel(item: Record<string, unknown>) {
+  const value = String(item.prompt || item.instructions || i18n.t("research.saved_prompt"))
+    .replace(/\s+/g, " ")
+    .trim();
+  return value.length > 92 ? `${value.slice(0, 89)}…` : value;
 }
-const presetLabel=computed(()=>researchPresetLabel(props.preset,(key,fallback)=>i18n.t(key,fallback)));
-// Ctrl/Cmd+Enter runs from either composer state.
-function onQuestionKeydown(event:KeyboardEvent){
-  if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)&&props.canRun&&!props.busy){event.preventDefault();emit("run")}
+function pickHistory(item: Record<string, unknown>) {
+  emit("history", item);
+  historyOpen.value = false;
+  historyQuery.value = "";
 }
-function pickHistory(item:Record<string,unknown>){emit("history",item);historyOpen.value=false;historyQuery.value=""}
+
+function updateDraftField(field: "prompt" | "instructions", event: Event) {
+  measureInteractionToNextFrame(`derridai.research.${field}.input_to_frame`);
+  const value = (event.target as HTMLTextAreaElement).value;
+  if (field === "prompt") emit("update:prompt", value);
+  else emit("update:instructions", value);
+}
 </script>
 
 <template>
-  <section v-if="compact" class="research-composer-compact card" :aria-label="i18n.t('research.question','Research question')">
-    <label class="sr-only" for="researchQuestion">{{i18n.t('research.question','Research question')}}</label>
-    <textarea id="researchQuestion" class="research-compact-input" rows="1" :value="prompt" :disabled="!canConfigure" :placeholder="i18n.t('research.question_placeholder','Ask about a concept, passage, relation, attribution, or disagreement…')" @input="emit('update:prompt',($event.target as HTMLTextAreaElement).value)" @keydown="onQuestionKeydown"></textarea>
-    <p class="research-compact-context">
-      <span>{{sourceCollection||i18n.t('research.evidence_only','Evidence only')}}</span>
-      <span>{{selectedProfile?.name||selectedProfile?.id||i18n.t('research.no_profile','No profile')}}</span>
-      <span>{{presetLabel}}</span>
-      <span v-if="evidenceCount">{{evidenceCount}} {{i18n.t('rag.selected_evidence','selected evidence')}}</span>
-    </p>
-    <div class="research-compact-actions">
-      <button class="btn" type="button" aria-controls="researchQuestion" @click="emit('expand')"><AppIcon name="gear"/>{{i18n.t('research.more_options','More options')}}</button>
-      <span class="action-tooltip-wrap" :data-tooltip="!canRun?disabledReason:''">
-        <button class="btn primary" type="button" :disabled="busy||!canRun" :aria-disabled="busy||!canRun" @click="emit('run')">
-          <AppIcon name="spark"/>{{busy?i18n.t('research.starting','Starting…'):i18n.t('research.run','Research')}}
-        </button>
-      </span>
-    </div>
-  </section>
-  <section v-else class="research-composer-v031 card" aria-labelledby="research-compose-title">
+  <section
+    class="research-composer-v031 card"
+    :class="{ 'research-composer-followup': compact }"
+    aria-labelledby="research-compose-title"
+  >
     <header class="research-composer-heading">
       <div>
-        <span class="section-label">{{i18n.t('nav.rag','Research')}}</span>
-        <h2 id="research-compose-title">{{i18n.t('research.ask_title','What are you researching?')}}</h2>
-        <p>{{i18n.t('research.ask_help','Ask a scholarly question. DerridAI will retrieve, rerank, synthesize, and bind the answer to inspectable evidence.')}}</p>
+        <span v-if="!compact" class="section-label">{{ i18n.t("nav.rag") }}</span>
+        <h2 id="research-compose-title">{{ i18n.t("research.ask_title") }}</h2>
+        <p v-if="!compact">{{ i18n.t("research.ask_help") }}</p>
       </div>
       <div class="research-heading-actions">
-        <button v-if="canManageRuns" class="btn" type="button" @click="emit('runs')"><AppIcon name="history"/>{{i18n.t('research.runs','Runs')}}</button>
-        <button v-if="canConfigure" class="btn" type="button" @click="emit('settings')"><AppIcon name="gear"/>{{i18n.t('research.expert_settings','Expert settings')}}</button>
+        <button v-if="!compact && canManageRuns" class="btn" type="button" @click="emit('runs')">
+          <AppIcon name="history" />{{ i18n.t("research.runs") }}
+        </button>
+        <button v-if="canConfigure" class="btn" type="button" @click="emit('settings')">
+          <AppIcon name="gear" />{{ i18n.t("research.expert_settings") }}
+        </button>
       </div>
     </header>
 
     <div class="research-question-shell">
-      <label class="sr-only" for="researchQuestion">{{i18n.t('research.question','Research question')}}</label>
-      <textarea id="researchQuestion" class="research-question-input" :value="prompt" :disabled="!canConfigure" :placeholder="i18n.t('research.question_placeholder','Ask about a concept, passage, relation, attribution, or disagreement…')" @input="emit('update:prompt',($event.target as HTMLTextAreaElement).value)" @keydown="onQuestionKeydown"></textarea>
+      <label class="sr-only" for="researchQuestion">{{ i18n.t("research.question") }}</label>
+      <textarea
+        id="researchQuestion"
+        class="research-question-input"
+        :value="prompt"
+        :disabled="!(canDraft ?? canConfigure)"
+        :placeholder="i18n.t('research.question_placeholder')"
+        @input="updateDraftField('prompt', $event)"
+      ></textarea>
       <div class="research-question-tools">
-        <div class="research-history-popover">
-          <button class="research-text-action" type="button" :disabled="!canConfigure" :aria-expanded="historyOpen" aria-controls="researchHistoryMenu" @click="historyOpen=!historyOpen">
-            <AppIcon name="history"/>{{i18n.t('research.recent_questions','Recent questions')}}
+        <div v-if="!compact" class="research-history-popover">
+          <button
+            class="research-text-action"
+            type="button"
+            :disabled="!canConfigure"
+            :aria-expanded="historyOpen"
+            aria-controls="researchHistoryMenu"
+            @click="historyOpen = !historyOpen"
+          >
+            <AppIcon name="history" />{{ i18n.t("research.recent_questions") }}
           </button>
-          <div v-if="historyOpen" id="researchHistoryMenu" class="research-history-menu" role="dialog" :aria-label="i18n.t('research.recent_questions','Recent questions')">
-            <label class="sr-only" for="researchHistorySearch">{{i18n.t('research.search_history','Search recent questions')}}</label>
-            <input id="researchHistorySearch" v-model="historyQuery" class="control" type="search" :placeholder="i18n.t('research.search_history','Search recent questions')" autofocus>
+          <div
+            v-if="historyOpen"
+            id="researchHistoryMenu"
+            class="research-history-menu"
+            role="dialog"
+            :aria-label="i18n.t('research.recent_questions')"
+          >
+            <label class="sr-only" for="researchHistorySearch">{{
+              i18n.t("research.search_history")
+            }}</label>
+            <input
+              id="researchHistorySearch"
+              v-model="historyQuery"
+              class="control"
+              type="search"
+              :placeholder="i18n.t('research.search_history')"
+              autofocus
+            />
             <div class="research-history-list">
-              <button v-for="(item,index) in filteredHistory" :key="String(item.id||index)" type="button" @click="pickHistory(item)">
-                <b>{{historyLabel(item)}}</b><small>{{String(item.timestamp||'')}}</small>
+              <button
+                v-for="(item, index) in filteredHistory"
+                :key="String(item.id || index)"
+                type="button"
+                @click="pickHistory(item)"
+              >
+                <b>{{ historyLabel(item) }}</b
+                ><small>{{ String(item.timestamp || "") }}</small>
               </button>
-              <p v-if="!filteredHistory.length" class="note">{{i18n.t('research.no_recent_questions','No matching recent questions.')}}</p>
+              <p v-if="!filteredHistory.length" class="note">
+                {{ i18n.t("research.no_recent_questions") }}
+              </p>
             </div>
           </div>
         </div>
-        <span>{{prompt.length.toLocaleString(i18n.locale)}} {{i18n.t('research.characters','characters')}}</span>
+        <span
+          >{{ prompt.length.toLocaleString(i18n.locale) }} {{ i18n.t("research.characters") }}</span
+        >
       </div>
     </div>
 
-    <details class="research-instructions-disclosure">
-      <summary>{{i18n.t('research.instructions','Additional instructions')}}<span>{{instructions?i18n.t('research.added','Added'):i18n.t('research.optional','Optional')}}</span></summary>
-      <label class="sr-only" for="researchInstructions">{{i18n.t('research.instructions','Additional instructions')}}</label>
-      <textarea id="researchInstructions" :value="instructions" :disabled="!canConfigure" :placeholder="i18n.t('research.instructions_placeholder','Optional constraints on framing, comparison, citation, or answer form.')" @input="emit('update:instructions',($event.target as HTMLTextAreaElement).value)"></textarea>
+    <details v-if="!compact" class="research-instructions-disclosure">
+      <summary>
+        {{ i18n.t("research.instructions")
+        }}<span>{{ instructions ? i18n.t("research.added") : i18n.t("research.optional") }}</span>
+      </summary>
+      <label class="sr-only" for="researchInstructions">{{
+        i18n.t("research.instructions")
+      }}</label>
+      <textarea
+        id="researchInstructions"
+        :value="instructions"
+        :disabled="!(canDraft ?? canConfigure)"
+        :placeholder="i18n.t('research.instructions_placeholder')"
+        @input="updateDraftField('instructions', $event)"
+      ></textarea>
+      <ResearchScopeSuggestions
+        :instructions="instructions"
+        :inventory-data="filterInventory"
+        :provider-profile-id="providerProfileId"
+        :filter-expression="filterExpression"
+        :collection="sourceCollection"
+        :fields="selectedStore?.filter_fields || []"
+        :disabled="!(canDraft ?? canConfigure)"
+        @update:filter-expression="emit('update:filterExpression', $event)"
+        @accepted="emit('scopeAccepted', $event)"
+      />
     </details>
 
-    <fieldset class="research-compose-context" :disabled="!canConfigure">
-      <legend class="sr-only">{{i18n.t('research.context','Research context')}}</legend>
+    <details v-if="!compact" class="research-instructions-disclosure">
+      <summary>
+        {{ i18n.t("research.filters.title")
+        }}<span>{{
+          filterExpression.trim() ? i18n.t("research.added") : i18n.t("research.optional")
+        }}</span>
+      </summary>
+      <ResearchFilterEditor
+        :model-value="filterExpression"
+        :field-catalog="filterInventory?.fields || []"
+        :collection="sourceCollection"
+        :fields="selectedStore?.filter_fields || []"
+        :disabled="!(canDraft ?? canConfigure)"
+        @update:model-value="emit('update:filterExpression', $event)"
+        @change="emit('filterChange', $event)"
+      />
+    </details>
+
+    <section
+      v-if="compact"
+      class="research-composer-effective"
+      :aria-label="i18n.t('research.effective_settings')"
+    >
+      <dl>
+        <dt>{{ i18n.t("research.corpus") }}</dt>
+        <dd>{{ sourceCollection || i18n.t("research.no_database") }}</dd>
+        <dt>{{ i18n.t("research.profile") }}</dt>
+        <dd>
+          <template v-if="selectedProfile"
+            >{{ selectedProfile.name || selectedProfile.id }} ·
+            {{ selectedProfile.model || i18n.t("research.model_auto") }}</template
+          >
+          <template v-else>{{ i18n.t("research.no_profile") }}</template>
+        </dd>
+        <dt>{{ i18n.t("research.retrieval_profile") }}</dt>
+        <dd>{{ presetLabel }}</dd>
+        <dt>{{ i18n.t("research.effective_evidence") }}</dt>
+        <dd :data-evidence-mode="usesSelectedEvidence && evidenceCount ? 'used' : 'retrieval'">
+          {{ evidenceModeLabel }}
+        </dd>
+        <template v-if="filterExpression.trim()">
+          <dt>{{ i18n.t("research.filters.title") }}</dt>
+          <dd>
+            <code>{{ filterExpression }}</code>
+          </dd>
+        </template>
+        <dt>{{ i18n.t("research.effective_context") }}</dt>
+        <dd v-if="contextScope === null">{{ i18n.t("research.effective_context_followup") }}</dd>
+        <dd v-else class="research-composer-context-scope">
+          <p>
+            {{
+              i18n.t(
+                contextScope.length
+                  ? "research.context_scope_explicit"
+                  : "research.context_scope_none",
+              )
+            }}
+          </p>
+          <ul v-if="contextScope.length">
+            <li v-for="item in contextScope" :key="item.turn_id">
+              <span>{{
+                i18n.tf("research.context_scope_turn", {
+                  ordinal: item.ordinal,
+                  question: item.question,
+                })
+              }}</span>
+              <button
+                type="button"
+                class="btn"
+                :aria-label="i18n.tf('research.context_scope_remove', { ordinal: item.ordinal })"
+                @click="emit('removeContextTurn', item.turn_id)"
+              >
+                ×
+              </button>
+            </li>
+          </ul>
+          <button type="button" class="btn" @click="emit('resetContext')">
+            {{ i18n.t("research.context_scope_automatic") }}
+          </button>
+        </dd>
+      </dl>
+      <button
+        type="button"
+        class="btn research-composer-settings-toggle"
+        :aria-expanded="settingsOpen"
+        aria-controls="researchComposerSettings"
+        @click="settingsOpen = !settingsOpen"
+      >
+        {{
+          settingsOpen
+            ? i18n.t("research.effective_settings_hide")
+            : i18n.t("research.effective_settings_show")
+        }}
+      </button>
+    </section>
+
+    <fieldset
+      v-if="!compact || settingsOpen"
+      id="researchComposerSettings"
+      class="research-compose-context"
+      :disabled="!canConfigure"
+    >
+      <legend class="sr-only">{{ i18n.t("research.context") }}</legend>
+      <div class="research-pipeline-action research-pipeline-context">
+        <span>{{ i18n.t("research.pipeline_chain", "Pipeline chain") }}</span>
+        <button
+          class="btn research-pipeline-action-button"
+          type="button"
+          :disabled="!canConfigure"
+          @click="emit('pipelineSettings')"
+        >
+          <AppIcon name="compare" />
+          {{
+            pipelineName
+              ? `${pipelineName}${pipelineVersion ? ` · v${pipelineVersion}` : ""}`
+              : i18n.t("research.pipeline_system_default", "System default")
+          }}
+        </button>
+        <small>
+          {{
+            pipelineOverride
+              ? i18n.t("research.pipeline_override_badge", "Per-run override")
+              : i18n.t("research.pipeline_system_assignment_badge", "System assignment")
+          }}
+        </small>
+      </div>
       <label>
-        <span>{{i18n.t('research.corpus','Corpus')}}</span>
-        <select class="control" :value="sourceCollection" @change="emit('update:sourceCollection',($event.target as HTMLSelectElement).value)">
-          <option v-for="store in stores" :key="store.name" :value="store.name">{{store.name}} · {{store.count.toLocaleString(i18n.locale)}}</option>
-          <option v-if="!stores.length" value="">{{i18n.t('research.no_database','No corpus database')}}</option>
+        <span>{{ i18n.t("research.corpus") }}</span>
+        <select
+          class="control"
+          :value="sourceCollection"
+          @change="emit('update:sourceCollection', ($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="store in stores" :key="store.name" :value="store.name">
+            {{ store.name }} · {{ store.count.toLocaleString(i18n.locale) }}
+          </option>
+          <option v-if="!stores.length" value="">{{ i18n.t("research.no_database") }}</option>
         </select>
-        <small v-if="selectedStore">{{selectedStore.collection_role||'general'}}<template v-if="selectedStore.embedding_model"> · {{selectedStore.embedding_model}}</template></small>
+        <small v-if="selectedStore"
+          >{{ selectedStore.collection_role || "general"
+          }}<template v-if="selectedStore.embedding_model">
+            · {{ selectedStore.embedding_model }}</template
+          ></small
+        >
       </label>
       <label>
-        <span>{{i18n.t('research.profile','Research profile')}}</span>
-        <select class="control" :value="providerProfileId" @change="emit('update:providerProfileId',($event.target as HTMLSelectElement).value)">
-          <option v-for="profile in profiles" :key="profile.id" :value="profile.id">{{profile.name||profile.id}}</option>
+        <span>{{ i18n.t("research.profile") }}</span>
+        <select
+          class="control"
+          :value="providerProfileId"
+          @change="emit('update:providerProfileId', ($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="profile in profiles" :key="profile.id" :value="profile.id">
+            {{ profile.name || profile.id }}
+          </option>
         </select>
-        <small>{{selectedProfile?.model||i18n.t('research.model_auto','Automatic model')}}</small>
+        <small>{{ selectedProfile?.model || i18n.t("research.model_auto") }}</small>
       </label>
       <label>
-        <span>{{i18n.t('research.retrieval_profile','Retrieval')}}</span>
-        <select class="control" :value="preset" @change="emit('update:preset',($event.target as HTMLSelectElement).value)">
-          <option value="balanced">{{i18n.t('research.preset_balanced','Balanced')}}</option>
-          <option value="precision">{{i18n.t('research.preset_precision','High precision')}}</option>
-          <option value="recall">{{i18n.t('research.preset_recall','High recall')}}</option>
-          <option value="evidence" :disabled="evidenceCount===0">{{i18n.t('research.preset_evidence','Selected evidence only')}}</option>
-          <option value="custom">{{i18n.t('research.preset_custom','Custom')}}</option>
+        <span>{{ i18n.t("research.retrieval_profile") }}</span>
+        <select
+          class="control"
+          :value="preset"
+          @change="emit('update:preset', ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="balanced">{{ i18n.t("research.preset_balanced") }}</option>
+          <option value="precision">{{ i18n.t("research.preset_precision") }}</option>
+          <option value="recall">{{ i18n.t("research.preset_recall") }}</option>
+          <option value="evidence" :disabled="evidenceCount === 0">
+            {{ i18n.t("research.preset_evidence") }}
+          </option>
+          <option value="hybrid" :disabled="evidenceCount === 0">
+            {{ i18n.t("research.preset_hybrid") }}
+          </option>
+          <option value="custom">{{ i18n.t("research.preset_custom") }}</option>
         </select>
-        <small>{{evidenceCount}} {{i18n.t('rag.selected_evidence','selected evidence')}}</small>
+        <small>{{
+          i18n.tf(
+            evidenceCount === 1
+              ? "research.selected_evidence_count_one"
+              : "research.selected_evidence_count_many",
+            { count: evidenceCount },
+          )
+        }}</small>
       </label>
+      <div class="research-context-action">
+        <span>{{ i18n.t("research.prompt_metadata", "Prompt metadata") }}</span>
+        <button
+          class="btn research-context-action-button"
+          type="button"
+          :disabled="!canConfigure"
+          @click="emit('promptMetadata')"
+        >
+          <AppIcon name="record" />{{ i18n.t("research.configure_prompt_metadata") }}
+        </button>
+        <small>
+          {{ i18n.t("research.metadata_with_evidence", "Evidence") }}
+          {{ promptMetadataCounts.evidence }} ·
+          {{ i18n.t("research.metadata_as_context", "Context") }}
+          {{ promptMetadataCounts.context }} ·
+          {{ i18n.t("research.metadata_with_record", "Record") }}
+          {{ promptMetadataCounts.record }}
+        </small>
+      </div>
       <label>
-        <span>{{i18n.t('research.answer_language','Answer language')}}</span>
-        <select class="control" :value="responseLanguage" @change="emit('update:responseLanguage',($event.target as HTMLSelectElement).value)">
-          <option value="auto">{{i18n.t('research.language_auto','Automatic')}}</option>
-          <option value="en">{{i18n.t('language.english_short','English')}}</option>
-          <option value="fr">{{i18n.t('language.french_short','French')}}</option>
+        <span>{{ i18n.t("research.answer_language") }}</span>
+        <select
+          class="control"
+          :value="responseLanguage"
+          @change="emit('update:responseLanguage', ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="auto">{{ i18n.t("research.language_auto") }}</option>
+          <option value="en">{{ i18n.t("language.english_short") }}</option>
+          <option value="fr">{{ i18n.t("language.french_short") }}</option>
         </select>
-        <small>{{i18n.t('research.language_help','Source-language routing remains independent.')}}</small>
+        <small>{{ i18n.t("research.language_help") }}</small>
       </label>
     </fieldset>
 
     <footer class="research-compose-footer">
       <div class="research-run-context-summary">
-        <span><i></i>{{evidenceCount?`${evidenceCount} ${i18n.t('rag.selected_evidence','selected evidence')}`:i18n.t('research.retrieval_ready','Retrieval ready')}}</span>
-        <span>{{selectedProfile?.name||selectedProfile?.id||i18n.t('research.no_profile','No profile')}}</span>
+        <span
+          ><i></i
+          >{{
+            evidenceCount
+              ? i18n.tf(
+                  evidenceCount === 1
+                    ? "research.selected_evidence_count_one"
+                    : "research.selected_evidence_count_many",
+                  { count: evidenceCount },
+                )
+              : i18n.t("research.retrieval_ready")
+          }}</span
+        >
+        <span>{{
+          selectedProfile?.name || selectedProfile?.id || i18n.t("research.no_profile")
+        }}</span>
       </div>
-      <span class="action-tooltip-wrap" :data-tooltip="!canRun?disabledReason:''">
-        <button class="btn primary research-run-button" type="button" :disabled="busy||!canRun" :aria-disabled="busy||!canRun" @click="emit('run')">
-          <AppIcon name="spark"/>{{busy?i18n.t('research.starting','Starting…'):i18n.t('research.run','Research')}}
+      <span class="action-tooltip-wrap" :data-tooltip="!canRun ? disabledReason : ''">
+        <button
+          class="btn primary research-run-button"
+          type="button"
+          :disabled="busy || !canRun"
+          :aria-disabled="busy || !canRun"
+          @click="emit('run')"
+        >
+          <AppIcon name="spark" />{{ busy ? i18n.t("research.starting") : i18n.t("research.run") }}
         </button>
       </span>
     </footer>
@@ -174,54 +541,52 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
 </template>
 
 <style scoped>
-.research-composer-compact {
+.research-composer-effective {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 4px 12px;
-  align-items: center;
+  gap: 8px;
   padding: 10px 12px;
-  border-radius: 13px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 0.8125rem;
 }
-.research-compact-input {
-  min-height: 40px;
-  max-height: 120px;
-  padding: 9px 11px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--card);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.875rem;
-  resize: vertical;
-}
-.research-compact-input:focus-visible {
-  outline: 3px solid var(--ui-accent-focus);
-  outline-offset: 1px;
-}
-.research-compact-actions {
-  grid-row: 1 / span 2;
-  grid-column: 2;
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.research-compact-context {
-  display: flex;
-  flex-wrap: wrap;
+.research-composer-effective dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 12px;
   margin: 0;
-  padding: 0 2px;
-  color: var(--muted);
-  font-size: 0.75rem;
+  overflow-wrap: anywhere;
 }
-@media (max-width: 560px) {
-  .research-composer-compact {
-    grid-template-columns: 1fr;
-  }
-  .research-compact-actions {
-    grid-row: auto;
-    grid-column: auto;
-  }
+.research-composer-effective dt {
+  color: var(--text-tertiary);
+}
+.research-composer-effective dd {
+  margin: 0;
+}
+.research-composer-settings-toggle {
+  justify-self: start;
+}
+.research-context-action,
+.research-pipeline-action {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.research-context-action > span,
+.research-pipeline-action > span {
+  color: var(--text-primary);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.research-context-action-button,
+.research-pipeline-action-button {
+  justify-content: flex-start;
+  min-height: var(--control-height);
+}
+.research-context-action small,
+.research-pipeline-action small {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 .research-history-list {
   max-height: 300px;
@@ -253,7 +618,56 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
   line-height: 1.35;
 }
 .research-history-list small {
-  font-size: .8125rem;
+  font-size: 0.8125rem;
   color: var(--muted);
+}
+
+.research-composer-followup {
+  position: fixed;
+  inset-inline-start: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 20;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(44vh, 420px);
+  overflow-y: auto;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.1);
+}
+.research-composer-followup {
+  pointer-events: none;
+}
+.research-composer-followup button,
+.research-composer-followup textarea,
+.research-composer-followup input,
+.research-composer-followup select,
+.research-composer-followup summary {
+  pointer-events: auto;
+}
+.research-composer-followup .research-composer-heading {
+  margin-bottom: var(--space-2, 8px);
+}
+.research-composer-followup .research-question-input {
+  min-height: 76px;
+}
+@media (max-width: 600px) {
+  .research-composer-followup {
+    width: 100%;
+    bottom: 0;
+    max-height: 48dvh;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+  }
+}
+.research-composer-context-scope ul {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.research-composer-context-scope li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
 }
 </style>

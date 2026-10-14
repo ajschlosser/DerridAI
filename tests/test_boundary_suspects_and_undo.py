@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Boundary-quality flags and review edits with undo/redo.
 
 Why: segmentation can leave a sentence split across two records, or leave the start
@@ -71,7 +87,7 @@ def test_slice_moves_prefix_to_previous_and_undo_redo_walk_history(tmp_path:Path
     """
     repo,build=install(tmp_path);manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     target=repo.load_records(build['build_id'])[1];cut=target['text'].index('Proper')
-    result=manager.slice_to_neighbor(build['build_id'],'r2','previous',cut,1)
+    result=manager.create_from_selection(build['build_id'],'r2',cut,len(target['text']),'merge_prior',expected_revision=1)
     assert result['record']['text'].startswith('Proper current text')
     assert repo.load_records(build['build_id'])[0]['text'].endswith('Misplaced beginning.')
     undo=manager.undo_last_review_edit(build['build_id']); assert undo['can_redo'] is True
@@ -84,7 +100,7 @@ def test_slice_moves_text_to_beginning_of_next_record_and_requeues_metadata(tmp_
     repo,build=install(tmp_path); manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     target=repo.load_records(build['build_id'])[1]
     cut=target['text'].index('Proper')
-    result=manager.slice_to_neighbor(build['build_id'],'r2','next',cut,1)
+    result=manager.create_from_selection(build['build_id'],'r2',0,cut,right='merge_next',expected_revision=1)
     rows=repo.load_records(build['build_id'])
     assert rows[2]['text'].startswith('Proper current text.')
     assert result['record']['text'].startswith('Misplaced beginning.')

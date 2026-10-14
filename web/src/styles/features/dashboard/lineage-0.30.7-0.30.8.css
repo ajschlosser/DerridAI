@@ -1,0 +1,165 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* ========================================================================
+   DerridAI 0.30.8 — Works, Dashboard, annotation and accessibility cleanup
+   ======================================================================== */
+.dashboard-hero-tagline {
+  font-size: 0.875rem;
+}
+.dashboard-search-card {
+  grid-template-rows: auto auto auto auto;
+  gap: 10px;
+}
+.dashboard-search-footer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding-top: 2px;
+}
+.dashboard-search-footer .dashboard-search-help {
+  margin: 0;
+  text-align: right;
+}
+.dashboard-overview-grid {
+  gap: 10px;
+  margin-top: 12px;
+}
+.dashboard-overview-grid button {
+  min-height: 104px;
+  padding: 12px 8px;
+  align-content: center;
+}
+.dashboard-overview-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 3px;
+}
+.dashboard-overview-icon svg {
+  width: 21px;
+  height: 21px;
+}
+.dashboard-overview-grid strong {
+  font-size: 1.125rem;
+  line-height: 1.1;
+}
+.dashboard-overview-grid small {
+  font-size: 0.78125rem !important;
+}
+
+/* WCAG/readability continuation. Essential labels and helper copy have a
+   12px floor; interaction text is generally 13px+ without bloating data grids. */
+:where(
+  .note,
+  .field small,
+  .field > small,
+  .dialog-subtitle,
+  .workflow-section-copy span,
+  .compare-selected-hint,
+  .user-identity span,
+  .user-identity small,
+  .dashboard-search-help,
+  .annotation-feed-meta span,
+  .annotation-feed-meta time
+) {
+  font-size: 0.8125rem !important;
+  line-height: 1.45;
+}
+.cardhead b,
+.field > label,
+.field > span,
+label > span {
+  font-size: 0.78125rem !important;
+}
+
+@media (max-width: 900px) {
+  .compare-intro-card {
+    grid-template-columns: 1fr;
+  }
+  .compare-intro-actions {
+    justify-content: flex-start;
+  }
+  .researcher-provider-card-list {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-search-footer {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-search-footer .dashboard-search-help {
+    text-align: left;
+  }
+}
+/* 0.30.8 final grid/readability alignment pass. */
+.dashboard-search-footer {
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+}
+.dashboard-search-footer .dashboard-advanced-link {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+.dashboard-search-footer .dashboard-search-help {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: left !important;
+  max-width: 640px;
+}
+.dashboard-overview-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  align-items: stretch !important;
+}
+.dashboard-overview-grid button {
+  display: grid !important;
+  grid-template-rows: 38px auto auto !important;
+  align-content: center !important;
+  justify-items: center !important;
+  gap: 7px !important;
+  padding: 12px 9px !important;
+}
+.dashboard-overview-icon {
+  margin: 0 !important;
+}
+@media (max-width: 760px) {
+  .dashboard-search-footer {
+    grid-template-columns: 1fr !important;
+  }
+  .dashboard-search-footer .dashboard-search-help,
+  .dashboard-search-footer .dashboard-advanced-link {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+  .dashboard-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .dashboard-operations .cardhead,
+  .researcher-provider-admin-card > .cardhead {
+    grid-template-columns: 1fr !important;
+  }
+  .workflow-review-strip {
+    grid-template-columns: 1fr !important;
+  }
+  .workflow-review-strip > .workflow-summary-icon {
+    display: none;
+  }
+}

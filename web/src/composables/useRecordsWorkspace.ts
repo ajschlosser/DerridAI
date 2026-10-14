@@ -1,7 +1,36 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
-import { ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
-import { corpusState } from "../state/workspaceState";
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { getCurrentScope, onScopeDispose, ref, watch } from "vue";
+import { ensureCorpusWorkspaceLoaded } from "../domain/sharedCorpusHydration";
+import {
+  createSubsetFile,
+  defaultSubsetName as sharedDefaultSubsetName,
+  subsetFields as sharedSubsetFields,
+  subsetSourceRecords as sharedSubsetSourceRecords,
+  subsetSources as sharedSubsetSources,
+  triggerExport,
+  triggerMerge,
+} from "../domain/sharedRecordFileCommands";
+import { recordsWorkspace } from "../domain/sharedRecordsWorkspace";
+import { closeFile as closeWorkspaceFile } from "../domain/sharedFileLifecycle";
+import { activateFile, searchByMetadata } from "../domain/workspaceActions";
+import { corpusState, navigationState } from "../state/workspaceState";
 import type { RecordsCell, RecordsListSnapshot, RecordsRow } from "../types/records";
 import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordSubsets";
 
@@ -15,128 +44,172 @@ import type { SubsetField, SubsetRequest, SubsetSource } from "../domain/recordS
  */
 export function useRecordsWorkspace() {
   const snapshot = ref<RecordsListSnapshot | null>(null);
+  const loading = ref(false);
+  const error = ref("");
+  let disposed = false;
+  let activation: Promise<void> | null = null;
+  let presenceRequest = 0;
+  if (getCurrentScope())
+    onScopeDispose(() => {
+      disposed = true;
+    });
 
-  function load() {
-    const next = runtime.getRecordsListSnapshot?.() as RecordsListSnapshot | undefined;
-    if (next) snapshot.value = next;
+  function load({ refreshPresence = true } = {}) {
+    const next = recordsWorkspace.getRecordsListSnapshot() as RecordsListSnapshot | undefined;
+    if (!next) return;
+    snapshot.value = next;
+    if (!refreshPresence || !next.rows.length) return;
+
+    const request = ++presenceRequest;
+    void Promise.resolve(
+      recordsWorkspace.refreshRecordsListPresence(next.rows.map((row) => row.index)),
+    ).then(() => {
+      if (!disposed && request === presenceRequest) load({ refreshPresence: false });
+    });
   }
   // The loaded corpus also changes outside this view: a file imported or closed, or a record edited elsewhere. Read the
   // snapshot again then, so the rail and table do not keep showing the corpus as it was (a file imported while Records was
   // open used to appear only after leaving and coming back).
   watch(
-    () => [corpusState.version, corpusState.activeFileId],
+    [
+      () => corpusState.structureVersion,
+      () => corpusState.activeFileId,
+      () =>
+        corpusState.activeFileId
+          ? Number(corpusState.fileVersions[corpusState.activeFileId] || 0)
+          : 0,
+    ],
     () => {
       if (snapshot.value) load();
     },
     { flush: "post" },
   );
 
-  function activate() {
-    runtime.state.view = "list";
+  function activate(): Promise<void> {
+    if (activation) return activation;
+    navigationState.view = "list";
+    loading.value = true;
+    error.value = "";
     load();
+    activation = (async () => {
+      try {
+        const result = await ensureCorpusWorkspaceLoaded();
+        if (disposed) return;
+        if (result?.status === "error") throw result.error;
+        load();
+      } catch (failure) {
+        if (!disposed) error.value = failure instanceof Error ? failure.message : String(failure);
+      } finally {
+        if (!disposed) loading.value = false;
+        activation = null;
+      }
+    })();
+    return activation;
   }
   function setQuery(value: string) {
-    runtime.setRecordsListQuery?.(value);
+    recordsWorkspace.setRecordsListQuery(value);
     load();
   }
   function setColumns(keys: string[]) {
-    runtime.setRecordsListColumns?.(keys);
+    recordsWorkspace.setRecordsListColumns(keys);
     load();
   }
   function resetColumns() {
-    runtime.resetRecordsListColumns?.();
+    recordsWorkspace.resetRecordsListColumns();
     load();
   }
   function openRecord(row: RecordsRow) {
-    runtime.openRecordsListRecord?.(row.index);
+    recordsWorkspace.openRecordsListRecord(row.index);
   }
   function setRowSelected(row: RecordsRow, selected: boolean) {
-    runtime.setRecordsListRowSelected?.(row.index, selected);
+    recordsWorkspace.setRecordsListRowSelected(row.index, selected);
     load();
   }
   function setPageSelected(selected: boolean) {
-    runtime.setRecordsListPageSelected?.(selected);
+    recordsWorkspace.setRecordsListPageSelected(selected);
     load();
   }
   function sort(key: string) {
-    runtime.setRecordsListSort?.(key);
+    recordsWorkspace.setRecordsListSort(key);
     load();
   }
   function setFilter(key: string, value: string) {
-    runtime.setRecordsListFilter?.(key, value);
+    recordsWorkspace.setRecordsListFilter(key, value);
     load();
   }
   function setStore(name: string) {
-    runtime.setRecordsListStore?.(name);
+    recordsWorkspace.setRecordsListStore(name);
     load();
   }
   function setPage(page: number) {
-    runtime.setRecordsListPage?.(page);
+    recordsWorkspace.setRecordsListPage(page);
     load();
   }
   function setPageSize(size: number) {
-    runtime.setRecordsListPageSize?.(size);
+    recordsWorkspace.setRecordsListPageSize(size);
     load();
   }
   function toggleEvidence(row: RecordsRow) {
-    runtime.toggleRecordsListEvidence?.(row.index);
+    recordsWorkspace.toggleRecordsListEvidence(row.index);
     load();
   }
   function copyCitation(row: RecordsRow, kind: "inline" | "full") {
-    runtime.copyRecordsListCitation?.(row.index, kind);
+    recordsWorkspace.copyRecordsListCitation(row.index, kind);
   }
   function searchMetadata(cell: RecordsCell) {
-    runtime.recordsListMetadataSearch?.(cell.key, cell.meta_value, cell.meta_contains);
+    searchByMetadata(cell.key, cell.meta_value, { contains: Boolean(cell.meta_contains) });
   }
   function selectMatches() {
-    runtime.selectRecordsListMatches?.();
+    recordsWorkspace.selectRecordsListMatches();
     load();
   }
   function clearFilters() {
-    runtime.clearRecordsListFilters?.();
+    recordsWorkspace.clearRecordsListFilters();
     load();
   }
   function clearSelection() {
-    runtime.clearRecordsListSelection?.();
+    recordsWorkspace.clearRecordsListSelection();
     load();
   }
   function shareHref() {
-    return runtime.getRecordsListShareHref?.() || location.href;
+    return recordsWorkspace.getRecordsListShareHref() || location.href;
   }
   function selectFile(id: string) {
-    runtime.activateFile?.(id);
+    activateFile(id);
     load();
   }
   async function closeFile(id: string) {
-    await runtime.closeWorkspaceFile?.(id);
+    await closeWorkspaceFile(id);
     load();
   }
   function subsetSources(): SubsetSource[] {
-    return runtime.subsetSources?.() || [];
+    return sharedSubsetSources() || [];
   }
   function subsetFields(): SubsetField[] {
-    return runtime.subsetFields?.() || [];
+    return sharedSubsetFields() || [];
   }
   function subsetSourceRecords(source: string): Record<string, unknown>[] {
-    return runtime.subsetSourceRecords?.(source) || [];
+    return sharedSubsetSourceRecords(source) || [];
   }
   function defaultSubsetName(): string {
-    return runtime.defaultSubsetName?.() || "subset.jsonl";
+    return sharedDefaultSubsetName() || "subset.jsonl";
   }
   async function createSubset(request: SubsetRequest) {
-    const created = await runtime.createSubsetFile(request);
+    const created = await createSubsetFile(request);
     load();
     return created;
   }
   async function run(command: string) {
-    if (command === "merge") await runtime.triggerMerge?.();
-    else if (command === "export") await runtime.triggerExport?.();
-    else await runtime.recordsListCommand?.(command);
+    if (command === "merge") triggerMerge();
+    else if (command === "export") triggerExport();
+    else await recordsWorkspace.recordsListCommand(command);
     load();
   }
 
   return {
     snapshot,
+    loading,
+    error,
     load,
     activate,
     setQuery,

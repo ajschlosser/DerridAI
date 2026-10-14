@@ -1,0 +1,73 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/* Steppers: remove legacy connector line that crossed labels. */
+.workflow-steps li::after,
+.collection-wizard-dialog .workflow-steps li::after {
+  display: none !important;
+}
+.workflow-steps li.active {
+  background: var(--ui-accent-soft);
+}
+.researcher-provider-editor-grid .field {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  margin: 0;
+}
+.researcher-provider-editor-grid .field-wide {
+  grid-column: 1/-1;
+}
+.selection-annotation-popover .field {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+.annotation-feed-item > .btn.danger {
+  align-self: start;
+  margin: 10px 10px 0 0;
+}
+:where(.btn, .control, input, select, textarea, summary) {
+  font-size: 0.8125rem;
+}
+.researcher-provider-admin-card > .cardhead {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+}
+.researcher-provider-admin-card > .cardhead > .tools {
+  align-self: center !important;
+}
+.researcher-provider-editor-grid .field > small {
+  min-height: 34px;
+}
+.section-label,
+.eyebrow {
+  font-size: 0.8125rem !important;
+}
+.btn,
+.control,
+input,
+select,
+textarea {
+  font-size: 0.8125rem !important;
+}
+body {
+  font-size: 0.9375rem !important;
+  line-height: 1.5 !important;
+}

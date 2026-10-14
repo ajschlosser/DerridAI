@@ -1,7 +1,24 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """A build follows the schema it was started with: prompts, accepted fields, evidence, review and edits."""
 
 from __future__ import annotations
 
+import hashlib
 import sys
 import types
 from pathlib import Path
@@ -16,6 +33,13 @@ except ModuleNotFoundError:
 from app import corpus_builder as cb
 from app import metadata_schema as ms
 from app.config import APP_VERSION
+from app.field_assertions import (
+    create_memory_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
+from app.metadata_candidates import apply_indexing_nlp_candidates
+from app.nlp_annotations import text_digest
 
 
 def notes_schema():
@@ -45,6 +69,7 @@ def manager(tmp_path: Path, schema: ms.MetadataSchema | None = None):
     build.update(status="awaiting_review", stage="review")
     m.repo.save_build(build)
     m._rewrite_and_validate = lambda bid, records: (m.repo.save_records(bid, records), m.repo.get_build(bid))[1]
+    m._rewrite_targeted_record = lambda bid, record, previous: (m.repo.update_record(bid, record), m.repo.get_build(bid))[1]
     m._assert_human_review_available = lambda *a, **k: None
     m._push_review_history = lambda *a, **k: None
     return m, build["build_id"]
@@ -86,10 +111,498 @@ def test_the_default_schema_still_runs_the_three_families(tmp_path):
     assert [t[0] for t in tasks] == ["discourse", "quotation", "indexing"]
 
 
+def test_deep_mode_skips_quotation_without_a_quotation_signal(tmp_path):
+    m, bid = manager(tmp_path)
+    record = {
+        "record_id": "r",
+        "text": "Hospitality and sovereignty remain in tension.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=m._schema_for(bid),
+    )
+    assert [t[0] for t in tasks] == ["discourse", "indexing"]
+
+
+def test_deep_mode_uses_current_document_intelligence_as_a_quotation_signal(tmp_path):
+    m, bid = manager(tmp_path)
+    text = "Hospitality and sovereignty remain in tension."
+    record = {
+        "record_id": "r",
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "document_intelligence": {
+            "status": "ok",
+            "record_text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+            "quotations": [{"text": "Hospitality and sovereignty", "speaker": ""}],
+        },
+    }
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=m._schema_for(bid),
+    )
+    assert [t[0] for t in tasks] == ["discourse", "quotation", "indexing"]
+
+
+def test_strong_memory_prefills_skip_the_automatic_indexing_model_call(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    record = {
+        "record_id": "r",
+        "record_revision": 1,
+        "text": "Hospitality, sovereignty, Derrida, and Glas.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    values = {
+        "topics": ["hospitality"],
+        "concepts": ["sovereignty"],
+        "persons": ["Derrida"],
+        "works_referenced": ["Glas"],
+    }
+    for field, value in values.items():
+        create_memory_assertion(
+            record,
+            field,
+            value,
+            schema=schema,
+            confidence=0.9,
+            reason="Two reviewed precedents agree.",
+            evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
+        )
+        record[field] = value
+    project_record_assertions(record)
+    pass_learning = {
+        "field_stats": {
+            "persons": {"marker": "PERSON_MEMORY_MARKER"},
+            "topics": {"marker": "TOPIC_MEMORY_MARKER"},
+        },
+        "prior_pass": {
+            "inferred_conventions": {
+                "persons": {
+                    "value": ["Derrida"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "PERSON_PRIOR_MARKER",
+                },
+                "topics": {
+                    "value": ["hospitality"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "TOPIC_PRIOR_MARKER",
+                },
+            },
+            "disputed_fields": {"persons": 2, "topics": 1},
+        },
+    }
+
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        pass_learning=pass_learning,
+        schema=schema,
+    )
+    assert [t[0] for t in tasks] == ["discourse"]
+    assert record["metadata_stage_status"]["indexing"] == "skipped"
+    assert record["metadata_execution_ledger"]["indexing"]["reason_code"] == "automatic_routing_skip"
+    assert "reviewed-memory prefills" in record["metadata_execution_ledger"]["indexing"]["error"]
+
+    rerun, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True, "families": ["indexing"]},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        pass_learning=pass_learning,
+        schema=schema,
+    )
+    assert [t[0] for t in rerun] == ["indexing"]
+
+def test_enrich_record_promotes_direct_ner_candidates_before_indexing_generation(
+    tmp_path,
+    monkeypatch,
+):
+    m, bid = manager(tmp_path)
+    text = "Rousseau discusses Of Grammatology and hospitality."
+    record = {
+        "record_id": "nlp-routing",
+        "record_revision": 1,
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [{
+                    "start": 0,
+                    "end": 8,
+                    "text": "Rousseau",
+                    "source": "ner",
+                    "tag": "PERSON",
+                }],
+                "works_referenced": [{
+                    "start": 19,
+                    "end": 34,
+                    "text": "Of Grammatology",
+                    "source": "ner",
+                    "tag": "WORK_OF_ART",
+                }],
+                "topics": [{
+                    "start": 39,
+                    "end": 50,
+                    "text": "hospitality",
+                    "source": "pos",
+                    "tag": "NOUN",
+                }],
+            },
+        },
+    }
+    captured = {}
+
+    monkeypatch.setattr(
+        m,
+        "_editorial_memory",
+        lambda *args, **kwargs: {
+            "conventions": {},
+            "examples": {},
+            "requested_fields": sorted(kwargs.get("field_filter") or []),
+        },
+    )
+    monkeypatch.setattr(m, "_keep_precedent_retrieval", lambda *args, **kwargs: None)
+
+    def fake_execute(current, request, tasks, build_id, stage_callback):
+        captured["tasks"] = tasks
+        return []
+
+    monkeypatch.setattr(m, "_execute_metadata_tasks", fake_execute)
+    monkeypatch.setattr(
+        m,
+        "_reconcile_metadata_results",
+        lambda current, *args, **kwargs: current,
+    )
+
+    out = m._enrich_record(
+        record,
+        {},
+        {
+            "provider": "ollama",
+            "model": "test",
+            "enrichment_mode": "deep",
+            "semantic_indexing": True,
+            "_interactive_provider_override": True,
+        },
+        build_id=bid,
+    )
+
+    assert out["persons"] == ["Rousseau"]
+    assert out["works_referenced"] == ["Of Grammatology"]
+    assert current_assertion_by_name(out, "persons").derivation_method == "derridai:nlp"
+    indexing = next(task for task in captured["tasks"] if task[0] == "indexing")
+    metadata_model = indexing[2].model_fields["metadata"].annotation
+    assert set(metadata_model.model_fields) == {"topics", "concepts"}
+
+
+def test_scoped_indexing_reconciliation_preserves_preexisting_nlp_candidates(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    text = "Rousseau discusses Of Grammatology and hospitality."
+    record = {
+        "record_id": "nlp-reconcile",
+        "record_revision": 1,
+        "text": text,
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+        "nlp_candidates": {
+            "status": "ok",
+            "engine": "spacy",
+            "engine_version": "3.8.7",
+            "model": "en_core_web_lg",
+            "text_sha256": text_digest(text),
+            "fields": {
+                "persons": [{
+                    "start": 0,
+                    "end": 8,
+                    "text": "Rousseau",
+                    "source": "ner",
+                    "tag": "PERSON",
+                }],
+                "works_referenced": [{
+                    "start": 19,
+                    "end": 34,
+                    "text": "Of Grammatology",
+                    "source": "ner",
+                    "tag": "WORK_OF_ART",
+                }],
+            },
+        },
+    }
+    apply_indexing_nlp_candidates(record, schema)
+    persons_before = current_assertion_by_name(record, "persons")
+    works_before = current_assertion_by_name(record, "works_referenced")
+    record["metadata_stage_status"] = {"indexing": "complete"}
+    record["metadata_execution_ledger"] = {"indexing": {"state": "complete"}}
+
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        ["b1"],
+        [(
+            "indexing",
+            {
+                "metadata": {
+                    "topics": ["hospitality"],
+                    "concepts": ["hospitality"],
+                },
+                "field_assessments": {
+                    "topics": {
+                        "confidence": 0.9,
+                        "needs_review": False,
+                        "reason": "Explicit subject matter.",
+                        "outcome": "supported_value",
+                    },
+                    "concepts": {
+                        "confidence": 0.85,
+                        "needs_review": False,
+                        "reason": "Explicit concept.",
+                        "outcome": "supported_value",
+                    },
+                },
+                "field_evidence": {},
+                "review_reason": "",
+            },
+            None,
+        )],
+        False,
+        request={"provider": "ollama", "model": "test"},
+        build_id=bid,
+        schema=schema,
+    )
+
+    assert out["persons"] == ["Rousseau"]
+    assert out["works_referenced"] == ["Of Grammatology"]
+    assert current_assertion_by_name(out, "persons").assertion_id == persons_before.assertion_id
+    assert current_assertion_by_name(out, "works_referenced").assertion_id == works_before.assertion_id
+    assert out["topics"] == ["hospitality"]
+    assert out["concepts"] == ["hospitality"]
+
+
+def test_partial_memory_prefills_shrink_the_automatic_indexing_contract(tmp_path):
+    m, bid = manager(tmp_path)
+    schema = m._schema_for(bid)
+    record = {
+        "record_id": "partial-memory",
+        "record_revision": 1,
+        "text": "Derrida discusses Glas, hospitality, and sovereignty.",
+        "source_block_ids": ["b1"],
+        "metadata_field_status": {},
+    }
+    for field, value in {
+        "persons": ["Derrida"],
+        "works_referenced": ["Glas"],
+    }.items():
+        create_memory_assertion(
+            record,
+            field,
+            value,
+            schema=schema,
+            confidence=0.9,
+            reason="Two reviewed precedents agree.",
+            evidence=[{"block_ids": ["b1"], "confidence": 0.9, "reason": "memory match"}],
+        )
+    project_record_assertions(record)
+    pass_learning = {
+        "field_stats": {
+            "persons": {"marker": "PERSON_MEMORY_MARKER"},
+            "topics": {"marker": "TOPIC_MEMORY_MARKER"},
+        },
+        "prior_pass": {
+            "inferred_conventions": {
+                "persons": {
+                    "value": ["Derrida"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "PERSON_PRIOR_MARKER",
+                },
+                "topics": {
+                    "value": ["hospitality"],
+                    "records": 3,
+                    "mean_confidence": 0.9,
+                    "marker": "TOPIC_PRIOR_MARKER",
+                },
+            },
+            "disputed_fields": {"persons": 2, "topics": 1},
+        },
+    }
+
+    tasks, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep", "semantic_indexing": True},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        pass_learning=pass_learning,
+        schema=schema,
+    )
+    indexing = next(task for task in tasks if task[0] == "indexing")
+    metadata_model = indexing[2].model_fields["metadata"].annotation
+    assert set(metadata_model.model_fields) == {"topics", "concepts"}
+    assert "THIS MODEL CALL IS FIELD-SCOPED" in indexing[1]
+    assert "topics and concepts" in indexing[1]
+    assert "TOPIC_MEMORY_MARKER" in indexing[1]
+    assert "TOPIC_PRIOR_MARKER" in indexing[1]
+    assert "PERSON_MEMORY_MARKER" not in indexing[1]
+    assert "PERSON_PRIOR_MARKER" not in indexing[1]
+
+    rerun, _, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {
+            "enrichment_mode": "deep",
+            "semantic_indexing": True,
+            "families": ["indexing"],
+        },
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        pass_learning=pass_learning,
+        schema=schema,
+    )
+    rerun_indexing = next(task for task in rerun if task[0] == "indexing")
+    rerun_metadata_model = rerun_indexing[2].model_fields["metadata"].annotation
+    assert set(rerun_metadata_model.model_fields) == {
+        "topics",
+        "concepts",
+        "persons",
+        "works_referenced",
+    }
+    assert "PERSON_MEMORY_MARKER" in rerun_indexing[1]
+    assert "PERSON_PRIOR_MARKER" in rerun_indexing[1]
+
+
 def answer(**metadata):
     return {"metadata": {"region_type": "main_text", "primary_text": True, "discourse_role": "assertion", **metadata},
             "field_evidence": {"mood": {"block_ids": ["b1"], "confidence": 0.95, "reason": "tone"}},
             "field_assessments": {"mood": {"confidence": 0.95, "needs_review": False, "reason": "clear"}}}
+
+
+def test_field_assertion_canary_flows_from_schema_through_enrichment_and_review(tmp_path):
+    schema = ms.MetadataSchema(
+        name="Conceptual analysis",
+        groups=[
+            ms.SchemaGroup(
+                key="discourse",
+                label="Conceptual analysis",
+                intro="Identify the central conceptual tension.",
+                footer="Report {assessed_fields}.\n",
+            )
+        ],
+        fields=[
+            ms.SchemaField(
+                field_id="field-conceptual-tension",
+                name="conceptual_tension",
+                label="Conceptual tension",
+                type="text",
+                instruction="names the central conceptual opposition in the passage.",
+                assess=True,
+                evidence=True,
+                review=True,
+            )
+        ],
+    )
+    m, bid = manager(tmp_path, schema)
+    record = {"record_id": "canary", "record_revision": 1, "text": "Hospitality strains against sovereignty.", "metadata_field_status": {}}
+    result = {
+        "metadata": {
+            "region_type": "main_text",
+            "primary_text": True,
+            "discourse_role": "analysis",
+            "conceptual_tension": "hospitality / sovereignty",
+        },
+        "field_evidence": {
+            "conceptual_tension": {
+                "block_ids": ["b1"],
+                "confidence": 0.91,
+                "reason": "Both concepts are explicitly opposed in the passage.",
+            }
+        },
+        "field_assessments": {
+            "conceptual_tension": {
+                "confidence": 0.91,
+                "needs_review": False,
+                "reason": "The opposition is explicit.",
+                "outcome": "supported_value",
+            }
+        },
+    }
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        ["b1"],
+        [("discourse", result, None)],
+        False,
+        request={"model": "q"},
+        build_id=bid,
+        schema=m._schema_for(bid),
+    )
+    assertion = current_assertion_by_name(out, "conceptual_tension")
+    assert assertion is not None
+    assert assertion.field_id == "field-conceptual-tension"
+    assert assertion.derivation_method == "model"
+    assert out["conceptual_tension"] == "hospitality / sovereignty"
+
+    m.repo.save_records(bid, [out])
+    saved = m.patch_metadata(
+        bid,
+        "canary",
+        {"conceptual_tension": "conditional hospitality / sovereignty"},
+        expected_revision=int(out.get("record_revision") or 1),
+    )
+    reviewed = current_assertion_by_name(saved, "conceptual_tension")
+    assert reviewed is not None
+    assert reviewed.field_id == "field-conceptual-tension"
+    assert reviewed.authority_status in {"human_confirmed", "human_override"}
+    assert saved["conceptual_tension"] == "conditional hospitality / sovereignty"
 
 
 def test_a_custom_field_is_proposed_cited_and_reviewed_like_any_other(tmp_path):
@@ -103,6 +616,223 @@ def test_a_custom_field_is_proposed_cited_and_reviewed_like_any_other(tmp_path):
     result = answer(mood="calm"); result["field_evidence"] = {}
     out2 = m._reconcile_metadata_results(bare, m._profile_for(bid), ["b1"], [("discourse", result, None)], False, request={"model": "q"}, build_id=bid, schema=m._schema_for(bid))
     assert out2["metadata_field_status"]["mood"]["status"] == "unresolved"
+    # No real source blocks exist in this fixture, so the evidence cascade legitimately finds nothing.
+    assert "mood" not in out2["metadata_evidence"]
+
+
+def _no_evidence_answer(**metadata):
+    result = answer(**metadata)
+    result["field_evidence"] = {}
+    return result
+
+
+def test_evidence_uses_current_source_units_after_topology_changes(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._blocks_for = lambda _build_id: {
+        "unit-new": {
+            "block_id": "unit-new",
+            "source_unit_id": "unit-new",
+            "text": "The mood of the passage is calm and unhurried.",
+        }
+    }
+    record = {
+        "record_id": "r-unit",
+        "text": "The mood of the passage is calm and unhurried.",
+        "source_block_ids": ["retired-block"],
+        "source_unit_ids": ["unit-new"],
+        "metadata_field_status": {},
+    }
+
+    labelled = m._labelled_source_blocks(bid, record, {"evidence_mode": "with_value"})
+    assert "[unit-new]" in labelled
+    assert "retired-block" not in labelled
+
+    tasks, source_ids, _ = m._prepare_metadata_tasks(
+        record,
+        {},
+        {"enrichment_mode": "deep"},
+        m._profile_for(bid),
+        {},
+        {},
+        "",
+        "",
+        None,
+        schema=m._schema_for(bid),
+        labelled_blocks=labelled,
+    )
+    assert source_ids == ["unit-new"]
+    assert any("[unit-new]" in task[1] for task in tasks)
+
+    out = m._reconcile_metadata_results(
+        record,
+        m._profile_for(bid),
+        source_ids,
+        [("discourse", _no_evidence_answer(mood="calm"), None)],
+        False,
+        request={"model": "q"},
+        build_id=bid,
+        schema=m._schema_for(bid),
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    assert evidence["block_ids"] == ["unit-new"]
+    assert evidence["backfilled"] is True
+
+
+def test_backfill_mode_attaches_untrusted_evidence_the_model_did_not_cite(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [
+        {"block_id": "b1", "text": "The mood of the passage is calm and unhurried."},
+        {"block_id": "b2", "text": "Unrelated footnote."},
+    ]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1", "b2"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q", "evidence_mode": "backfill"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    # Populated for the reviewer, but never trusted: pending review, not autofilled.
+    assert out["metadata_field_status"]["mood"]["status"] != "autofilled"
+    assert not out["metadata_field_status"]["mood"].get("autofilled")
+
+
+def test_the_evidence_cascade_runs_regardless_of_evidence_mode(tmp_path):
+    """The cascade is a universal safety net now: the same result no longer depends on ``evidence_mode``."""
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [
+        {"block_id": "b1", "text": "The mood of the passage is calm and unhurried."},
+        {"block_id": "b2", "text": "Unrelated footnote."},
+    ]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1", "b2"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),  # default "with_value" mode, unset
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    assert out["metadata_field_status"]["mood"]["status"] != "autofilled"
+
+
+def test_with_value_mode_still_runs_the_evidence_cascade_when_the_model_cites_nothing(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    evidence = out["metadata_evidence"]["mood"]
+    # Bound by the cascade's deterministic stage (verbatim match), but still untrusted and unconfirmed.
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    assert out["metadata_field_status"]["mood"]["status"] == "unresolved"
+    assert not out["metadata_field_status"]["mood"].get("autofilled")
+
+
+def test_evidence_cascade_llm_stage_only_runs_when_enabled(tmp_path):
+    """The cascade's LLM stage is wired end-to-end, but stays off unless explicitly enabled.
+
+    ``discourse_role="assertion"`` has no lexical or local-semantic match in these fake blocks
+    (chromadb is stubbed in this test environment, so the semantic stages fail open), so it is
+    exactly the case that would reach the cascade's LLM stage. ``_chat_json`` is stubbed so this
+    never touches a real provider.
+    """
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "Unrelated text."}]
+    calls: list[str] = []
+
+    def fake_chat_json(request, prompt, **kwargs):
+        calls.append(prompt)
+        return {"block_ids": ["b1"], "reason": "The model's own last-resort choice."}
+
+    m._chat_json = fake_chat_json
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+
+    out_disabled = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert not calls
+    assert out_disabled["metadata_evidence"].get("discourse_role") is None
+
+    record2 = {"record_id": "r2", "text": "t", "metadata_field_status": {}}
+    out_enabled = m._reconcile_metadata_results(
+        record2, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q", "evidence_cascade_llm_enabled": True}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert calls
+    evidence = out_enabled["metadata_evidence"]["discourse_role"]
+    assert evidence["block_ids"] == ["b1"] and evidence["backfilled"] is True and evidence["confidence"] is None
+    assert evidence["method"] == "llm-evidence-choice-v1"
+
+
+def test_enrichment_evidence_is_bound_to_the_recovery_pipeline_identity(tmp_path):
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    pipeline = out["metadata_evidence"]["mood"]["pipeline"]
+    assert pipeline["feature"] == "evidence_recovery"
+    assert pipeline["pipeline_id"] == "evidence.recovery.cascade"
+    assert pipeline["pipeline_version"] == 2
+    assert pipeline["pipeline_hash"] and pipeline["trace_id"]
+
+
+def test_failed_evidence_recovery_pipeline_stays_visible_and_pending_review(tmp_path, monkeypatch, caplog):
+    from app import corpus_metadata_enrichment_execution as enrichment
+
+    def unavailable(**_kwargs):
+        raise KeyError("evidence_recovery")
+
+    monkeypatch.setattr(enrichment, "execute_evidence_recovery", unavailable)
+    m, bid = manager(tmp_path, notes_schema())
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert out["metadata_evidence"].get("mood") is None
+    status = out["metadata_field_status"]["mood"]
+    assert status["reason_code"] == "evidence_failed"
+    assert status["verification_status"] == "pending_review" and not status["autofilled"]
+    assert any("Evidence recovery pipeline did not run for mood" in message for message in caplog.messages)
+
+
+def test_missing_source_document_identity_is_logged_and_left_pending_review(tmp_path, monkeypatch, caplog):
+    m, bid = manager(tmp_path, notes_schema())
+    real_get_build = m.repo.get_build
+    monkeypatch.setattr(m.repo, "get_build", lambda build_id: {**real_get_build(build_id), "asset_id": ""})
+    m._evidence_source_blocks = lambda *a, **k: [{"block_id": "b1", "text": "calm calm calm"}]
+    record = {"record_id": "r", "text": "t", "metadata_field_status": {}}
+    out = m._reconcile_metadata_results(
+        record, m._profile_for(bid), ["b1"], [("discourse", _no_evidence_answer(mood="calm"), None)], False,
+        request={"model": "q"}, build_id=bid, schema=m._schema_for(bid),
+    )
+    assert out["metadata_evidence"].get("mood") is None
+    assert out["metadata_field_status"]["mood"]["reason_code"] == "evidence_failed"
+    assert any("no source document identity" in message for message in caplog.messages)
+
+
+def test_evidence_mode_defaults_to_with_value_and_rejects_unknown_values(monkeypatch):
+    import dataclasses
+
+    from app import config
+    from app import evidence_suggestions as es
+
+    def configured(value):
+        monkeypatch.setattr(config, "settings", dataclasses.replace(config.settings, metadata_evidence_mode=value))
+
+    configured("with_value")
+    assert es.evidence_mode({}) == "with_value"
+    assert es.evidence_mode({"evidence_mode": "backfill"}) == "backfill"
+    assert es.evidence_mode({"evidence_mode": "nonsense"}) == "with_value"
+    configured("backfill")
+    assert es.evidence_mode(None) == "backfill"
+    configured("garbage")
+    assert es.evidence_mode(None) == "with_value"
 
 
 def test_a_field_the_schema_leaves_out_cannot_be_set_by_the_model_or_a_person(tmp_path):
@@ -130,6 +860,35 @@ def test_review_fields_come_from_the_schema(tmp_path):
     assert "stance" in default._profile_for(dbid)["review_metadata_fields"]
 
 
+def test_record_review_state_prefers_explicit_schema_over_stale_profile():
+    from app.corpus_review_state import _sync_record_metadata_state
+    from app.field_assertions import create_unresolved_assertion
+
+    schema = notes_schema()
+    record = {
+        "record_id": "r-schema-review",
+        "record_revision": 1,
+        "text": "A calm passage.",
+        "metadata_field_status": {},
+    }
+    create_unresolved_assertion(
+        record,
+        "mood",
+        schema=schema,
+        method="test",
+        reason="Needs a reviewer decision.",
+    )
+
+    _sync_record_metadata_state(
+        record,
+        {"required_metadata_fields": [], "review_metadata_fields": ["speaker"]},
+        schema,
+    )
+
+    assert record["metadata_review_fields"] == ["mood"]
+    assert "speaker" not in record["metadata_review_fields"]
+
+
 def test_a_reported_position_needs_a_position_holder_only_when_the_schema_has_one():
     profile_without = {"schema_field_names": ["region_type", "mood"]}
     profile_with = {"schema_field_names": ["region_type", "position_holder"]}
@@ -151,3 +910,19 @@ def test_a_schema_group_can_be_previewed_without_a_build(tmp_path):
     m._interactive_llm_request = lambda build_id, override=None: {}  # type: ignore[method-assign]
     ran = m.preview_schema_group(notes_schema(), "discourse", "It was a calm evening.", {"model": "q"}, run=True)
     assert ran["ran"] is True and ran["answer"]["metadata"]["mood"] == "calm"
+
+
+def test_validating_audio_records_does_not_require_pdf_pages():
+    blocks = [{"block_id": "a1", "text": "hello", "locator_kind": "time", "start": 0.0, "end": 2.0}]
+    records = [{"record_id": "r", "text": "hello", "source_block_ids": ["a1"], "page_start": None, "page_end": None, "pdf_pages": []}]
+    result = cb.PdfCorpusBuildManager.validate_records(blocks, records, dict(cb.CORPUS_PROFILES[cb.PROFILE_VERSION]))
+    assert not result.get("page_errors") and not result.get("printed_page_errors")
+
+
+def test_audio_blocks_without_a_valid_time_range_are_mapping_errors():
+    profile = dict(cb.CORPUS_PROFILES[cb.PROFILE_VERSION])
+    record = {"record_id": "r", "text": "hello", "source_block_ids": ["a1"], "page_start": None, "page_end": None, "pdf_pages": []}
+    bad = [{"block_id": "a1", "text": "hello", "locator_kind": "time", "start": 3.0, "end": 1.0}]
+    assert "r" in cb.PdfCorpusBuildManager.validate_records(bad, [record], profile)["page_mapping_errors"]
+    unlocated = [{"block_id": "a1", "text": "hello"}]
+    assert "r" in cb.PdfCorpusBuildManager.validate_records(unlocated, [record], profile)["page_mapping_errors"]

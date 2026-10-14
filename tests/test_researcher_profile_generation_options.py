@@ -1,51 +1,45 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Server-side normalization of researcher provider-profile generation options.
 
 Why: researcher accounts run RAG through an administrator-approved provider profile.
-Its generation options are stored as strings (from forms or JSON) and must be
-converted to real types on the server so the browser can never supply or alter them.
-How: imports the helper straight from app.main and feeds it string values.
+Its generation options may be stored as strings and must be converted to real types
+on the server so the browser cannot supply or alter them.
 """
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-ROOT=Path(__file__).resolve().parents[1]
-
-
+from app.provider_profile_options import profile_generation_options
 
 
 def test_researcher_static_profile_generation_is_normalized_server_side():
-    """Strings from a stored profile become typed generation options.
+    """Stored profile strings become correctly typed generation options."""
+    values = profile_generation_options(
+        {
+            "num_ctx": "8192",
+            "temperature": "0.2",
+            "think": "false",
+            "extra_options": '{"repeat_last_n": 128}',
+            "keep_alive": "10m",
+        }
+    )
 
-    What: "8192" -> int, "0.2" -> float, "false" -> bool, a JSON string -> dict, and
-    "10m" stays a string (Ollama's keep_alive duration).
-    Why: Ollama rejects or misinterprets numeric options sent as strings, and an
-    unparsed extra_options string would otherwise be silently ignored.
-    """
-    if str(ROOT/"api") not in sys.path:
-        sys.path.insert(0,str(ROOT/"api"))
-    from app.main import _profile_generation_options
-    values=_profile_generation_options({
-        "num_ctx":"8192",
-        "temperature":"0.2",
-        "think":"false",
-        "extra_options":'{"repeat_last_n": 128}',
-        "keep_alive":"10m",
-    })
     assert values["num_ctx"] == 8192
     assert values["temperature"] == 0.2
     assert values["think"] is False
-    assert values["extra_options"] == {"repeat_last_n":128}
+    assert values["extra_options"] == {"repeat_last_n": 128}
     assert values["keep_alive"] == "10m"
-
-
-
-
-
-
-
-
-
-

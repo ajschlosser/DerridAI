@@ -1,4 +1,23 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Full backup and restore: download a zip of the browser workspace plus every Chroma collection, and load one back.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -11,11 +30,11 @@ type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-
 type Helper =
   | "deleteWorkspaceDatabase"
   | "idbPut"
-  | "openMessageModal"
   | "persistFileNow"
   | "providerProfiles"
   | "serializableFile"
-  | "toast"
+  | "tr"
+  | "trf"
   | "workspacePrefs";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -24,11 +43,11 @@ export function createBackupWorkspace(deps: Deps) {
     state,
     deleteWorkspaceDatabase,
     idbPut,
-    openMessageModal,
     persistFileNow,
     providerProfiles,
     serializableFile,
-    toast,
+    tr,
+    trf,
     workspacePrefs,
   } = deps;
   function backupContainsCredentials() {
@@ -39,29 +58,29 @@ export function createBackupWorkspace(deps: Deps) {
       ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeJobs.length) {
-      return toast(
-        `Wait for or cancel ${activeJobs.length} active background operation${activeJobs.length === 1 ? "" : "s"} before backing up.`,
-      );
+      return toast(trf("runtime.toast.wait_before_backup", { count: activeJobs.length }), {
+        tone: "warning",
+      });
     }
     const hasCredentials = backupContainsCredentials();
     const warning = hasCredentials
-      ? "This full backup contains provider API keys/credentials configured in DerridAI. Treat the ZIP as sensitive. Continue?"
-      : "Create a full DerridAI backup containing all loaded JSONL records, configuration, audit history, UI workspace state, the current PDF, and every Chroma collection with its stored embeddings?";
+      ? tr("settings.backup_keys_warning")
+      : tr("settings.backup_confirm_message");
     if (
       !confirmed &&
-      !(await openMessageModal({
-        title: "Create full backup?",
+      !(await openMessageDialog({
+        title: tr("settings.backup_confirm_title"),
         message: warning,
         tone: hasCredentials ? "danger" : "info",
-        confirmLabel: "Create backup",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("settings.backup"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return;
     const button = document.querySelector<HTMLButtonElement>("#downloadFullBackup");
     if (button) {
       button.disabled = true;
-      button.textContent = "Creating backup…";
+      button.textContent = tr("runtime.backup.creating");
     }
     try {
       for (const file of state.files) await persistFileNow(file);
@@ -126,14 +145,16 @@ export function createBackupWorkspace(deps: Deps) {
       anchor.click();
       anchor.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast(`Full backup created · ${(blob.size / 1024 / 1024).toFixed(1)} MB`);
+      toast(trf("runtime.toast.backup_created", { size: (blob.size / 1024 / 1024).toFixed(1) }), {
+        tone: "success",
+      });
     } catch (error: Any) {
-      toast(`Backup failed: ${error.message}`);
+      toast(trf("runtime.toast.backup_failed", { detail: error.message }), { tone: "danger" });
     } finally {
       const current = document.querySelector<HTMLButtonElement>("#downloadFullBackup");
       if (current) {
         current.disabled = false;
-        current.textContent = "Download full backup";
+        current.textContent = tr("runtime.backup.download");
       }
     }
   }
@@ -143,23 +164,22 @@ export function createBackupWorkspace(deps: Deps) {
       ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeJobs.length)
-      return toast("Cancel or wait for all background operations before restoring a backup.");
+      return toast(tr("runtime.toast.wait_before_restore"), { tone: "warning" });
     if (
       !confirmed &&
-      !(await openMessageModal({
-        title: "Restore full DerridAI backup?",
-        message:
-          "This replaces the current browser workspace and every collection in the active Chroma database. The restore is validated first and Chroma uses a rollback snapshot if restoration fails.",
+      !(await openMessageDialog({
+        title: tr("runtime.backup.restore_title"),
+        message: tr("runtime.backup.restore_message"),
         tone: "danger",
-        confirmLabel: "Restore backup",
-        cancelLabel: "Cancel",
+        confirmLabel: tr("runtime.backup.restore_confirm"),
+        cancelLabel: tr("ui.cancel"),
       }))
     )
       return;
     const button = document.querySelector<HTMLButtonElement>("#restoreFullBackup");
     if (button) {
       button.disabled = true;
-      button.textContent = "Restoring…";
+      button.textContent = tr("runtime.backup.restoring");
     }
     try {
       const form = new FormData();
@@ -179,7 +199,7 @@ export function createBackupWorkspace(deps: Deps) {
         !workspace.prefs ||
         typeof workspace.prefs !== "object"
       )
-        throw new Error("Backup restore returned an invalid workspace.");
+        throw new Error(tr("runtime.toast.restore_invalid"));
 
       await deleteWorkspaceDatabase();
       state.storageReady = false;
@@ -215,14 +235,16 @@ export function createBackupWorkspace(deps: Deps) {
           });
         }
       }
-      toast(`Restore complete · ${payload.chroma?.count || 0} Chroma collections restored`);
+      toast(trf("runtime.toast.restore_complete", { count: payload.chroma?.count || 0 }), {
+        tone: "success",
+      });
       setTimeout(() => location.reload(), 500);
     } catch (error: Any) {
-      toast(`Restore failed: ${error.message}`);
+      toast(trf("runtime.toast.restore_failed", { detail: error.message }), { tone: "danger" });
       const current = document.querySelector<HTMLButtonElement>("#restoreFullBackup");
       if (current) {
         current.disabled = false;
-        current.textContent = "Load from backup";
+        current.textContent = tr("runtime.backup.load_from");
       }
     }
   }

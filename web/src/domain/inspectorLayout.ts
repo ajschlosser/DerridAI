@@ -1,4 +1,25 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { assertionFieldsByTab } from "./fieldAssertions";
+import { metadataRegistryGroups, type MetadataRegistryField } from "./metadataFieldRegistry";
+import type { MetadataSchema } from "../api/metadataSchemas";
+
 const STORAGE_KEY = "derridai.record.inspectorLayout.v1";
 
 export type InspectorTabKey = "overview" | "provenance" | "indexing";
@@ -58,6 +79,66 @@ export const INSPECTOR_FIELD_CATALOG: Record<InspectorTabKey, string[]> = {
   ],
 };
 
+const SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS = [
+  "document_author",
+  "edition",
+  "year",
+  "publication_year",
+  "publisher",
+  "translator",
+  "document_language",
+  "original_language",
+  "__pages",
+  "needs_review",
+  "review_reason",
+];
+
+function inspectorTabForSchemaField(field: MetadataRegistryField): InspectorTabKey {
+  const semanticId = String(field.semanticCompatibilityId || "");
+  const group = String(field.group || "").toLowerCase();
+  if (semanticId.startsWith("derridai.indexing.") || group.includes("index")) return "indexing";
+  if (
+    semanticId.startsWith("derridai.quotation.") ||
+    group.includes("quotation") ||
+    ["derridai.region_type", "derridai.primary_text"].includes(semanticId)
+  )
+    return "overview";
+  if (field.scope === "corpus") return "overview";
+  return "provenance";
+}
+
+function schemaInspectorCatalog(schema: MetadataSchema): Record<InspectorTabKey, string[]> {
+  const out: Record<InspectorTabKey, string[]> = {
+    overview: [...SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS],
+    provenance: [],
+    indexing: [],
+  };
+  for (const group of metadataRegistryGroups(schema)) {
+    for (const item of group.fields) {
+      if (item.role === "operational" || item.scope !== "record") continue;
+      out[inspectorTabForSchemaField(item)].push(item.name);
+    }
+  }
+  return {
+    overview: [...new Set(out.overview)],
+    provenance: [...new Set(out.provenance)],
+    indexing: [...new Set(out.indexing)],
+  };
+}
+
+export function inspectorFieldCatalog(
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): Record<InspectorTabKey, string[]> {
+  if (schema) return schemaInspectorCatalog(schema);
+  const asserted = assertionFieldsByTab(record || {});
+  return {
+    overview: [...new Set([...INSPECTOR_FIELD_CATALOG.overview, ...asserted.overview])],
+    provenance: [...new Set([...INSPECTOR_FIELD_CATALOG.provenance, ...asserted.provenance])],
+    indexing: [...new Set([...INSPECTOR_FIELD_CATALOG.indexing, ...asserted.indexing])],
+  };
+}
+
 function uid() {
   return typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
@@ -72,8 +153,38 @@ function field(name: string): InspectorLayoutRow {
   return { id: uid(), kind: "field", field: name };
 }
 
-export function defaultInspectorLayout(): InspectorLayout {
-  return {
+function schemaInspectorLayout(schema: MetadataSchema): InspectorLayout {
+  const layout: InspectorLayout = {
+    overview: [heading("Record context"), ...SCHEMA_OVERVIEW_COMPATIBILITY_FIELDS.map(field)],
+    provenance: [],
+    indexing: [],
+  };
+  for (const group of metadataRegistryGroups(schema)) {
+    const byTab: Record<InspectorTabKey, MetadataRegistryField[]> = {
+      overview: [],
+      provenance: [],
+      indexing: [],
+    };
+    for (const item of group.fields) {
+      if (item.role === "operational" || item.scope !== "record") continue;
+      byTab[inspectorTabForSchemaField(item)].push(item);
+    }
+    for (const tab of INSPECTOR_TABS) {
+      if (!byTab[tab].length) continue;
+      layout[tab].push(heading(group.label || group.key));
+      layout[tab].push(...byTab[tab].map((item) => field(item.name)));
+    }
+  }
+  return layout;
+}
+
+export function defaultInspectorLayout(
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): InspectorLayout {
+  if (schema) return schemaInspectorLayout(schema);
+  const asserted = assertionFieldsByTab(record || {});
+  const base: InspectorLayout = {
     overview: [
       heading("Record context"),
       field("document_author"),
@@ -119,10 +230,30 @@ export function defaultInspectorLayout(): InspectorLayout {
       field("works_referenced"),
     ],
   };
+  const used = new Set(
+    Object.values(base)
+      .flat()
+      .filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field")
+      .map((row) => row.field),
+  );
+  const appendMissing = (tab: InspectorTabKey) => {
+    const missing = asserted[tab].filter((name) => !used.has(name));
+    if (!missing.length) return;
+    base[tab].push(...missing.map(field));
+  };
+  appendMissing("overview");
+  appendMissing("provenance");
+  appendMissing("indexing");
+  return base;
 }
 
-export function normalizeInspectorLayout(raw: unknown): InspectorLayout {
-  const fallback = defaultInspectorLayout();
+export function normalizeInspectorLayout(
+  raw: unknown,
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): InspectorLayout {
+  const fallback = defaultInspectorLayout(record, schema);
+  const catalog = inspectorFieldCatalog(record, schema);
   if (!raw || typeof raw !== "object") return fallback;
   const source = raw as Record<string, unknown>;
   const next = { ...fallback };
@@ -135,12 +266,16 @@ export function normalizeInspectorLayout(raw: unknown): InspectorLayout {
       if (!item || typeof item !== "object") continue;
       const row = item as Record<string, unknown>;
       if (row.kind === "heading") {
-        cleaned.push({ id: String(row.id || uid()), kind: "heading", label: String(row.label || "").trim() || "Section" });
+        cleaned.push({
+          id: String(row.id || uid()),
+          kind: "heading",
+          label: String(row.label || "").trim() || "Section",
+        });
         continue;
       }
       if (row.kind === "field") {
         const name = String(row.field || "");
-        if (!name || seen.has(name) || !INSPECTOR_FIELD_CATALOG[tab].includes(name)) continue;
+        if (!name || seen.has(name) || !catalog[tab].includes(name)) continue;
         seen.add(name);
         cleaned.push({ id: String(row.id || uid()), kind: "field", field: name });
       }
@@ -150,7 +285,11 @@ export function normalizeInspectorLayout(raw: unknown): InspectorLayout {
   return next;
 }
 
-export function moveInspectorRow(rows: InspectorLayoutRow[], from: number, to: number): InspectorLayoutRow[] {
+export function moveInspectorRow(
+  rows: InspectorLayoutRow[],
+  from: number,
+  to: number,
+): InspectorLayoutRow[] {
   if (from === to || from < 0 || to < 0 || from >= rows.length || to >= rows.length) return rows;
   const next = [...rows];
   const [item] = next.splice(from, 1);
@@ -158,7 +297,9 @@ export function moveInspectorRow(rows: InspectorLayoutRow[], from: number, to: n
   return next;
 }
 
-export function groupInspectorRows(rows: InspectorLayoutRow[]): Array<{ heading: string | null; fields: string[] }> {
+export function groupInspectorRows(
+  rows: InspectorLayoutRow[],
+): Array<{ heading: string | null; fields: string[] }> {
   const sections: Array<{ heading: string | null; fields: string[] }> = [];
   let current: { heading: string | null; fields: string[] } = { heading: null, fields: [] };
   for (const row of rows) {
@@ -173,22 +314,45 @@ export function groupInspectorRows(rows: InspectorLayoutRow[]): Array<{ heading:
   return sections;
 }
 
-export function unusedInspectorFields(tab: InspectorTabKey, rows: InspectorLayoutRow[]): string[] {
-  const used = new Set(rows.filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field").map((row) => row.field));
-  return INSPECTOR_FIELD_CATALOG[tab].filter((name) => !used.has(name));
+export function unusedInspectorFields(
+  tab: InspectorTabKey,
+  rows: InspectorLayoutRow[],
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): string[] {
+  const used = new Set(
+    rows
+      .filter((row): row is { id: string; kind: "field"; field: string } => row.kind === "field")
+      .map((row) => row.field),
+  );
+  return inspectorFieldCatalog(record, schema)[tab].filter((name) => !used.has(name));
 }
 
-export function loadInspectorLayout(): InspectorLayout {
+export function loadInspectorLayout(
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+): InspectorLayout {
   try {
-    return normalizeInspectorLayout(JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"));
+    return normalizeInspectorLayout(
+      JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"),
+      record,
+      schema,
+    );
   } catch {
-    return defaultInspectorLayout();
+    return defaultInspectorLayout(record, schema);
   }
 }
 
-export function saveInspectorLayout(layout: InspectorLayout) {
+export function saveInspectorLayout(
+  layout: InspectorLayout,
+  record?: Record<string, unknown> | null,
+  schema: MetadataSchema | null = null,
+) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeInspectorLayout(layout)));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(normalizeInspectorLayout(layout, record, schema)),
+    );
   } catch {
     /* browser storage may be unavailable */
   }

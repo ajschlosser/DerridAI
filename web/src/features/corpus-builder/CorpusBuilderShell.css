@@ -1,0 +1,94 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+/*
+ * Corpus Builder shell: the parent frame plus the Review pane content the parent renders into
+ * CorpusReviewWorkspace's slots (slot content keeps the parent's scope). Workspace layout lives beside
+ * the workspace components: setup, build, publish and the review frame/grid/splitters/fix banner.
+ */
+.corpus-builder {
+  padding: 20px 22px 32px;
+  display: grid;
+  gap: 14px;
+}
+/* One outer geometry for Setup, Build and Publish; Review's three-pane frame is its own surface. */
+.corpus-workspace-surface {
+  width: min(100%, 1520px);
+  min-width: 0;
+  margin-inline: auto;
+}
+.status-region:focus {
+  outline: none;
+}
+.eyebrow {
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+.help {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+.inspector-empty {
+  padding: 26px 14px;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+.btn:focus-visible,
+.control:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 2px;
+}
+.queue-toggle {
+  font-size: 0.8125rem;
+}
+
+.review-inspector-panel {
+  min-width: 0;
+  padding: 12px 14px 16px;
+}
+.review-inspector-panel > .resolution-panel {
+  border-top: 0;
+  background: transparent;
+}
+.review-inspector-panel > .record-data {
+  margin: 16px -14px -16px;
+  padding: 10px 12px;
+  background: var(--surface-card);
+}
+
+/* Accessible type floor for dense Corpus Builder controls. */
+.corpus-builder small,
+.corpus-builder label,
+.corpus-builder summary,
+.corpus-builder code {
+  font-size: 0.8125rem !important;
+  line-height: 1.4;
+}
+.corpus-builder :where(.eyebrow, .help, .record-review-head p) {
+  font-size: 0.8125rem !important;
+  line-height: 1.4;
+}
+.corpus-builder :where(.metadata-json, .inspector-empty) {
+  font-size: 0.8125rem !important;
+  line-height: 1.45;
+}

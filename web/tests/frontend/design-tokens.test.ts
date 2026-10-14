@@ -1,21 +1,44 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { readGlobalCss } from "./helpers/global-css";
 
 // The tokens are CSS, so the contrast guarantees are checked against the CSS itself. If a token
 // value changes, this fails before an unreadable colour pair ships.
 const tokens = readFileSync("src/styles/tokens.css", "utf8");
-const styles = readFileSync("src/style.css", "utf8");
+const styles = readGlobalCss();
+const providerProfileSelect = readFileSync("src/components/ProviderProfileSelect.vue", "utf8");
 
-function block(css: string, opener: string): string {
-  const start = css.indexOf(opener);
-  if (start < 0) throw new Error(`No block for ${opener}`);
-  const open = css.indexOf("{", start);
+function block(css: string, selector: string): string {
+  const start = css.indexOf(selector);
+  if (start < 0) throw new Error(`No block for ${selector}`);
+  const open = css.indexOf("{", start + selector.length);
+  if (open < 0 || css.slice(start + selector.length, open).trim()) {
+    throw new Error(`No block for ${selector}`);
+  }
   let depth = 0;
   for (let i = open; i < css.length; i++) {
     if (css[i] === "{") depth++;
     if (css[i] === "}" && --depth === 0) return css.slice(open + 1, i);
   }
-  throw new Error(`Unclosed block for ${opener}`);
+  throw new Error(`Unclosed block for ${selector}`);
 }
 function value(css: string, name: string): string {
   const match = css.match(new RegExp(`${name}\\s*:\\s*([^;]+);`));
@@ -40,12 +63,12 @@ const contrast = (a: RGB, b: RGB) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-const light = block(tokens, ":root {");
-const dark = block(tokens, 'html[data-color-scheme="dark"] {');
-const darkNeutrals = block(styles, 'html[data-color-scheme="dark"]{');
+const light = block(tokens, ":root");
+const dark = block(tokens, 'html[data-color-scheme="dark"]');
+const darkNeutrals = block(styles, 'html[data-color-scheme="dark"]');
 const surfaces = { light: hex("#ffffff"), dark: hex(value(darkNeutrals, "--card")) };
 const themes = ["green", "blue", "slate"].map((name) => {
-  const rule = block(styles, `[data-ui-theme="${name}"]{`);
+  const rule = block(styles, `[data-ui-theme="${name}"]`);
   return {
     name,
     accent: hex(value(rule, "--ui-accent")),
@@ -148,5 +171,16 @@ describe("unified workbench contract", () => {
     ]) {
       expect(light).toMatch(new RegExp(`--${name}\\s*:`));
     }
+  });
+});
+
+describe("provider profile surfaces", () => {
+  it("uses semantic theme tokens instead of light-only warning and surface fallbacks", () => {
+    expect(providerProfileSelect).toContain("var(--surface-card)");
+    expect(providerProfileSelect).toContain("var(--surface-selected)");
+    expect(providerProfileSelect).toContain("var(--tone-warn-bg)");
+    expect(providerProfileSelect).toContain("var(--tone-warn-fg)");
+    expect(providerProfileSelect).not.toMatch(/--warning-(?:soft|line)/);
+    expect(providerProfileSelect).not.toMatch(/#fff8e6|#17233b|#64748b|#e2e8f0/);
   });
 });

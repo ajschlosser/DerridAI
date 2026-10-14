@@ -1,6 +1,23 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-import { esc } from "./html";
+import { openMessageDialog } from "../composables/messageDialog";
+import { toast } from "../composables/notifications";
 
 // Whether a record already exists in a vector database (presence), and the pending-upsert queue and command that syncs
 // records into one. Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as
@@ -22,24 +39,21 @@ type Helper =
   | "hasCorpusDb"
   | "localRecordKey"
   | "notifyVectorStoresChanged"
-  | "openMessageModal"
   | "persistPrefs"
   | "recordFingerprint"
   | "refreshOperationsPanelOnly"
-  | "reviewItemFromKey"
   | "selectedReviewItems"
   | "startJobPolling"
   | "storeReceipt"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
   | "trf"
   | "upsertAuditDelta"
-  | "upsertRecordPayload"
-  | "workIndex";
+  | "upsertRecordPayload";
 type Deps = { state: Loose; corpusCache: Loose } & Record<Helper, Fn>;
 
 let pendingUpsertCache: Any = { key: "", at: 0, rows: [] };
+const suppressionLoads = new Set<string>();
 export function createDbPresenceUpsert(deps: Deps) {
   const {
     state,
@@ -53,24 +67,37 @@ export function createDbPresenceUpsert(deps: Deps) {
     hasCorpusDb,
     localRecordKey,
     notifyVectorStoresChanged,
-    openMessageModal,
     persistPrefs,
     recordFingerprint,
     refreshOperationsPanelOnly,
-    reviewItemFromKey,
     selectedReviewItems,
     startJobPolling,
     storeReceipt,
     syncJobProgressToasts,
-    toast,
     tr,
     trf,
     upsertAuditDelta,
     upsertRecordPayload,
-    workIndex,
   } = deps;
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
+  function loadServerSuppressions(store: string) {
+    if (!store) return;
+    void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`)
+      .then((payload: Any) => {
+        const serverSuppressions = payload?.suppressions || {};
+        const mapped: Record<string, string> = {};
+        for (const row of allRows()) {
+          const recordId = String(row.record?.record_id || "");
+          if (!recordId || !(recordId in serverSuppressions)) continue;
+          mapped[localRecordKey(row.file, row.index)] = String(serverSuppressions[recordId]);
+        }
+        state.upsertIgnored[store] = { ...(state.upsertIgnored[store] || {}), ...mapped };
+        pendingUpsertCache.key = "";
+        persistPrefs();
+      })
+      .catch(() => {
+        // Presence remains authoritative; a failed suppression refresh must not hide rows.
+      });
+  }
   function recordDbStatus(file: Any, index: Any, record: Any, store = state.activeStore) {
     if (!hasCorpusDb()) return { kind: "none", label: "No database", title: dbUnavailableReason() };
     if (!store)
@@ -188,33 +215,20 @@ export function createDbPresenceUpsert(deps: Deps) {
         state.storePresenceCheckedAt[store][key] = now;
       }
       pendingUpsertCache.key = "";
-      updateDbStatusElements();
+      state.presenceVersion = Number(state.presenceVersion || 0) + 1;
     } catch (error: Any) {
       console.warn("Could not refresh Chroma presence", error);
     }
-  }
-  function updateDbStatusElements() {
-    document.querySelectorAll("[data-db-status-key]").forEach((el: Any) => {
-      const item = reviewItemFromKey(el.dataset.dbStatusKey);
-      if (!item) return;
-      const info = recordDbStatus(item.file, item.index, item.file.records[item.index]);
-      el.className = `db-status ${info.kind}`;
-      el.title = info.title;
-      el.innerHTML = `<i></i>${esc(info.label)}`;
-    });
-    document.querySelectorAll("[data-work-status]").forEach((el: Any) => {
-      const work = el.dataset.workStatus;
-      const rows = workIndex().get(work)?.rows || [];
-      const info = workDbStatus(rows, work);
-      el.className = `db-status ${info.kind}`;
-      el.innerHTML = `<i></i>${esc(info.label)}`;
-    });
   }
   function ignoredFingerprint(store: Any, file: Any, index: Any) {
     return state.upsertIgnored?.[store]?.[localRecordKey(file, index)] || null;
   }
   function pendingUpsertRows() {
     if (!hasCorpusDb() || !state.activeStore) return [];
+    if (!suppressionLoads.has(state.activeStore)) {
+      suppressionLoads.add(state.activeStore);
+      loadServerSuppressions(state.activeStore);
+    }
     const dirtyCount = state.files.reduce(
       (sum: Any, file: Any) => sum + (file.dirty?.size || 0),
       0,
@@ -270,8 +284,38 @@ export function createDbPresenceUpsert(deps: Deps) {
     const store = state.activeStore;
     if (!store) return;
     if (!state.upsertIgnored[store]) state.upsertIgnored[store] = {};
-    state.upsertIgnored[store][localRecordKey(row.file, row.index)] = recordFingerprint(row.record);
-    persistPrefs();
+    const fingerprint = recordFingerprint(row.record);
+    const recordId = String(row.record?.record_id || "");
+    if (!recordId) {
+      toast(
+        tr(
+          "vector.sync_suppression_failed",
+          "Could not save this queue decision; the item remains available.",
+        ),
+        { tone: "danger" },
+      );
+      return;
+    }
+    state.upsertIgnored[store][localRecordKey(row.file, row.index)] = fingerprint;
+    void api(`/api/stores/${encodeURIComponent(store)}/sync-suppressions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ record_id: recordId, fingerprint }),
+    })
+      .then(() => {
+        persistPrefs();
+      })
+      .catch(() => {
+        delete state.upsertIgnored[store][localRecordKey(row.file, row.index)];
+        toast(
+          tr(
+            "vector.sync_suppression_failed",
+            "Could not save this queue decision; the item remains available.",
+          ),
+          { tone: "danger" },
+        );
+        persistPrefs();
+      });
   }
   async function buildUpsertItems(rows: Any, store: Any, { yieldEvery = 0 } = {}) {
     const idCounts = new Map();
@@ -308,39 +352,36 @@ export function createDbPresenceUpsert(deps: Deps) {
   }
   async function upsertRows(rows: Any, labelText = "records", { largeSyncConfirmed = false } = {}) {
     if (!hasCorpusDb())
-      return openMessageModal({
-        title: "Vector database required",
+      return openMessageDialog({
+        title: tr("records.toast.vector_required"),
         message: dbUnavailableReason(),
-        confirmLabel: "OK",
+        confirmLabel: tr("ui.ok"),
       });
-    if (!state.activeStore) return toast("Select a Chroma collection first");
-    if (!rows.length) return toast("No records selected for upsert");
+    if (!state.activeStore)
+      return toast(tr("records.toast.select_collection"), { tone: "warning" });
+    if (!rows.length) return toast(tr("runtime.toast.no_upsert_rows"), { tone: "warning" });
     const activeUpsert = state.jobs.find(
       (job: Any) =>
         job.type === "upsert" && ["queued", "running", "cancelling"].includes(job.status),
     );
     if (activeUpsert)
-      return openMessageModal({
-        title: tr("operations.vector_sync_active_title", "A vector sync is already active"),
-        message: trf(
-          "operations.vector_sync_active_help",
-          "{label} must finish or be cancelled before another collection build starts.",
-          { label: activeUpsert.label || activeUpsert.store_name || "The current sync" },
-        ),
-        confirmLabel: "OK",
+      return openMessageDialog({
+        title: tr("operations.vector_sync_active_title"),
+        message: trf("operations.vector_sync_active_help", {
+          label: activeUpsert.label || activeUpsert.store_name || "The current sync",
+        }),
+        confirmLabel: tr("ui.ok"),
       });
     const store = state.activeStore;
     await refreshPresenceForRows(rows, { force: true });
     if (rows.length > 500 && !largeSyncConfirmed) {
-      const approved = await openMessageModal({
-        title: tr("operations.large_sync_background_title", "Build collection in the background?"),
-        message: trf(
-          "operations.large_sync_background_help",
-          "{count} records will be prepared once, then DerridAI will build and validate the collection as a background operation. You may continue working in this tab while the build runs.",
-          { count: rows.length.toLocaleString() },
-        ),
-        confirmLabel: tr("operations.start_background_build", "Start background build"),
-        cancelLabel: tr("ui.cancel", "Cancel"),
+      const approved = await openMessageDialog({
+        title: tr("operations.large_sync_background_title"),
+        message: trf("operations.large_sync_background_help", {
+          count: rows.length.toLocaleString(),
+        }),
+        confirmLabel: tr("operations.start_background_build"),
+        cancelLabel: tr("ui.cancel"),
       });
       if (!approved) return false;
     }
@@ -383,19 +424,16 @@ export function createDbPresenceUpsert(deps: Deps) {
       state.jobs = [job, ...state.jobs.filter((existing: Any) => existing.id !== job.id)];
       syncJobProgressToasts();
       startJobPolling();
-      toast(
-        trf(
-          "operations.vector_build_queued",
-          "Queued {count} records for background build of {store}",
-          { count: rows.length.toLocaleString(), store },
-        ),
-        { tone: "success" },
-      );
+      toast(trf("operations.vector_build_queued", { count: rows.length.toLocaleString(), store }), {
+        tone: "success",
+      });
       notifyVectorStoresChanged();
       if (state.view === "home") refreshOperationsPanelOnly();
       return true;
     } catch (error: Any) {
-      toast(`Could not start vector build: ${error.message}`);
+      toast(trf("runtime.toast.vector_build_start_failed", { detail: error.message }), {
+        tone: "danger",
+      });
       return false;
     }
   }
@@ -410,7 +448,6 @@ export function createDbPresenceUpsert(deps: Deps) {
     recordDbStatus,
     workDbStatus,
     refreshPresenceForRows,
-    updateDbStatusElements,
     ignoredFingerprint,
     pendingUpsertRows,
     pendingChangesForRow,

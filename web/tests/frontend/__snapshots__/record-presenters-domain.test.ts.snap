@@ -1,3 +1,21 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`record presenters > builds dashboard and work insight fragments 1`] = `"<div class="dashboard-pie-layout"><div class="dashboard-pie" style="background:conic-gradient(var(--chart-1) 0.00% 75.00%,var(--chart-2) 75.00% 100.00%)" role="img" aria-label="T"></div><div class="dashboard-pie-legend"><button type="button" data-dashboard-work="a"><i style="background:var(--chart-1)"></i><span title="a">a</span><b>75%</b><small>3 V</small></button><button type="button" data-dashboard-work="b"><i style="background:var(--chart-2)"></i><span title="b">b</span><b>25%</b><small>1 V</small></button></div></div>"`;
@@ -7,6 +25,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "persons",
     "format": [Function],
+    "heading": "Top 5 persons",
     "id": "persons",
     "title": "Top 5 persons mentioned in the work",
     "type": "bars",
@@ -16,6 +35,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "concepts",
     "format": [Function],
+    "heading": "Top 5 concepts",
     "id": "concepts",
     "title": "Top 5 concepts mentioned in the work",
     "type": "bars",
@@ -25,6 +45,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "topics",
     "format": [Function],
+    "heading": "Top 5 topics",
     "id": "topics",
     "title": "Top 5 topics in the work",
     "type": "bars",
@@ -43,6 +64,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "target",
     "format": [Function],
+    "heading": "Top 5 discourse targets",
     "id": "targets",
     "title": "Top 5 discourse targets in the work",
     "type": "bars",
@@ -52,6 +74,7 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   {
     "field": "discourse_role",
     "format": [Function],
+    "heading": "Top discourse roles",
     "id": "roles",
     "title": "Top discourse roles as percentage of recorded roles",
     "type": "pie",
@@ -61,8 +84,6 @@ exports[`record presenters > builds dashboard and work insight fragments 2`] = `
   },
 ]
 `;
-
-exports[`record presenters > builds dashboard and work insight fragments 3`] = `"<section class="work-insights-panel" aria-label="Work insights"><div class="work-insights-heading"><div><span class="section-label">Work insights</span><h2>Metadata patterns in this work</h2></div><p>Counts come from populated metadata on the loaded records, not from the vector index. Empty cards mean this work has no usable values for that field yet.</p></div><div class="work-insights-grid"><article class="work-insight-card "><h3>Top 5 persons mentioned</h3><ol><li class="note">No populated metadata values yet.</li></ol></article><article class="work-insight-card "><h3>Top 5 concepts mentioned</h3><ol><li class="note">No populated metadata values yet.</li></ol></article><article class="work-insight-card "><h3>Top 5 topics</h3><ol><li><button type="button" data-work-insight-field="topics" data-work-insight-value="a"><span>a</span><b>1</b></button></li><li><button type="button" data-work-insight-field="topics" data-work-insight-value="b"><span>b</span><b>1</b></button></li></ol></article><article class="work-insight-card "><h3>Top 5 discourse targets</h3><ol><li class="note">No populated metadata values yet.</li></ol></article><article class="work-insight-card work-insight-card-pie"><h3>Top discourse roles as percentage of recorded roles</h3><p class="note">No populated metadata values yet.</p></article></div></section>"`;
 
 exports[`record presenters > previews RAG evidence 1`] = `
 "<details class="rag-evidence-card" >

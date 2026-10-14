@@ -1,0 +1,72 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# The paged, filtered review queue (REST: GET /api/pdf/corpus-builds/{id}/records). Rows only:
+# full Records are read with CorpusReviewRecords once a row is opened.
+query CorpusReviewQueue(
+  $build_id: String!
+  $offset: Int = 0
+  $limit: Int = 50
+  $cursor: String
+  $direction: String = "forward"
+  $needs_review: Boolean
+  $disposition: String
+  $metadata_incomplete: Boolean
+  $source_problem: Boolean
+  $review_queue: String
+  $query: String = ""
+) {
+  corpus_build(build_id: $build_id) {
+    review_queue(
+      offset: $offset
+      limit: $limit
+      cursor: $cursor
+      direction: $direction
+      needs_review: $needs_review
+      disposition: $disposition
+      metadata_incomplete: $metadata_incomplete
+      source_problem: $source_problem
+      review_queue: $review_queue
+      query: $query
+    ) {
+      items {
+        ...CorpusQueueRowFields
+      }
+      total
+      offset
+      limit
+      topology_count
+      data_generation
+      topology_generation
+      next_cursor
+      previous_cursor
+      has_next_page
+      has_previous_page
+      queue_counts {
+        all
+        ready
+        preparing
+        issues
+        metadata
+        topology
+        source
+        accepted
+        rejected
+        pending
+      }
+    }
+  }
+}

@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -13,9 +31,11 @@ function when(value?: string | null) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? String(value)
-    : new Intl.DateTimeFormat(i18n.locale, { dateStyle: "medium", timeStyle: "short" }).format(
-        date,
-      );
+    : new Intl.DateTimeFormat(i18n.locale, {
+        timeZone: i18n.timeZone,
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(date);
 }
 function fieldLabel(key: string) {
   return i18n.t(
@@ -28,8 +48,8 @@ function fieldLabel(key: string) {
   <section class="record-history-timeline" aria-labelledby="recordHistoryHeading">
     <header>
       <div>
-        <p>{{ i18n.t("record.audit_trail", "Audit trail") }}</p>
-        <h3 id="recordHistoryHeading">{{ i18n.t("record.change_history", "Change history") }}</h3>
+        <p>{{ i18n.t("record.audit_trail") }}</p>
+        <h3 id="recordHistoryHeading">{{ i18n.t("record.change_history") }}</h3>
       </div>
       <span>{{ props.total }}</span>
     </header>
@@ -48,7 +68,7 @@ function fieldLabel(key: string) {
       </li>
     </ol>
     <div v-else class="history-empty">
-      {{ i18n.t("record.no_history", "No tracked record changes yet.") }}
+      {{ i18n.t("record.no_history") }}
     </div>
     <button
       v-if="props.canOpen && props.total"
@@ -56,7 +76,7 @@ function fieldLabel(key: string) {
       type="button"
       @click="emit('open')"
     >
-      <AppIcon name="history" />{{ i18n.t("record.open_history", "Open history & undo") }}
+      <AppIcon name="history" />{{ i18n.t("record.open_history") }}
     </button>
   </section>
 </template>

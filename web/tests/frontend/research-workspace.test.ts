@@ -1,9 +1,26 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it, vi } from "vitest";
 import { createResearchWorkspace } from "../../src/domain/researchWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
-type Anything = any; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Anything = any;
 
 // The rendered Research and Response Library views are covered by the legacy baseline's research and faq scenarios
 // (recorded before this logic moved); these pin the commands and their permission checks.
@@ -21,7 +38,15 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         spies[name] ??= vi.fn(() => {
-          if (name === "persistPrefs") calls.push(name);
+          if (
+            [
+              "persistPrefs",
+              "persistResearchPreferences",
+              "persistSettingsPreferences",
+              "persistJobPreferences",
+            ].includes(name)
+          )
+            calls.push(name);
         });
         return spies[name];
       },
@@ -35,6 +60,172 @@ function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe("research workspace commands", () => {
+  it("characterizes first-turn submission without history, retries, or settings changes", async () => {
+    const api = vi.fn(async (_path: string, _options: unknown) => ({
+      id: "first-job",
+      status: "queued",
+      thread_id: "new-thread",
+      turn_id: "new-turn",
+    }));
+    const { workspace, state } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "pinned", record_id: "r1" }],
+      selectedEvidencePayload: () => [{ record_id: "r1", collection: "corpus" }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+    const job = await workspace.startResearchRun({
+      prompt: "What is NOT asserted?",
+      instructions: "Retain qualification",
+    });
+    expect(api).toHaveBeenCalledOnce();
+    expect(api.mock.calls[0][0]).toBe("/api/jobs/rag");
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body).toMatchObject({
+      prompt: "What is NOT asserted?",
+      instructions: "Retain qualification",
+      skip_retrieval: true,
+      selected_evidence: [{ record_id: "r1", collection: "corpus" }],
+    });
+    expect(body).not.toHaveProperty("thread_context");
+    expect(body).not.toHaveProperty("prior_answers");
+    expect(body).not.toHaveProperty("retry_turn_id");
+    expect(job).toMatchObject({ thread_id: "new-thread", turn_id: "new-turn" });
+    expect(state.ragConfig.k).toBe(64);
+  });
+
+  it("does not send stale selected evidence with an ordinary retrieval run", async () => {
+    const api = vi.fn(async () => ({ id: "balanced-job", status: "queued" }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "stale", record_id: "other-author" }],
+      selectedEvidencePayload: () => [{ record_id: "other-author", collection: "corpus" }],
+      recordStores: () => [{ name: "corpus", count: 3 }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+
+    await workspace.startResearchRun({
+      prompt: "Discuss the two named Proust novels.",
+      skip_retrieval: false,
+      include_selected_evidence: false,
+      config: {
+        source_collection: "corpus",
+        locales: ["en"],
+        search_types: ["lexical"],
+        skip_retrieval: false,
+      },
+    });
+
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.skip_retrieval).toBe(false);
+    expect(body.selected_evidence).toEqual([]);
+  });
+
+  it("sends selected evidence only when a hybrid retrieval run opts in", async () => {
+    const api = vi.fn(async () => ({ id: "hybrid-job", status: "queued" }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "pinned", record_id: "r1" }],
+      selectedEvidencePayload: () => [{ record_id: "r1", collection: "corpus" }],
+      recordStores: () => [{ name: "corpus", count: 3 }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+
+    await workspace.startResearchRun({
+      prompt: "Synthesize retrieval with my pinned passage.",
+      skip_retrieval: false,
+      include_selected_evidence: true,
+      config: {
+        source_collection: "corpus",
+        locales: ["en"],
+        search_types: ["lexical"],
+        skip_retrieval: false,
+      },
+    });
+
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.skip_retrieval).toBe(false);
+    expect(body.selected_evidence).toEqual([{ record_id: "r1", collection: "corpus" }]);
+  });
+
+  it("submits a follow-up to the selected thread without transporting history", async () => {
+    const api = vi.fn(async (_path: string, _options: unknown) => ({
+      id: "next-job",
+      status: "queued",
+      thread_id: "thread/a",
+      turn_id: "next-turn",
+    }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Started",
+      selectedEvidenceEntries: () => [{ key: "pinned", record_id: "r1" }],
+      selectedEvidencePayload: () => [{ record_id: "r1", collection: "corpus" }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model" }),
+      isResearcher: () => true,
+      api,
+    });
+    await workspace.startResearchRun({ prompt: "What about Levinas?", thread_id: "thread/a" });
+    expect(api.mock.calls[0][0]).toBe("/api/research/threads/thread%2Fa/turns");
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body.prompt).toBe("What about Levinas?");
+    expect(body).not.toHaveProperty("thread_context");
+    expect(body).not.toHaveProperty("prior_answers");
+  });
+
+  it("retries through the existing run validation and narrow turn endpoint", async () => {
+    const api = vi.fn(async (_path: string, _options: unknown) => ({
+      id: "new-job",
+      status: "running",
+      thread_id: "thread/a",
+      turn_id: "turn b",
+    }));
+    const { workspace } = setup({
+      hasCapability: () => true,
+      trf: () => "Research started",
+      selectedEvidenceEntries: () => [{ key: "e", record_id: "r" }],
+      selectedEvidencePayload: () => [{ record_id: "r", collection: "corpus" }],
+      providerProfile: () => ({ id: "p", type: "ollama", model: "model-current" }),
+      isResearcher: () => true,
+      api,
+    });
+    const job = await workspace.startResearchRun({
+      prompt: "Original question",
+      instructions: "Original instructions",
+      retry_thread_id: "thread/a",
+      retry_turn_id: "turn b",
+    });
+    expect(job).toMatchObject({ id: "new-job", thread_id: "thread/a", turn_id: "turn b" });
+    expect(api.mock.calls[0][0]).toBe("/api/research/threads/thread%2Fa/turns/turn%20b/retry");
+    const body = JSON.parse((api.mock.calls[0] as unknown as [string, { body: string }])[1].body);
+    expect(body).toMatchObject({
+      prompt: "Original question",
+      instructions: "Original instructions",
+      model: "model-current",
+      selected_evidence: [{ record_id: "r", collection: "corpus" }],
+    });
+    expect(body).not.toHaveProperty("retry_turn_id");
+    expect(body).not.toHaveProperty("prior_answers");
+  });
+  it("rejects incomplete retry identifiers before sending or changing run state", async () => {
+    const api = vi.fn();
+    const { workspace } = setup({ hasCapability: () => true, api });
+    await expect(workspace.startResearchRun({ retry_turn_id: "turn" })).rejects.toThrow();
+    expect(api).not.toHaveBeenCalled();
+  });
+  it("preserves thread linkage through the job presentation adapter", async () => {
+    const { researchJobForUi } = await import("../../src/domain/researchPayloads");
+    expect(
+      researchJobForUi({ id: "j", thread_id: "t", turn_id: "u", status: "running" }),
+    ).toMatchObject({ id: "j", thread_id: "t", turn_id: "u" });
+  });
   it("accepts only known configuration keys and saves", () => {
     const { state, calls, spies, workspace } = setup({ selectedEvidenceEntries: () => [{}] });
     const config = workspace.updateResearchConfig({
@@ -49,8 +240,28 @@ describe("research workspace commands", () => {
     });
     expect(state.ragConfig).not.toHaveProperty("unknown_key");
     expect(config).toMatchObject({ k: 8 });
-    expect(calls).toEqual(["persistPrefs"]);
-    expect(spies.shellRefreshHook).toHaveBeenCalled();
+    expect(calls).toEqual(["persistResearchPreferences"]);
+    expect(spies.persistPrefs).toBeUndefined();
+    expect(spies.shellRefreshHook).not.toHaveBeenCalled();
+  });
+
+  it("persists rerun configuration without serializing the whole workspace", () => {
+    const { calls, spies, workspace } = setup({
+      providerProfiles: () => [
+        { id: "p", type: "ollama", model: "model", base_url: "http://ollama" },
+      ],
+      navigateTo: vi.fn(),
+    });
+
+    workspace.prepareRagRerun({
+      prompt: "Original question",
+      provider: "ollama",
+      model: "model",
+      base_url: "http://ollama",
+    });
+
+    expect(calls).toEqual(["persistResearchPreferences", "persistSettingsPreferences"]);
+    expect(spies.persistPrefs).toBeUndefined();
   });
 
   it("turns off skipping retrieval when no evidence is selected", () => {
@@ -106,5 +317,42 @@ describe("research workspace commands", () => {
     await expect(denied.workspace.getResponseFaqPage()).rejects.toThrow(
       "Your role cannot open Response Library.",
     );
+  });
+});
+
+describe("Research independent reads", () => {
+  it("can hydrate composer data without waiting for run history or pipeline visibility", async () => {
+    const refreshJobs = vi.fn(() => new Promise(() => {})),
+      api = vi.fn(() => new Promise(() => {}));
+    const { workspace } = setup({
+      refreshStores: vi.fn(async () => {}),
+      refreshJobs,
+      api,
+      recordStores: () => [],
+      providerProfiles: () => [],
+      selectedEvidenceEntries: () => [],
+      hasCorpusDb: () => false,
+      hasCapability: () => true,
+      isResearcher: () => false,
+    });
+    const result = await workspace.getResearchWorkspaceSnapshot({
+      refresh: true,
+      includeJobs: false,
+      includePipelines: false,
+      strictCollections: true,
+    });
+    expect(result.stores).toEqual([]);
+    expect(refreshJobs).not.toHaveBeenCalled();
+    expect(api).not.toHaveBeenCalled();
+  });
+  it("reports a failed authoritative collection read instead of confirming an empty workspace", async () => {
+    const { workspace } = setup({
+      refreshStores: vi.fn(async () => {
+        throw new Error("Collections unavailable");
+      }),
+    });
+    await expect(
+      workspace.getResearchWorkspaceSnapshot({ refresh: true, strictCollections: true }),
+    ).rejects.toThrow("Collections unavailable");
   });
 });

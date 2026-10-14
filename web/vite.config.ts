@@ -1,4 +1,21 @@
-// Copyright 2026 Aaron John Schlosser, PhD.
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -7,7 +24,10 @@ import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
 const root = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as { version: string };
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+  version: string;
+  codename: string;
+};
 
 function gitCommit(): string {
   const fromEnv = String(process.env.GIT_COMMIT || process.env.SOURCE_COMMIT || "").trim();
@@ -20,12 +40,15 @@ function gitCommit(): string {
 }
 
 const appVersion = pkg.version;
+const appCodename = pkg.codename;
 const appGitCommit = gitCommit();
-const versionLabel = appGitCommit ? `${appVersion} (${appGitCommit})` : appVersion;
+const releaseLabel = appCodename ? `${appVersion} - ${appCodename}` : appVersion;
+const versionLabel = appGitCommit ? `${releaseLabel} (${appGitCommit})` : releaseLabel;
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
+    __APP_CODENAME__: JSON.stringify(appCodename),
     __APP_GIT_COMMIT__: JSON.stringify(appGitCommit),
   },
   plugins: [
@@ -42,6 +65,7 @@ export default defineConfig({
   ],
   server: {
     proxy: {
+      "/api/ws": { target: "ws://127.0.0.1:8000", ws: true },
       "/api": "http://127.0.0.1:8000",
     },
   },

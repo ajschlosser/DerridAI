@@ -1,13 +1,38 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import RecordProvenance from "./RecordProvenance.vue";
+import RecordTraceabilityExplorer from "./RecordTraceabilityExplorer.vue";
 import RecordIndexTerms from "./RecordIndexTerms.vue";
 import RecordAnnotations from "./RecordAnnotations.vue";
 import RecordPdfLinks from "./RecordPdfLinks.vue";
 import RecordHistoryTimeline from "./RecordHistoryTimeline.vue";
 import InspectorLayoutEditor from "./InspectorLayoutEditor.vue";
+import CorpusSemanticGraphPanel from "../corpus-builder/CorpusSemanticGraphPanel.vue";
+import CorpusRecordSemanticMap from "../corpus-builder/CorpusRecordSemanticMap.vue";
+import UiLoadingState from "../ui/UiLoadingState.vue";
+import { corpusBuildsApi } from "../../api/corpus";
 import type { RecordWorkspaceSnapshot } from "../../types/record";
+import type { DerridaiNormativeModel, ResearchObjectGraph } from "../../types/researchObjectGraph";
+import type { MetadataSchema } from "../../api/metadataSchemas";
 import {
   loadInspectorLayout,
   saveInspectorLayout,
@@ -17,12 +42,20 @@ import {
   type InspectorLayoutRow,
 } from "../../domain/inspectorLayout";
 
-const props = defineProps<{ snapshot: RecordWorkspaceSnapshot }>();
+const props = defineProps<{
+  snapshot: RecordWorkspaceSnapshot;
+  objectGraph?: ResearchObjectGraph | null;
+  normativeModel?: DerridaiNormativeModel | null;
+  graphLoading?: boolean;
+  graphError?: string;
+  schema?: MetadataSchema | null;
+}>();
 const emit = defineEmits<{
   search: [field: string, value: string, contains?: boolean];
   change: [changes: Record<string, unknown>];
   addAnnotation: [];
   removeAnnotation: [id: string];
+  replyAnnotation: [id: string];
   openPdf: [index: number];
   removePdf: [index: number];
   removeAllPdf: [];
@@ -32,39 +65,47 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const tab = ref("overview");
-const layout = ref<InspectorLayout>(loadInspectorLayout());
+const layout = ref<InspectorLayout>(
+  loadInspectorLayout(props.snapshot.record || {}, props.schema || null),
+);
 const layoutEditor = ref<{ open: () => void } | null>(null);
 const record = computed(() => props.snapshot.record || {});
 const tabs = computed(() => [
-  ["overview", i18n.t("record.tab_overview", "Overview")],
-  ["provenance", i18n.t("record.tab_provenance", "Provenance")],
-  ["indexing", i18n.t("record.tab_indexing", "Indexing")],
-  ["pdf", i18n.t("record.tab_pdf", "PDFs")],
-  ["annotations", i18n.t("record.tab_annotations", "Annotations")],
-  ["history", i18n.t("record.tab_history", "History")],
+  ["overview", i18n.t("record.tab_overview")],
+  ["provenance", i18n.t("record.tab_provenance")],
+  ["traceability", i18n.t("record.tab_traceability", "Traceability")],
+  ["indexing", i18n.t("record.tab_indexing")],
+  ["semantic", i18n.t("record.tab_semantic_map")],
+  ["pdf", i18n.t("record.tab_pdf")],
+  ["annotations", i18n.t("record.tab_annotations")],
+  ["history", i18n.t("record.tab_history")],
 ]);
 const overviewSections = computed(() => groupInspectorRows(layout.value.overview));
 const indexingFields = computed(() =>
-  layout.value.indexing.filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field").map((row) => row.field),
+  layout.value.indexing
+    .filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field")
+    .map((row) => row.field),
 );
 const provenanceFields = computed(() =>
-  layout.value.provenance.filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field").map((row) => row.field),
+  layout.value.provenance
+    .filter((row): row is Extract<InspectorLayoutRow, { kind: "field" }> => row.kind === "field")
+    .map((row) => row.field),
 );
 function applyLayout(next: InspectorLayout) {
   layout.value = next;
-  saveInspectorLayout(next);
+  saveInspectorLayout(next, record.value, props.schema || null);
 }
 function resetLayout() {
-  const next = defaultInspectorLayout();
+  const next = defaultInspectorLayout(record.value, props.schema || null);
   layout.value = next;
-  saveInspectorLayout(next);
+  saveInspectorLayout(next, record.value, props.schema || null);
 }
 function headingText(label: string) {
-  if (label === "Record context") return i18n.t("record.record_context", "Record context");
-  if (label === "Quotation provenance") return i18n.t("record.quotation_provenance", "Quotation provenance");
-  if (label === "Attribution") return i18n.t("record.attribution", "Attribution");
-  if (label === "Discourse") return i18n.t("record.discourse", "Discourse");
-  if (label === "Research index") return i18n.t("record.indexing_kicker", "Research index");
+  if (label === "Record context") return i18n.t("record.record_context");
+  if (label === "Quotation provenance") return i18n.t("record.quotation_provenance");
+  if (label === "Attribution") return i18n.t("record.attribution");
+  if (label === "Discourse") return i18n.t("record.discourse");
+  if (label === "Research index") return i18n.t("record.indexing_kicker");
   return label;
 }
 const pageSpan = computed(() => {
@@ -78,13 +119,12 @@ const pageSpan = computed(() => {
 function present(value: unknown) {
   if (value === null || value === undefined || value === "") return "—";
   if (Array.isArray(value)) return value.length ? value.join(", ") : "—";
-  if (typeof value === "boolean")
-    return value ? i18n.t("runtime.yes", "Yes") : i18n.t("runtime.no", "No");
+  if (typeof value === "boolean") return value ? i18n.t("runtime.yes") : i18n.t("runtime.no");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
 function fieldLabel(key: string) {
-  if (key === "__pages") return i18n.t("record.page", "Page");
+  if (key === "__pages") return i18n.t("record.page");
   return i18n.t(
     `field.${key}`,
     key.replaceAll("_", " ").replace(/\b\w/g, (m) => m.toUpperCase()),
@@ -119,6 +159,41 @@ async function activateTab(index: number) {
   const el = document.getElementById(tabId(tab.value));
   if (el instanceof HTMLButtonElement) el.focus();
 }
+// The semantic map reads build-scoped Document Intelligence; a published Record's
+// build_id is resolved through provenance recorded at publish time, not stored on
+// the record itself (see corpus_publication.serialize_public_record).
+const semanticBuildId = ref<string | null>(null);
+const semanticLoading = ref(false);
+const semanticChecked = ref("");
+async function resolveSemanticBuild(recordId: string) {
+  if (!recordId || semanticChecked.value === recordId) return;
+  semanticChecked.value = recordId;
+  semanticLoading.value = true;
+  semanticBuildId.value = null;
+  try {
+    const result = await corpusBuildsApi.recordSemanticMapBuild(recordId);
+    semanticBuildId.value = result.build_id || null;
+  } catch {
+    semanticBuildId.value = null;
+  } finally {
+    semanticLoading.value = false;
+  }
+}
+watch(
+  () => [props.snapshot.record_id, props.schema?.id],
+  () => {
+    layout.value = loadInspectorLayout(record.value, props.schema || null);
+  },
+);
+
+watch(
+  () => [tab.value, props.snapshot.record_id],
+  ([activeTab, recordId]) => {
+    if (activeTab === "semantic" && typeof recordId === "string")
+      void resolveSemanticBuild(recordId);
+  },
+  { immediate: true },
+);
 function onTabKeydown(event: KeyboardEvent, index: number) {
   if (event.key === "ArrowRight" || event.key === "ArrowDown") {
     event.preventDefault();
@@ -142,11 +217,11 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 }
 </script>
 <template>
-  <aside class="record-inspector" :aria-label="i18n.t('record.inspector', 'Record inspector')">
+  <aside class="record-inspector" :aria-label="i18n.t('record.inspector')">
     <nav
       class="record-inspector-tabs"
       role="tablist"
-      :aria-label="i18n.t('record.inspector_sections', 'Record inspector sections')"
+      :aria-label="i18n.t('record.inspector_sections')"
     >
       <button
         v-for="(item, index) in tabs"
@@ -179,13 +254,17 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :aria-labelledby="tabId('overview')"
       >
         <div class="inspector-section-head">
-          <p>{{ i18n.t("record.record_context", "Record context") }}</p>
-          <h2>{{ i18n.t("record.overview", "Overview") }}</h2>
+          <p>{{ i18n.t("record.record_context") }}</p>
+          <h2>{{ i18n.t("record.overview") }}</h2>
           <button type="button" class="btn tiny record-layout-button" @click="layoutEditor?.open()">
-            {{ i18n.t("record.configure_fields", "Configure fields") }}
+            {{ i18n.t("record.configure_fields") }}
           </button>
         </div>
-        <section v-for="(section, index) in overviewSections" :key="`${section.heading || 'fields'}-${index}`" class="inspector-field-group">
+        <section
+          v-for="(section, index) in overviewSections"
+          :key="`${section.heading || 'fields'}-${index}`"
+          class="inspector-field-group"
+        >
           <h3 v-if="section.heading">{{ headingText(section.heading) }}</h3>
           <dl class="record-meta-list">
             <div v-for="field in section.fields" :key="field">
@@ -205,13 +284,13 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
           </dl>
         </section>
         <section class="citation-preview">
-          <h3>{{ i18n.t("record.citations", "Citations") }}</h3>
+          <h3>{{ i18n.t("record.citations") }}</h3>
           <div>
-            <small>{{ i18n.t("record.inline_citation", "Inline citation") }}</small>
+            <small>{{ i18n.t("record.inline_citation") }}</small>
             <p>{{ snapshot.inline_citation || "—" }}</p>
           </div>
           <div>
-            <small>{{ i18n.t("record.full_citation", "Full citation") }}</small>
+            <small>{{ i18n.t("record.full_citation") }}</small>
             <p>{{ snapshot.full_citation || "—" }}</p>
           </div>
         </section>
@@ -225,6 +304,17 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :aria-labelledby="tabId('provenance')"
         @search="(field, value) => emit('search', field, value)"
       />
+      <RecordTraceabilityExplorer
+        v-else-if="tab === 'traceability'"
+        :id="panelId('traceability')"
+        :graph="objectGraph"
+        :record="record"
+        :model="normativeModel"
+        :loading="graphLoading"
+        :error="graphError"
+        role="tabpanel"
+        :aria-labelledby="tabId('traceability')"
+      />
       <section
         v-else-if="tab === 'indexing'"
         :id="panelId('indexing')"
@@ -233,10 +323,10 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :aria-labelledby="tabId('indexing')"
       >
         <div class="inspector-section-head">
-          <p>{{ i18n.t("record.indexing_kicker", "Research index") }}</p>
-          <h2>{{ i18n.t("record.indexing", "Indexing") }}</h2>
+          <p>{{ i18n.t("record.indexing_kicker") }}</p>
+          <h2>{{ i18n.t("record.indexing") }}</h2>
           <button type="button" class="btn tiny record-layout-button" @click="layoutEditor?.open()">
-            {{ i18n.t("record.configure_fields", "Configure fields") }}
+            {{ i18n.t("record.configure_fields") }}
           </button>
         </div>
         <RecordIndexTerms
@@ -248,6 +338,28 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
           :editable="Boolean(snapshot.capabilities?.edit)"
           @search="(field, value) => emit('search', field, value, true)"
           @change="(field, next) => emit('change', { [field]: next })"
+        />
+      </section>
+      <section
+        v-else-if="tab === 'semantic'"
+        :id="panelId('semantic')"
+        class="record-semantic-panel"
+        role="tabpanel"
+        :aria-labelledby="tabId('semantic')"
+      >
+        <UiLoadingState v-if="semanticLoading" :label="i18n.t('ui.loading')" />
+        <p v-else-if="!semanticBuildId" class="record-semantic-status">
+          {{ i18n.t("record.semantic_map_unavailable") }}
+        </p>
+        <CorpusRecordSemanticMap
+          v-else
+          :build-id="semanticBuildId"
+          :record="{ record_id: String(snapshot.record_id || ''), text: String(record.text || '') }"
+          id-prefix="record-inspector"
+        />
+        <CorpusSemanticGraphPanel
+          v-if="semanticBuildId && !semanticLoading"
+          :build-id="semanticBuildId"
         />
       </section>
       <RecordPdfLinks
@@ -275,6 +387,7 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         :can-add="Boolean(snapshot.capabilities?.annotate)"
         @add="emit('addAnnotation')"
         @remove="(id) => emit('removeAnnotation', id)"
+        @reply="(id) => emit('replyAnnotation', id)"
       />
       <RecordHistoryTimeline
         v-else
@@ -287,7 +400,14 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
         @open="emit('openHistory')"
       />
     </div>
-    <InspectorLayoutEditor ref="layoutEditor" :layout="layout" @apply="applyLayout" @reset="resetLayout" />
+    <InspectorLayoutEditor
+      ref="layoutEditor"
+      :layout="layout"
+      :record="record"
+      :schema="schema"
+      @apply="applyLayout"
+      @reset="resetLayout"
+    />
   </aside>
 </template>
 <style scoped>
@@ -384,6 +504,11 @@ function onTabKeydown(event: KeyboardEvent, index: number) {
 .record-indexing-panel {
   display: grid;
   gap: 17px;
+}
+.record-semantic-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 .record-page-value {
   font-variant-numeric: tabular-nums;

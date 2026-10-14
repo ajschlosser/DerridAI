@@ -1,0 +1,225 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { apiRequest } from "../http";
+import type {
+  PdfAsset,
+  DocumentLayoutPlan,
+  SourceBlock,
+  GutenbergHit,
+  WikisourceHit,
+  GutenbergStatus,
+  PageDetectionRequest,
+  SourceUnitPolicy,
+  SourceUnitPreview,
+  SourceBulkDeleteResult,
+  SourceDetail,
+  SourceListQuery,
+  SourceListResponse,
+} from "./types";
+import { LEGACY_CORPUS_BASE, legacyCorpusUrl } from "./compatibility";
+
+/** Ingestion extracts text, OCRs scans and detects page numbers in one request; large scans take minutes. */
+const SOURCE_INGEST_TIMEOUT_MS = 15 * 60_000;
+
+/** Query string for the Sources list; multi-valued filters travel as comma-separated values. */
+export function sourceListQuery(params: SourceListQuery): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    if (Array.isArray(value)) {
+      if (value.length) search.set(key, value.join(","));
+    } else search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
+export const corpusSourcesApi = {
+  /** Compact, paginated source rows (never text or blocks), with facet counts. */
+  listSources: (params: SourceListQuery = {}) =>
+    apiRequest<SourceListResponse>(`/api/corpus/sources${sourceListQuery(params)}`),
+  sourceDetail: (sourceId: string) =>
+    apiRequest<SourceDetail>(`/api/corpus/sources/${encodeURIComponent(sourceId)}`),
+  /** Deletes sources no build uses; each refusal comes back with its reason. */
+  bulkDeleteSources: (sourceIds: string[]) =>
+    apiRequest<SourceBulkDeleteResult>("/api/corpus/sources/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ source_document_ids: sourceIds }),
+    }),
+  gutenbergStatus: () => apiRequest<GutenbergStatus>("/api/gutenberg/status"),
+  refreshGutenbergCatalogue: () =>
+    apiRequest<GutenbergStatus>("/api/gutenberg/catalogue/refresh", { method: "POST" }),
+  gutenbergArchiveAction: (action: "start" | "pause" | "resume" | "refetch") =>
+    apiRequest<GutenbergStatus>(`/api/gutenberg/archive/${action}`, { method: "POST" }),
+  /** Delete a source and the builds made from it (refused by the API while one is running). */
+  deleteAsset: (assetId: string) =>
+    apiRequest<{ deleted: string[]; builds_deleted: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}?cascade=true`,
+      { method: "DELETE" },
+    ),
+  listAssets: () => apiRequest<{ items: PdfAsset[] }>(legacyCorpusUrl("assets")),
+  async uploadAsset(
+    file: File,
+    ocrMode = "auto",
+    sourceIllegibility = 0,
+    pages: PageDetectionRequest = { mode: "auto" },
+    audioDiarization = true,
+  ) {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("ocr_mode", ocrMode);
+    body.append("ocr_languages", "eng+fra+deu");
+    body.append("source_illegibility", String(sourceIllegibility));
+    body.append("page_number_detection", pages.mode);
+    body.append("audio_diarization", String(audioDiarization));
+    if (pages.providerProfileId) body.append("provider_profile_id", pages.providerProfileId);
+    for (const [key, value] of Object.entries(pages.connection || {}))
+      if (value) body.append(key, String(value));
+    return apiRequest<PdfAsset>(legacyCorpusUrl("assets"), {
+      method: "POST",
+      body,
+      timeoutMs: SOURCE_INGEST_TIMEOUT_MS,
+    });
+  },
+  importUrl: (
+    url: string,
+    sourceIllegibility = 0,
+    pages: PageDetectionRequest = { mode: "auto" },
+  ) =>
+    apiRequest<PdfAsset>(legacyCorpusUrl("assets/url"), {
+      method: "POST",
+      timeoutMs: SOURCE_INGEST_TIMEOUT_MS,
+      body: JSON.stringify({
+        url,
+        source_illegibility: sourceIllegibility,
+        page_number_detection: pages.mode,
+        provider_profile_id: pages.providerProfileId || undefined,
+        ...pages.connection,
+      }),
+    }),
+  searchGutenberg: (query: string) =>
+    apiRequest<{ items: GutenbergHit[] }>(
+      `${LEGACY_CORPUS_BASE}/gutenberg/search?q=${encodeURIComponent(query)}&limit=12`,
+    ),
+  searchWikisource: (query: string, language = "en") =>
+    apiRequest<{ items: WikisourceHit[] }>(
+      `${LEGACY_CORPUS_BASE}/wikisource/search?q=${encodeURIComponent(query)}&limit=20&language=${encodeURIComponent(language)}`,
+    ),
+  importGutenberg: (
+    etextId: number,
+    sourceIllegibility = 0,
+    pages: PageDetectionRequest = { mode: "auto" },
+  ) =>
+    apiRequest<PdfAsset>(legacyCorpusUrl("gutenberg/import"), {
+      method: "POST",
+      body: JSON.stringify({
+        etext_id: etextId,
+        source_illegibility: sourceIllegibility,
+        page_number_detection: pages.mode,
+        provider_profile_id: pages.providerProfileId || undefined,
+        ...pages.connection,
+      }),
+    }),
+  previewUnitPolicy: (assetId: string, policy: SourceUnitPolicy) =>
+    apiRequest<SourceUnitPreview>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/units/preview`,
+      { method: "POST", body: JSON.stringify(policy) },
+    ),
+  /** Creates (or returns) a source asset whose evidence units follow the policy. */
+  deriveUnits: (assetId: string, policy: SourceUnitPolicy) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/units`, {
+      method: "POST",
+      body: JSON.stringify(policy),
+    }),
+  assetContentUrl: (assetId: string) =>
+    `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/content`,
+  updatePageLabels: (assetId: string, labels: Record<number, string | null>) =>
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-labels`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ labels }),
+      },
+    ),
+  updateDocumentLayout: (assetId: string, plan: DocumentLayoutPlan) =>
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/document-layout`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(plan),
+      },
+    ),
+  applyPageEstimate: (assetId: string, wordsPerPage: number, oneRecordPerPage: boolean) =>
+    apiRequest<PdfAsset>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/page-estimate`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          words_per_page: wordsPerPage,
+          one_record_per_page: oneRecordPerPage,
+        }),
+      },
+    ),
+  updateAssetLanguage: (assetId: string, language: string | null) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language`, {
+      method: "PATCH",
+      body: JSON.stringify(language ? { language } : { skip_language: true }),
+    }),
+  suggestAssetLanguage: (
+    assetId: string,
+    connection: { provider?: string; model?: string; base_url?: string; api_key?: string } = {},
+  ) =>
+    apiRequest<{
+      mode: "detect_language";
+      language: string | null;
+      confidence?: number;
+      reason?: string;
+      source?: string;
+    }>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/language-suggestion`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "detect_language", ...connection }),
+    }),
+  updateAssetMetadata: (
+    assetId: string,
+    metadata: Record<string, unknown>,
+    skipFields: string[] = [],
+  ) =>
+    apiRequest<PdfAsset>(`${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/metadata`, {
+      method: "PATCH",
+      body: JSON.stringify({ metadata, skip_fields: skipFields }),
+    }),
+  updateVoiceAssignments: (assetId: string, assignments: Record<string, string>) =>
+    apiRequest<{ asset: PdfAsset; records_updated: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/voice-assignments`,
+      { method: "PATCH", body: JSON.stringify({ assignments }) },
+    ),
+  blocks: (assetId: string, offset = 0, limit = 200, ids: string[] = [], page?: number) =>
+    apiRequest<{ items: SourceBlock[]; total: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?offset=${offset}&limit=${limit}${
+        ids.length ? `&ids=${encodeURIComponent(ids.join(","))}` : ""
+      }${page ? `&page=${page}` : ""}`,
+    ),
+  /** A window of blocks that starts a little before `blockId`, with its offset for further paging. */
+  blocksAround: (assetId: string, blockId: string, limit = 60) =>
+    apiRequest<{ items: SourceBlock[]; total: number; offset: number }>(
+      `${LEGACY_CORPUS_BASE}/assets/${encodeURIComponent(assetId)}/blocks?around=${encodeURIComponent(blockId)}&limit=${limit}`,
+    ),
+  profiles: () =>
+    apiRequest<{ items: Array<Record<string, unknown>> }>(legacyCorpusUrl("corpus-profiles")),
+};

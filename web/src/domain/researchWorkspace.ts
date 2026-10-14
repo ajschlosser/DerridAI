@@ -1,9 +1,27 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // The Research workspace and the Response Library: the workspace snapshot, configuration, evidence, running and grading
 // research, and the cached-answer page. Moved verbatim from the legacy runtime; the runtime's state object and helpers are
 // passed in as dependencies.
+import { createResponseFaq } from "./responseFaq";
 import { providerRequestConfig } from "./providerRequest";
+import { createGetResearchJob } from "./researchJobLookup";
 import { cloneAuditValue } from "./recordValues";
 import {
   normalizedResearchConfig,
@@ -12,6 +30,9 @@ import {
   researchProfileForUi,
   sanitizeResearchGeneration,
 } from "./researchPayloads";
+import { bindCopy } from "../i18n/bindCopy";
+import { englishDefault } from "../i18n/englishDefault";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -30,7 +51,9 @@ type Helper =
   | "hasCorpusDb"
   | "isResearcher"
   | "navigateTo"
-  | "persistPrefs"
+  | "persistJobPreferences"
+  | "persistResearchPreferences"
+  | "persistSettingsPreferences"
   | "providerDisplayName"
   | "providerProfile"
   | "providerProfiles"
@@ -44,8 +67,8 @@ type Helper =
   | "shellRefreshHook"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
+  | "trf"
   | "uid";
 type Deps = { state: Loose } & Record<Helper, Fn>;
 
@@ -61,7 +84,9 @@ export function createResearchWorkspace(deps: Deps) {
     hasCorpusDb,
     isResearcher,
     navigateTo,
-    persistPrefs,
+    persistJobPreferences,
+    persistResearchPreferences,
+    persistSettingsPreferences,
     providerDisplayName,
     providerProfile,
     providerProfiles,
@@ -75,21 +100,34 @@ export function createResearchWorkspace(deps: Deps) {
     shellRefreshHook,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
-    tr,
+    trf,
     uid,
   } = deps;
-  function researchConfigForUi() {
-    return cloneAuditValue(state.ragConfig || {});
+  const { tr } = bindCopy(deps.tr, (key, fallback, values = {}) =>
+    Object.entries(values).reduce(
+      (text, [name, value]) => text.replaceAll(`{${name}}`, String(value)),
+      fallback || englishDefault(key) || key,
+    ),
+  );
+  function researchConfigForUi(): Loose {
+    const cloned = cloneAuditValue(state.ragConfig || {});
+    return cloned && typeof cloned === "object" && !Array.isArray(cloned) ? (cloned as Loose) : {};
   }
-  async function getResearchWorkspaceSnapshot({ refresh = false } = {}) {
+  async function getResearchWorkspaceSnapshot({
+    refresh = false,
+    includeJobs = true,
+    includePipelines = true,
+    strictCollections = false,
+  } = {}) {
     if (refresh) {
       try {
         await refreshStores();
       } catch (error) {
+        if (strictCollections) throw error;
         console.warn("Could not refresh Research collections", error);
       }
-      if (hasCapability("rag.jobs.own") || !isResearcher()) await refreshJobs({ rerender: false });
+      if (includeJobs && (hasCapability("rag.jobs.own") || !isResearcher()))
+        await refreshJobs({ rerender: false });
     }
     const corpus = recordStores();
     const usable = corpus.filter((store: Any) => Number(store.count || 0) > 0);
@@ -134,7 +172,40 @@ export function createResearchWorkspace(deps: Deps) {
           profiles[0]
         )?.id || "";
     }
-    persistPrefs();
+
+    let pipelineVisibility: Loose = {
+      assignment: null,
+      override_allowed: false,
+      pipelines: [],
+      strategies: [],
+    };
+    try {
+      if (includePipelines)
+        pipelineVisibility = await api("/api/system/pipelines/research-options");
+      const configuredId = String(state.ragConfig.pipeline_id || "").trim();
+      const configuredVersion = Number(state.ragConfig.pipeline_version || 0);
+      if (
+        includePipelines &&
+        configuredId &&
+        !((pipelineVisibility.pipelines || []) as Loose[]).some(
+          (pipeline: Loose) =>
+            String(pipeline.pipeline_id || "") === configuredId &&
+            Number(pipeline.version || 0) === configuredVersion,
+        )
+      ) {
+        // Remove an override that is no longer visible or authorized. Keeping
+        // it in browser preferences would make a later Research run fail for a
+        // pipeline the user can no longer select.
+        state.ragConfig.pipeline_id = "";
+        state.ragConfig.pipeline_version = null;
+      }
+    } catch (error) {
+      // Research remains available with server-side assignment resolution even
+      // if the visibility endpoint is temporarily unavailable.
+      console.warn("Could not load Research pipeline visibility", error);
+    }
+
+    persistResearchPreferences();
     return {
       config: researchConfigForUi(),
       stores: corpus.map((store: Any) => ({
@@ -142,6 +213,8 @@ export function createResearchWorkspace(deps: Deps) {
         count: Number(store.count || 0),
         collection_role: store.collection_role || "general",
         embedding_model: store.embedding_model || store.metadata?.embedding_model || "",
+        filter_fields: Array.isArray(store.filter_fields) ? store.filter_fields.map(String) : [],
+        schema_id: String(store.schema_id || store.metadata?.schema_id || ""),
       })),
       profiles: profiles.map(researchProfileForUi).filter(Boolean),
       selected_evidence: evidence,
@@ -153,6 +226,17 @@ export function createResearchWorkspace(deps: Deps) {
               .filter(Boolean)
           : [],
       history: cloneAuditValue(state.ragConfig.history || []),
+      pipeline_assignment:
+        pipelineVisibility.assignment && typeof pipelineVisibility.assignment === "object"
+          ? cloneAuditValue(pipelineVisibility.assignment)
+          : null,
+      pipeline_options: Array.isArray(pipelineVisibility.pipelines)
+        ? cloneAuditValue(pipelineVisibility.pipelines)
+        : [],
+      pipeline_strategies: Array.isArray(pipelineVisibility.strategies)
+        ? cloneAuditValue(pipelineVisibility.strategies)
+        : [],
+      pipeline_override_allowed: Boolean(pipelineVisibility.override_allowed),
       can_run: hasCapability("rag.run"),
       can_select_evidence: hasCapability("evidence.select"),
       can_manage_jobs: !isResearcher() || hasCapability("rag.jobs.own"),
@@ -161,11 +245,15 @@ export function createResearchWorkspace(deps: Deps) {
   }
   function updateResearchConfig(patch = {}) {
     const allowed = new Set([
+      "pipeline_id",
+      "pipeline_version",
+      "pipeline_config_overrides",
       "source_collection",
       "locales",
       "search_types",
       "k",
       "fetch_k",
+      "automatic_sizing",
       "lambda_mult",
       "rrf_k",
       "rerank_top_n",
@@ -178,40 +266,39 @@ export function createResearchWorkspace(deps: Deps) {
       "evidence_total_char_limit",
       "bind_citations",
       "include_works_cited",
+      "prompt_metadata",
       "auto_grade",
       "auto_grade_provider_profile_id",
       "provider_profile_id",
       "skip_retrieval",
+      "use_prior_response_memory",
+      "use_prior_claim_memory",
+      "memory_profile_id",
       "prompt",
       "instructions",
     ]);
     for (const [key, value] of Object.entries(patch || {}))
       if (allowed.has(key)) state.ragConfig[key] = cloneAuditValue(value);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
-    persistPrefs();
-    shellRefreshHook?.();
+    // Research configuration is feature-owned. Updating it must not invalidate
+    // application chrome; shell-visible state is unaffected by these fields.
+    persistResearchPreferences();
     return researchConfigForUi();
   }
   function removeResearchEvidence(key: Any) {
-    if (!hasCapability("evidence.select"))
-      throw new Error(
-        tr("permissions.evidence_denied", "Your role cannot change selected evidence."),
-      );
+    if (!hasCapability("evidence.select")) throw new Error(tr("permissions.evidence_denied"));
     setEvidence(String(key || ""), null, false);
     if (!selectedEvidenceEntries().length) state.ragConfig.skip_retrieval = false;
-    persistPrefs();
+    persistResearchPreferences();
     return selectedEvidenceEntries()
       .map(researchEvidenceForUi)
       .filter((item: Any) => item !== null);
   }
   function clearResearchEvidence() {
-    if (!hasCapability("evidence.select"))
-      throw new Error(
-        tr("permissions.evidence_denied", "Your role cannot change selected evidence."),
-      );
+    if (!hasCapability("evidence.select")) throw new Error(tr("permissions.evidence_denied"));
     clearSelectedEvidence();
     state.ragConfig.skip_retrieval = false;
-    persistPrefs();
+    persistResearchPreferences();
     return [];
   }
   async function discoverResearchModels(profileId: Any) {
@@ -242,13 +329,7 @@ export function createResearchWorkspace(deps: Deps) {
       .map(researchJobForUi)
       .filter(Boolean);
   }
-  async function getResearchJob(jobId: Any) {
-    const job = await api(`/api/jobs/${encodeURIComponent(jobId)}`);
-    const index = state.jobs.findIndex((item: Any) => item.id === job.id);
-    if (index >= 0) state.jobs[index] = { ...state.jobs[index], ...job };
-    else state.jobs.unshift(job);
-    return researchJobForUi(job);
-  }
+  const getResearchJob = createGetResearchJob({ api, state });
   async function cancelResearchJob(jobId: Any) {
     if (isResearcher() && !hasCapability("rag.jobs.own"))
       throw new Error("Your role cannot manage Research jobs.");
@@ -260,7 +341,7 @@ export function createResearchWorkspace(deps: Deps) {
       throw new Error("Your role cannot manage Research jobs.");
     await api(`/api/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" });
     pruneClientJobState(jobId);
-    persistPrefs();
+    persistJobPreferences();
     shellRefreshHook?.();
     return true;
   }
@@ -269,26 +350,33 @@ export function createResearchWorkspace(deps: Deps) {
     return cloneAuditValue(cfg?.ollama || {});
   }
   async function startResearchRun(input: Loose = {}) {
-    if (!hasCapability("rag.run"))
-      throw new Error(tr("permissions.rag_denied", "Your role cannot run Research pipelines."));
-    const cfg: Loose = normalizedResearchConfig(updateResearchConfig(input.config || {}) as Loose);
-    updateResearchConfig({
-      k: cfg.k,
-      fetch_k: cfg.fetch_k,
-      lambda_mult: cfg.lambda_mult,
-      rrf_k: cfg.rrf_k,
-      rerank_top_n: cfg.rerank_top_n,
-      query_decomposition_num_predict: cfg.query_decomposition_num_predict,
-      evidence_record_char_limit: cfg.evidence_record_char_limit,
-      evidence_total_char_limit: cfg.evidence_total_char_limit,
-      locales: cfg.locales,
-      search_types: cfg.search_types,
+    if (!hasCapability("rag.run")) throw new Error(tr("permissions.rag_denied"));
+    const retryThreadId = String(input.retry_thread_id || "");
+    const retryTurnId = String(input.retry_turn_id || "");
+    if (Boolean(retryThreadId) !== Boolean(retryTurnId))
+      throw new Error(tr("research.thread_retry_invalid"));
+    const endpoint = retryTurnId
+      ? `/api/research/threads/${encodeURIComponent(retryThreadId)}/turns/${encodeURIComponent(retryTurnId)}/retry`
+      : input.thread_id
+        ? `/api/research/threads/${encodeURIComponent(String(input.thread_id))}/turns`
+        : "/api/jobs/rag";
+    // Research composes a one-run draft over the saved Settings configuration.
+    // Do not write the draft back into ragConfig: the Research modal is the
+    // highest-precedence layer for this run only.
+    const cfg: Loose = normalizedResearchConfig({
+      ...researchConfigForUi(),
+      ...(input.config || {}),
     });
     const prompt = String(input.prompt ?? cfg.prompt ?? "").trim();
     const instructions = String(input.instructions ?? cfg.instructions ?? "").trim();
     if (!prompt) throw new Error("Enter a research question.");
     const selected = selectedEvidenceEntries();
     const skipRetrieval = Boolean(input.skip_retrieval ?? cfg.skip_retrieval);
+    // Selected evidence is authoritative only when the run explicitly opts into
+    // evidence-only or hybrid/pinned-evidence semantics. Merely having evidence
+    // selected in the workspace must not silently contaminate an ordinary
+    // Balanced/Precision/Recall/Custom retrieval run.
+    const includeSelectedEvidence = skipRetrieval || Boolean(input.include_selected_evidence);
     if (skipRetrieval && !selected.length)
       throw new Error("Select at least one evidence record before using evidence-only mode.");
     if (!skipRetrieval && !cfg.source_collection) throw new Error("Select a corpus database.");
@@ -309,8 +397,8 @@ export function createResearchWorkspace(deps: Deps) {
     }
     if (selected.length > 500)
       throw new Error("Research supports at most 500 selected evidence records in one run.");
-    const selectedPayload = selectedEvidencePayload();
-    if (skipRetrieval && selectedPayload.length !== selected.length)
+    const selectedPayload = includeSelectedEvidence ? selectedEvidencePayload() : [];
+    if (includeSelectedEvidence && selectedPayload.length !== selected.length)
       throw new Error(
         "One or more selected evidence records are no longer available. Remove the stale selection and try again.",
       );
@@ -362,20 +450,34 @@ export function createResearchWorkspace(deps: Deps) {
       provider,
       model,
     });
-    persistPrefs();
+    persistResearchPreferences();
 
-    const job = await api("/api/jobs/rag", {
+    const job = await api(endpoint, {
       method: "POST",
       body: JSON.stringify({
         prompt,
         instructions: instructions || null,
+        filter_plan: input.filter_plan ?? null,
+        // Explicit follow-up context scope travels only for a new thread turn.
+        ...(Array.isArray(input.context_turn_ids) && input.thread_id && !retryTurnId
+          ? { context_turn_ids: input.context_turn_ids.map(String) }
+          : {}),
+        pipeline_id: cfg.pipeline_id || null,
+        pipeline_version: cfg.pipeline_version || null,
+        settings_pipeline_overrides:
+          input.settings_pipeline_overrides ?? cfg.settings_pipeline_overrides ?? null,
+        run_pipeline_overrides: input.run_pipeline_overrides ?? cfg.run_pipeline_overrides ?? null,
         source_collection: cfg.source_collection || "",
         selected_evidence: selectedPayload,
         skip_retrieval: skipRetrieval,
+        use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
+        use_prior_claim_memory: Boolean(cfg.use_prior_claim_memory),
+        memory_profile_id: cfg.memory_profile_id || null,
         locales: cfg.locales,
         search_types: cfg.search_types,
         k: cfg.k,
         fetch_k: cfg.fetch_k,
+        automatic_sizing: Boolean(cfg.automatic_sizing),
         lambda_mult: cfg.lambda_mult,
         rrf_k: cfg.rrf_k,
         rerank_top_n: cfg.rerank_top_n,
@@ -413,6 +515,7 @@ export function createResearchWorkspace(deps: Deps) {
             : null,
         bind_citations: Boolean(cfg.bind_citations),
         include_works_cited: Boolean(cfg.include_works_cited),
+        prompt_metadata: cfg.prompt_metadata,
         auto_grade: Boolean(cfg.auto_grade),
         auto_grade_provider: gradeConfig?.provider || null,
         auto_grade_model: gradeConfig?.model || null,
@@ -426,11 +529,17 @@ export function createResearchWorkspace(deps: Deps) {
     });
     state.jobs = [job, ...state.jobs.filter((existing: Any) => existing.id !== job.id)];
     rememberRagRun(job);
-    persistPrefs();
+    persistResearchPreferences();
     syncJobProgressToasts();
     startJobPolling();
     shellRefreshHook?.();
-    toast(`Research started · ${providerDisplayName(profile)} · ${model}`, { tone: "success" });
+    toast(
+      trf("runtime.toast.research_started", {
+        provider: providerDisplayName(profile),
+        model,
+      }),
+      { tone: "success" },
+    );
     return researchJobForUi(job);
   }
   async function gradeResearchJob(jobId: Any) {
@@ -450,11 +559,16 @@ export function createResearchWorkspace(deps: Deps) {
     const request = job?.request || job?.result?.rag_request || {};
     if (!request || typeof request !== "object") return researchConfigForUi();
     const keys = [
+      "pipeline_id",
+      "pipeline_version",
+      "settings_pipeline_overrides",
+      "run_pipeline_overrides",
       "source_collection",
       "locales",
       "search_types",
       "k",
       "fetch_k",
+      "automatic_sizing",
       "lambda_mult",
       "rrf_k",
       "rerank_top_n",
@@ -467,42 +581,31 @@ export function createResearchWorkspace(deps: Deps) {
       "evidence_total_char_limit",
       "bind_citations",
       "include_works_cited",
+      "prompt_metadata",
       "auto_grade",
       "auto_grade_provider_profile_id",
       "provider_profile_id",
       "skip_retrieval",
+      "use_prior_response_memory",
+      "use_prior_claim_memory",
+      "memory_profile_id",
     ];
     const patch = Object.fromEntries(
       keys.filter((key) => request[key] !== undefined).map((key) => [key, request[key]]),
     );
     patch.prompt = request.prompt || job?.prompt || "";
     patch.instructions = request.instructions || "";
-    return updateResearchConfig(patch);
+    // Loading a historical run prepares an ephemeral draft. It must not rewrite
+    // the user's current Settings overrides or other saved Research defaults.
+    return normalizedResearchConfig({ ...researchConfigForUi(), ...patch });
   }
-  async function getResponseFaqPage({ limit = 50, offset = 0, query = "" } = {}) {
-    if (!canAccessPage("faq"))
-      throw new Error(tr("permissions.faq_denied", "Your role cannot open Response Library."));
-    const params = new URLSearchParams({
-      limit: String(Math.max(1, Math.min(1000, Number(limit) || 50))),
-      offset: String(Math.max(0, Number(offset) || 0)),
-    });
-    const search = String(query || "").trim();
-    if (search) params.set("query", search);
-    return api(`/api/response-cache/records?${params}`);
-  }
-  function gradeResponseFaqRecord(record: Loose = {}) {
-    return gradeRagResponse({
-      question: record.question || "",
-      answer: record.text || "",
-      evidence: Array.isArray(record.evidence) ? record.evidence : [],
-      responseRecordId: record.record_id || null,
-      generationProvider: record.provider || null,
-      generationModel: record.model || null,
-    });
-  }
-  function rerunResponseFaqRecord(record: Loose = {}) {
-    return prepareRagRerun(record.rag_request || {});
-  }
+  const { getResponseFaqPage, gradeResponseFaqRecord, rerunResponseFaqRecord } = createResponseFaq({
+    api,
+    canAccessPage,
+    tr,
+    gradeRagResponse,
+    prepareRagRerun: (request) => prepareRagRerun(request),
+  });
   function rememberRagPrompt(prompt: Any, instructions: Any, extra: Loose = {}) {
     const question = String(prompt || "").trim();
     const guidance = String(instructions || "").trim();
@@ -549,8 +652,11 @@ export function createResearchWorkspace(deps: Deps) {
     if (Array.isArray(request.search_types) && request.search_types.length)
       cfg.search_types = [...request.search_types];
     for (const key of [
+      "pipeline_id",
+      "pipeline_version",
       "k",
       "fetch_k",
+      "automatic_sizing",
       "lambda_mult",
       "rrf_k",
       "rerank_top_n",
@@ -563,6 +669,7 @@ export function createResearchWorkspace(deps: Deps) {
       "evidence_total_char_limit",
       "bind_citations",
       "include_works_cited",
+      "prompt_metadata",
       "auto_grade",
     ]) {
       if (request[key] !== undefined) cfg[key] = cloneAuditValue(request[key]);
@@ -656,7 +763,8 @@ export function createResearchWorkspace(deps: Deps) {
       );
       if (gradeProfile) cfg.auto_grade_provider_profile_id = gradeProfile.id;
     }
-    persistPrefs();
+    persistResearchPreferences();
+    persistSettingsPreferences();
     navigateTo("rag");
   }
   return {

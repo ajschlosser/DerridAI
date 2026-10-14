@@ -1,4 +1,27 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { assertionSummaries, assertionValues } from "./fieldAssertions";
+import { toast } from "../composables/notifications";
+import {
+  reviewItemFromKey as sharedReviewItemFromKey,
+  selectedReviewItems as sharedSelectedReviewItems,
+} from "./reviewItems";
 
 // Evidence and review selection: which workspace/database records are picked as Research evidence or marked for review.
 // Moved verbatim from the legacy runtime; the runtime's state object and helpers are passed in as dependencies.
@@ -10,77 +33,40 @@ type Fn = (...args: any[]) => any; // eslint-disable-line @typescript-eslint/no-
 
 /** The helpers that still live in the legacy runtime. */
 type Helper =
-  | "fullCitation"
   | "hasCapability"
-  | "inlineCitation"
   | "localRecordKey"
   | "persistPrefs"
   | "ragEvidenceRecordPayload"
   | "recordDbStatus"
   | "shellRefreshHook"
   | "storeReceipt"
-  | "toast"
-  | "tr"
-  | "trf";
-type Deps = { state: Loose } & Record<Helper, Fn>;
+  | "tr";
+type Deps = { state: Loose; invalidateShellStatus?: Fn } & Record<Helper, Fn>;
+
+/** Key of one workspace record in the review selection (`reviewSelection`). */
+export function reviewKey(file: Any, index: Any) {
+  return `${file.id}::${index}`;
+}
+/** Whether `key` is currently selected as Research evidence in the given state. */
+export function isEvidenceSelected(state: Loose, key: Any) {
+  return Boolean(state.selectedEvidence?.[key]);
+}
 
 export function createEvidenceSelection(deps: Deps) {
   const {
     state,
-    fullCitation,
     hasCapability,
-    inlineCitation,
     localRecordKey,
     persistPrefs,
     ragEvidenceRecordPayload,
     recordDbStatus,
     shellRefreshHook,
     storeReceipt,
-    toast,
     tr,
-    trf,
   } = deps;
-  function reviewKey(file: Any, index: Any) {
-    return `${file.id}::${index}`;
-  }
-  function reviewItemFromKey(key: Any) {
-    const split = String(key).lastIndexOf("::");
-    if (split < 0) return null;
-    const fileId = key.slice(0, split),
-      index = Number(key.slice(split + 2));
-    const file = state.files.find((f: Any) => f.id === fileId);
-    if (!file || !Number.isInteger(index) || !file.records[index]) return null;
-    return { file, index, record: file.records[index], key };
-  }
-  function selectedReviewItems() {
-    return [...state.reviewSelection].map(reviewItemFromKey).filter(Boolean);
-  }
-  async function copyCitation(record: Any, kind = "inline") {
-    const text = kind === "full" ? fullCitation(record) : inlineCitation(record);
-    try {
-      await navigator.clipboard.writeText(text);
-      // Say exactly what reached the clipboard, so the reader can check it before pasting.
-      toast(
-        trf(
-          kind === "full"
-            ? "record.full_citation_copied_value"
-            : "record.inline_citation_copied_value",
-          kind === "full"
-            ? "Copied full citation to the clipboard: {citation}"
-            : "Copied inline citation to the clipboard: {citation}",
-          { citation: text },
-        ),
-        { tone: "success", duration: 7000 },
-      );
-    } catch (error: Any) {
-      toast(
-        trf("record.copy_failed_reason", "Could not copy citation: {error}", {
-          error: error?.message || String(error),
-        }),
-        { tone: "danger" },
-      );
-    }
-  }
+  const invalidateShellStatus = deps.invalidateShellStatus ?? (() => undefined);
+  const reviewItemFromKey = (key: Any) => sharedReviewItemFromKey(state, key);
+  const selectedReviewItems = () => sharedSelectedReviewItems(state);
   function workspaceEvidenceKey(file: Any, index: Any) {
     return `workspace:${file.id}:${index}`;
   }
@@ -91,13 +77,14 @@ export function createEvidenceSelection(deps: Deps) {
     return Object.values(state.selectedEvidence || {}).filter(Boolean);
   }
   function evidenceIsSelected(key: Any) {
-    return Boolean(state.selectedEvidence?.[key]);
+    return isEvidenceSelected(state, key);
   }
   function setEvidence(key: Any, item: Any, selected = true) {
     if (!state.selectedEvidence || typeof state.selectedEvidence !== "object")
       state.selectedEvidence = {};
     if (selected) state.selectedEvidence[key] = item;
     else delete state.selectedEvidence[key];
+    invalidateShellStatus();
     persistPrefs();
     shellRefreshHook();
   }
@@ -120,8 +107,8 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function toggleWorkspaceEvidence(file: Any, index: Any) {
     if (!hasCapability("evidence.select")) {
-      toast(tr("permissions.evidence_denied", "Your role cannot change selected evidence."), {
-        tone: "warn",
+      toast(tr("permissions.evidence_denied"), {
+        tone: "warning",
       });
       return;
     }
@@ -154,6 +141,8 @@ export function createEvidenceSelection(deps: Deps) {
         discourse_role: record.discourse_role || null,
         target: record.target || null,
         proposition_status: record.proposition_status || null,
+        metadata: assertionValues(record),
+        assertions: assertionSummaries(record),
         inline_citation: record.inline_citation || null,
         text_preview: String(record.text || "")
           .replace(/\s+/g, " ")
@@ -166,8 +155,8 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function toggleDbEvidence(collection: Any, id: Any, record: Any = {}) {
     if (!hasCapability("evidence.select")) {
-      toast(tr("permissions.evidence_denied", "Your role cannot change selected evidence."), {
-        tone: "warn",
+      toast(tr("permissions.evidence_denied"), {
+        tone: "warning",
       });
       return;
     }
@@ -190,6 +179,8 @@ export function createEvidenceSelection(deps: Deps) {
         discourse_role: record.discourse_role || null,
         target: record.target || null,
         proposition_status: record.proposition_status || null,
+        metadata: assertionValues(record),
+        assertions: assertionSummaries(record),
         inline_citation: record.inline_citation || null,
         text_preview: String(record.text || "")
           .replace(/\s+/g, " ")
@@ -202,12 +193,13 @@ export function createEvidenceSelection(deps: Deps) {
   }
   function clearSelectedEvidence() {
     if (!hasCapability("evidence.select")) {
-      toast(tr("permissions.evidence_denied", "Your role cannot change selected evidence."), {
-        tone: "warn",
+      toast(tr("permissions.evidence_denied"), {
+        tone: "warning",
       });
       return;
     }
     state.selectedEvidence = {};
+    invalidateShellStatus();
     persistPrefs();
     shellRefreshHook();
   }
@@ -237,7 +229,6 @@ export function createEvidenceSelection(deps: Deps) {
     reviewKey,
     reviewItemFromKey,
     selectedReviewItems,
-    copyCitation,
     workspaceEvidenceKey,
     dbEvidenceKey,
     selectedEvidenceEntries,

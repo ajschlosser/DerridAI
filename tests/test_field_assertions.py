@@ -1,0 +1,493 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""Regression coverage for canonical metadata assertions and legacy projection."""
+
+from __future__ import annotations
+
+import pytest
+from app.corpus_record_quality import _metadata_source_quality_gate
+from app.field_assertions import (
+    FieldAssertion,
+    confirm_absence,
+    confirm_assertion,
+    create_model_assertion,
+    create_nlp_assertion,
+    current_assertion_by_name,
+    get_assertions,
+    migrate_record_assertions,
+    project_record_assertions,
+    replace_assertion_evidence,
+    reset_fields_for_evaluation,
+    validate_projection,
+)
+from app.metadata_schema import (
+    MetadataSchema,
+    SchemaField,
+    SchemaGroup,
+    SchemaMember,
+    default_schema,
+)
+from pydantic import ValidationError
+
+
+def test_repeatable_members_have_independent_stable_assertions() -> None:
+    schema = MetadataSchema(
+        name="Relations",
+        groups=[
+            SchemaGroup(key="discourse", label="Discourse", intro="Classify."),
+            SchemaGroup(key="quotation", label="Quotation", intro="Extract."),
+        ],
+        fields=[
+            SchemaField(
+                field_id="field-quotation-relations",
+                name="quotation_relations",
+                label="Quotation relations",
+                type="repeatable",
+                group="quotation",
+                max_items=4,
+                members=[
+                    SchemaMember(
+                        field_id="member-quoted-speaker",
+                        name="quoted_speaker",
+                        label="Quoted speaker",
+                    ),
+                    SchemaMember(
+                        field_id="member-quoted-addressee",
+                        name="quoted_addressee",
+                        label="Quoted addressee",
+                    ),
+                ],
+            )
+        ],
+    )
+    record = {"record_id": "r-repeatable", "record_revision": 1}
+    create_model_assertion(
+        record,
+        "quotation_relations",
+        [{
+            "instance_id": "relation:levinas",
+            "quoted_speaker": "Levinas",
+            "quoted_addressee": "Derrida",
+        }],
+        schema=schema,
+        confidence=0.8,
+        evidence=[{"block_id": "b1"}],
+    )
+
+    members = []
+    for bucket in record["field_assertions"].values():
+        for value in bucket:
+            parsed = FieldAssertion.model_validate(value)
+            if parsed.container_field_id:
+                members.append(parsed)
+    assert {(item.instance_id, item.member_name) for item in members} == {
+        ("relation:levinas", "quoted_speaker"),
+        ("relation:levinas", "quoted_addressee"),
+    }
+    assert len({item.field_id for item in members}) == 2
+    assert all(item.evidence == [{"block_id": "b1"}] for item in members)
+    record["quotation_relations"] = [{"instance_id": "corrupt", "quoted_speaker": "Wrong"}]
+    project_record_assertions(record)
+    assert record["quotation_relations"] == [{
+        "instance_id": "relation:levinas",
+        "quoted_addressee": "Derrida",
+        "quoted_speaker": "Levinas",
+    }]
+
+
+def test_repeatable_legacy_container_assertion_migrates_idempotently() -> None:
+    schema = MetadataSchema(
+        name="Relations",
+        groups=[
+            SchemaGroup(key="discourse", label="Discourse", intro="Classify."),
+            SchemaGroup(key="quotation", label="Quotation", intro="Extract."),
+        ],
+        fields=[
+            SchemaField(
+                field_id="field-relations",
+                name="relations",
+                label="Relations",
+                type="repeatable",
+                group="quotation",
+                max_items=2,
+                members=[
+                    SchemaMember(
+                        field_id="member-speaker",
+                        name="speaker",
+                        label="Speaker",
+                    )
+                ],
+            )
+        ],
+    )
+    record = {"record_id": "legacy-repeatable", "record_revision": 1}
+    create_model_assertion(
+        record,
+        "relations",
+        [{"instance_id": "voice:1", "speaker": "SPEAKER_1"}],
+        schema=None,
+    )
+    migrate_record_assertions(record, schema)
+    first_counts = {key: len(values) for key, values in record["field_assertions"].items()}
+    migrate_record_assertions(record, schema)
+    assert {key: len(values) for key, values in record["field_assertions"].items()} == first_counts
+    members = [
+        FieldAssertion.model_validate(value)
+        for values in record["field_assertions"].values()
+        for value in values
+        if value.get("member_field_id") == "member-speaker"
+    ]
+    assert len(members) == 1
+
+
+def test_model_confidence_and_human_confirmation_preserve_derivation() -> None:
+    record = {"record_id": "r1", "record_revision": 1, "speaker": "Derrida"}
+    assertion = create_model_assertion(
+        record,
+        "speaker",
+        "Derrida",
+        confidence=0.82,
+        model="test-model",
+        evidence=[{"block_id": "b1"}],
+    )
+    confirmed = confirm_assertion(record, assertion, actor="reviewer")
+    project_record_assertions(record)
+
+    assert confirmed.derivation_method == "model"
+    assert confirmed.authority_status == "human_confirmed"
+    assert confirmed.confidence == pytest.approx(0.82)
+    assert record["metadata_field_status"]["speaker"]["status"] == "human_confirmed"
+    assert record["metadata_field_status"]["speaker"]["assertion_id"] == confirmed.assertion_id
+    assert not validate_projection(record)
+
+
+def test_nlp_candidate_assertion_preserves_derived_unreviewed_provenance() -> None:
+    record = {"record_id": "nlp-1", "record_revision": 1}
+    assertion = create_nlp_assertion(
+        record,
+        "persons",
+        ["Rousseau"],
+        schema=default_schema(),
+        reason="Direct PERSON entity mention in the current Record.",
+        evidence=[{
+            "kind": "nlp_span",
+            "start": 0,
+            "end": 8,
+            "text": "Rousseau",
+            "tag": "PERSON",
+        }],
+        method="nlp:spacy:test-model",
+        model="test-model",
+        legacy_metadata={"candidate_only": True, "value_source": "nlp"},
+    )
+    project_record_assertions(record)
+
+    assert assertion.derivation_method == "derridai:nlp"
+    assert assertion.evaluation_status == "value_supported"
+    assert assertion.authority_status == "unreviewed"
+    assert assertion.confidence is None
+    assert record["persons"] == ["Rousseau"]
+    status = record["metadata_field_status"]["persons"]
+    assert status["status"] == "model_inferred"
+    assert status["method"] == "nlp:spacy:test-model"
+    assert assertion.legacy_metadata["candidate_only"] is True
+    assert assertion.legacy_metadata["value_source"] == "nlp"
+
+
+def test_legacy_migration_is_idempotent_and_preserves_confirmed_absence() -> None:
+    record = {
+        "record_id": "r2",
+        "record_revision": 1,
+        "position_holder": None,
+        "metadata_field_status": {
+            "position_holder": {
+                "status": "confirmed_absent",
+                "method": "human_review",
+                "reason": "No supported position holder.",
+            }
+        },
+    }
+
+    migrate_record_assertions(record)
+    first = record["field_assertions"]
+    migrate_record_assertions(record)
+
+    assert record["field_assertions"] == first
+    current = current_assertion_by_name(record, "position_holder")
+    assert current is not None
+    assert current.value_status == "confirmed_absent"
+    assert record["position_holder"] is None
+    assert not validate_projection(record)
+
+
+def test_evaluated_unknown_confidence_is_serialized_as_null() -> None:
+    assertion = FieldAssertion(
+        record_id="r3",
+        field_id="legacy.speaker",
+        field_name="speaker",
+        value="Derrida",
+        derivation_method="model",
+        evaluation_status="value_supported",
+        confidence=None,
+    )
+
+    assert assertion.model_dump(mode="json")["confidence"] is None
+
+
+def test_invalid_states_are_rejected() -> None:
+    with pytest.raises(ValidationError):
+        FieldAssertion(
+            record_id="r4",
+            field_id="legacy.speaker",
+            field_name="speaker",
+            value="Derrida",
+            derivation_method="model",
+            evaluation_status="not_evaluated",
+            confidence=0.5,
+        )
+    with pytest.raises(ValidationError):
+        FieldAssertion(
+            record_id="r5",
+            field_id="legacy.speaker",
+            field_name="speaker",
+            value="Derrida",
+            derivation_method="model",
+            evaluation_status="evaluation_failed",
+            value_status="confirmed_absent",
+        )
+
+
+def test_human_absence_supersedes_model_candidate_without_claiming_model_absence() -> None:
+    record = {"record_id": "r6", "record_revision": 1}
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        None,
+        outcome="no_supported_value",
+        confidence=0.73,
+        model="test-model",
+        evidence=[{"block_ids": ["b1"], "reason": "No supported holder in this passage."}],
+    )
+    absent = confirm_absence(record, "position_holder", prior=model, actor="reviewer")
+
+    assert absent.derivation_method == "model"
+    assert absent.authority_status == "human_confirmed"
+    assert absent.value_status == "confirmed_absent"
+    assert absent.supersedes_assertion_id == model.assertion_id
+    assert absent.model == "test-model"
+    assert absent.confidence == pytest.approx(0.73)
+    assert absent.evidence == model.evidence
+
+
+
+
+def test_confirmed_absence_repairs_legacy_model_placeholder_without_losing_provenance() -> None:
+    record = {"record_id": "r7", "record_revision": 1}
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        "no value",
+        confidence=0.58,
+        model="legacy-model",
+        evidence=[{"block_ids": ["b1"]}],
+    )
+
+    absent = confirm_absence(record, "position_holder", prior=model, actor="reviewer")
+
+    assert absent.value is None
+    assert absent.derivation_method == "model"
+    assert absent.evaluation_status == "no_supported_value"
+    assert absent.authority_status == "human_confirmed"
+    assert absent.value_status == "confirmed_absent"
+    assert absent.model == "legacy-model"
+    assert absent.confidence == pytest.approx(0.58)
+    assert absent.evidence == model.evidence
+
+
+def test_confirmed_absence_preserves_model_provenance_and_evidence() -> None:
+    record = {"record_id": "r8", "record_revision": 2}
+    model = create_model_assertion(
+        record,
+        "position_holder",
+        None,
+        outcome="no_supported_value",
+        confidence=0.64,
+        model="model-x",
+        run_id="run-1",
+        evidence=[{"block_ids": ["b2"], "confidence": 0.9}],
+    )
+    absent = confirm_absence(record, "position_holder", prior=model, actor="reviewer")
+
+    assert absent.derivation_method == "model"
+    assert absent.authority_status == "human_confirmed"
+    assert absent.value_status == "confirmed_absent"
+    assert absent.confidence == pytest.approx(0.64)
+    assert absent.model == "model-x"
+    assert absent.run_id == "run-1"
+    assert absent.evidence == [{"block_ids": ["b2"], "confidence": 0.9}]
+
+
+def test_reset_fields_for_evaluation_preserves_durable_history() -> None:
+    record = {"record_id": "r9", "record_revision": 1}
+    original = create_model_assertion(
+        record,
+        "stance",
+        "critical",
+        confidence=0.8,
+        model="model-x",
+    )
+    project_record_assertions(record)
+
+    reset_fields_for_evaluation(record, ["stance"], method="metadata_rerun")
+    current = current_assertion_by_name(record, "stance")
+
+    assert current is not None
+    assert current.assertion_id != original.assertion_id
+    assert current.value_status == "unresolved"
+    assert current.evaluation_status == "not_evaluated"
+    assert "stance" not in record
+    assert any(
+        item.assertion_id == original.assertion_id
+        for item in get_assertions(record, original.field_id)
+    )
+
+
+def test_worker_reset_discards_ephemeral_field_history() -> None:
+    record = {"record_id": "r10", "record_revision": 1}
+    create_model_assertion(record, "stance", "critical", confidence=0.8)
+    create_model_assertion(record, "speaker", "Derrida", confidence=0.9)
+    project_record_assertions(record)
+
+    reset_fields_for_evaluation(
+        record,
+        ["stance"],
+        discard_history=True,
+        method="metadata_rerun_worker",
+    )
+
+    assert current_assertion_by_name(record, "stance") is None
+    assert "stance" not in record
+    assert current_assertion_by_name(record, "speaker") is not None
+
+
+def test_replacing_evidence_supersedes_without_changing_authority() -> None:
+    record = {"record_id": "r11", "record_revision": 3}
+    model = create_model_assertion(
+        record,
+        "speaker",
+        "Derrida",
+        confidence=0.9,
+        evidence=[{"block_ids": ["b1"]}],
+    )
+    confirmed = confirm_assertion(record, model)
+    changed = replace_assertion_evidence(
+        record,
+        confirmed,
+        [{"block_ids": ["b2"], "reviewed_by": "human"}],
+        actor="reviewer",
+    )
+
+    assert changed.supersedes_assertion_id == confirmed.assertion_id
+    assert changed.derivation_method == "model"
+    assert changed.authority_status == "human_confirmed"
+    assert changed.evidence == [{"block_ids": ["b2"], "reviewed_by": "human"}]
+
+
+def test_schema_identity_survives_legacy_migration_and_custom_fields() -> None:
+    schema = default_schema()
+    schema.fields.append(
+        schema.fields[0].model_copy(
+            update={
+                "name": "interlocutor_role",
+                "label": "Interlocutor role",
+                "field_id": "field-interlocutor-role",
+                "semantic_compatibility_id": None,
+            }
+        )
+    )
+    record = {
+        "record_id": "r7",
+        "record_revision": 1,
+        "interlocutor_role": "critic",
+        "metadata_field_status": {
+            "interlocutor_role": {"status": "model_inferred", "confidence": 0.7}
+        },
+    }
+
+    migrate_record_assertions(record, schema)
+    assertion = current_assertion_by_name(record, "interlocutor_role")
+
+    assert assertion is not None
+    assert assertion.field_id == "field-interlocutor-role"
+    assert record["interlocutor_role"] == "critic"
+
+
+
+def test_source_quality_failure_creates_unresolved_assertion_not_absence() -> None:
+    schema = default_schema()
+    record = {
+        "record_id": "r-source-quality",
+        "record_revision": 1,
+        "text": "corrupted source",
+        "source_quality_issues": [{"code": "fragmented_glyph_layout", "severity": "blocking"}],
+        "metadata_field_status": {},
+    }
+
+    blocked = _metadata_source_quality_gate(
+        record,
+        ["speaker"],
+        None,
+        schema=schema,
+    )
+
+    assert blocked is True
+    assertion = current_assertion_by_name(record, "speaker")
+    assert assertion is not None
+    assert assertion.evaluation_status == "not_evaluated"
+    assert assertion.value_status == "unresolved"
+    assert assertion.authority_status == "unreviewed"
+    assert assertion.value_status != "confirmed_absent"
+    assert "confidence" not in assertion.model_dump(mode="json", exclude_none=True)
+
+
+def test_accept_unreviewed_suggestions_accepts_model_values_but_keeps_human_and_invalid() -> None:
+    """Autonomous selection preserves epistemic state and never touches human or invalid fields."""
+    from app.field_assertions import accept_unreviewed_suggestions
+
+    record = {"record_id": "r1", "record_revision": 1}
+    low = create_model_assertion(record, "stance", "describe", outcome="uncertain", confidence=0.4)
+    record["field_assertions"][low.field_id][-1]["value_status"] = "unresolved"
+    human = create_model_assertion(record, "speaker", "Derrida", confidence=0.9)
+    confirm_assertion(record, human, actor="reviewer")
+    create_model_assertion(record, "discourse_role", "not-a-role", outcome="evaluation_failed")
+    unselected = create_model_assertion(record, "claim_scope", "local", confidence=0.5, select=False)
+    reset_fields_for_evaluation(record, ["claim_scope"], method="test")
+    project_record_assertions(record)
+
+    assert accept_unreviewed_suggestions(record) == 2
+
+    stance = current_assertion_by_name(record, "stance")
+    assert stance.value == "describe" and stance.value_status == "unresolved"
+    assert stance.authority_status == "unreviewed" and stance.method == "llm"
+    assert stance.legacy_metadata["autonomous_decision"]["actor_kind"] == "autonomous_policy"
+    assert stance.supersedes_assertion_id == low.assertion_id
+    scope = current_assertion_by_name(record, "claim_scope")
+    assert scope.value == unselected.value and scope.value_status == "present"
+    assert scope.legacy_metadata["autonomous_decision"]["actor_kind"] == "autonomous_policy"
+    assert current_assertion_by_name(record, "speaker").authority_status == "human_confirmed"
+    assert current_assertion_by_name(record, "discourse_role").value_status == "invalid"
+    assert record["stance"] == "describe" and record["claim_scope"] == "local"

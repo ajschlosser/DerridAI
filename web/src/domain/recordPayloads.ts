@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 // Record payload and PDF-link helpers, moved verbatim from the legacy runtime.
@@ -80,4 +97,153 @@ export function normalizePdfLinkChanges(record: Loose, links: Loose[]): Loose {
   if (record.pdf_page !== undefined) changes.pdf_page = null;
   if (record.pdf_links !== undefined) changes.pdf_links = null;
   return changes;
+}
+
+// API boundaries receive only fields required by the operation. These lists
+// contain structural/bibliographic context only; scholarly metadata is
+// discovered from the record and FieldAssertions below, so ordinary schema
+// fields never need to be added to a transport whitelist.
+export const TOUCHUP_TRANSPORT_CONTEXT_FIELDS = [
+  "record_id",
+  "work",
+  "document_author",
+  "edition",
+  "year",
+  "page_start",
+  "page_end",
+  "text",
+  "inline_citation",
+  "full_citation",
+  "needs_review",
+  "review_reason",
+  "field_assertions",
+  "current_field_assertions",
+];
+export const RAG_EVIDENCE_TRANSPORT_FIELDS = [
+  "record_id",
+  "canonical_work_id",
+  "work",
+  "document_author",
+  "edition",
+  "year",
+  "page_start",
+  "page_end",
+  "translator",
+  "text",
+  "document_language",
+  "document_languages",
+  "field_assertions",
+  "current_field_assertions",
+];
+
+const NON_METADATA_TRANSPORT_FIELDS = new Set([
+  "accepted",
+  "rejected",
+  "review_disposition",
+  "review_state",
+  "needs_review",
+  "review_reason",
+  "updates",
+  "activity",
+  "metadata_field_status",
+  "metadata_evidence",
+  "metadata_decisions",
+  "metadata_stage_status",
+  "metadata_execution_ledger",
+  "metadata_incomplete_fields",
+  "metadata_review_fields",
+  "metadata_attention_reasons",
+  "metadata_needs_attention",
+  "metadata_complete",
+  "metadata_enrichment_state",
+  "metadata_enrichment_history",
+  "metadata_disputes",
+  "human_touched_fields",
+  "human_touched_at",
+  "field_assertions",
+  "current_field_assertions",
+  "_chroma_id",
+  "_researcher_text_policy",
+]);
+
+function assertionFieldNames(source: Loose): string[] {
+  const names = new Set<string>();
+  const assertions = source.field_assertions;
+  if (!assertions || typeof assertions !== "object") return [];
+  for (const values of Object.values(assertions as Record<string, unknown>)) {
+    if (!Array.isArray(values)) continue;
+    for (const assertion of values) {
+      if (
+        assertion &&
+        typeof assertion === "object" &&
+        typeof (assertion as Loose).field_name === "string"
+      )
+        names.add((assertion as Loose).field_name);
+    }
+  }
+  return [...names];
+}
+
+function customMetadataFields(source: Loose, baseFields: string[]): string[] {
+  const assertedFields = assertionFieldNames(source);
+  if (assertedFields.length) return assertedFields;
+
+  // Compatibility for records that predate FieldAssertion. New schema-defined
+  // scholarly metadata is assertion-native; legacy records may still expose
+  // materialized scalar/list values without assertion history.
+  const base = new Set(baseFields);
+  return Object.keys(source).filter(
+    (key) =>
+      !base.has(key) &&
+      !NON_METADATA_TRANSPORT_FIELDS.has(key) &&
+      !key.startsWith("_") &&
+      ![
+        "record_id",
+        "text",
+        "source_spans",
+        "source_units",
+        "source_unit_ids",
+        "source_block_ids",
+      ].includes(key) &&
+      (typeof source[key] === "string" ||
+        typeof source[key] === "number" ||
+        typeof source[key] === "boolean" ||
+        Array.isArray(source[key])),
+  );
+}
+
+export function upsertRecordPayload(record: unknown, chromaId: string | null = null): Loose {
+  const out = recordPayload(record, { includeChromaId: false });
+  if (chromaId) out._chroma_id = chromaId;
+  return out;
+}
+
+export function touchupRecordPayload(record: unknown, fields: string[] = []): Loose {
+  const source = record && typeof record === "object" ? (record as Loose) : {};
+  return recordPayload(record, {
+    fields: [
+      ...fields,
+      ...TOUCHUP_TRANSPORT_CONTEXT_FIELDS,
+      ...customMetadataFields(source, TOUCHUP_TRANSPORT_CONTEXT_FIELDS),
+    ],
+  });
+}
+
+export function ragEvidenceRecordPayload(record: unknown): Loose {
+  const source = record && typeof record === "object" ? (record as Loose) : {};
+  return recordPayload(record, {
+    fields: [
+      ...RAG_EVIDENCE_TRANSPORT_FIELDS,
+      ...customMetadataFields(source, RAG_EVIDENCE_TRANSPORT_FIELDS),
+    ],
+  });
+}
+
+export function isResponseCacheStore(store: Loose | null | undefined): boolean {
+  return Boolean(
+    store &&
+      (store.name === "_response_cache" ||
+        store.storage_name === "derridai_response_cache" ||
+        store.metadata?.derridai_system_collection === "response_cache"),
+  );
 }

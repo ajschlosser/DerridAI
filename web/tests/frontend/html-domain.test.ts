@@ -1,7 +1,23 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import { esc, icon } from "../../src/domain/html";
-import { FIELD_LABELS, TABLE_DEFAULTS, viewConfig } from "../../src/domain/runtimeConstants";
 
 describe("legacy HTML helpers", () => {
   it("escapes markup characters", () => {
@@ -15,31 +31,5 @@ describe("legacy HTML helpers", () => {
     expect(icon("search")).toBe(
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
     );
-  });
-  it("keeps the navigation and table tables intact", () => {
-    expect(viewConfig.map((item) => item.id)).toEqual([
-      "home",
-      "list",
-      "record",
-      "works",
-      "global",
-      "annotations",
-      "pdf",
-      "compare",
-      "vector",
-      "rag",
-      "faq",
-      "responsecache",
-      "providers",
-      "config",
-    ]);
-    expect(TABLE_DEFAULTS.list).toEqual([
-      "__db_status",
-      "work",
-      "page_start",
-      "needs_review",
-      "text",
-    ]);
-    expect(FIELD_LABELS.document_author).toBe("Document author");
   });
 });

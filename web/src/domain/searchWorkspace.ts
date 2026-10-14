@@ -1,14 +1,33 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { mlaPageSpan } from "./citations";
 import { valueMatches } from "./recordQuery";
 import { cloneAuditValue, sortRows } from "./recordValues";
-import {
-  SEARCH_AUTOCOMPLETE_EXCLUDED,
-  SEARCH_FILTER_FIELDS,
-  SEARCH_LOADED_COLUMNS,
-  TABLE_DEFAULTS,
-} from "./runtimeConstants";
+import { SEARCH_LOADED_COLUMNS, TABLE_DEFAULTS } from "./runtimeConstants";
 import { decompressUrlState } from "./urlState";
+import { toast } from "../composables/notifications";
+import { createUpdateSearchQuery } from "./searchQuery";
+import {
+  filterOpsForKind,
+  isSearchFilterFieldName,
+  type FilterFieldKind,
+} from "./searchFilterSchema";
 
 // The Search workspace: building the results, facets and columns the Search view shows, and the commands it sends
 // (scope, query, filters, sort, paging, selection, running a search). Moved verbatim from the legacy runtime; the
@@ -30,11 +49,11 @@ type Helper =
   | "canUse"
   | "clearReviewSelection"
   | "copyCitation"
+  | "corpusGeneration"
   | "dbEvidenceKey"
   | "dbSearchFilterDescriptors"
   | "dbSearchWhere"
   | "evidenceIsSelected"
-  | "filterOpsForField"
   | "getTableColumns"
   | "hasCapability"
   | "isResearcher"
@@ -44,7 +63,10 @@ type Helper =
   | "openDatabaseCreationFromResearch"
   | "openStoreRecordEditor"
   | "openTouchup"
-  | "persistPrefs"
+  | "persistListPreferences"
+  | "persistRecordViewPreferences"
+  | "persistSearchPreferences"
+  | "persistVectorPreferences"
   | "recordDbStatus"
   | "recordStores"
   | "refreshPresenceForRows"
@@ -61,10 +83,9 @@ type Helper =
   | "selectedEvidenceEntries"
   | "selectedReviewItems"
   | "setReviewSelected"
-  | "shell"
+  | "refreshShell"
   | "syncUrl"
   | "tableAvailableFields"
-  | "toast"
   | "toggleDbEvidence"
   | "toggleSort"
   | "toggleWorkspaceEvidence"
@@ -85,11 +106,11 @@ export function createSearchWorkspace(deps: Deps) {
     canUse,
     clearReviewSelection,
     copyCitation,
+    corpusGeneration,
     dbEvidenceKey,
     dbSearchFilterDescriptors,
     dbSearchWhere,
     evidenceIsSelected,
-    filterOpsForField,
     getTableColumns,
     hasCapability,
     isResearcher,
@@ -99,7 +120,10 @@ export function createSearchWorkspace(deps: Deps) {
     openDatabaseCreationFromResearch,
     openStoreRecordEditor,
     openTouchup,
-    persistPrefs,
+    persistListPreferences,
+    persistRecordViewPreferences,
+    persistSearchPreferences,
+    persistVectorPreferences,
     recordDbStatus,
     recordStores,
     refreshPresenceForRows,
@@ -116,10 +140,9 @@ export function createSearchWorkspace(deps: Deps) {
     selectedEvidenceEntries,
     selectedReviewItems,
     setReviewSelected,
-    shell,
+    refreshShell,
     syncUrl,
     tableAvailableFields,
-    toast,
     toggleDbEvidence,
     toggleSort,
     toggleWorkspaceEvidence,
@@ -128,20 +151,107 @@ export function createSearchWorkspace(deps: Deps) {
     urlFromState,
     workspaceEvidenceSelectionKey,
   } = deps;
+  let localCorpusCache: {
+    generation: string;
+    rows: Any[];
+    available: string[] | null;
+    filterFields: string[] | null;
+    suggestions: Loose | null;
+  } = {
+    generation: "",
+    rows: [],
+    available: null,
+    filterFields: null,
+    suggestions: null,
+  };
+  let localQueryCache: {
+    generation: string;
+    query: string;
+    filtersKey: string;
+    rows: Any[];
+  } | null = null;
+  let normalizedTextCache = new WeakMap<object, string>();
+
+  function localCorpusRows() {
+    const generation = String(corpusGeneration() ?? "");
+    if (localCorpusCache.generation === generation) return localCorpusCache.rows;
+    localCorpusCache = {
+      generation,
+      rows: allRows(),
+      available: null,
+      filterFields: null,
+      suggestions: null,
+    };
+    localQueryCache = null;
+    normalizedTextCache = new WeakMap();
+    return localCorpusCache.rows;
+  }
+
+  function normalizedRecordText(record: Any) {
+    if (record && typeof record === "object") {
+      const cached = normalizedTextCache.get(record);
+      if (cached !== undefined) return cached;
+      const normalized = String(record.text || "").toLocaleLowerCase();
+      normalizedTextCache.set(record, normalized);
+      return normalized;
+    }
+    return String(record?.text || "").toLocaleLowerCase();
+  }
+
   function localSearchBaseRows() {
-    const q = String(state.globalSearch || "")
+    const rows = localCorpusRows();
+    const generation = localCorpusCache.generation;
+    const query = String(state.globalSearch || "")
       .trim()
       .toLocaleLowerCase();
-    return allRows().filter(
+    const filters = Array.isArray(state.globalFilters) ? state.globalFilters : [];
+    const filtersKey = JSON.stringify(filters);
+
+    if (
+      localQueryCache &&
+      localQueryCache.generation === generation &&
+      localQueryCache.query === query &&
+      localQueryCache.filtersKey === filtersKey
+    )
+      return localQueryCache.rows;
+
+    const canNarrowPreviousQuery =
+      Boolean(localQueryCache) &&
+      localQueryCache!.generation === generation &&
+      localQueryCache!.filtersKey === filtersKey &&
+      query.startsWith(localQueryCache!.query);
+    const candidates = canNarrowPreviousQuery ? localQueryCache!.rows : rows;
+    const matched = candidates.filter(
       (row: Any) =>
-        (!q ||
-          String(row.record.text || "")
-            .toLocaleLowerCase()
-            .includes(q)) &&
-        state.globalFilters.every((filter: Any) =>
+        (!query || normalizedRecordText(row.record).includes(query)) &&
+        filters.every((filter: Any) =>
           valueMatches(row.record[filter.field], filter.op, filter.value),
         ),
     );
+    localQueryCache = { generation, query, filtersKey, rows: matched };
+    return matched;
+  }
+
+  function localSearchStaticMetadata() {
+    const rows = localCorpusRows();
+    const availableFields =
+      localCorpusCache.available ||
+      tableAvailableFields(rows, ["__file", ...SEARCH_LOADED_COLUMNS]) ||
+      [];
+    if (!localCorpusCache.available) {
+      localCorpusCache.available = availableFields;
+      localCorpusCache.filterFields = availableFields.filter((field: string) =>
+        isSearchFilterFieldName(field),
+      );
+      localCorpusCache.suggestions = searchSuggestions(rows, {
+        fields: localCorpusCache.filterFields || [],
+      });
+    }
+    return {
+      available: [...availableFields],
+      filterFields: [...(localCorpusCache.filterFields || [])],
+      suggestions: localCorpusCache.suggestions || {},
+    };
   }
   function searchScope() {
     return state.globalSearchMode === "database" || isResearcher() ? "database" : "loaded";
@@ -212,7 +322,7 @@ export function createSearchWorkspace(deps: Deps) {
       record: cloneAuditValue(record),
       db_status: {
         kind: "exists",
-        label: tr("search.db_in_database", "In DB"),
+        label: tr("search.db_in_database"),
         title: state.activeStore,
       },
       selected: false,
@@ -269,18 +379,20 @@ export function createSearchWorkspace(deps: Deps) {
     if (isResearcher()) state.globalSearchMode = "database";
     if (autoRun && state.globalSearchAutoRun && searchScope() === "database" && stores.length) {
       state.globalSearchAutoRun = false;
-      persistPrefs();
+      persistSearchPreferences();
       await runSearchWorkspace({ silent: true });
     }
     const scope = searchScope();
     const layout = searchLayout(scope);
+    const loadedRows = localCorpusRows();
     const pageSize = Math.max(10, Number(state.pageSize) || 100);
     let results = [],
       total = 0,
       facets = [],
       suggestions = {},
       available = [],
-      filters = [];
+      filters = [],
+      filterFieldNames: string[] = [];
     if (scope === "loaded") {
       const base = localSearchBaseRows();
       let rows = base.filter((row: Any) => searchRowMatchesFacets(row));
@@ -292,9 +404,14 @@ export function createSearchWorkspace(deps: Deps) {
       const slice = rows.slice(start, start + pageSize);
       await refreshPresenceForRows(slice).catch(() => undefined);
       results = slice.map(buildWorkspaceSearchResult);
+      const staticMetadata = localSearchStaticMetadata();
+      available = staticMetadata.available;
+      filterFieldNames = staticMetadata.filterFields;
+      // Loaded records have no index capability contract. Let the facet helper
+      // derive eligibility from the record field inventory, retaining only its
+      // compatibility ordering for schema-less/legacy data.
       facets = buildSearchFacets(base);
-      suggestions = searchSuggestions(allRows());
-      available = tableAvailableFields(allRows(), ["__file", ...SEARCH_LOADED_COLUMNS]);
+      suggestions = staticMetadata.suggestions;
       filters = state.globalFilters.map(searchFilterDescriptor);
     } else {
       let dbItems = (state.storeSearchResults || [])
@@ -307,8 +424,12 @@ export function createSearchWorkspace(deps: Deps) {
       const start = (state.globalPage - 1) * pageSize;
       results = dbItems.slice(start, start + pageSize);
       const records = (state.storeSearchResults || []).map((item: Any) => item.record || {});
-      facets = buildSearchFacets(records, { database: true });
-      suggestions = searchSuggestions(records, { database: true });
+      const activeStore = stores.find((store: Any) => store.name === state.activeStore);
+      filterFieldNames = Array.isArray(activeStore?.filter_fields)
+        ? activeStore.filter_fields.map(String).filter(isSearchFilterFieldName)
+        : [];
+      facets = buildSearchFacets(records, { database: true, fields: filterFieldNames });
+      suggestions = searchSuggestions(records, { database: true, fields: filterFieldNames });
       available = tableAvailableFields(
         records.map((record: Any) => ({ record })),
         ["__db_status"],
@@ -318,14 +439,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (!available.includes("__db_status")) available.unshift("__db_status");
     const columns = getTableColumns("global", available);
     const pages = Math.max(1, Math.ceil(total / pageSize));
-    const filterFields = [
-      ...new Set([
-        ...SEARCH_FILTER_FIELDS,
-        ...available.filter(
-          (field: Any) => !field.startsWith("__") && !SEARCH_AUTOCOMPLETE_EXCLUDED.has(field),
-        ),
-      ]),
-    ]
+    const filterFields = [...new Set(filterFieldNames)]
       .filter(Boolean)
       .sort((a, b) => label(a).localeCompare(label(b)));
     return {
@@ -347,8 +461,8 @@ export function createSearchWorkspace(deps: Deps) {
       })),
       active_store: state.activeStore || "",
       has_database: stores.length > 0,
-      has_loaded_records: allRows().length > 0,
-      total_loaded_records: allRows().length,
+      has_loaded_records: loadedRows.length > 0,
+      total_loaded_records: loadedRows.length,
       results,
       total,
       page: state.globalPage,
@@ -370,6 +484,7 @@ export function createSearchWorkspace(deps: Deps) {
       loading: Boolean(state.storeSearchLoading),
       search_has_run:
         scope === "loaded" || Boolean(state.searchDatabaseRan || state.storeSearchResults.length),
+      search_error: scope === "database" ? String(state.storeSearchError || "") : "",
       capabilities: {
         can_select: scope === "loaded" && canUse("editLocalRecords"),
         can_review: scope === "loaded" && canUse("editLocalRecords"),
@@ -385,21 +500,20 @@ export function createSearchWorkspace(deps: Deps) {
     state.globalPage = 1;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
-    persistPrefs();
+    state.storeSearchError = "";
+    persistSearchPreferences();
     syncUrl({ replace: false });
-    shell();
+    refreshShell();
     return getSearchWorkspaceSnapshot({ refresh: true, autoRun: false });
   }
-  function updateSearchQuery(value: Any, { replace = true } = {}) {
-    state.globalSearch = String(value || "");
-    state.globalPage = 1;
-    persistPrefs();
-    syncUrl({ replace });
-    return state.globalSearch;
-  }
+  const updateSearchQuery = createUpdateSearchQuery({
+    state,
+    persistPrefs: persistSearchPreferences,
+    syncUrl,
+  });
   function setSearchAdvancedOpen(value: Any) {
     state.globalAdvancedOpen = Boolean(value);
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchMethod(method: Any) {
@@ -418,20 +532,15 @@ export function createSearchWorkspace(deps: Deps) {
       );
       if (Object.keys(safe).length !== Object.keys(previous).length) {
         state.dbSearchWhere = safe;
-        toast(
-          tr(
-            "search.contains_filter_removed",
-            "Contains metadata filters are available only in Filters only mode and were removed.",
-          ),
-          { tone: "info" },
-        );
+        toast(tr("search.contains_filter_removed"), { tone: "info" });
       }
     }
     state.dbSearchMethod = method;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchStore(name: Any) {
@@ -440,41 +549,44 @@ export function createSearchWorkspace(deps: Deps) {
       : recordStores()[0]?.name || "";
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
+    persistVectorPreferences();
     syncUrl({ replace: true });
-    shell();
+    refreshShell();
   }
   function setSearchMmrOptions({ fetch_k, lambda_mult }: Loose = {}) {
     if (fetch_k != null) state.dbSearchFetchK = Math.max(1, Math.min(1000, Number(fetch_k) || 100));
     if (lambda_mult != null)
       state.dbSearchLambda = Math.max(0, Math.min(1, Number(lambda_mult) || 0));
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchLayout(layout: Any) {
     if (!["compact", "roomy", "cards"].includes(layout)) return;
     const key = searchScope() === "database" ? "database" : "traditional";
     state.searchResultLayouts = { ...(state.searchResultLayouts || {}), [key]: layout };
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchPage(page: Any) {
     state.globalPage = Math.max(1, Number(page) || 1);
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchPageSize(size: Any) {
     state.pageSize = Math.max(10, Math.min(500, Number(size) || 100));
     state.globalPage = 1;
-    persistPrefs();
+    persistListPreferences();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function setSearchColumns(columns: Any) {
     const scope = searchScope();
     const available =
       scope === "loaded"
-        ? tableAvailableFields(allRows(), ["__file", ...SEARCH_LOADED_COLUMNS])
+        ? localSearchStaticMetadata().available
         : tableAvailableFields(
             (state.storeSearchResults || []).map((item: Any) => ({ record: item.record || {} })),
             ["__db_status"],
@@ -482,12 +594,11 @@ export function createSearchWorkspace(deps: Deps) {
     const requested = [...new Set((columns || []).map(String))].filter((key) =>
       available.includes(key),
     );
-    const fallback =
-      scope === "loaded" ? SEARCH_LOADED_COLUMNS : TABLE_DEFAULTS.global;
+    const fallback = scope === "loaded" ? SEARCH_LOADED_COLUMNS : TABLE_DEFAULTS.global;
     state.tableColumns.global = requested.length
       ? requested
       : fallback.filter((key) => available.includes(key));
-    persistPrefs();
+    persistListPreferences();
     syncUrl({ replace: true });
   }
   function setSearchSort(key: Any) {
@@ -499,7 +610,7 @@ export function createSearchWorkspace(deps: Deps) {
       };
     } else toggleSort(state.globalSort, key);
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function toggleSearchFacet(field: Any, value: Any) {
@@ -511,13 +622,13 @@ export function createSearchWorkspace(deps: Deps) {
     else delete next[field];
     state.searchFacetFilters = next;
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function clearSearchFacetFilters() {
     state.searchFacetFilters = {};
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function clearSearchAllFilters() {
@@ -527,10 +638,21 @@ export function createSearchWorkspace(deps: Deps) {
     state.globalPage = 1;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
-    persistPrefs();
+    state.storeSearchError = "";
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
-  function addSearchAdvancedFilter({ field = "", op = "eq", value = "" } = {}) {
+  function addSearchAdvancedFilter({
+    field = "",
+    op = "eq",
+    value = "",
+    kind = "text",
+  }: {
+    field?: string;
+    op?: string;
+    value?: string;
+    kind?: FilterFieldKind;
+  } = {}) {
     field = String(field || "");
     value = String(value ?? "").trim();
     if (!field) return;
@@ -541,10 +663,9 @@ export function createSearchWorkspace(deps: Deps) {
       state.dbSearchWhere = next;
       state.storeSearchResults = [];
       state.searchDatabaseRan = false;
+      state.storeSearchError = "";
     } else {
-      const nextOp = filterOpsForField(field).some(([candidate]: Any) => candidate === op)
-        ? op
-        : "eq";
+      const nextOp = filterOpsForKind(kind).some(([candidate]) => candidate === op) ? op : "eq";
       if (!["empty", "notempty"].includes(nextOp) && !value) return;
       state.globalFilters = [
         ...(state.globalFilters || []),
@@ -552,7 +673,7 @@ export function createSearchWorkspace(deps: Deps) {
       ];
     }
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   function removeSearchAdvancedFilter(id: Any) {
@@ -563,12 +684,13 @@ export function createSearchWorkspace(deps: Deps) {
       state.dbSearchWhere = next;
       state.storeSearchResults = [];
       state.searchDatabaseRan = false;
+      state.storeSearchError = "";
     } else
       state.globalFilters = (state.globalFilters || []).filter(
         (filter: Any) => String(filter.id) !== String(id),
       );
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
   }
   async function runSearchWorkspace({ silent = false } = {}) {
@@ -587,15 +709,16 @@ export function createSearchWorkspace(deps: Deps) {
       : "similarity";
     const query = String(state.globalSearch || "").trim();
     if (method !== "filter" && !query) {
-      if (!silent) toast(tr("search.enter_query", "Enter a search query first."), { tone: "warn" });
+      if (!silent) toast(tr("search.enter_query"), { tone: "warning" });
       return getSearchWorkspaceSnapshot({ refresh: false, autoRun: false });
     }
     state.dbSearchFetchK = Math.max(1, Math.min(1000, Number(state.dbSearchFetchK) || 100));
     state.dbSearchLambda = Math.max(0, Math.min(1, Number(state.dbSearchLambda ?? 0.7)));
     state.storeSearchLoading = true;
     state.searchDatabaseRan = true;
+    state.storeSearchError = "";
     state.globalPage = 1;
-    persistPrefs();
+    persistSearchPreferences();
     syncUrl({ replace: true });
     try {
       const safeWhere = safeDbSearchWhere(method);
@@ -615,13 +738,16 @@ export function createSearchWorkspace(deps: Deps) {
       state.storeSearchResults = Array.isArray(data?.results) ? data.results : [];
     } catch (error) {
       state.storeSearchResults = [];
+      // A failed search is not an empty corpus. Keep the reason so the view can report the
+      // failure instead of presenting zero matches as a successful result.
+      state.storeSearchError = (error as Error).message || String(error);
       if (!silent)
-        toast(`${tr("research.search_failed", "Search failed")}: ${(error as Error).message}`, {
+        toast(`${tr("research.search_failed")}: ${(error as Error).message}`, {
           tone: "danger",
         });
     } finally {
       state.storeSearchLoading = false;
-      persistPrefs();
+      persistSearchPreferences();
       syncUrl({ replace: true });
     }
     return getSearchWorkspaceSnapshot({ refresh: false, autoRun: false });
@@ -659,7 +785,8 @@ export function createSearchWorkspace(deps: Deps) {
         if (isResearcher()) {
           state.activeStore = result.collection;
           state.researcherRecordId = result.id;
-          persistPrefs();
+          persistVectorPreferences();
+          persistRecordViewPreferences();
           navigateTo("record");
         } else openStoreRecordEditor({ ...result.record, _chroma_id: result.id });
         return true;
@@ -684,8 +811,8 @@ export function createSearchWorkspace(deps: Deps) {
     if (item?.file) setReviewSelected(item.file, item.index, Boolean(selected));
   }
   function setSearchPageSelected(keys: Any, selected: Any) {
+    // setReviewSelected owns review-domain persistence for each changed row.
     for (const key of keys || []) setSearchResultSelected(key, selected);
-    persistPrefs();
   }
   function clearSearchSelection() {
     clearReviewSelection();
@@ -698,7 +825,7 @@ export function createSearchWorkspace(deps: Deps) {
     if (action === "bulk")
       return openBulkFieldEditor({
         rows: items,
-        title: tr("search.bulk_edit_selected", "Bulk edit selected records"),
+        title: tr("search.bulk_edit_selected"),
       });
   }
   function getSearchShareHref() {
@@ -714,11 +841,14 @@ export function createSearchWorkspace(deps: Deps) {
     if (store) state.activeStore = store;
     state.storeSearchResults = [];
     state.searchDatabaseRan = false;
+    state.storeSearchError = "";
     if (searchScope() === "database" && (state.globalSearch || Object.keys(dbSearchWhere()).length))
       state.globalSearchAutoRun = true;
-    persistPrefs();
+    persistSearchPreferences();
+    persistListPreferences();
+    persistVectorPreferences();
     syncUrl({ replace: false });
-    shell();
+    refreshShell();
     return getSearchWorkspaceSnapshot({ refresh: true, autoRun: true });
   }
   function safeDbSearchWhere(method = state.dbSearchMethod) {
@@ -744,19 +874,6 @@ export function createSearchWorkspace(deps: Deps) {
         safe[field] = rawValue;
     }
     return safe;
-  }
-  function researcherDbRecords() {
-    const map = new Map();
-    for (const item of state.storeSearchResults || []) {
-      const record = item.record || {};
-      const id = String(item.id || record._chroma_id || record.record_id || "");
-      if (id) map.set(id, { ...record, _chroma_id: id });
-    }
-    for (const record of state.storeRecords || []) {
-      const id = String(record._chroma_id || record.record_id || "");
-      if (id && !map.has(id)) map.set(id, record);
-    }
-    return [...map.values()];
   }
   return {
     localSearchBaseRows,
@@ -792,6 +909,5 @@ export function createSearchWorkspace(deps: Deps) {
     getSearchShareHref,
     restoreSearchViewFromHref,
     safeDbSearchWhere,
-    researcherDbRecords,
   };
 }

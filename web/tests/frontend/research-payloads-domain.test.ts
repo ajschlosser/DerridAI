@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   finiteResearchNumber,
@@ -44,22 +61,90 @@ describe("research payloads", () => {
 
   it("normalizes the Research configuration", () => {
     const cfg = normalizedResearchConfig({
+      pipeline_id: " research.balanced ",
+      pipeline_version: "2",
       k: 9999,
+      automatic_sizing: true,
       locales: ["en", "xx"],
       reranker: "nope",
       bind_citations: false,
     });
     expect(cfg).toMatchObject({
+      pipeline_id: "research.balanced",
+      pipeline_version: 2,
       k: 500,
+      automatic_sizing: true,
       locales: ["en"],
       reranker: "cross_encoder",
       response_language: "auto",
       bind_citations: false,
       include_works_cited: true,
+      use_prior_response_memory: false,
+      use_prior_claim_memory: false,
+      memory_profile_id: "",
       fetch_k: 500,
       lambda_mult: 0.7,
     });
-    expect(normalizedResearchConfig().search_types).toEqual(["similarity", "lexical", "mmr"]);
+    expect(normalizedResearchConfig()).toMatchObject({
+      pipeline_id: "",
+      pipeline_version: null,
+      search_types: ["similarity", "lexical", "mmr"],
+    });
+    expect(normalizedResearchConfig().prompt_metadata).toMatchObject({
+      evidence: expect.arrayContaining(["speaker", "position_holder", "discourse_role"]),
+      context: [],
+      record: [],
+    });
+    expect(
+      normalizedResearchConfig({
+        prompt_metadata: {
+          evidence: ["field-custom", "_private", "field-custom"],
+          context: ["stance"],
+          record: ["quoted_author"],
+        },
+      }).prompt_metadata,
+    ).toEqual({
+      evidence: ["field-custom"],
+      context: ["stance"],
+      record: ["quoted_author"],
+    });
+  });
+
+  it("preserves custom assertion metadata for Research evidence", () => {
+    const item = researchEvidenceForUi({
+      key: "custom",
+      kind: "workspace",
+      record_id: "r-custom",
+      field_assertions: {
+        "field-conceptual-tension": [
+          {
+            assertion_id: "a-custom",
+            field_id: "field-conceptual-tension",
+            field_name: "conceptual_tension",
+            value: "hospitality / sovereignty",
+            derivation_method: "model",
+            evaluation_status: "value_supported",
+            authority_status: "human_confirmed",
+            value_status: "present",
+            confidence: 0.88,
+          },
+        ],
+      },
+      current_field_assertions: {
+        "field-conceptual-tension": "a-custom",
+      },
+    });
+
+    expect(item?.metadata).toMatchObject({
+      conceptual_tension: "hospitality / sovereignty",
+    });
+    expect(item?.assertions).toEqual([
+      expect.objectContaining({
+        field_name: "conceptual_tension",
+        field_id: "field-conceptual-tension",
+        authority_status: "human_confirmed",
+      }),
+    ]);
   });
 
   it("shapes profiles, evidence and jobs for the UI", () => {

@@ -1,5 +1,22 @@
-// Copyright 2026 Aaron John Schlosser, PhD.
-import { ref } from "vue";
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { onScopeDispose, ref } from "vue";
 import { annotationsService } from "../services/annotations";
 import type { AnnotationWorkspaceItem, AnnotationsWorkspaceSnapshot } from "../types/annotations";
 
@@ -9,22 +26,41 @@ export function useAnnotationsWorkspace() {
   const error = ref("");
   const removing = ref<string | null>(null);
   let queryTimer: number | undefined;
+  let request = 0;
+  let disposed = false;
+  onScopeDispose(() => {
+    disposed = true;
+    request += 1;
+    window.clearTimeout(queryTimer);
+  });
 
   async function load(force = false) {
+    if (disposed) return;
+    const current = ++request;
     loading.value = true;
     error.value = "";
     try {
-      snapshot.value = await annotationsService.loadWorkspace(
-        force || Boolean(snapshot.value),
-      );
+      const result = await annotationsService.loadWorkspace(force || Boolean(snapshot.value));
+      if (current !== request) return;
+      snapshot.value = snapshot.value ? { ...result, view: snapshot.value.view } : result;
     } catch (exception) {
+      if (current !== request) return;
+      if (
+        exception &&
+        typeof exception === "object" &&
+        "status" in exception &&
+        [401, 403].includes(Number(exception.status))
+      )
+        snapshot.value = null;
       error.value = exception instanceof Error ? exception.message : String(exception);
     } finally {
-      loading.value = false;
+      if (current === request) loading.value = false;
     }
   }
 
   function setQuery(value: string) {
+    request += 1;
+    loading.value = false;
     annotationsService.setQuery(value);
     if (snapshot.value) snapshot.value = { ...snapshot.value, query: value };
     window.clearTimeout(queryTimer);
@@ -52,10 +88,14 @@ export function useAnnotationsWorkspace() {
       await load(true);
       return true;
     } catch (exception) {
-      window.dispatchEvent(new CustomEvent("derridai:toast", { detail: {
-        message: exception instanceof Error ? exception.message : String(exception),
-        tone: "danger",
-      }}));
+      window.dispatchEvent(
+        new CustomEvent("derridai:toast", {
+          detail: {
+            message: exception instanceof Error ? exception.message : String(exception),
+            tone: "danger",
+          },
+        }),
+      );
       return false;
     } finally {
       removing.value = null;

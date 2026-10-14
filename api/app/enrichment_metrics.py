@@ -1,4 +1,19 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Ten measures of how well a model's metadata enrichment is working, computed from the ledger.
 
 Every figure is a query over enrichment_ledger.jsonl (see enrichment_ledger.py), so it can be
@@ -23,12 +38,15 @@ from .enrichment_ledger import (
     CORRECTED,
     PROPOSED,
     RECHECK,
+    RECORD_RUN,
     REJECTED,
     RESUMED,
     REVIEW_EVENTS,
     SUSPENDED,
+    UNRESOLVED,
 )
 from .experiment_stats import cohens_kappa, two_proportion, wilson
+from .field_assertions import current_assertions, migrate_record_assertions
 
 THRESHOLDS = (0.7, 0.8, 0.9, 0.95)
 LEARNING_BUCKET = 10  # reviews per point on the learning curve
@@ -56,6 +74,20 @@ def _median(values: list[float]) -> float | None:
     ordered = sorted(values)
     mid = len(ordered) // 2
     return round(ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2, 2)
+
+
+def _percentile(values: list[float], quantile: float) -> float | None:
+    """Linearly interpolated percentile for small enrichment-latency samples."""
+    if not values:
+        return None
+    ordered = sorted(float(value) for value in values)
+    if len(ordered) == 1:
+        return round(ordered[0], 2)
+    position = max(0.0, min(1.0, quantile)) * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(len(ordered) - 1, lower + 1)
+    fraction = position - lower
+    return round(ordered[lower] + (ordered[upper] - ordered[lower]) * fraction, 2)
 
 
 def review_seconds(reviews: list[dict[str, Any]]) -> float | None:
@@ -102,7 +134,11 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
     proposals = [e for e in events if e["kind"] == PROPOSED]
     reviews = [e for e in events if e["kind"] in REVIEW_EVENTS]
     calls = [e for e in events if e["kind"] == CALL]
+    record_runs = [e for e in events if e["kind"] == RECORD_RUN]
     accepted = [e for e in reviews if e["kind"] == ACCEPTED]
+    # A reviewer who restated the value (J.P. -> J. P.) accepted it; it is counted apart so
+    # "accepted" is never read as "kept exactly as proposed".
+    accepted_equivalent = [e for e in accepted if e.get("equivalence_relation") == "equivalent"]
     corrected = [e for e in reviews if e["kind"] == CORRECTED]
     rejected = [e for e in reviews if e["kind"] == REJECTED]
     scored = [e for e in reviews if isinstance(e.get("confidence"), (int, float))]
@@ -135,8 +171,41 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
     # 8. Grounding: did the value cite a source block that exists?
     grounded = sum(1 for e in proposals if e.get("grounded"))
 
-    # 9. Cost of a value a person kept.
-    elapsed = sum(int(e.get("elapsed_ms") or 0) for e in calls)
+    # 9. Cost/latency of model work. Call events are already emitted per
+    # metadata family, so the same metrics also become family-specific through
+    # the existing by_field aggregation below.
+    call_elapsed = [
+        float(e.get("elapsed_ms") or 0)
+        for e in calls
+        if isinstance(e.get("elapsed_ms"), (int, float))
+    ]
+    elapsed = sum(call_elapsed)
+    record_elapsed = [
+        float(e.get("elapsed_ms") or 0)
+        for e in record_runs
+        if isinstance(e.get("elapsed_ms"), (int, float))
+    ]
+    requested_field_counts = [
+        float(e["requested_field_count"])
+        for e in calls
+        if isinstance(e.get("requested_field_count"), (int, float))
+    ]
+    input_char_counts = [
+        float(e["input_chars"])
+        for e in calls
+        if isinstance(e.get("input_chars"), (int, float))
+    ]
+
+    model_invocations = [
+        int(e["model_invocations"])
+        for e in calls
+        if isinstance(e.get("model_invocations"), (int, float))
+    ]
+    recovery_calls = sum(
+        int(e.get("recovery_calls") or 0)
+        for e in calls
+        if isinstance(e.get("recovery_calls"), (int, float))
+    )
 
     # 10. Learning curve: acceptance in successive groups of reviews.
     curve = []
@@ -154,7 +223,8 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         severities[str(e.get("severity") or ("cleared" if e["kind"] == REJECTED else "unknown"))] += 1
     firsts = [t for t in (_seconds(e) for e in calls) if t is not None]
     useful = [t for t in (_seconds(e) for e in events if e["kind"] in (AUTOFILLED, ACCEPTED)) if t is not None]
-    blind = [e for e in events if e["kind"] == BLIND_LABEL]
+    # An unresolved comparison is neither agreement nor disagreement.
+    blind = [e for e in events if e["kind"] == BLIND_LABEL and e.get("equivalence_relation") != "unknown"]
     blind_agreed = sum(1 for e in blind if e.get("agreed"))
     return {
         # Anchoring: how much more often people agree with the model when they can see its value than when they cannot.
@@ -178,6 +248,11 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         "reviews": len(reviews),
         "autofilled": len(autofilled),
         "acceptance_rate": _rate(len(accepted), len(reviews)),  # 1
+        "accepted_exact": len(accepted) - len(accepted_equivalent),
+        "accepted_equivalent": len(accepted_equivalent),
+        "accepted_equivalent_rate": _rate(len(accepted_equivalent), len(reviews)),
+        # Reviewer values saved when equivalence could not be decided; outside every denominator.
+        "unresolved_reviews": sum(1 for e in events if e["kind"] == UNRESOLVED),
         "brier_score": brier,  # 2 (0 is perfect; 0.25 is a coin toss)
         "reliability": reliability,  # 2
         "correction_rate": _rate(len(corrected), len(reviews)),  # 3
@@ -190,6 +265,40 @@ def _model_metrics(events: list[dict[str, Any]]) -> dict[str, Any]:
         "ungrounded_rate": _rate(len(proposals) - grounded, len(proposals)),  # 8
         "calls": len(calls),
         "failed_calls": sum(1 for e in calls if not e.get("ok")),
+        "call_latency_ms": {
+            "p50": _percentile(call_elapsed, 0.50),
+            "p95": _percentile(call_elapsed, 0.95),
+            "max": round(max(call_elapsed), 2) if call_elapsed else None,
+            "total": round(elapsed, 2),
+        },
+        "record_latency_ms": {
+            "records": len(record_elapsed),
+            "p50": _percentile(record_elapsed, 0.50),
+            "p95": _percentile(record_elapsed, 0.95),
+            "max": round(max(record_elapsed), 2) if record_elapsed else None,
+            "total": round(sum(record_elapsed), 2),
+        },
+        "structured_model_invocations": {
+            "reported_call_events": len(model_invocations),
+            "total": sum(model_invocations),
+            "p50_per_family": _percentile(
+                [float(value) for value in model_invocations],
+                0.50,
+            ),
+            "p95_per_family": _percentile(
+                [float(value) for value in model_invocations],
+                0.95,
+            ),
+            "recovery_calls": recovery_calls,
+        },
+        "call_contract": {
+            "requested_fields_p50": _percentile(requested_field_counts, 0.50),
+            "requested_fields_p95": _percentile(requested_field_counts, 0.95),
+            "requested_fields_total": round(sum(requested_field_counts), 2),
+            "input_chars_p50": _percentile(input_char_counts, 0.50),
+            "input_chars_p95": _percentile(input_char_counts, 0.95),
+            "input_chars_total": round(sum(input_char_counts), 2),
+        },
         "ms_per_call": _rate(elapsed, len(calls)),  # 9
         "ms_per_accepted_field": _rate(elapsed, len(accepted)),  # 9
         "learning_curve": curve,  # 10
@@ -232,13 +341,24 @@ def inter_model_agreement(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def unresolved_remaining(records: list[dict[str, Any]]) -> int:
-    """10. Fields still waiting for a person, across the records given."""
-    return sum(
-        1
-        for record in records
-        for info in (record.get("metadata_field_status") or {}).values()
-        if isinstance(info, dict) and info.get("status") in {"unresolved", "invalid"}
-    )
+    """10. Canonical assertions still waiting for a person."""
+    total = 0
+    for record in records:
+        migrate_record_assertions(record)
+        total += sum(
+            1
+            for assertion in current_assertions(record)
+            if not (
+                assertion.legacy_status in {"model_inferred", "llm_inferred"}
+                and assertion.value in (None, "", [])
+            )
+            and (
+                assertion.value_status in {"unresolved", "invalid"}
+                or assertion.evaluation_status == "evaluation_failed"
+                or assertion.authority_status == "disputed"
+            )
+        )
+    return total
 
 
 def compute(

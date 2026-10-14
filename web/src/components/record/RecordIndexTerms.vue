@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { ref } from "vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -55,29 +73,23 @@ function remove(index: number) {
           v-if="props.editable"
           type="button"
           class="record-index-remove"
-          :aria-label="i18n.tf('record.remove_term', 'Remove {value}', { value })"
+          :aria-label="i18n.tf('record.remove_term', { value })"
           @click="remove(index)"
         >
           ×
         </button>
       </span>
-      <span v-if="!props.values.length" class="record-index-empty">{{
-        i18n.t("ui.none", "None")
-      }}</span>
+      <span v-if="!props.values.length" class="record-index-empty">{{ i18n.t("ui.none") }}</span>
     </div>
     <div v-if="props.editable" class="record-index-add">
       <label
-        ><span class="sr-only">{{
-          i18n.tf("record.add_term", "Add {label}", { label: props.title })
-        }}</span
+        ><span class="sr-only">{{ i18n.tf("record.add_term", { label: props.title }) }}</span
         ><input
           v-model="draft"
-          :placeholder="
-            i18n.tf('record.add_term', 'Add {label}', { label: props.title.toLocaleLowerCase() })
-          "
+          :placeholder="i18n.tf('record.add_term', { label: props.title.toLocaleLowerCase() })"
           @keydown.enter.prevent="add" /></label
       ><button type="button" :disabled="!draft.trim()" @click="add">
-        {{ i18n.t("ui.add", "Add") }}
+        {{ i18n.t("ui.add") }}
       </button>
     </div>
   </section>

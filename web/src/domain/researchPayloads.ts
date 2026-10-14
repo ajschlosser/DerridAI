@@ -1,4 +1,22 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { assertionSummaries, assertionValues } from "./fieldAssertions";
 import { cloneAuditValue } from "./recordValues";
 
 // Shaping and validation of Research (RAG) data crossing the runtime/Vue boundary. Pure functions
@@ -42,6 +60,13 @@ export function researchProfileForUi(profile: Loose | null | undefined) {
 
 export function researchEvidenceForUi(item: Loose | null | undefined) {
   if (!item) return null;
+  const metadata: Record<string, unknown> =
+    item.metadata && typeof item.metadata === "object" && !Array.isArray(item.metadata)
+      ? (cloneAuditValue(item.metadata) as Record<string, unknown>)
+      : assertionValues(item);
+  const assertions = Array.isArray(item.assertions)
+    ? (cloneAuditValue(item.assertions) as ReturnType<typeof assertionSummaries>)
+    : assertionSummaries(item);
   return {
     key: item.key,
     kind: item.kind,
@@ -51,12 +76,14 @@ export function researchEvidenceForUi(item: Loose | null | undefined) {
     work: item.work || "",
     page_start: item.page_start ?? null,
     page_end: item.page_end ?? null,
-    speaker: item.speaker || null,
-    position_holder: item.position_holder || null,
-    stance: item.stance || null,
-    discourse_role: item.discourse_role || null,
-    target: item.target || null,
-    proposition_status: item.proposition_status || null,
+    speaker: item.speaker ?? metadata.speaker ?? null,
+    position_holder: item.position_holder ?? metadata.position_holder ?? null,
+    stance: item.stance ?? metadata.stance ?? null,
+    discourse_role: item.discourse_role ?? metadata.discourse_role ?? null,
+    target: item.target ?? metadata.target ?? null,
+    proposition_status: item.proposition_status ?? metadata.proposition_status ?? null,
+    metadata,
+    assertions,
     inline_citation: item.inline_citation || null,
     text_preview: item.text_preview || "",
     label: item.label || "",
@@ -68,6 +95,8 @@ export function researchJobForUi(job: Loose | null | undefined) {
   const result = job.result && typeof job.result === "object" ? job.result : null;
   return {
     id: job.id,
+    thread_id: job.thread_id,
+    turn_id: job.turn_id,
     type: job.type,
     status: job.status,
     stage: job.stage || "",
@@ -158,6 +187,42 @@ export function sanitizeResearchGeneration(input: unknown = {}) {
   return out;
 }
 
+const LEGACY_RESEARCH_PROMPT_METADATA_FIELDS = [
+  "speaker",
+  "quoted_speaker",
+  "quoted_author",
+  "quoted_work",
+  "quoted_position_holder",
+  "position_holder",
+  "stance",
+  "proposition_status",
+  "target",
+  "discourse_role",
+];
+
+function promptMetadataFields(value: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(value)) return [...fallback];
+  return [
+    ...new Set(
+      value
+        .map((item) => String(item || "").trim())
+        .filter((item) => item && item.length <= 120 && !item.startsWith("_")),
+    ),
+  ].slice(0, 120);
+}
+
+function normalizedPromptMetadata(value: unknown) {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  return {
+    evidence: promptMetadataFields(source.evidence, LEGACY_RESEARCH_PROMPT_METADATA_FIELDS),
+    context: promptMetadataFields(source.context),
+    record: promptMetadataFields(source.record),
+  };
+}
+
 export function normalizedResearchConfig(cfg: Loose = {}) {
   const locales = Array.isArray(cfg.locales)
     ? [...new Set(cfg.locales.map(String).filter((value) => ["en", "fr"].includes(value)))]
@@ -179,8 +244,15 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
     : "auto";
   return {
     ...cfg,
+    pipeline_id: String(cfg.pipeline_id || "").trim(),
+    pipeline_version: finiteResearchNumber(cfg.pipeline_version, null, {
+      integer: true,
+      min: 1,
+      max: 1000000,
+    }),
     k: finiteResearchNumber(cfg.k, 64, { integer: true, min: 1, max: 500 }),
     fetch_k: finiteResearchNumber(cfg.fetch_k, 500, { integer: true, min: 1, max: 5000 }),
+    automatic_sizing: Boolean(cfg.automatic_sizing),
     lambda_mult: finiteResearchNumber(cfg.lambda_mult, 0.7, { min: 0, max: 1 }),
     rrf_k: finiteResearchNumber(cfg.rrf_k, 60, { integer: true, min: 1, max: 10000 }),
     rerank_top_n: finiteResearchNumber(cfg.rerank_top_n, 24, { integer: true, min: 1, max: 500 }),
@@ -213,7 +285,11 @@ export function normalizedResearchConfig(cfg: Loose = {}) {
     search_types: searchTypes,
     bind_citations: cfg.bind_citations !== false,
     include_works_cited: cfg.include_works_cited !== false,
+    prompt_metadata: normalizedPromptMetadata(cfg.prompt_metadata),
     auto_grade: Boolean(cfg.auto_grade),
     skip_retrieval: Boolean(cfg.skip_retrieval),
+    use_prior_response_memory: Boolean(cfg.use_prior_response_memory),
+    use_prior_claim_memory: Boolean(cfg.use_prior_claim_memory),
+    memory_profile_id: String(cfg.memory_profile_id || ""),
   };
 }

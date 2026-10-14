@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import type { Meta, StoryObj } from "@storybook/vue3-vite";
 import WorksOverviewCard from "./WorksOverviewCard.vue";
 import type { WorksItem } from "../../types/works";
@@ -39,25 +56,31 @@ const work: WorksItem = {
   },
   metadata: [
     {
+      field_id: "derridai.document.document_author",
       field: "document_author",
       field_label: "Document author",
       value: "Jacques Derrida",
       mixed: false,
       unique_count: 0,
+      empty: false,
     },
     {
+      field_id: "derridai.document.publisher",
       field: "publisher",
       field_label: "Publisher",
       value: "Stanford University Press",
       mixed: false,
       unique_count: 0,
+      empty: false,
     },
     {
+      field_id: "derridai.document.publication_year",
       field: "publication_year",
       field_label: "Publication year",
       value: "1999",
       mixed: false,
       unique_count: 0,
+      empty: false,
     },
   ],
   status: { kind: "synced", label: "Synced" },
@@ -97,3 +120,7 @@ type Story = StoryObj<typeof WorksOverviewCard>;
 export const Admin: Story = {};
 export const WithCover: Story = { args: { work: { ...work, cover } } };
 export const Researcher: Story = { args: { mode: "researcher" } };
+export const InspectorNeedsReview: Story = {
+  args: { work: { ...work, review: 12 }, closable: true, canSync: true },
+};
+export const InDialog: Story = { args: { embedded: true } };

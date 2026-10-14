@@ -1,0 +1,168 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { ref } from "vue";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const corpusBuilderApi = vi.hoisted(() => ({
+  patchText: vi.fn(),
+  touchupText: vi.fn(),
+  setTouchupProposalStatus: vi.fn(),
+}));
+
+vi.mock("../../src/api/corpus", async () => {
+  const actual =
+    await vi.importActual<typeof import("../../src/api/corpus")>("../../src/api/corpus");
+  return { ...actual, corpusBuilderApi };
+});
+
+import { useCorpusTextReview } from "../../src/features/corpus-builder/composables/useCorpusTextReview";
+
+function setup() {
+  const currentBuild = ref<any | null>({ build_id: "b1" });
+  const selectedBuildId = ref("b1");
+  const selectedRecord = ref<any | null>({
+    record_id: "r1",
+    record_revision: 1,
+    text: "Original text",
+    text_length: 13,
+  });
+  const busy = ref("");
+  const sourceTranscriptionOpen = ref(true);
+  const llmActionProviderId = ref("");
+  const llmActionModel = ref("");
+  const selectedProviderId = ref("local");
+  const providerProfiles = ref<any[]>([{ id: "local", model: "qwen" }]);
+  const queued: Array<(rebase: boolean) => Promise<unknown>> = [];
+  const queueRecordRequest = vi.fn(
+    (
+      _recordId: string | readonly string[],
+      _fields: string[],
+      request: (rebase: boolean) => Promise<unknown>,
+    ) => queued.push(request),
+  );
+  const restoreReviewViewport = vi.fn(async () => undefined);
+  const applyAuthoritativeRecord = vi.fn((record: any) => {
+    selectedRecord.value = record;
+  });
+  const applyRecordToQueue = vi.fn();
+  const setMessage = vi.fn();
+
+  const review = useCorpusTextReview({
+    currentBuild,
+    selectedBuildId,
+    selectedRecord,
+    applyRecordToQueue,
+    busy,
+    sourceTranscriptionOpen,
+    llmActionProviderId,
+    llmActionModel,
+    selectedProviderId,
+    providerProfiles,
+    directProfilePayloadWithModel: (profileId, model) => ({
+      provider_profile_id: profileId,
+      model: model || "qwen",
+    }),
+    captureReviewViewport: () => ({
+      windowY: 0,
+      queueTop: 0,
+      recordTop: 0,
+      inspectorTop: 0,
+    }),
+    restoreReviewViewport,
+    queueRecordRequest,
+    applyAuthoritativeRecord,
+    textDraftKey: (buildId, recordId) => `draft.${buildId}.${recordId}`,
+    setMessage,
+    t: (key) => key,
+  });
+
+  return {
+    review,
+    selectedRecord,
+    sourceTranscriptionOpen,
+    llmActionProviderId,
+    llmActionModel,
+    queued,
+    applyAuthoritativeRecord,
+  };
+}
+
+describe("Corpus Builder text review", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it("applies reviewed text optimistically and queues persistence with the expected revision", async () => {
+    const state = setup();
+    state.review.beginTextEdit();
+    state.review.textDraft.value = "Edited text";
+
+    await state.review.saveReviewedText(false);
+
+    expect(state.selectedRecord.value?.text).toBe("Edited text");
+    expect(state.selectedRecord.value?.record_revision).toBe(2);
+    expect(state.review.editingText.value).toBe(false);
+    expect(state.queued).toHaveLength(1);
+
+    corpusBuilderApi.patchText.mockResolvedValue(state.selectedRecord.value);
+    await state.queued[0](false);
+    expect(corpusBuilderApi.patchText).toHaveBeenCalledWith("b1", "r1", "Edited text", 1, false);
+  });
+
+  it("applies the authoritative human-reviewed state after Mark reviewed persists", async () => {
+    const state = setup();
+    const authoritative = {
+      ...state.selectedRecord.value,
+      record_revision: 2,
+      text_review_status: "human_reviewed",
+      text_reviewed_at: "2026-09-26T02:30:00Z",
+    };
+    corpusBuilderApi.patchText.mockResolvedValue(authoritative);
+
+    await state.review.markTextReviewed();
+    expect(state.queued).toHaveLength(1);
+
+    await state.queued[0](false);
+
+    expect(state.applyAuthoritativeRecord).toHaveBeenCalledWith(authoritative);
+    expect(state.selectedRecord.value?.text_review_status).toBe("human_reviewed");
+  });
+
+  it("opens touch-up with the shared provider/model defaults", () => {
+    const state = setup();
+
+    state.review.openLlmTouchup("Original text");
+
+    expect(state.review.llmTouchupOpen.value).toBe(true);
+    expect(state.llmActionProviderId.value).toBe("local");
+    expect(state.llmActionModel.value).toBe("qwen");
+    expect(state.review.textDraft.value).toBe("Original text");
+  });
+
+  it("persists source transcription through the same reviewed-text path", async () => {
+    const state = setup();
+
+    await state.review.saveSourceTranscription("Corrected transcription");
+
+    expect(state.selectedRecord.value?.text).toBe("Corrected transcription");
+    expect(state.sourceTranscriptionOpen.value).toBe(false);
+    expect(state.queued).toHaveLength(1);
+  });
+});

@@ -1,0 +1,58 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.annotation-selection-component {
+  width: min(390px, calc(100vw - 24px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
+}
+.annotation-selection-component > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.annotation-selection-component > header > div {
+  display: grid;
+  gap: 2px;
+}
+.annotation-selection-component header b {
+  font-size: 0.875rem;
+}
+.annotation-selection-component header small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.annotation-selection-component blockquote {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--ui-accent);
+  background: var(--card);
+  font:
+    13px/1.5 Georgia,
+    serif;
+}
+.annotation-selection-component footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}

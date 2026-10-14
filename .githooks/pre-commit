@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Fast staged-file quality gate. The broader, change-aware regression plan runs pre-push and in CI.
+set -euo pipefail
+
+[ "${DERRIDAI_SKIP_PREFLIGHT:-}" = "1" ] && exit 0
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+"${PYTHON:-python3}" .githooks/copyright_headers.py
+[ "${DERRIDAI_SKIP_PREFLIGHT:-}" = "1" ] && exit 0
+mapfile -t FILES < <(git diff --cached --name-only --diff-filter=ACMR)
+[ "${#FILES[@]}" -eq 0 ] && exit 0
+
+format=()
+python_files=()
+frontend=()
+for path in "${FILES[@]}"; do
+  case "$path" in
+    *.md|*.json|*.yml|*.yaml|*.js|*.mjs|*.cjs|*.ts|*.tsx|*.vue|*.css|*.scss|*.html) format+=("$path") ;;
+  esac
+  case "$path" in
+    api/*.py|api/**/*.py|tests/*.py|tests/**/*.py|scripts/*.py|scripts/**/*.py) python_files+=("$path") ;;
+  esac
+  case "$path" in
+    web/src/*.ts|web/src/*.vue|web/src/*.js|web/src/**/*.ts|web/src/**/*.vue|web/src/**/*.js|web/sdk/*.ts|web/sdk/**/*.ts|web/tests/*.ts|web/tests/**/*.ts) frontend+=("${path#web/}") ;;
+  esac
+done
+
+run_batched() {
+  local -a command=()
+  while [ "$1" != "--" ]; do
+    command+=("$1")
+    shift
+  done
+  shift
+  local -a files=("$@")
+  local offset
+  # MSYS path expansion can exceed Windows' command-line limit even below ARG_MAX.
+  for ((offset=0; offset<${#files[@]}; offset+=32)); do
+    "${command[@]}" "${files[@]:offset:32}"
+  done
+}
+
+if [ "${#format[@]}" -gt 0 ]; then
+  PRETTIER=web/node_modules/.bin/prettier
+  if [ ! -x "$PRETTIER" ]; then
+    echo "pre-commit: web/node_modules missing; run: cd web && npm ci" >&2
+    exit 1
+  fi
+  run_batched "$PRETTIER" --check --config web/.prettierrc --ignore-path .prettierignore --ignore-unknown -- "${format[@]}"
+fi
+
+if [ "${#python_files[@]}" -gt 0 ]; then
+  if ! command -v ruff >/dev/null 2>&1; then
+    echo "pre-commit: ruff is missing (expected ruff==0.16.8)" >&2
+    exit 1
+  fi
+  run_batched ruff check -- "${python_files[@]}"
+fi
+
+if [ "${#frontend[@]}" -gt 0 ]; then
+  ESLINT=web/node_modules/.bin/eslint
+  if [ ! -x "$ESLINT" ]; then
+    echo "pre-commit: web/node_modules missing; run: cd web && npm ci" >&2
+    exit 1
+  fi
+  (cd web && run_batched ./node_modules/.bin/eslint --max-warnings 0 --no-warn-ignored -- "${frontend[@]}")
+fi

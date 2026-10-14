@@ -1,0 +1,140 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { ref, type Ref } from "vue";
+import { corpusBuilderApi, type CorpusBuild, type CorpusRecord } from "../../../api/corpus";
+
+type MessageTone = "error" | "notice";
+
+export interface JsonlPreviewState {
+  jsonl: string;
+  validation_errors: string[];
+  unresolved_fields: string[];
+  would_publish: boolean;
+}
+
+export function useCorpusPublication(options: {
+  currentBuild: Ref<CorpusBuild | null>;
+  selectedRecord: Ref<CorpusRecord | null>;
+  busy: Ref<string>;
+  setMessage: (message: string, tone?: MessageTone) => void;
+  refreshBuild: () => Promise<void>;
+  syncBuild?: (build: CorpusBuild) => void;
+  beforePublish?: () => Promise<void>;
+  t: (key: string, fallback?: string) => string;
+  tf: (key: string, values: Record<string, string | number>) => string;
+}) {
+  const jsonlPreviewOpen = ref(false);
+  const jsonlPreview = ref<JsonlPreviewState>({
+    jsonl: "",
+    validation_errors: [],
+    unresolved_fields: [],
+    would_publish: false,
+  });
+
+  async function openJsonlPreview() {
+    if (!options.currentBuild.value || !options.selectedRecord.value) return;
+    options.busy.value = "preview";
+    try {
+      const result = await corpusBuilderApi.previewRecord(
+        options.currentBuild.value.build_id,
+        options.selectedRecord.value.record_id,
+      );
+      jsonlPreview.value = {
+        jsonl: result.jsonl,
+        validation_errors: result.validation_errors || [],
+        unresolved_fields: result.unresolved_fields || [],
+        would_publish: Boolean(result.would_publish),
+      };
+      jsonlPreviewOpen.value = true;
+    } catch (exc) {
+      options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+    } finally {
+      options.busy.value = "";
+    }
+  }
+
+  async function publish(
+    publishOptions: { download?: boolean; automatic?: boolean; acceptUnreviewed?: boolean } = {},
+  ) {
+    if (!options.currentBuild.value) return null;
+    options.busy.value = "publish";
+    try {
+      const buildId = options.currentBuild.value.build_id;
+      // Finish outstanding optimistic review writes first, then recompute the
+      // complete authoritative corpus state. Publication should never race a
+      // background save or rely on counters/validation left over from the run.
+      await options.beforePublish?.();
+      if (options.currentBuild.value?.build_id !== buildId) return null;
+
+      const reconciled = await corpusBuilderApi.reconcile(buildId);
+      if (options.currentBuild.value?.build_id !== buildId) return null;
+      Object.assign(options.currentBuild.value, reconciled);
+      options.syncBuild?.(options.currentBuild.value);
+
+      if (
+        !publishOptions.acceptUnreviewed &&
+        reconciled.publication_readiness &&
+        !reconciled.publication_readiness.can_publish
+      ) {
+        options.setMessage(options.t("pdf_corpus.publication_waiting_help"));
+        return null;
+      }
+
+      const result = await corpusBuilderApi.publish(buildId, {
+        acceptUnreviewed: publishOptions.acceptUnreviewed,
+      });
+      // One authoritative detail read attaches the publication snapshot and
+      // syncs the already-loaded build rail in place. Publication does not add
+      // or remove builds, so a second full list read is unnecessary. If the
+      // reviewer navigated to another build during the request, leave that
+      // newly selected build alone rather than refreshing it as a side effect.
+      if (options.currentBuild.value?.build_id === buildId) await options.refreshBuild();
+      options.setMessage(
+        publishOptions.acceptUnreviewed
+          ? options.tf("pdf_corpus.published_unreviewed", {
+              count: result.record_count,
+              unreviewed: result.unreviewed_record_count || 0,
+              fields: result.unreviewed_accepted_field_count || 0,
+            })
+          : publishOptions.automatic
+            ? options.tf("pdf_corpus.auto_published", { count: result.record_count })
+            : options.tf("pdf_corpus.published", {
+                count: result.record_count,
+                hash: result.sha256.slice(0, 12),
+              }),
+      );
+      if (publishOptions.download) {
+        window.location.href = corpusBuilderApi.publicationUrl(result.publication_id);
+      }
+      return result;
+    } catch (exc) {
+      options.setMessage(exc instanceof Error ? exc.message : String(exc), "error");
+      return null;
+    } finally {
+      options.busy.value = "";
+    }
+  }
+
+  return {
+    jsonlPreviewOpen,
+    jsonlPreview,
+    openJsonlPreview,
+    publish,
+  };
+}

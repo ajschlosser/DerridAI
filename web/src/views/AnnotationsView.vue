@@ -1,19 +1,53 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, watch } from "vue";
 import AnnotationFeedItem from "../components/annotations/AnnotationFeedItem.vue";
 import { useAnnotationsWorkspace } from "../composables/useAnnotationsWorkspace";
 import { useI18nStore } from "../stores/i18n";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
+import type { AnnotationWorkspaceItem } from "../types/annotations";
 
 const i18n = useI18nStore();
 const annotations = useAnnotationsWorkspace();
 const { snapshot, loading, error, removing } = annotations;
 const emptyMessage = computed(() =>
-  snapshot.value?.total
-    ? i18n.t("annotations.empty", "No annotations match the current search.")
-    : i18n.t("annotations.none_yet", "No annotations yet."),
+  snapshot.value?.total ? i18n.t("annotations.empty") : i18n.t("annotations.none_yet"),
 );
+function roots(items: AnnotationWorkspaceItem[]) {
+  return items.filter((item) => !item.parent_id);
+}
+function replies(items: AnnotationWorkspaceItem[], rootId: string) {
+  return items.filter((item) => item.parent_id === rootId);
+}
+function descendants(items: AnnotationWorkspaceItem[], rootId: string) {
+  const result: AnnotationWorkspaceItem[] = [];
+  const pending = [rootId];
+  while (pending.length) {
+    const parent = pending.shift() as string;
+    const children = replies(items, parent);
+    result.push(...children);
+    pending.push(...children.map((child) => child.id));
+  }
+  return result;
+}
 
 watch(
   () => i18n.locale,
@@ -25,98 +59,113 @@ onMounted(() => void annotations.load());
 <template>
   <main class="annotations-page" aria-labelledby="annotations-page-title" :aria-busy="loading">
     <UiPageHeader
-      :kicker="i18n.t('section.corpus', 'Corpus')"
-      :title="i18n.t('nav.annotations', 'Annotations')"
+      :kicker="i18n.t('section.corpus')"
+      :title="i18n.t('nav.annotations')"
       title-id="annotations-page-title"
-      :description="
-        i18n.t(
-          'annotations.page_help',
-          'Review annotations across the corpus. The default view groups discussion by work; switch to Recent for a chronological stream.',
-        )
-      "
+      :description="i18n.t('annotations.page_help')"
     />
 
-    <section v-if="loading" class="card annotations-state" role="status">
-      {{ i18n.t("ui.loading", "Loading…") }}
+    <section class="card annotations-index-card">
+      <div class="annotations-toolbar">
+        <label class="search">
+          <span class="sr-only">{{ i18n.t("annotations.search_placeholder") }}</span>
+          <input
+            type="search"
+            :disabled="!snapshot"
+            :value="snapshot?.query || ''"
+            :placeholder="i18n.t('annotations.search_placeholder')"
+            @input="annotations.setQuery(($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <div class="view-tabs" role="tablist">
+          <button
+            type="button"
+            class="view-tab"
+            :disabled="!snapshot"
+            :class="{ active: snapshot?.view === 'works' }"
+            role="tab"
+            :aria-selected="snapshot?.view === 'works'"
+            @click="annotations.setView('works')"
+          >
+            {{ i18n.t("annotations.by_work") }}
+          </button>
+          <button
+            type="button"
+            class="view-tab"
+            :disabled="!snapshot"
+            :class="{ active: snapshot?.view === 'recent' }"
+            role="tab"
+            :aria-selected="snapshot?.view === 'recent'"
+            @click="annotations.setView('recent')"
+          >
+            {{ i18n.t("annotations.recent") }}
+          </button>
+        </div>
+        <span v-if="snapshot" class="note"
+          >{{
+            i18n.tf("annotations.annotation_count", {
+              count: snapshot.total.toLocaleString(i18n.locale),
+            })
+          }}
+          · {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
+          {{ i18n.t("dynamic.works") }}</span
+        >
+      </div>
     </section>
-    <section v-else-if="error" class="card annotations-state" role="alert">
-      <strong>{{ i18n.t("annotations.open_failed", "Could not load annotations") }}</strong>
+
+    <section v-if="loading && !snapshot" class="card annotations-state">
+      <UiLoadingState variant="skeleton" :label="i18n.t('ui.loading')" />
+    </section>
+    <section v-if="error" class="card annotations-state" role="alert">
+      <strong>{{ i18n.t("annotations.open_failed") }}</strong>
       <p>{{ error }}</p>
+      <p v-if="snapshot">{{ i18n.t("loading.stale") }}</p>
       <button type="button" class="btn" @click="annotations.load(true)">
-        {{ i18n.t("ui.retry", "Retry") }}
+        {{ i18n.t("ui.retry") }}
       </button>
     </section>
-    <template v-else-if="snapshot">
-      <section class="card annotations-index-card">
-        <div class="annotations-toolbar">
-          <label class="search">
-            <span class="sr-only">{{
-              i18n.t(
-                "annotations.search_placeholder",
-                "Search annotations, tags, quotes, records, or works…",
-              )
-            }}</span>
-            <input
-              type="search"
-              :value="snapshot.query"
-              :placeholder="
-                i18n.t(
-                  'annotations.search_placeholder',
-                  'Search annotations, tags, quotes, records, or works…',
-                )
-              "
-              @input="annotations.setQuery(($event.target as HTMLInputElement).value)"
-            />
-          </label>
-          <div class="view-tabs" role="tablist">
-            <button
-              type="button"
-              class="view-tab"
-              :class="{ active: snapshot.view === 'works' }"
-              role="tab"
-              :aria-selected="snapshot.view === 'works'"
-              @click="annotations.setView('works')"
-            >
-              {{ i18n.t("annotations.by_work", "By work") }}
-            </button>
-            <button
-              type="button"
-              class="view-tab"
-              :class="{ active: snapshot.view === 'recent' }"
-              role="tab"
-              :aria-selected="snapshot.view === 'recent'"
-              @click="annotations.setView('recent')"
-            >
-              {{ i18n.t("annotations.recent", "Recent") }}
-            </button>
-          </div>
-          <span class="note"
-            >{{ snapshot.total.toLocaleString(i18n.locale) }}
-            {{ i18n.t("annotations.annotation_count", "annotations") }} ·
-            {{ snapshot.groups.length.toLocaleString(i18n.locale) }}
-            {{ i18n.t("dynamic.works", "works") }}</span
-          >
-        </div>
-      </section>
-
+    <UiLoadingState
+      v-if="loading && snapshot"
+      variant="inline"
+      :label="i18n.t('loading.updating')"
+    />
+    <template v-if="snapshot">
       <section v-if="snapshot.view === 'recent'" class="card annotations-recent-card">
         <div class="cardhead">
           <div>
-            <b>{{ i18n.t("annotations.recent_annotations", "Recent annotations") }}</b>
+            <b>{{ i18n.t("annotations.recent_annotations") }}</b>
             <div class="note">
-              {{ i18n.t("annotations.recent_help", "Newest annotations across all loaded works.") }}
+              {{ i18n.t("annotations.recent_help") }}
             </div>
           </div>
         </div>
         <div class="annotation-feed">
-          <AnnotationFeedItem
-            v-for="annotation in snapshot.annotations"
-            :key="annotation.id"
-            :annotation="annotation"
-            :removing="removing === annotation.id"
-            @open="annotations.openRecord"
-            @remove="annotations.remove"
-          />
+          <details
+            v-for="root in roots(snapshot.annotations)"
+            :key="root.id"
+            :open="!descendants(snapshot.annotations, root.id).length"
+          >
+            <summary v-if="descendants(snapshot.annotations, root.id).length">
+              {{ i18n.t("annotations.thread") }} ·
+              {{ descendants(snapshot.annotations, root.id).length }}
+              {{ i18n.t("annotations.replies") }}
+            </summary>
+            <AnnotationFeedItem
+              :annotation="root"
+              :removing="removing === root.id"
+              @open="annotations.openRecord"
+              @remove="annotations.remove"
+            />
+            <AnnotationFeedItem
+              v-for="reply in descendants(snapshot.annotations, root.id)"
+              :key="reply.id"
+              class="annotation-thread-reply"
+              :annotation="reply"
+              :removing="removing === reply.id"
+              @open="annotations.openRecord"
+              @remove="annotations.remove"
+            />
+          </details>
           <div v-if="!snapshot.annotations.length" class="llm-empty">{{ emptyMessage }}</div>
         </div>
       </section>
@@ -132,28 +181,49 @@ onMounted(() => void annotations.load());
             <span
               ><b>{{ group.work }}</b
               ><small
-                >{{ group.annotations.length.toLocaleString(i18n.locale) }}
-                {{ i18n.t("annotations.annotation_count", "annotations") }} ·
-                {{ group.records.toLocaleString(i18n.locale) }}
-                {{ i18n.t("dynamic.records", "records") }}</small
+                >{{
+                  i18n.tf("annotations.annotation_count", {
+                    count: group.annotations.length.toLocaleString(i18n.locale),
+                  })
+                }}
+                · {{ group.records.toLocaleString(i18n.locale) }}
+                {{ i18n.t("dynamic.records") }}</small
               ></span
             ><button
               type="button"
               class="btn tiny"
               @click.prevent="annotations.openWork(group.work)"
             >
-              {{ i18n.t("works.open_overview", "Open work overview") }}
+              {{ i18n.t("works.open_overview") }}
             </button>
           </summary>
           <div class="annotation-feed">
-            <AnnotationFeedItem
-              v-for="annotation in group.annotations"
-              :key="annotation.id"
-              :annotation="annotation"
-              :removing="removing === annotation.id"
-              @open="annotations.openRecord"
-              @remove="annotations.remove"
-            />
+            <details
+              v-for="root in roots(group.annotations)"
+              :key="root.id"
+              :open="!descendants(group.annotations, root.id).length"
+            >
+              <summary v-if="descendants(group.annotations, root.id).length">
+                {{ i18n.t("annotations.thread") }} ·
+                {{ descendants(group.annotations, root.id).length }}
+                {{ i18n.t("annotations.replies") }}
+              </summary>
+              <AnnotationFeedItem
+                :annotation="root"
+                :removing="removing === root.id"
+                @open="annotations.openRecord"
+                @remove="annotations.remove"
+              />
+              <AnnotationFeedItem
+                v-for="reply in descendants(group.annotations, root.id)"
+                :key="reply.id"
+                class="annotation-thread-reply"
+                :annotation="reply"
+                :removing="removing === reply.id"
+                @open="annotations.openRecord"
+                @remove="annotations.remove"
+              />
+            </details>
           </div>
         </details>
         <div v-if="!snapshot.groups.length" class="card llm-empty">{{ emptyMessage }}</div>
@@ -200,12 +270,10 @@ onMounted(() => void annotations.load());
   cursor: pointer;
 }
 .view-tab.active {
-  border-color: var(--ui-accent, #3c8d62);
+  border-color: var(--ui-accent);
   background: var(--soft);
 }
-.note,
-.annotation-feed-meta,
-.annotation-feed-item small {
+.note {
   color: var(--muted);
   font-size: 0.8125rem;
 }
@@ -280,7 +348,7 @@ onMounted(() => void annotations.load());
 .annotation-feed-item blockquote {
   margin: 0;
   padding: 8px 10px;
-  border-left: 3px solid var(--ui-accent, #3c8d62);
+  border-left: 3px solid var(--ui-accent);
   background: var(--soft);
   color: var(--text-2);
   font:
@@ -330,7 +398,7 @@ onMounted(() => void annotations.load());
 }
 button:focus-visible,
 input:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--ui-accent, #3c8d62) 42%, var(--card));
+  outline: 3px solid color-mix(in srgb, var(--ui-accent) 42%, var(--card));
   outline-offset: 2px;
 }
 @media (max-width: 640px) {

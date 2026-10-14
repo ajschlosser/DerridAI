@@ -1,0 +1,134 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.vector-protection-toggle {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.vector-protection-toggle > span {
+  display: grid;
+  gap: 3px;
+}
+.vector-protection-toggle small {
+  color: var(--muted);
+}
+
+.vector-hero-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vector-hero-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+  min-width: 190px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow-md);
+}
+.vector-search-config {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+.vector-search-config .vector-search-row {
+  min-width: 0;
+}
+
+@media (max-width: 820px) {
+  .collection-wizard-v037 .wizard-two-col,
+  .manifest-review,
+  .vector-search-config {
+    grid-template-columns: 1fr;
+  }
+  .manifest-review > div {
+    border-right: 0 !important;
+  }
+  .manifest-review > div:nth-last-child(2) {
+    border-bottom: 1px solid var(--line);
+  }
+}
+
+/* 0.37.1 — Disoriented: streamlined Vector Stores workspace. */
+.vector-workspace-v0371 {
+  min-height: 620px;
+}
+.vector-workspace-v0371 .vector-collection-sidebar {
+  top: 92px;
+  max-height: calc(100vh - 112px);
+  display: flex;
+  flex-direction: column;
+}
+.vector-rail-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.vector-collection-list {
+  overflow: auto;
+  min-height: 0;
+}
+.vector-store-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #98a2b3;
+  box-shadow: 0 0 0 3px rgba(152, 162, 179, 0.13);
+}
+.vector-store-status-ready {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 16%, transparent);
+}
+.vector-store-status-building,
+.vector-store-status-syncing,
+.vector-store-status-validating,
+.vector-store-status-queued {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.vector-store-status-failed,
+.vector-store-status-stale {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+@media (max-width: 760px) {
+  .vector-workspace-v0371 .vector-collection-sidebar {
+    max-height: none;
+  }
+  .vector-rail-actions {
+    grid-template-columns: 1fr auto;
+  }
+  .vector-collection-list {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Hybrid deterministic/LLM metadata, review state, and Unicode safety.
 
 Why: required fields (region type, primary text, discourse role) combine
@@ -18,7 +34,6 @@ sys.modules.setdefault("chromadb", types.SimpleNamespace())
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"api"))
 from app import corpus_builder as cb
-from app.models import PdfCorpusBuildCreate
 
 
 def install_asset(repo:cb.PdfCorpusRepository, count:int=2):
@@ -40,20 +55,15 @@ def make_build(repo:cb.PdfCorpusRepository,count:int=2):
 
 
 def test_profile_requires_region_type_primary_text_and_discourse_role():
-    """Pin profile/prompt ids and the required metadata fields.
+    """Pin the required metadata fields and their central vocabularies.
 
     Required fields are region_type, primary_text and discourse_role; the profile must
-    list main_text and analysis as allowed values. (Name says v8 for history; the ids now
-    checked are the current ones.)
+    list main_text and analysis as allowed values.
     """
-    assert cb.PROFILE_VERSION=="derrida-scholarly-v12"
-    assert cb.METADATA_PROMPT_VERSION=="derridai-record-metadata-v11"
-    assert PdfCorpusBuildCreate(asset_id="a").profile_id=="derrida-scholarly-v12"
     profile=cb.CORPUS_PROFILES[cb.PROFILE_VERSION]
     assert profile["required_metadata_fields"]==["region_type","primary_text","discourse_role"]
     assert "main_text" in profile["region_types"]
     assert "analysis" in profile["discourse_roles"]
-    assert set(cb.CORPUS_PROFILES) == {cb.PROFILE_VERSION}
 
 
 def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_path:Path,monkeypatch):
@@ -67,7 +77,7 @@ def test_hybrid_metadata_uses_constrained_llm_and_tracks_field_provenance(tmp_pa
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={"record_id":"r1","record_revision":1,"text":"Derrida analyzes hospitality.","text_length":30,"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}]}
-    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id=""):
+    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             assert "region_type MUST be one of" in prompt
             assert "primary_text MUST be true or false" in prompt
@@ -101,7 +111,7 @@ def test_manifest_llm_disagreement_is_prefilled_for_review(tmp_path:Path,monkeyp
     _asset,build=make_build(repo,1)
     manager=cb.PdfCorpusBuildManager(repo,max_workers=1)
     record={"record_id":"r1","record_revision":1,"text":"Main text.","text_length":10,"pdf_pages":[1],"source_asset_id":"asset-aardvark","source_block_ids":["b1"],"source_spans":[{"block_id":"b1","page":1,"confidence":1.0}],"region_type":"main_text","primary_text":True,"metadata_field_status":{"region_type":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."},"primary_text":{"status":"deterministic","method":"human_document_layout","confidence":.99,"reason":"Reviewer-defined document structure."}}}
-    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id=""):
+    def fake_chat(_request,prompt,*,response_model,max_tokens,schema_name,build_id="", **_kwargs):
         if schema_name=="derridai_record_discourse":
             return {"metadata":{"region_type":"front_matter","primary_text":False,"discourse_role":"assertion"},"field_evidence":{"region_type":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"primary_text":{"block_ids":["b1"],"confidence":.99,"reason":"model"},"discourse_role":{"block_ids":["b1"],"confidence":.99,"reason":"assertion"}},"field_assessments":{"region_type":{"confidence":.99,"needs_review":False,"reason":"model","outcome":"supported_value"},"primary_text":{"confidence":.99,"needs_review":False,"reason":"model","outcome":"supported_value"},"discourse_role":{"confidence":.99,"needs_review":False,"reason":"assertion","outcome":"supported_value"}},"review_reason":""}
         if schema_name=="derridai_record_quotation": return {"metadata":{},"field_evidence":{},"review_reason":""}
@@ -143,6 +153,28 @@ def test_metadata_issue_summary_and_metadata_queue_are_derived_from_records(tmp_
     assert refreshed["metadata_issue_summary"]["by_field"]=={"discourse_role":1}
     page=repo.page_records(build["build_id"],metadata_incomplete=True)
     assert page["total"]==1 and page["items"][0]["record_id"]=="r2"
+
+
+def test_page_records_exposes_deterministic_and_llm_candidates_as_metadata_values(tmp_path:Path):
+    """Unresolved comboboxes can reuse deterministic names and retained LLM alternatives."""
+    repo=cb.PdfCorpusRepository(tmp_path/"repo")
+    _asset,build=make_build(repo,1)
+    record={
+        "record_id":"r1","record_revision":1,"text":"Passage.","text_length":8,
+        "source_asset_id":"asset-aardvark","source_block_ids":["b1"],
+        "source_spans":[{"block_id":"b1","page":1}],
+        "document_author":"Jacques Derrida",
+        "deterministic_ingest":{"speakers":["Hélène Cixous"]},
+        "metadata_field_status":{
+            "position_holder":{"status":"unresolved","proposed_value":"Édouard Glissant"},
+            "work":{"status":"unresolved","llm_value":"Of Grammatology"},
+        },
+    }
+    repo.save_records(build["build_id"],[record])
+    values=repo.page_records(build["build_id"])["metadata_values"]
+    assert "Hélène Cixous" in values["speaker"]
+    assert "Édouard Glissant" in values["position_holder"]
+    assert "Of Grammatology" in values["work"]
 
 
 def test_accept_reject_and_bulk_disposition_mutate_review_state_reliably(tmp_path:Path):

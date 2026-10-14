@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Human ownership of metadata during and after enrichment.
 
 Why: reviewers edit while background workers enrich. Human decisions must win, be
@@ -23,6 +39,12 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'api'))
 from app import corpus_builder as cb
 from app.config import APP_VERSION
+from app.field_assertions import (
+    create_human_assertion,
+    create_model_assertion,
+    current_assertion_by_name,
+    project_record_assertions,
+)
 
 
 def install(tmp_path:Path, records:list[dict], *, status='running', stage='enriching'):
@@ -79,23 +101,67 @@ def test_bulk_metadata_patch_supports_selection_and_all_records(tmp_path:Path):
     assert all(row.get('language')=='en' for row in repo.load_records(build['build_id']))
 
 
-def test_worker_merge_preserves_human_owned_fields_and_discards_frozen_record_results():
-    """Merging a worker's snapshot into the live record never clobbers human edits.
+def test_worker_merge_preserves_human_owned_fields_without_freezing_reviewed_text():
+    """Fresh enrichment may use reviewed text while human assertions remain protected.
 
-    Case 1: the human set speaker="Human"; the worker proposes speaker="Model" and
-    target="Kant". Result keeps "Human" and accepts the new target.
-    Case 2: the record's text was hand-edited ("__text__" touched), so the whole worker
-    result is discarded (its stage becomes "skipped") and the human target stays.
+    A matching worker snapshot may merge model-owned fields after a text correction;
+    source/revision matching rejects stale snapshots before this helper runs. Completing
+    record review still freezes the whole record against late automatic enrichment.
     """
     live={'record_id':'r1','text':'reviewed','speaker':'Human','human_touched_fields':['speaker'],'metadata_field_status':{'speaker':{'status':'human_confirmed'}},'metadata_stage_status':{},'metadata_execution_ledger':{}}
     worker={'record_id':'r1','text':'reviewed','speaker':'Model','target':'Kant','metadata_field_status':{'speaker':{'status':'model_inferred'},'target':{'status':'model_inferred'}},'metadata_stage_status':{'discourse':'complete'},'metadata_execution_ledger':{'discourse':{'state':'complete'}}}
-    merged=cb.PdfCorpusBuildManager._merge_enrichment_snapshot(live,worker)
+    merged=cb._merge_enrichment_snapshot(live,worker)
     assert merged['speaker']=='Human'
     assert merged['target']=='Kant'
-    frozen={**live,'human_touched_fields':['__text__'],'target':'Human target'}
-    merged2=cb.PdfCorpusBuildManager._merge_enrichment_snapshot(frozen,worker)
-    assert merged2['target']=='Human target'
-    assert merged2['metadata_stage_status']['discourse']=='skipped'
+
+    reviewed_text={**live,'human_touched_fields':['__text__'],'target':'Human target'}
+    merged2=cb._merge_enrichment_snapshot(reviewed_text,worker)
+    assert merged2['speaker']=='Human'
+    assert merged2['target']=='Kant'
+    assert merged2['metadata_stage_status']['discourse']=='complete'
+
+    reviewed_record={**live,'human_touched_fields':['__review__'],'target':'Human target'}
+    merged3=cb._merge_enrichment_snapshot(reviewed_record,worker)
+    assert merged3['target']=='Human target'
+    assert merged3['metadata_stage_status']['discourse']=='skipped'
+
+
+
+
+def test_worker_merge_uses_canonical_human_authority_not_legacy_status():
+    """A human-owned FieldAssertion is sufficient to seal a field against worker output."""
+    live = {
+        "record_id": "canonical-live",
+        "record_revision": 1,
+        "text": "reviewed",
+        "metadata_stage_status": {},
+        "metadata_execution_ledger": {},
+    }
+    create_human_assertion(live, "speaker", "Human", reason="Reviewed by a person.")
+    project_record_assertions(live)
+    # Deliberately corrupt the compatibility token. The canonical assertion,
+    # not this projection, must decide whether the worker may overwrite it.
+    live["metadata_field_status"]["speaker"]["status"] = "model_inferred"
+
+    worker = {
+        "record_id": "canonical-live",
+        "record_revision": 1,
+        "text": "reviewed",
+        "metadata_stage_status": {"discourse": "complete"},
+        "metadata_execution_ledger": {"discourse": {"state": "complete"}},
+    }
+    create_model_assertion(worker, "speaker", "Model", confidence=0.99)
+    create_model_assertion(worker, "target", "Kant", confidence=0.91)
+    project_record_assertions(worker)
+
+    merged = cb._merge_enrichment_snapshot(live, worker)
+    speaker = current_assertion_by_name(merged, "speaker")
+    target = current_assertion_by_name(merged, "target")
+
+    assert merged["speaker"] == "Human"
+    assert speaker is not None and speaker.authority_status == "human_confirmed"
+    assert merged["target"] == "Kant"
+    assert target is not None and target.derivation_method == "model"
 
 
 def test_editorial_context_only_generalizes_repeated_human_choices(tmp_path:Path):

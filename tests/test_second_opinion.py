@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Reviewer identity and second opinions (inter-annotator agreement)."""
 
 from __future__ import annotations
@@ -31,6 +47,7 @@ def setup(tmp_path: Path, **experiment):
     repo.save_records(build["build_id"], [{"record_id": f"rec-{i}", "text": f"text {i}", "metadata_field_status": {}} for i in range(3)])
     manager = cb.PdfCorpusBuildManager(repo)
     manager._rewrite_and_validate = lambda bid, records: (repo.save_records(bid, records), repo.get_build(bid))[1]
+    manager._rewrite_targeted_record = lambda bid, record, previous: (repo.update_record(bid, record), repo.get_build(bid))[1]
     manager._assert_human_review_available = lambda *a, **k: None
     manager._push_review_history = lambda *a, **k: None
     return manager, repo, build["build_id"]

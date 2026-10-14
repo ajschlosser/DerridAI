@@ -1,14 +1,37 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
 import { relativeTimeLabel } from "../../src/domain/relativeTimeLabel";
 
 const now = Date.parse("2026-09-22T12:00:00Z");
 const keys: string[] = [];
 const deps = {
-  tr: (_key: string, fallback: string) => fallback,
-  trf: (key: string, fallback: string, values: Record<string, unknown>) => {
+  tr: (_key: string, fallback = "") => fallback,
+  trf: (
+    key: string,
+    fallbackOrValues: string | Record<string, unknown> = "",
+    values: Record<string, unknown> = {},
+  ) => {
     keys.push(key);
-    return fallback.replace("{count}", String(values.count));
+    const fallback = typeof fallbackOrValues === "string" ? fallbackOrValues : "";
+    const replacements = typeof fallbackOrValues === "string" ? values : fallbackOrValues;
+    return fallback.replace("{count}", String(replacements.count));
   },
 };
 const ago = (ms: number) => new Date(now - ms).toISOString();

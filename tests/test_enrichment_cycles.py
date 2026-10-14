@@ -1,3 +1,19 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Multi-pass metadata enrichment: conflict rules, learning, and safe concurrency.
 
 Why: enrichment passes may be chained while a reviewer keeps working. Human
@@ -34,7 +50,7 @@ def test_enrichment_scope_can_target_explicit_records() -> None:
         {"record_id": "r2", "review_disposition": "accepted"},
         {"record_id": "r3", "review_disposition": "pending"},
     ]
-    assert cb.PdfCorpusBuildManager._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
+    assert cb._enrichment_pass_indices(rows, "all", ["r2", "r3"]) == [1, 2]
 
 
 def test_trash_quality_ratio_is_deterministic() -> None:
@@ -42,7 +58,7 @@ def test_trash_quality_ratio_is_deterministic() -> None:
         {"record_id": "good", "text": "A sufficiently legible scholarly passage with normal words."},
         {"record_id": "bad", "text": "\ufffd\ufffd\nx\nx"},
     ]
-    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    report = cb._trash_quality_report(rows)
     assert report["deterministic"] is True
     assert report["trash_record_count"] == 1
     assert report["exceeds_threshold"] is True
@@ -55,7 +71,7 @@ def test_trash_quality_counts_high_text_noise() -> None:
         {"record_id": "ocr", "text": "enough letters here to skip sparse-text heuristics on this row",
          "text_noise": {"score": 72, "threshold": 45, "unusable": True}},
     ]
-    report = cb.PdfCorpusBuildManager._trash_quality_report(rows)
+    report = cb._trash_quality_report(rows)
     assert report["trash_record_count"] == 1
     assert "high_text_noise" in report["records"][0]["reasons"]
     assert report["median_noise"] == 40.0
@@ -97,7 +113,7 @@ def make_manager(tmp_path: Path, rows: list[dict], *, real_validation: bool = Fa
     manager._validate_execution_budget = lambda request: None
     if not real_validation:
         # Whole-build validation needs the real source asset; it is not under test here.
-        manager._rewrite_and_validate = lambda build_id, records: repo.get_build(build_id)
+        manager._reconcile_and_validate = lambda build_id: repo.get_build(build_id)
     return manager, repo, build["build_id"]
 
 
@@ -186,6 +202,48 @@ def test_global_store_promotes_only_generalizable_conventions_seen_in_several_bu
     assert promoted == {"discourse_role": {"value": "analysis", "confirmed_records": 5, "scope": "global"}}
     assert "speaker" not in promoted
     assert store.conventions(exclude_build_id="b2") == {}
+
+
+def test_record_wall_clock_event_is_emitted_after_durable_merge(
+    tmp_path: Path,
+    monkeypatch,
+):
+    manager, repo, build_id = make_manager(tmp_path, [{"record_id": "timed"}])
+    observed_persisted_values: list[str] = []
+    original_append = manager._ledger.append
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        return proposal(record, stance=("critical", 0.9))
+
+    def observing_append(kind, **kwargs):
+        if kind == "record_run":
+            stored = repo.get_record(build_id, str(kwargs.get("record_id") or ""))
+            observed_persisted_values.append(str(stored.get("stance") or ""))
+        return original_append(kind, **kwargs)
+
+    manager._enrich_record = fake_enrich
+    monkeypatch.setattr(manager._ledger, "append", observing_append)
+    manager.rerun_metadata_enrichment(
+        build_id,
+        {
+            "families": ["discourse"],
+            "scope": "all",
+            "model": "m",
+            "provider": "ollama",
+        },
+    )
+
+    rows = [
+        row
+        for row in manager._ledger.events()
+        if row.get("kind") == "record_run"
+        and row.get("record_id") == "timed"
+    ]
+    assert len(rows) == 1
+    assert rows[0]["elapsed_ms"] >= 0
+    assert rows[0]["outcome"] == "enriched"
+    assert rows[0]["families"] == ["discourse"]
+    assert observed_persisted_values == ["critical"]
 
 
 def test_review_stays_editable_while_a_pass_runs(tmp_path: Path):
@@ -357,8 +415,37 @@ def test_next_pass_reads_last_pass_inferences_without_reviewing_records(tmp_path
     assert repo.get_build(build_id)["status"] == "awaiting_review"
 
 
+def test_rerun_records_wall_clock_after_durable_merge(tmp_path: Path):
+    manager, repo, build_id = make_manager(tmp_path, [{}])
+
+    def fake_enrich(record, manifest, request, **kwargs):
+        return proposal(record, stance=("critical", 0.9))
+
+    manager._enrich_record = fake_enrich
+    manager.rerun_metadata_enrichment(
+        build_id,
+        {"families": ["discourse"], "scope": "all"},
+    )
+
+    stored = repo.get_record(build_id, "r1")
+    assert stored["stance"] == "critical"
+    events = [
+        row
+        for row in manager._ledger.events()
+        if row.get("kind") == "record_run"
+        and row.get("build_id") == build_id
+        and row.get("record_id") == "r1"
+    ]
+    assert len(events) == 1
+    event = events[0]
+    assert event["outcome"] == "enriched"
+    assert event["families"] == ["discourse"]
+    assert event["pass_number"] == 1
+    assert event["elapsed_ms"] >= 0
+
+
 def test_initial_enrichment_operation_marks_the_first_pass_complete():
-    op = cb.PdfCorpusBuildManager._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
+    op = cb._initial_enrichment_operation("build-abc123def", [{}, {}], started_at="t0")
     assert op["kind"] == "metadata_enrichment"
     assert op["state"] == "completed"
     assert op["passes_completed"] == 1
@@ -406,7 +493,7 @@ def test_settled_enrichment_reason_is_not_left_as_a_fake_blocker():
         "metadata_review_fields": [],
         "metadata_disputes": [{"field": "stance", "resolved_at": "now"}],
     }
-    cb.PdfCorpusBuildManager._settle_enrichment_review_reason(record)
+    cb._settle_enrichment_review_reason(record)
     assert record["review_reason"] == "Pending human review."
 
 

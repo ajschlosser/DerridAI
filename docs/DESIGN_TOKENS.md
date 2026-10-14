@@ -1,10 +1,26 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
 
 # Design tokens
 
 Components take colours, type sizes and status styling from tokens, not literals. That is what lets one stylesheet serve light, dark, increased-contrast and forced-colors modes. The tokens live in two places:
 
-- `web/src/style.css` defines the neutrals (`--bg`, `--card`, `--soft`, `--text`, `--muted`, `--line`, `--line-strong`) and the accent family (`--ui-accent*`), with their dark values under `html[data-color-scheme="dark"]`.
+- `web/src/style.css` (an ordered `@import` index over `web/src/styles/legacy/*.css` (residual shared/base rules) and `web/src/styles/features/<feature>/*.css` (per-feature rules); import order is cascade order, so do not reorder) defines the neutrals (`--bg`, `--card`, `--soft`, `--text`, `--muted`, `--line`, `--line-strong`) and the accent family (`--ui-accent*`), with their dark values under `html[data-color-scheme="dark"]`.
 - `web/src/styles/tokens.css` defines everything built on top of them, described below.
 
 ## Colour

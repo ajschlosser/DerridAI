@@ -1,6 +1,47 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
-import { esc, icon } from "./html";
+import { openMessageDialog } from "../composables/messageDialog";
+import { realtime } from "../realtime";
+import { followResource } from "../realtime/follow";
+import {
+  openJobReviewDialog,
+  type JobReviewApplyMode,
+  type JobReviewHandle,
+  type JobReviewView,
+} from "../composables/jobReviewDialog";
+import { openRecordPreviewDialog } from "../composables/recordPreviewDialog";
+import { createJobDialogCopy } from "./jobDialogCopy";
+import {
+  closeLlmTaskLauncherDialog,
+  openLlmTaskLauncherDialog,
+  type LlmLauncherProfile,
+  type LlmLauncherRunMode,
+  type LlmLauncherSubmission,
+} from "../composables/llmTaskLauncherDialog";
+import { openPdfDraftRecordDialog } from "../composables/pdfDraftRecordDialog";
+import {
+  openLlmToolResultDialog,
+  type LlmToolResultBody,
+  type LlmToolResultRequest,
+} from "../composables/llmToolResultDialog";
+import { openJobDetailsDialog } from "../composables/jobDetailsDialog";
+import { toast } from "../composables/notifications";
 
 // The dialogs opened from background jobs and LLM tasks: job details and results, RAG results, record previews, the LLM
 // task launcher and the touch-up, drawn as HTML strings. Moved verbatim from the legacy runtime; the runtime's state
@@ -19,20 +60,20 @@ type Helper =
   | "canAccessPage"
   | "cancelBackgroundJob"
   | "cloneAuditValue"
+  | "commitRecordFiles"
   | "formatTimestamp"
   | "fullCitation"
   | "isResearcher"
+  | "invalidateCorpusCache"
   | "jobLabel"
   | "jsonPretty"
   | "label"
   | "navSnapshot"
   | "navigateTo"
-  | "normalizeTouchupItems"
-  | "openMessageModal"
   | "openWorkMetadataProposalResult"
   | "pages"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistJobPreferences"
   | "providerDisplayName"
   | "providerProfile"
   | "providerProfiles"
@@ -51,11 +92,10 @@ type Helper =
   | "sanitizeResearchGeneration"
   | "shell"
   | "shellRefreshHook"
-  | "showAppModal"
   | "startJobPolling"
   | "syncJobProgressToasts"
-  | "toast"
   | "tr"
+  | "trf"
   | "uid"
   | "upsertRecordPayload"
   | "getUrlSyncHook"
@@ -71,20 +111,20 @@ export function createJobDialogs(deps: Deps) {
     canAccessPage,
     cancelBackgroundJob,
     cloneAuditValue,
+    commitRecordFiles,
     formatTimestamp,
     fullCitation,
     isResearcher,
+    invalidateCorpusCache,
     jobLabel,
     jsonPretty,
     label,
     navSnapshot,
     navigateTo,
-    normalizeTouchupItems,
-    openMessageModal,
     openWorkMetadataProposalResult,
     pages,
     persistFileNow,
-    persistPrefs,
+    persistJobPreferences,
     providerDisplayName,
     providerProfile,
     providerProfiles,
@@ -103,18 +143,16 @@ export function createJobDialogs(deps: Deps) {
     sanitizeResearchGeneration,
     shell,
     shellRefreshHook,
-    showAppModal,
     startJobPolling,
     syncJobProgressToasts,
-    toast,
     tr,
+    trf,
     uid,
     upsertRecordPayload,
     getUrlSyncHook,
     warmupProviderProfile,
   } = deps;
-  // The legacy code queries the page freely; untyped, as it was written.
-  const document: Any = globalThis.document;
+  const copy = createJobDialogCopy(tr, trf);
   async function openJobDetails(jobId: Any) {
     let job: Any;
     try {
@@ -122,134 +160,133 @@ export function createJobDialogs(deps: Deps) {
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
-        return toast("This operation was removed and has been cleared from the activity view");
+        return toast(copy.operationRemoved, { tone: "success" });
       }
-      return toast(`Could not load operation details: ${error.message}`);
+      return toast(copy.loadDetailsFailed(error.message), { tone: "danger" });
     }
-    const dialog = document.createElement("dialog");
-    dialog.className = "job-details-dialog";
     const events = job.events || [];
     const request = job.request || {};
     const safeRequest = cloneAuditValue(request);
     if (safeRequest && typeof safeRequest === "object") delete safeRequest.api_key;
 
-    const resultSummary =
-      job.type === "llm"
-        ? {
-            pending_result_count: job.pending_result_count ?? (job.results || []).length,
-            pending_proposed_changes:
-              job.pending_change_count ??
-              (job.results || []).reduce(
-                (sum: Any, result: Any) => sum + Object.keys(result.proposal?.changes || {}).length,
-                0,
-              ),
-            accepted_results: job.accepted_results || 0,
-            accepted_fields: job.accepted_fields || 0,
-            rejected_results: job.rejected_results || 0,
-            rejected_fields: job.rejected_fields || 0,
-            resolution_state: job.resolution_state || "pending",
-            unprocessed_records:
-              job.remaining_record_count ?? Math.max(0, (job.total || 0) - (job.completed || 0)),
-            failures: (job.results || []).filter((result: Any) => result.error).length,
-          }
-        : job.type === "upsert"
-          ? {
-              committed: job.completed || 0,
-              requested: job.total || 0,
-              target_collection: job.store_name,
-              language_mirrors: job.mirrored || {},
-              receipt_count: (job.results || []).length,
-            }
-          : job.type === "pdf_corpus"
-            ? {
-                source_pdf: job.source_filename || null,
-                build_id: job.build_id || job.id,
-                raw_status: job.raw_status || job.status,
-                stage: job.stage || null,
-                record_count: job.record_count || 0,
-                review_count: job.review_count || 0,
-                unresolved_regions: job.unresolved_regions || 0,
-              }
-            : job.type === "llm_tool"
-              ? {
-                  operation: job.label || job.tool || job.mode,
-                  provider_profile_id: job.provider_profile_id || null,
-                  max_concurrent_requests: job.max_concurrent_requests || null,
-                  has_result: Boolean(job.result),
-                  result_keys:
-                    job.result && typeof job.result === "object" ? Object.keys(job.result) : [],
-                }
-              : {
-                  has_result: Boolean(job.result),
-                  evidence_count: job.result?.evidence?.length || 0,
-                  elapsed_seconds: job.result?.elapsed_seconds ?? null,
-                  collections: job.result?.collections || [],
-                  response_cache: job.result?.response_cache || job.response_cache || null,
-                };
+    let resultSummary: Any;
+    if (job.type === "llm") {
+      resultSummary = {
+        pending_result_count: job.pending_result_count ?? (job.results || []).length,
+        pending_proposed_changes:
+          job.pending_change_count ??
+          (job.results || []).reduce(
+            (sum: Any, result: Any) => sum + Object.keys(result.proposal?.changes || {}).length,
+            0,
+          ),
+        accepted_results: job.accepted_results || 0,
+        accepted_fields: job.accepted_fields || 0,
+        rejected_results: job.rejected_results || 0,
+        rejected_fields: job.rejected_fields || 0,
+        resolution_state: job.resolution_state || "pending",
+        unprocessed_records:
+          job.remaining_record_count ?? Math.max(0, (job.total || 0) - (job.completed || 0)),
+        failures: (job.results || []).filter((result: Any) => result.error).length,
+      };
+    } else if (job.type === "upsert") {
+      resultSummary = {
+        committed: job.completed || 0,
+        requested: job.total || 0,
+        target_collection: job.store_name,
+        language_mirrors: job.mirrored || {},
+        receipt_count: (job.results || []).length,
+      };
+    } else if (job.type === "corpus_capture") {
+      resultSummary = {
+        capture_id: job.capture_id || job.id,
+        mode: job.mode || null,
+        raw_status: job.status || null,
+        candidate_count: job.result?.candidate_count ?? job.candidate_count ?? null,
+        has_capture_state: Boolean(job.capture_id),
+        error_count: (job.errors || []).length,
+      };
+    } else if (job.type === "pdf_corpus") {
+      resultSummary = {
+        source_pdf: job.source_filename || null,
+        build_id: job.build_id || job.id,
+        raw_status: job.raw_status || job.status,
+        stage: job.stage || null,
+        record_count: job.record_count || 0,
+        review_count: job.review_count || 0,
+        unresolved_regions: job.unresolved_regions || 0,
+      };
+    } else if (job.type === "llm_tool") {
+      resultSummary = {
+        operation: job.label || job.tool || job.mode,
+        provider_profile_id: job.provider_profile_id || null,
+        max_concurrent_requests: job.max_concurrent_requests || null,
+        has_result: Boolean(job.result),
+        result_keys: job.result && typeof job.result === "object" ? Object.keys(job.result) : [],
+      };
+    } else {
+      resultSummary = {
+        has_result: Boolean(job.result),
+        evidence_count: job.result?.evidence?.length || 0,
+        elapsed_seconds: job.result?.elapsed_seconds ?? null,
+        collections: job.result?.collections || [],
+        response_cache: job.result?.response_cache || job.response_cache || null,
+      };
+    }
 
-    dialog.innerHTML = `<div class="dh">
-    <div><h2 class="dialog-title">${esc(jobLabel(job))} details</h2><div class="dialog-subtitle">${esc(job.id)} · ${esc(job.status)} · created ${esc(formatTimestamp(job.created_at))}</div></div>
-    <button class="btn icon-only" data-close>${icon("close")}</button>
-  </div>
-  <div class="db job-details-body">
-    <section class="job-detail-summary">
-      ${[
-        ["Type", job.type],
-        ["Started by", job.owner || "—"],
-        ["Status", job.status],
-        ["Provider", job.provider],
-        ["Model", job.model],
-        ["Progress", `${job.completed}/${job.total}`],
-        ["Failed", job.failed || 0],
-        ["Started", job.started_at ? formatTimestamp(job.started_at) : "—"],
-        ["Finished", job.finished_at ? formatTimestamp(job.finished_at) : "—"],
+    const active = ["queued", "running", "cancelling"].includes(job.status);
+    const reviewable =
+      job.type === "llm" && (job.pending_result_count ?? (job.results || []).length) > 0;
+    const openable =
+      (["rag", "llm_tool"].includes(job.type) && job.status === "completed") ||
+      (job.type === "pdf_corpus" && ["completed", "blocked"].includes(job.status));
+    const openLabel = reviewable
+      ? active
+        ? tr("operations.panel.action_review_partial")
+        : tr("operations.panel.action_review")
+      : job.type === "pdf_corpus"
+        ? tr("pdf_corpus.open_build")
+        : tr("operations.panel.action_open_result");
+    const when = (value: Any) => (value ? formatTimestamp(value) : "—");
+    openJobDetailsDialog({
+      title: trf("operations.details_title", { label: jobLabel(job) }),
+      subtitle: `${job.id} · ${tr(`operations.status.${job.status}`, String(job.status || ""))} · ${trf("operations.created", { when: formatTimestamp(job.created_at) })}`,
+      facts: (
         [
-          "Cancel requested",
-          job.cancel_requested_at ? formatTimestamp(job.cancel_requested_at) : "—",
-        ],
-      ]
-        .map(([name, value]) => `<div><span>${esc(name)}</span><b>${esc(value ?? "—")}</b></div>`)
-        .join("")}
-    </section>
-    ${job.fatal_error ? `<div class="info error">${esc(job.fatal_error)}</div>` : ""}
-    <section class="card-inset">
-      <div class="rag-result-section-head"><div><b>Request configuration</b><div class="note">API keys are intentionally omitted.</div></div></div>
-      <pre class="job-detail-json">${esc(JSON.stringify(safeRequest, null, 2))}</pre>
-    </section>
-    <section class="card-inset">
-      <div class="rag-result-section-head"><div><b>Operation timeline</b><div class="note">${events.length} recorded events</div></div></div>
-      <div class="job-event-list">${events.map((event: Any, index: Any) => `<div class="job-event ${index === events.length - 1 ? "latest" : ""}"><time>${esc(formatTimestamp(event.timestamp))}</time><b>${esc(label(event.stage || "event"))}</b><span>${event.current != null && event.total != null ? `${event.current}/${event.total} · ` : ""}${esc(event.detail || "")}</span></div>`).join("") || '<div class="note">No events recorded.</div>'}</div>
-    </section>
-    <section class="card-inset">
-      <div class="rag-result-section-head"><b>Result summary</b></div>
-      <pre class="job-detail-json">${esc(JSON.stringify(resultSummary, null, 2))}</pre>
-    </section>
-  </div>
-  <div class="da">
-    <button class="btn" data-close>Close</button>
-    ${["queued", "running", "cancelling"].includes(job.status) ? (job.cancel_requested || job.status === "cancelling" ? '<button class="btn" disabled>Cancelling…</button>' : `<button class="btn danger" id="detailsCancelJob">Cancel operation</button>`) : ""}
-    ${job.type === "llm" && (job.pending_result_count ?? (job.results || []).length) > 0 ? `<button class="btn primary" id="detailsOpenResult">${["queued", "running", "cancelling"].includes(job.status) ? "Review available results" : "Review results"}</button>` : ""}
-    ${(["rag", "llm_tool"].includes(job.type) && job.status === "completed") || (job.type === "pdf_corpus" && ["completed", "blocked"].includes(job.status)) ? `<button class="btn primary" id="detailsOpenResult">${job.type === "pdf_corpus" ? esc(tr("pdf_corpus.open_build", "Open corpus build")) : "Open result"}</button>` : ""}
-  </div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#detailsCancelJob")?.addEventListener("click", async () => {
-      const updated = await cancelBackgroundJob(job.id);
-      if (updated) {
-        close();
-        openJobDetails(job.id);
-      }
-    });
-    dialog.querySelector("#detailsOpenResult")?.addEventListener("click", () => {
-      close();
-      openJobResults(job.id);
+          [tr("operations.fact.operation"), job.type],
+          [tr("operations.fact.started_by"), job.owner || "—"],
+          [
+            tr("operations.fact.status"),
+            tr(`operations.status.${job.status}`, String(job.status || "")),
+          ],
+          [tr("operations.fact.provider"), job.provider],
+          [tr("operations.fact.model"), job.model],
+          [tr("operations.fact.progress"), `${job.completed}/${job.total}`],
+          [tr("operations.fact.failed"), job.failed || 0],
+          [tr("operations.fact.started"), when(job.started_at)],
+          [tr("operations.fact.finished"), when(job.finished_at)],
+          [tr("operations.fact.cancel_requested"), when(job.cancel_requested_at)],
+        ] as Any[]
+      ).map(([name, value]) => ({ name: String(name), value: String(value ?? "—") })),
+      fatalError: job.fatal_error ? String(job.fatal_error) : "",
+      requestJson: JSON.stringify(safeRequest, null, 2),
+      events: events.map((event: Any, index: Any) => ({
+        when: formatTimestamp(event.timestamp),
+        stage: label(event.stage || "event"),
+        detail: `${event.current != null && event.total != null ? `${event.current}/${event.total} · ` : ""}${event.detail || ""}`,
+        latest: index === events.length - 1,
+      })),
+      resultJson: JSON.stringify(resultSummary, null, 2),
+      cancel: !active
+        ? "none"
+        : job.cancel_requested || job.status === "cancelling"
+          ? "cancelling"
+          : "cancel",
+      onCancel: async () => {
+        if (await cancelBackgroundJob(job.id)) openJobDetails(job.id);
+      },
+      openResult:
+        reviewable || openable ? { label: openLabel, run: () => openJobResults(job.id) } : null,
     });
   }
   async function openJobResults(jobId: Any) {
@@ -259,12 +296,11 @@ export function createJobDialogs(deps: Deps) {
     } catch (error: Any) {
       if (String(error?.message || "").includes("404")) {
         pruneClientJobState(jobId);
-        persistPrefs();
         if (state.view === "rag") refreshRagProgressPanel();
-        return toast("This operation was removed and has been cleared from the activity view");
+        return toast(copy.operationRemoved, { tone: "success" });
       }
-      await openMessageModal({
-        title: "Could not open operation result",
+      await openMessageDialog({
+        title: copy.openResultFailed,
         message: error.message || String(error),
         tone: "danger",
       });
@@ -278,7 +314,7 @@ export function createJobDialogs(deps: Deps) {
         window.dispatchEvent(
           new CustomEvent("derridai:navigate-native", {
             detail: {
-              path: `/pdf?mode=builder&build=${encodeURIComponent(job.build_id || job.id)}`,
+              path: `/corpus-builder?build=${encodeURIComponent(job.build_id || job.id)}`,
               runtimeView: "pdf",
             },
           }),
@@ -287,8 +323,8 @@ export function createJobDialogs(deps: Deps) {
       }
     } catch (error: Any) {
       console.error("Could not render operation result", error, job);
-      await openMessageModal({
-        title: "Could not render operation result",
+      await openMessageDialog({
+        title: copy.renderResultFailed,
         message: error.message || String(error),
         detail: jobLabel(job),
         tone: "danger",
@@ -296,11 +332,9 @@ export function createJobDialogs(deps: Deps) {
       return;
     }
 
-    const dialog = document.createElement("dialog");
-    dialog.className = "job-results-dialog";
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
     let liveTimer: Any = null;
+    let handle: JobReviewHandle | null = null;
+    const isLive = () => ["queued", "running", "cancelling"].includes(job.status);
 
     async function refreshJob() {
       try {
@@ -309,7 +343,7 @@ export function createJobDialogs(deps: Deps) {
         if (idx >= 0) state.jobs[idx] = { ...state.jobs[idx], ...job };
         return true;
       } catch (error: Any) {
-        toast(`Could not refresh review results: ${error.message}`);
+        toast(copy.refreshFailed(error.message), { tone: "danger" });
         return false;
       }
     }
@@ -349,16 +383,6 @@ export function createJobDialogs(deps: Deps) {
 
     let selections = new Set<Any>();
 
-    function initializeSelections(flattened: Any) {
-      const valid = [...selections].filter((index) => index < flattened.length);
-      selections = new Set(valid);
-      if (!selections.size) {
-        flattened.forEach((item: Any, index: Any) => {
-          if (item.field !== "text") selections.add(index);
-        });
-      }
-    }
-
     async function resolveOnServer(action: Any, items: Any, { dismissJob = false } = {}) {
       return api(`/api/jobs/${encodeURIComponent(job.id)}/llm-results/resolve`, {
         method: "POST",
@@ -368,13 +392,12 @@ export function createJobDialogs(deps: Deps) {
 
     async function rejectAndDismiss() {
       if (
-        !(await openMessageModal({
-          title: "Discard pending LLM review?",
-          message:
-            "Discard all currently pending proposed changes, stop the review if it is still running, and remove this operation from the queue?",
+        !(await openMessageDialog({
+          title: copy.discardTitle,
+          message: copy.discardMessage,
           tone: "danger",
-          confirmLabel: "Discard pending & remove",
-          cancelLabel: "Keep review",
+          confirmLabel: copy.discardConfirm,
+          cancelLabel: copy.discardCancel,
         }))
       )
         return;
@@ -383,16 +406,16 @@ export function createJobDialogs(deps: Deps) {
           method: "POST",
           body: JSON.stringify({ dismiss: true }),
         });
-        dialog.close();
-        dialog.remove();
+        handle?.close();
         await refreshJobs({ rerender: state.view === "home" });
-        toast("LLM review rejected and removed from the operations queue");
+        toast(copy.rejectedRemoved, { tone: "success" });
       } catch (error: Any) {
-        toast(`Could not reject LLM review: ${error.message}`);
+        toast(copy.rejectFailed(error.message), { tone: "danger" });
       }
     }
 
-    async function apply(mode: Any) {
+    async function apply(mode: JobReviewApplyMode, selected: number[]): Promise<boolean> {
+      selections = new Set(selected);
       const { successful, unchanged, flattened } = buildData();
       const batchId = uid();
       let fieldsApplied = 0;
@@ -434,6 +457,7 @@ export function createJobDialogs(deps: Deps) {
         }
       }
 
+      const touchedFiles = new Map<string, Any>();
       for (const [key, target] of byKey.entries()) {
         if (mode === "selected" && !target.fields.length) continue;
         const record = target.item.file.records[target.item.index];
@@ -452,12 +476,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
         }
-        fieldsApplied += applyRecordChanges(target.item.file, target.item.index, changes, {
+        const changed = applyRecordChanges(target.item.file, target.item.index, changes, {
           source: "llm_review",
           model: job.model,
           batchId,
           rationale: target.rationale,
+          deferCommit: true,
         });
+        fieldsApplied += changed;
+        if (changed) touchedFiles.set(String(target.item.file.id), target.item.file);
         if (target.resolveRecord) _fullyReviewed++;
 
         resolveItems.push({
@@ -475,12 +502,15 @@ export function createJobDialogs(deps: Deps) {
           if (record.needs_review !== false) changes.needs_review = false;
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
-          fieldsApplied += applyRecordChanges(entry.local.file, entry.local.index, changes, {
+          const changed = applyRecordChanges(entry.local.file, entry.local.index, changes, {
             source: "llm_review",
             model: job.model,
             batchId,
             rationale: {},
+            deferCommit: true,
           });
+          fieldsApplied += changed;
+          if (changed) touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
@@ -492,39 +522,47 @@ export function createJobDialogs(deps: Deps) {
           if (record.needs_review !== false) changes.needs_review = false;
           if (record.review_reason != null && record.review_reason !== "")
             changes.review_reason = null;
-          fieldsApplied += applyRecordChanges(entry.local.file, entry.local.index, changes, {
+          const changed = applyRecordChanges(entry.local.file, entry.local.index, changes, {
             source: "llm_review",
             model: job.model,
             batchId,
             rationale: {},
+            deferCommit: true,
           });
+          fieldsApplied += changed;
+          if (changed) touchedFiles.set(String(entry.local.file.id), entry.local.file);
           _fullyReviewed++;
           resolveItems.push({ key: entry.result.key, fields: null, resolve_record: true });
         }
       }
 
-      if (!resolveItems.length) return toast("No LLM results selected");
+      if (!resolveItems.length) {
+        toast(copy.noResultsSelected, { tone: "warning" });
+        return false;
+      }
+
+      commitRecordFiles(touchedFiles.values());
 
       try {
         job = await resolveOnServer("accept", resolveItems);
         state.jobApplied[job.id] = new Date().toISOString();
-        persistPrefs();
+        persistJobPreferences();
         shell();
         renderView();
         await refreshJobs({ rerender: state.view === "home" });
-        selections.clear();
-        render({ preserveScroll: true });
-        toast(
-          `Accepted ${resolveItems.length} pending result${resolveItems.length === 1 ? "" : "s"} · ${fieldsApplied} tracked field changes · ${job.pending_result_count || 0} pending`,
-        );
+        publish();
+        toast(copy.accepted(resolveItems.length, fieldsApplied, job.pending_result_count || 0), {
+          tone: "success",
+        });
+        return true;
       } catch (error: Any) {
-        toast(
-          `Local changes were applied, but the operation queue could not be updated: ${error.message}`,
-        );
+        toast(copy.localAppliedQueueFailed(error.message), { tone: "danger" });
+        return false;
       }
     }
 
-    async function rejectSelected() {
+    async function rejectSelected(selected: number[]): Promise<boolean> {
+      selections = new Set(selected);
       const { flattened } = buildData();
       const grouped = new Map();
       flattened.forEach((entry, index) => {
@@ -537,189 +575,138 @@ export function createJobDialogs(deps: Deps) {
         fields,
         resolve_record: false,
       }));
-      if (!items.length) return toast("Select proposed changes to reject");
+      if (!items.length) {
+        toast(copy.selectToReject, { tone: "warning" });
+        return false;
+      }
       try {
         job = await resolveOnServer("reject", items);
-        selections.clear();
         await refreshJobs({ rerender: state.view === "home" });
-        render({ preserveScroll: true });
-        toast(
-          `Rejected selected proposed changes · ${job.pending_change_count || 0} pending changes remain`,
-        );
+        publish();
+        toast(copy.rejectedRemain(job.pending_change_count || 0), { tone: "warning" });
+        return true;
       } catch (error: Any) {
-        toast(`Could not reject selected changes: ${error.message}`);
+        toast(copy.rejectSelectedFailed(error.message), { tone: "danger" });
+        return false;
       }
     }
 
-    function render({ preserveScroll = false } = {}) {
-      const tableBefore = dialog.querySelector(".job-change-table-wrap");
-      const scrollState = preserveScroll
-        ? {
-            dialog: dialog.scrollTop,
-            tableTop: tableBefore?.scrollTop || 0,
-            tableLeft: tableBefore?.scrollLeft || 0,
-          }
-        : null;
+    // The reviewer's selection is indices into the rows built here, in this order.
+    function buildView(): JobReviewView {
       const { successful, failures, unchanged, flattened } = buildData();
-      initializeSelections(flattened);
-      const selected = selections.size;
-      const _changedRecords = new Set(flattened.map((item) => item.result.key)).size;
-      const noChangeCount = unchanged.length;
-      const active = ["queued", "running", "cancelling"].includes(job.status);
-      const statusText = job.status === "cancelled" ? "cancelled with partial results" : job.status;
+      const active = isLive();
       const pendingResults = job.pending_result_count ?? successful.length;
       const pendingChanges = job.pending_change_count ?? flattened.length;
       const remaining =
         job.remaining_record_count ?? Math.max(0, (job.total || 0) - (job.completed || 0));
-
-      const changeTable = flattened.length
-        ? `<div class="job-change-table-wrap"><table class="job-change-table"><thead><tr><th></th><th>Record</th><th>Field</th><th>Current</th><th>Proposed</th><th>Rationale</th></tr></thead><tbody>${flattened
-            .map((item, index) => {
-              const rid = item.local?.record?.record_id || item.result.record_id || item.result.key;
-              const diff = reviewDiffSides(item.current, item.proposed);
-              return `<tr class="${item.stale ? "stale-change" : ""}"><td><input type="checkbox" data-job-change="${index}" ${selections.has(index) ? "checked" : ""}></td><td><div class="job-record-cell"><b>${esc(rid)}</b>${item.local ? `<button class="btn tiny" data-copy-row-key="${esc(reviewKey(item.local.file, item.local.index))}">${icon("copy")}Copy</button>` : ""}<button class="btn tiny" data-preview-result="${index}">Preview record</button>${item.stale ? '<span class="stale-badge">local record changed since job started</span>' : ""}</div></td><td><b>${esc(label(item.field))}</b></td><td><pre class="change-diff current-diff">${diff.left}</pre></td><td><pre class="change-diff proposed-diff">${diff.right}</pre></td><td>${esc(item.rationale || "No rationale supplied.")}</td></tr>`;
-            })
-            .join("")}</tbody></table></div>`
-        : `<section class="review-no-changes-empty"><div class="review-no-changes-icon">✓</div><div><h3>${active ? "No pending changes yet" : "No changes proposed"}</h3><p>${active ? `The review is still running. ${job.completed.toLocaleString()} records have completed and ${remaining.toLocaleString()} remain unprocessed.` : `The model reviewed ${noChangeCount.toLocaleString()} record${noChangeCount === 1 ? "" : "s"} and did not propose metadata/text edits.`}</p></div></section>`;
-
-      const unchangedSection = noChangeCount
-        ? `<details class="unchanged-review-list" ${flattened.length ? "" : "open"}><summary><span><b>${noChangeCount.toLocaleString()} record${noChangeCount === 1 ? "" : "s"} with no proposed changes</b><small>Expand to inspect or preview these records</small></span></summary><div class="unchanged-review-grid">${unchanged
-            .map((item, index) => {
-              const rid = item.local?.record?.record_id || item.result.record_id || item.result.key;
-              return `<div class="unchanged-review-row"><div><b>${esc(rid)}</b><span>${esc(item.local?.record?.work || "")}${item.stale ? " · local record changed since review" : ""}</span></div><button class="btn tiny" data-preview-unchanged="${index}">Preview record</button></div>`;
-            })
-            .join("")}</div></details>`
-        : "";
-
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${job.mode === "auto" ? "Auto-improve changes" : "LLM review changes"}</h2><div class="dialog-subtitle">${job.completed}/${job.total} processed · ${pendingResults} pending result${pendingResults === 1 ? "" : "s"} · ${pendingChanges} pending change${pendingChanges === 1 ? "" : "s"} · ${remaining} unprocessed · ${failures.length} failures · ${esc(statusText)}</div></div><div class="tools">${active ? '<span class="job-status running">live</span>' : ""}<button class="btn icon-only" data-close>${icon("close")}</button></div></div>
-    <div class="db job-change-review">
-      <div class="job-resolution-summary">
-        <span><b>${job.accepted_results || 0}</b> accepted results</span>
-        <span><b>${job.accepted_fields || 0}</b> accepted fields</span>
-        <span><b>${job.rejected_results || 0}</b> rejected results</span>
-        <span><b>${job.rejected_fields || 0}</b> rejected fields</span>
-        <span><b>${esc((job.resolution_state || "pending").replaceAll("_", " "))}</b> decision state</span>
-      </div>
-      ${flattened.length ? `<div class="job-change-toolbar"><button class="btn small" id="jobSelectAll">Select all changes</button><button class="btn small" id="jobSelectNone">Select none</button><button class="btn small danger" id="jobRejectSelected">Reject selected</button><span class="note"><b id="jobSelectedCount">${selected}</b> selected · accepted changes are removed from this pending queue immediately</span></div>` : ""}
-      ${failures.length ? `<div class="info warn">${failures.map((result: Any) => `${esc(result.record_id || result.key)}: ${esc(result.error?.message || "failed")}`).join("<br>")}</div>` : ""}
-      ${changeTable}
-      ${unchangedSection}
-    </div>
-    <div class="da">
-      <button class="btn" data-close>Close</button>
-      ${active && remaining > 0 ? `<button class="btn danger subtle-danger" id="rejectJob">${icon("close")}Stop review & discard pending</button>` : pendingResults > 0 ? `<button class="btn danger subtle-danger" id="rejectJob">${icon("close")}Discard pending & remove operation</button>` : ""}
-      ${active ? `<button class="btn" id="refreshLiveResults">${icon("refresh")}Refresh available results</button>` : ""}
-      ${successful.length ? `<button class="btn" id="markJobReviewed">${icon("check")}Mark all available reviewed</button>${flattened.length ? `<button class="btn primary" id="applyJobSelected" ${selected ? "" : "disabled"}>${icon("check")}Apply selected</button><button class="btn soft" id="applyJobAll">${icon("check")}Accept all available</button>` : ""}` : ""}
-    </div>`;
-
-      const close = () => {
-        if (liveTimer) clearInterval(liveTimer);
-        dialog.close();
-        dialog.remove();
+      const statusText =
+        job.status === "cancelled" ? tr("jobs.review.cancelled_partial") : job.status;
+      const recordId = (item: Any) =>
+        String(item.local?.record?.record_id || item.result.record_id || item.result.key);
+      const state_ = job.resolution_state || "pending";
+      return {
+        title: job.mode === "auto" ? tr("jobs.review.auto_title") : tr("jobs.review.title"),
+        subtitle: trf("jobs.review.subtitle", {
+          completed: job.completed,
+          total: job.total,
+          pendingResults,
+          pendingChanges,
+          remaining,
+          failures: failures.length,
+          status: statusText,
+        }),
+        active,
+        completed: job.completed || 0,
+        remaining,
+        noChangeCount: unchanged.length,
+        resolution: {
+          acceptedResults: job.accepted_results || 0,
+          acceptedFields: job.accepted_fields || 0,
+          rejectedResults: job.rejected_results || 0,
+          rejectedFields: job.rejected_fields || 0,
+          state: tr(`operations.decision.${state_}`, String(state_).replaceAll("_", " ")),
+        },
+        failures: failures.map(
+          (result: Any) =>
+            `${result.record_id || result.key}: ${result.error?.message || tr("jobs.review.failed")}`,
+        ),
+        rows: flattened.map((item: Any) => {
+          const diff = reviewDiffSides(item.current, item.proposed);
+          return {
+            recordId: recordId(item),
+            copyKey: item.local ? String(reviewKey(item.local.file, item.local.index)) : "",
+            stale: item.stale,
+            isText: item.field === "text",
+            field: String(label(item.field)),
+            currentHtml: diff.left,
+            proposedHtml: diff.right,
+            rationale: item.rationale || "",
+          };
+        }),
+        unchanged: unchanged.map((item: Any) => ({
+          recordId: recordId(item),
+          work: String(item.local?.record?.work || ""),
+          stale: item.stale,
+        })),
+        discard: active && remaining > 0 ? "stop" : pendingResults > 0 ? "remove" : "none",
+        hasSuccessful: successful.length > 0,
       };
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      const syncSelectionUi = () => {
-        dialog.querySelectorAll("[data-job-change]").forEach((box: Any) => {
-          box.checked = selections.has(+box.dataset.jobChange);
-        });
-        const count = dialog.querySelector("#jobSelectedCount");
-        if (count) count.textContent = String(selections.size);
-        const applyButton = dialog.querySelector("#applyJobSelected");
-        if (applyButton) applyButton.disabled = !selections.size;
-      };
-      dialog.querySelector("#jobSelectAll")?.addEventListener("click", () => {
-        flattened.forEach((_, index) => selections.add(index));
-        syncSelectionUi();
-      });
-      dialog.querySelector("#jobSelectNone")?.addEventListener("click", () => {
-        selections.clear();
-        syncSelectionUi();
-      });
-      dialog.querySelector("#jobRejectSelected")?.addEventListener("click", rejectSelected);
-      dialog.querySelector("#rejectJob")?.addEventListener("click", rejectAndDismiss);
-      dialog.querySelector("#refreshLiveResults")?.addEventListener("click", async () => {
-        if (await refreshJob()) render({ preserveScroll: true });
-      });
-      dialog.querySelectorAll("[data-job-change]").forEach(
-        (box: Any) =>
-          (box.onchange = () => {
-            const index = +box.dataset.jobChange;
-            box.checked ? selections.add(index) : selections.delete(index);
-            syncSelectionUi();
-          }),
-      );
-      dialog.querySelectorAll("[data-preview-result]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const entry = flattened[+button.dataset.previewResult];
-            if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
-            else toast("The source record is no longer loaded");
-          }),
-      );
-      dialog.querySelectorAll("[data-preview-unchanged]").forEach(
-        (button: Any) =>
-          (button.onclick = () => {
-            const entry = unchanged[+button.dataset.previewUnchanged];
-            if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
-            else toast("The source record is no longer loaded");
-          }),
-      );
-      dialog.querySelector("#markJobReviewed")?.addEventListener("click", () => apply("review"));
-      dialog.querySelector("#applyJobSelected")?.addEventListener("click", () => apply("selected"));
-      dialog.querySelector("#applyJobAll")?.addEventListener("click", () => apply("all"));
-      if (scrollState)
-        requestAnimationFrame(() => {
-          dialog.scrollTop = scrollState.dialog;
-          const table = dialog.querySelector(".job-change-table-wrap");
-          if (table) {
-            table.scrollTop = scrollState.tableTop;
-            table.scrollLeft = scrollState.tableLeft;
-          }
-        });
     }
+    const publish = () => handle?.update(buildView());
 
-    render();
-    if (["queued", "running", "cancelling"].includes(job.status)) {
-      liveTimer = setInterval(async () => {
-        if (!dialog.isConnected) {
-          clearInterval(liveTimer);
-          return;
-        }
-        const before = job.completed;
-        const pendingBefore = job.pending_result_count;
-        if (await refreshJob()) {
-          if (
-            job.completed !== before ||
-            job.pending_result_count !== pendingBefore ||
-            !["queued", "running", "cancelling"].includes(job.status)
-          ) {
-            render({ preserveScroll: true });
+    handle = openJobReviewDialog(buildView(), {
+      apply,
+      rejectSelected,
+      discard: rejectAndDismiss,
+      refresh: async () => {
+        if (await refreshJob()) publish();
+      },
+      previewRow: (index) => {
+        const entry = buildData().flattened[index];
+        if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
+        else toast(copy.sourceGone, { tone: "danger" });
+      },
+      previewUnchanged: (index) => {
+        const entry = buildData().unchanged[index];
+        if (entry?.local) openReviewRecordPreview(entry.local, entry.result);
+        else toast(copy.sourceGone, { tone: "danger" });
+      },
+      onClose: () => {
+        if (liveTimer) liveTimer();
+      },
+    });
+    if (isLive()) {
+      // Follow this job's realtime events; REST polling only while the socket is unavailable.
+      liveTimer = followResource({
+        topic: `job:${job.id}`,
+        fallbackMs: realtime.status === "idle" ? 4000 : undefined,
+        isDone: () => !handle?.isOpen() || !isLive(),
+        refresh: async () => {
+          if (!handle?.isOpen()) return;
+          const before = job.completed;
+          const pendingBefore = job.pending_result_count;
+          if (await refreshJob()) {
+            if (
+              job.completed !== before ||
+              job.pending_result_count !== pendingBefore ||
+              !isLive()
+            ) {
+              publish();
+            }
           }
-          if (!["queued", "running", "cancelling"].includes(job.status)) {
-            clearInterval(liveTimer);
-            liveTimer = null;
-          }
-        }
-      }, 4000);
+        },
+      });
     }
   }
   async function openRagResult(job: Any) {
-    if (!job?.id)
-      return toast(
-        tr("research.result_unavailable", "This Research run has no result identifier."),
-        { tone: "warn" },
-      );
+    if (!job?.id) return toast(tr("research.result_unavailable"), { tone: "warning" });
     if (!canAccessPage("rag"))
-      return toast(
-        tr("permissions.research_result_denied", "Your role cannot open Research results."),
-        { tone: "warn" },
-      );
+      return toast(tr("permissions.research_result_denied"), { tone: "warning" });
     // v0.35.5: a RAG result is a research object, not a legacy modal. Open it in
     // the same native result workspace used by Research so typography, source
     // binding, evidence inspection, accessibility, and i18n stay identical no
     // matter where the result was launched (Operations, job history, etc.).
     state.view = "rag";
-    persistPrefs();
     shellRefreshHook?.();
     const href = `/rag?job=${encodeURIComponent(job.id)}`;
     // The hook is assigned later by the app shell, so it is read when needed.
@@ -732,7 +719,7 @@ export function createJobDialogs(deps: Deps) {
   }
   function openReviewRecordPreview(local: Any, result: Any) {
     const record = local?.file?.records?.[local.index];
-    if (!record) return toast("The source record is no longer loaded in this workspace");
+    if (!record) return toast(copy.sourceGoneWorkspace, { tone: "danger" });
 
     const proposal = result?.proposal || {};
     const proposedFields = Object.keys(proposal.changes || {});
@@ -773,112 +760,104 @@ export function createJobDialogs(deps: Deps) {
       "review_reason",
     ].filter((field) => record[field] !== undefined);
 
-    const dialog = document.createElement("dialog");
-    dialog.className = "record-preview-dialog";
     const stale = Boolean(result?.fingerprint && recordFingerprint(record) !== result.fingerprint);
     const updates = Array.isArray(record.updates) ? record.updates.slice(-8).reverse() : [];
-
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Record preview</h2><div class="dialog-subtitle">${esc(record.record_id || `Record ${local.index + 1}`)} · ${esc(record.work || local.file.name)} · ${esc(local.file.name)}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db record-preview-body">
-    ${stale ? '<div class="info warn">This local record changed after the LLM job started. Current values below may differ from the values originally reviewed.</div>' : ""}
-    <section class="record-preview-summary">
-      <div><span>Record ID</span><b>${esc(record.record_id || "—")}</b></div>
-      <div><span>Work</span><b>${esc(record.work || "—")}</b></div>
-      <div><span>Pages</span><b>${esc(pages(record))}</b></div>
-      <div><span>Citation</span><b>${esc(fullCitation(record) || "—")}</b></div>
-      <div><span>LLM proposals</span><b>${proposedFields.length}</b></div>
-      <div><span>Needs review</span><b>${record.needs_review ? "Yes" : "No"}</b></div>
-    </section>
-
-    <section class="record-preview-section">
-      <div class="record-preview-heading"><b>Metadata</b><span>${important.length} populated fields</span></div>
-      <div class="record-preview-metadata">${important.map((field) => `<div class="record-preview-field ${proposedFields.includes(field) ? "proposed-field" : ""}"><span>${esc(label(field))}${proposedFields.includes(field) ? "<i>proposed change</i>" : ""}</span><pre>${esc(jsonPretty(record[field]))}</pre></div>`).join("")}</div>
-    </section>
-
-    <section class="record-preview-section">
-      <div class="record-preview-heading"><b>Text</b><span>${String(record.text || "").length.toLocaleString()} characters</span></div>
-      <pre class="record-preview-text">${esc(record.text || "")}</pre>
-    </section>
-
-    ${proposedFields.length ? `<section class="record-preview-section"><div class="record-preview-heading"><b>Proposed changes for this record</b><span>${proposedFields.length}</span></div><div class="record-preview-proposals">${proposedFields.map((field) => `<div><b>${esc(label(field))}</b><div class="record-preview-proposal-grid"><pre>${esc(jsonPretty(record[field]))}</pre><span>→</span><pre>${esc(jsonPretty(proposal.changes[field]))}</pre></div>${proposal.rationale?.[field] ? `<small>${esc(proposal.rationale[field])}</small>` : ""}</div>`).join("")}</div></section>` : ""}
-
-    <section class="record-preview-section">
-      <div class="record-preview-heading"><b>Recent audit history</b><span>${updates.length} shown</span></div>
-      <div class="record-preview-history">${updates.map((update: Any) => `<div><time>${esc(formatTimestamp(update.timestamp))}</time><b>${esc(label(update.field_name || "field"))}</b><span>${esc(update.source || "manual")}${update.initiated_by ? ` · ${esc(update.initiated_by)}` : ""}</span></div>`).join("") || '<div class="note">No audit history recorded.</div>'}</div>
-    </section>
-  </div>
-  <div class="da"><button class="btn" data-close>Close preview</button><button class="btn" data-copy-row-key="${esc(reviewKey(local.file, local.index))}">${icon("copy")}Copy entire record</button><button class="btn primary" id="previewOpenRecord">${icon("arrow")}Open full Record view</button></div>`;
-
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#previewOpenRecord").onclick = () => {
-      close();
-      navigateTo("record", { fileId: local.file.id, index: local.index });
-    };
+    openRecordPreviewDialog({
+      recordId: record.record_id || trf("dashboard.record_n", { n: local.index + 1 }),
+      subtitle: `${record.work || local.file.name} · ${local.file.name}`,
+      stale,
+      summary: {
+        work: record.work || "—",
+        pages: String(pages(record)),
+        citation: fullCitation(record) || "—",
+        proposalCount: proposedFields.length,
+        needsReview: Boolean(record.needs_review),
+      },
+      fields: important.map((field) => ({
+        key: field,
+        label: String(label(field)),
+        value: String(jsonPretty(record[field])),
+        proposed: proposedFields.includes(field),
+      })),
+      text: String(record.text || ""),
+      proposals: proposedFields.map((field) => ({
+        label: String(label(field)),
+        current: String(jsonPretty(record[field])),
+        proposed: String(jsonPretty(proposal.changes[field])),
+        rationale: String(proposal.rationale?.[field] || ""),
+      })),
+      history: updates.map((update: Any) => ({
+        when: String(formatTimestamp(update.timestamp)),
+        field: String(label(update.field_name || "field")),
+        source: `${update.source || tr("jobs.preview.manual")}${update.initiated_by ? ` · ${update.initiated_by}` : ""}`,
+      })),
+      copyKey: String(reviewKey(local.file, local.index)),
+      openFull: () => navigateTo("record", { fileId: local.file.id, index: local.index }),
+    });
   }
   function openLlmToolResult(job: Any) {
     const result = job.result;
     if (!result)
-      return openMessageModal({
-        title: "Result unavailable",
-        message:
-          "This completed LLM operation does not contain a retained result. Open full details to inspect the operation.",
+      return openMessageDialog({
+        title: copy.resultUnavailableTitle,
+        message: copy.resultUnavailable,
         tone: "danger",
       });
-    const dialog = document.createElement("dialog");
-    dialog.className = "llm-tool-result-dialog";
     const task = job.tool || job.mode;
-    if (task === "work_metadata") {
-      dialog.remove();
-      return openWorkMetadataProposalResult(job);
-    }
-    let body = "",
-      actions = "";
+    if (task === "work_metadata") return openWorkMetadataProposalResult(job);
+    const subtitle = `${job.provider || ""} \u00b7 ${job.model || result.model || ""}`;
+    const json = (value: Any) => JSON.stringify(value, null, 2);
+    let body: LlmToolResultBody = { kind: "raw", json: json(result) };
+    let action: LlmToolResultRequest["action"] = null;
     if (task === "pdf_clean_text") {
-      body = `<section class="card-inset"><div class="cardhead"><b>Cleaned page text</b></div><pre class="llm-tool-text">${esc(result.text || "")}</pre></section>`;
-      actions = '<button class="btn primary" id="useToolText">Use as current page text</button>';
+      body = { kind: "clean_text", text: result.text || "" };
+      action = {
+        label: tr("jobs.tool.use_page_text"),
+        run: () => {
+          state.pdf.text = result.text || "";
+          state.pdf.extractionSource = trf("jobs.tool.cleanup_source", {
+            model: job.model || result.model || tr("jobs.tool.model_fallback", "model"),
+          });
+          if (state.view === "pdf")
+            window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
+        },
+      };
     } else if (task === "pdf_draft_record") {
-      body = `<pre class="rag-json">${esc(JSON.stringify(result.record || {}, null, 2))}</pre>`;
-      actions = '<button class="btn primary" id="openToolDraft">Review / add draft</button>';
+      body = { kind: "draft_record", json: json(result.record || {}) };
+      action = {
+        label: tr("jobs.tool.review_draft"),
+        run: () => openPdfDraftRecord(result.record || {}),
+      };
     } else if (task === "pdf_link_record") {
-      body = `<div class="llm-tool-match"><b>${esc(result.match?.record_id || "No supported match")}</b><p>${esc(result.match?.reason || "")}</p></div>`;
-      actions = result.match?.key
-        ? '<button class="btn primary" id="applyToolLink">Review & link page</button>'
-        : "";
+      body = {
+        kind: "link_record",
+        recordId: result.match?.record_id || "",
+        reason: result.match?.reason || "",
+      };
+      if (result.match?.key)
+        action = {
+          label: tr("jobs.tool.review_link"),
+          run: () => applyPdfLinkMatch(result.match || {}),
+        };
     } else if (task === "rag_grade") {
-      const question = job.request?.question || "";
-      body = `${question ? `<section class="llm-tool-context"><span>Question / prompt</span><p>${esc(question)}</p></section>` : ""}${result.response_cache_error ? `<div class="info warn">The grade completed, but saving it to the response cache failed: ${esc(result.response_cache_error)}</div>` : ""}${ragGradeHtml(result.grade || {})}`;
+      body = {
+        kind: "rag_grade",
+        question: job.request?.question || "",
+        cacheError: result.response_cache_error || "",
+        gradeHtml: ragGradeHtml(result.grade || {}),
+      };
     } else if (task === "rag_grade_batch") {
-      body = `<section class="bulk-grade-result"><div class="compare-result-summary"><div><strong>${Number(result.graded || 0).toLocaleString()}</strong><span>graded</span></div><div><strong>${Number(result.failed || 0).toLocaleString()}</strong><span>failed</span></div><div><strong>${Number(result.total || 0).toLocaleString()}</strong><span>responses</span></div></div>${Array.isArray(result.errors) && result.errors.length ? `<details><summary>Errors (${result.errors.length})</summary><pre class="rag-json">${esc(JSON.stringify(result.errors, null, 2))}</pre></details>` : '<div class="info">All cached responses were processed.</div>'}</section>`;
-    } else body = `<pre class="rag-json">${esc(JSON.stringify(result, null, 2))}</pre>`;
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(jobLabel(job))}</h2><div class="dialog-subtitle">${esc(job.provider || "")} · ${esc(job.model || result.model || "")}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div><div class="db">${body}</div><div class="da"><button class="btn" data-close>Close</button>${actions}</div>`;
-    document.body.appendChild(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    showAppModal(dialog);
-    dialog.querySelector("#useToolText")?.addEventListener("click", () => {
-      state.pdf.text = result.text || "";
-      state.pdf.extractionSource = `LLM cleanup · ${job.model || result.model || "model"}`;
-      close();
-      if (state.view === "pdf")
-        window.dispatchEvent(new CustomEvent("derridai:pdf-explorer-refresh"));
-    });
-    dialog.querySelector("#openToolDraft")?.addEventListener("click", () => {
-      close();
-      openPdfDraftRecord(result.record || {});
-    });
-    dialog.querySelector("#applyToolLink")?.addEventListener("click", async () => {
-      await applyPdfLinkMatch(result.match || {});
-      close();
-    });
+      const errors = Array.isArray(result.errors) ? result.errors : [];
+      body = {
+        kind: "rag_grade_batch",
+        graded: Number(result.graded || 0),
+        failed: Number(result.failed || 0),
+        total: Number(result.total || 0),
+        errorsJson: errors.length ? json(errors) : "",
+        errorCount: errors.length,
+      };
+    }
+    openLlmToolResultDialog({ title: jobLabel(job), subtitle, body, action });
   }
   function openLlmTaskLauncher({
     task,
@@ -891,7 +870,7 @@ export function createJobDialogs(deps: Deps) {
     onForegroundResult = null,
   }: Any = {}) {
     const profiles = providerProfiles();
-    if (!profiles.length) return toast("Configure an LLM provider first");
+    if (!profiles.length) return toast(copy.configureProvider, { tone: "warning" });
     let profileId = state.appConfig.default_provider_profile || profiles[0].id;
     if (task === "rag_grade" && generationModel) {
       const independent = profiles.find(
@@ -902,121 +881,97 @@ export function createJobDialogs(deps: Deps) {
       );
       if (independent) profileId = independent.id;
     }
-    let runMode =
-      task === "rag_grade_batch" ? "background" : isResearcher() ? "foreground" : "background";
-    const dialog = document.createElement("dialog");
-    dialog.className = "llm-tool-launcher";
-
-    const render = () => {
-      const profile = providerProfile(profileId);
-      const status = state.providerStatuses?.[profile.id] || {};
-      const sameModel = Boolean(
-        generationModel &&
-          String(profile.model || "") === String(generationModel) &&
-          (!generationProvider || profile.type === generationProvider),
-      );
-      dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">${esc(title)}</h2><div class="dialog-subtitle">${esc(description)}</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-    <div class="db llm-tool-body">
-      ${contextText ? `<section class="llm-tool-context"><span>Question / prompt</span><p>${esc(contextText)}</p></section>` : ""}
-      ${sameModel ? `<div class="info warn"><b>Same-model grading warning.</b> This provider/model was also used to generate the RAG answer. Self-grading can be systematically biased; use a different model for a more independent evaluation.</div>` : ""}
-      <div class="llm-tool-grid">
-        <div class="field field-wide"><label>Provider profile</label><select class="control" id="toolProvider">${profiles.map((item: Any) => `<option value="${esc(item.id)}" ${item.id === profile.id ? "selected" : ""}>${esc(providerDisplayName(item))} · ${item.type === "ollama" ? "Ollama" : "OpenAI-compatible"}</option>`).join("")}</select></div>
-        <div class="field"><label>Run mode</label><select class="control" id="toolRunMode" ${isResearcher() || task === "rag_grade_batch" ? "disabled" : ""}>${task === "rag_grade_batch" ? '<option value="background" selected>Background operation</option>' : isResearcher() ? '<option value="foreground" selected>Interactive foreground</option>' : `<option value="background" ${runMode === "background" ? "selected" : ""}>Background operation</option><option value="foreground" ${runMode === "foreground" ? "selected" : ""}>Interactive foreground</option>`}</select></div>
-        <div class="field field-wide"><label>Model</label><input class="control" id="toolModel" value="${esc(profile.type === "openai" && profile.model_mode === "auto" ? "auto" : profile.model || "")}" ${profile.type === "openai" && profile.model_mode === "auto" ? "disabled" : ""}></div>
-        <div class="field"><label>Max concurrent requests</label><input class="control" value="${esc(profile.max_concurrent_requests ?? 1)}" disabled></div>
-        ${
-          profile.type === "ollama"
-            ? `<div class="field"><label>Context</label><input class="control" id="toolCtx" type="number" value="${esc(profile.num_ctx ?? 16384)}"></div><div class="field"><label>Think</label><select class="control" id="toolThink">${[
-                ["false", "Off"],
-                ["true", "On"],
-                ["low", "Low"],
-                ["medium", "Medium"],
-                ["high", "High"],
-              ]
-                .map(
-                  ([v, l]) =>
-                    `<option value="${v}" ${String(profile.think ?? "false") === v ? "selected" : ""}>${l}</option>`,
-                )
-                .join("")}</select></div>`
-            : ""
-        }
-        <div class="field"><label>Max output tokens</label><input class="control" id="toolPredict" type="number" value="${esc(profile.num_predict ?? 4096)}"></div>
-        <div class="field"><label>Temperature</label><input class="control" id="toolTemp" type="number" step="0.01" value="${esc(profile.temperature ?? 0)}"></div>
-        <div class="field"><label>top_p</label><input class="control" id="toolTopP" type="number" step="0.01" value="${esc(profile.top_p ?? 1)}"></div>
-        <div class="field"><label>Seed</label><input class="control" id="toolSeed" type="number" value="${esc(profile.seed ?? "")}"></div>
-        <div class="field field-wide"><label>Advanced options JSON</label><textarea id="toolExtra" spellcheck="false">${esc(profile.extra_options || "{}")}</textarea></div>
-      </div>
-      <div class="tools llm-tool-profile-actions"><button class="btn small" id="toolWarm">${icon("spark")}Warm this provider</button>${isResearcher() ? "" : `<button class="btn small" id="toolProviders">${icon("gear")}Manage providers</button>`}<span class="note" id="toolStatus">${status.available ? "Endpoint ready" : status.error || "Not verified"}</span></div>
-    </div>
-    <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="runLlmTask">${icon("spark")}${runMode === "background" ? "Start background operation" : "Run now"}</button></div>`;
-      const close = () => {
-        dialog.close();
-        dialog.remove();
+    const runModes: LlmLauncherRunMode[] =
+      task === "rag_grade_batch"
+        ? ["background"]
+        : isResearcher()
+          ? ["foreground"]
+          : ["background", "foreground"];
+    const launcherProfiles = profiles.map((item: Any): LlmLauncherProfile => {
+      const status = state.providerStatuses?.[item.id] || {};
+      return {
+        id: item.id,
+        label: providerDisplayName(item),
+        type: String(item.type || ""),
+        model: String(item.model || ""),
+        autoModel: item.type === "openai" && item.model_mode === "auto",
+        maxConcurrentRequests: item.max_concurrent_requests ?? 1,
+        numCtx: item.num_ctx ?? 16384,
+        think: String(item.think ?? "false"),
+        numPredict: item.num_predict ?? 4096,
+        temperature: item.temperature ?? 0,
+        topP: item.top_p ?? 1,
+        seed: item.seed ?? "",
+        extraOptions: item.extra_options || "{}",
+        available: Boolean(status.available),
+        statusError: status.error || "",
       };
-      dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-      dialog.querySelector("#toolProvider").onchange = (e: Any) => {
-        profileId = e.target.value;
-        render();
-      };
-      dialog.querySelector("#toolRunMode").onchange = (e: Any) => {
-        runMode = e.target.value;
-        render();
-      };
-      dialog.querySelector("#toolProviders")?.addEventListener("click", () => {
-        close();
-        navigateTo("providers");
-      });
-      dialog.querySelector("#toolWarm").onclick = async () => {
-        const el = dialog.querySelector("#toolStatus");
-        el.textContent = "Warming…";
-        await warmupProviderProfile(profileId);
-        el.textContent = state.providerWarmups?.[profileId]?.message || "Warmup requested";
-      };
-      dialog.querySelector("#runLlmTask").onclick = async () => {
-        const active = providerProfile(profileId);
-        if (!active) return toast("Choose an available provider profile before continuing.");
+    });
+    openLlmTaskLauncherDialog({
+      title,
+      description,
+      contextText,
+      generationProvider,
+      generationModel,
+      profiles: launcherProfiles,
+      profileId,
+      runMode: runModes[0] === "foreground" ? "foreground" : "background",
+      runModes,
+      canManageProviders: !isResearcher(),
+      manageProviders: () => navigateTo("providers"),
+      warm: async (id: string) => {
+        await warmupProviderProfile(id);
+        return state.providerWarmups?.[id]?.message || tr("jobs.tool.warmup_requested");
+      },
+      run: async (form: LlmLauncherSubmission) => {
+        const refuse = (message: string, tone: "warning" | "danger") => {
+          toast(message, { tone });
+          return false;
+        };
+        const runMode = form.runMode;
+        const active = providerProfile(form.profileId);
+        if (!active) return refuse(copy.chooseProfile, "warning");
         if (!["ollama", "openai"].includes(String(active.type || "")))
-          return toast("The selected provider profile is not supported by this operation.");
+          return refuse(copy.profileUnsupported, "warning");
         const config = providerRequestConfig(active, { textReview: true });
         let extra: Any = {};
         try {
-          extra = JSON.parse(dialog.querySelector("#toolExtra").value || "{}");
+          extra = JSON.parse(form.extraOptions || "{}");
           if (!extra || Array.isArray(extra) || typeof extra !== "object")
             throw new Error("Advanced options must be an object");
         } catch (error: Any) {
-          return toast(error.message);
+          return refuse(error.message, "danger");
         }
-        const n = (id: Any) => {
-          const raw = dialog.querySelector(`#${id}`)?.value;
+        const n = (raw: string) => {
           if (raw === "" || raw == null) return null;
           const value = Number(raw);
           return Number.isFinite(value) ? value : null;
         };
-        let think = false;
+        let think: boolean | string = false;
         if (active.type === "ollama") {
-          const raw = dialog.querySelector("#toolThink")?.value || "false";
+          const raw = form.think || "false";
           think = raw === "true" ? true : ["low", "medium", "high"].includes(raw) ? raw : false;
         }
         const generation = sanitizeResearchGeneration({
           ...config.ollama,
-          num_ctx: active.type === "ollama" ? n("toolCtx") : null,
-          num_predict: n("toolPredict") ?? 4096,
+          num_ctx: active.type === "ollama" ? n(form.numCtx) : null,
+          num_predict: n(form.numPredict) ?? 4096,
           think,
-          temperature: n("toolTemp") ?? 0,
-          top_p: n("toolTopP") ?? 1,
-          seed: n("toolSeed"),
+          temperature: n(form.temperature) ?? 0,
+          top_p: n(form.topP) ?? 1,
+          seed: n(form.seed),
           extra_options: extra,
         });
         const model =
           active.type === "openai" && active.model_mode === "auto"
             ? "auto"
-            : String(dialog.querySelector("#toolModel")?.value || "").trim();
-        if (!model) return toast("Select a model before continuing.");
+            : String(form.model || "").trim();
+        if (!model) return refuse(copy.selectModel, "warning");
         if (
           task === "rag_grade" &&
           (!String(payload.question || "").trim() || !String(payload.answer || "").trim())
         )
-          return toast("A completed Research question and answer are required before grading.");
+          return refuse(copy.gradeRequiresQa, "warning");
         const direct = {
           ...payload,
           provider: active.type,
@@ -1025,19 +980,17 @@ export function createJobDialogs(deps: Deps) {
           api_key: active.type === "openai" ? active.api_key || "" : null,
           generation,
         };
-        const button = dialog.querySelector("#runLlmTask");
-        button.disabled = true;
-        button.textContent = runMode === "background" ? "Starting…" : "Running…";
         try {
           if (runMode === "background") {
+            const concurrency = Math.max(
+              1,
+              Math.min(64, Number(active.max_concurrent_requests) || 1),
+            );
             const body = {
               task,
               label: title,
               provider_profile_id: active.id,
-              max_concurrent_requests: Math.max(
-                1,
-                Math.min(64, Number(active.max_concurrent_requests) || 1),
-              ),
+              max_concurrent_requests: concurrency,
               pdf: task.startsWith("pdf_") ? direct : null,
               grade: task === "rag_grade" ? direct : null,
               grade_batch:
@@ -1049,10 +1002,7 @@ export function createJobDialogs(deps: Deps) {
                       api_key: direct.api_key,
                       generation: direct.generation,
                       provider_profile_id: active.id,
-                      max_concurrent_requests: Math.max(
-                        1,
-                        Math.min(64, Number(active.max_concurrent_requests) || 1),
-                      ),
+                      max_concurrent_requests: concurrency,
                     }
                   : null,
             };
@@ -1063,106 +1013,98 @@ export function createJobDialogs(deps: Deps) {
             state.jobs = [job, ...state.jobs.filter((item: Any) => item.id !== job.id)];
             syncJobProgressToasts();
             startJobPolling();
-            close();
-            toast(`${title} started in background`);
+            toast(copy.startedBackground(title), { tone: "success" });
           } else {
             if (task === "rag_grade_batch")
               throw new Error("Cache-wide grading runs as a background operation.");
             const endpoint = task === "rag_grade" ? "/api/rag/grade" : "/api/pdf/llm";
             const result = await api(endpoint, { method: "POST", body: JSON.stringify(direct) });
-            close();
+            // Close first so the result dialog opens over the page, not over the launcher.
+            closeLlmTaskLauncherDialog();
             if (onForegroundResult) await onForegroundResult(result);
           }
+          return true;
         } catch (error: Any) {
-          button.disabled = false;
-          button.innerHTML = `${icon("spark")}${runMode === "background" ? "Start background operation" : "Run now"}`;
-          toast(`${title} failed: ${error.message}`);
+          toast(copy.failed(title, error.message), { tone: "danger" });
+          return false;
         }
-      };
-    };
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    render();
+      },
+    });
   }
   function openPdfDraftRecord(record: Any) {
-    const dialog = document.createElement("dialog");
-    dialog.className = "pdf-draft-dialog";
-    const files = state.files;
-    const stores = recordStores();
-    dialog.innerHTML = `<div class="dh"><div><h2 class="dialog-title">Draft record from PDF page</h2><div class="dialog-subtitle">${esc(state.pdf.title || state.pdf.name)} · page ${state.pdf.page} · unsaved draft</div></div><button class="btn icon-only" data-close>${icon("close")}</button></div>
-  <div class="db pdf-draft-body">
-    <div class="info warn">This is a draft generated by an LLM. Review attribution, page metadata, quotation provenance, and text before saving.</div>
-    <textarea class="pdf-draft-json" id="pdfDraftJson" spellcheck="false">${esc(JSON.stringify(record, null, 2))}</textarea>
-    <div class="pdf-draft-targets">
-      <div class="field"><label>JSONL destination</label><select class="control" id="pdfDraftFile"><option value="">Do not add to JSONL</option>${files.map((file: Any) => `<option value="${esc(file.id)}">${esc(file.name)} · ${file.records.length} records</option>`).join("")}</select></div>
-      <div class="field"><label>Chroma destination</label><select class="control" id="pdfDraftStore" ${stores.length ? "" : `disabled data-disabled-reason="Create or restore a corpus vector database before upserting PDF drafts." title="Create or restore a corpus vector database before upserting PDF drafts."`}><option value="">${stores.length ? "Do not upsert to Chroma" : "No corpus database available"}</option>${stores.map((store: Any) => `<option value="${esc(store.name)}">${esc(store.name)} · ${Number(store.count || 0).toLocaleString()} records</option>`).join("")}</select></div>
-    </div>
-  </div>
-  <div class="da"><button class="btn" data-close>Cancel</button><button class="btn primary" id="savePdfDraft">${icon("check")}Add draft</button></div>`;
-    document.body.appendChild(dialog);
-    showAppModal(dialog);
-    const close = () => {
-      dialog.close();
-      dialog.remove();
-    };
-    dialog.querySelectorAll("[data-close]").forEach((button: Any) => (button.onclick = close));
-    dialog.querySelector("#savePdfDraft").onclick = async () => {
-      let draft: Any;
-      try {
-        draft = JSON.parse(dialog.querySelector("#pdfDraftJson").value);
-        if (!draft || typeof draft !== "object" || Array.isArray(draft))
-          throw new Error("Draft must be one JSON object.");
-      } catch (error: Any) {
-        return toast(`Invalid draft JSON: ${error.message}`);
-      }
-      if (!draft.record_id) draft.record_id = `pdf-draft-${Date.now()}`;
-      draft.needs_review = true;
-      draft.updates = Array.isArray(draft.updates) ? draft.updates : [];
-      draft.pdf_file = state.pdf.name || draft.pdf_file || null;
-      draft.pdf_pages = [
-        ...new Set([...(Array.isArray(draft.pdf_pages) ? draft.pdf_pages : []), state.pdf.page]),
-      ].sort((a, b) => a - b);
-      draft.text_length = String(draft.text || "").length;
-
-      const fileId = dialog.querySelector("#pdfDraftFile").value;
-      const storeName = dialog.querySelector("#pdfDraftStore").value;
-      if (!fileId && !storeName) return toast("Choose a JSONL file, a Chroma collection, or both.");
-
-      if (fileId) {
-        const file = state.files.find((item: Any) => item.id === fileId);
-        if (!file) return toast("Selected JSONL file is no longer loaded");
-        file.records.push(cloneAuditValue(draft));
-        file.dirty.add(file.records.length - 1);
-        await persistFileNow(file);
-      }
-      if (storeName) {
+    openPdfDraftRecordDialog({
+      title: state.pdf.title || state.pdf.name,
+      page: state.pdf.page,
+      recordJson: JSON.stringify(record, null, 2),
+      files: state.files.map((file: Any) => ({
+        id: file.id,
+        name: file.name,
+        count: file.records.length,
+      })),
+      stores: recordStores().map((store: Any) => ({
+        id: store.name,
+        name: store.name,
+        count: Number(store.count || 0),
+      })),
+      save: async ({ json, fileId, storeName }) => {
+        let draft: Any;
         try {
-          await api(`/api/stores/${encodeURIComponent(storeName)}/records`, {
-            method: "POST",
-            body: JSON.stringify({ record: upsertRecordPayload(draft) }),
-          });
-          await refreshStores();
+          draft = JSON.parse(json);
+          if (!draft || typeof draft !== "object" || Array.isArray(draft))
+            throw new Error("Draft must be one JSON object.");
         } catch (error: Any) {
-          return toast(
-            `Draft was added to JSONL where selected, but Chroma upsert failed: ${error.message}`,
-          );
+          toast(copy.invalidDraft(error.message), { tone: "danger" });
+          return false;
         }
-      }
-      close();
-      shell();
-      renderView();
-      toast(
-        `Draft ${draft.record_id} added${fileId && storeName ? " to JSONL and Chroma" : fileId ? " to JSONL" : " to Chroma"}`,
-        { tone: "success" },
-      );
-    };
-  }
-  function openTouchup(inputItems = null, initialMode = "foreground") {
-    const items = normalizeTouchupItems(inputItems);
-    if (!items.length) return;
-    window.dispatchEvent(
-      new CustomEvent("derridai:open-touchup", { detail: { items, initialMode } }),
-    );
+        if (!draft.record_id) draft.record_id = `pdf-draft-${Date.now()}`;
+        draft.needs_review = true;
+        draft.updates = Array.isArray(draft.updates) ? draft.updates : [];
+        draft.pdf_file = state.pdf.name || draft.pdf_file || null;
+        draft.pdf_pages = [
+          ...new Set([...(Array.isArray(draft.pdf_pages) ? draft.pdf_pages : []), state.pdf.page]),
+        ].sort((a, b) => a - b);
+        draft.text_length = String(draft.text || "").length;
+
+        if (!fileId && !storeName) {
+          toast(copy.chooseDestination, { tone: "warning" });
+          return false;
+        }
+        if (fileId) {
+          const file = state.files.find((item: Any) => item.id === fileId);
+          if (!file) {
+            toast(copy.jsonlGone, { tone: "danger" });
+            return false;
+          }
+          file.records.push(cloneAuditValue(draft));
+          file.dirty.add(file.records.length - 1);
+          invalidateCorpusCache(file.id, true);
+          await persistFileNow(file);
+        }
+        if (storeName) {
+          try {
+            await api(`/api/stores/${encodeURIComponent(storeName)}/records`, {
+              method: "POST",
+              body: JSON.stringify({ record: upsertRecordPayload(draft) }),
+            });
+            await refreshStores();
+          } catch (error: Any) {
+            toast(copy.chromaUpsertFailed(error.message), { tone: "danger" });
+            return false;
+          }
+        }
+        shell();
+        renderView();
+        toast(
+          fileId && storeName
+            ? copy.draftAddedBoth(draft.record_id)
+            : fileId
+              ? copy.draftAddedJsonl(draft.record_id)
+              : copy.draftAddedChroma(draft.record_id),
+          { tone: "success" },
+        );
+        return true;
+      },
+    });
   }
   return {
     openJobDetails,
@@ -1172,6 +1114,5 @@ export function createJobDialogs(deps: Deps) {
     openLlmToolResult,
     openLlmTaskLauncher,
     openPdfDraftRecord,
-    openTouchup,
   };
 }

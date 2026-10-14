@@ -1,0 +1,713 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""Semantic retrieval of progressive metadata exemplars."""
+
+from __future__ import annotations
+
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+if "chromadb" not in sys.modules:
+    sys.modules["chromadb"] = types.SimpleNamespace()
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "api"))
+
+from app.metadata_exemplar_retrieval import (
+    ChromaMetadataExemplarIndex,
+    _candidate_rows,
+    _retrieval_query_text,
+)
+
+
+class ArrayLike:
+    """Small array-shaped response double whose truth value is intentionally invalid."""
+
+    def __init__(self, values):
+        self.values = values
+
+    def __bool__(self):
+        raise ValueError("ambiguous array truth value")
+
+    def tolist(self):
+        return self.values
+
+
+def test_retrieval_query_filters_function_words_without_erasing_short_queries():
+    assert _retrieval_query_text("the position of Derrida", "en") == "position Derrida"
+    assert _retrieval_query_text("the", "en") == "the"
+
+
+def test_lexical_overlap_handles_punctuation_without_changing_source_text():
+    from app.metadata_exemplar_retrieval import _lexical_overlap
+
+    assert _lexical_overlap("responsibility", "Responsibility precedes freedom.") == 1.0
+
+
+class FakeEmbeddings:
+    def __init__(self):
+        self.calls = 0
+
+    def embed_query(self, query, *, provider=None, model=None):
+        self.calls += 1
+        assert query
+        return [1.0, 0.0]
+
+
+def _matches_where(row, where):
+    if "$and" in where:
+        return all(_matches_where(row, item) for item in where["$and"])
+    return all(
+        row.get(key) in value["$in"] if isinstance(value, dict) else row.get(key) == value
+        for key, value in where.items()
+    )
+
+
+class FakeCollection:
+    def __init__(self):
+        self.metadata = {"derridai_exemplar_schema": 3}
+        self.rows = {
+            "stale": {
+                "scope_id": "build-1",
+                "record_id": "r-speaker",
+                "field_name": "speaker",
+                "schema_version": "v1",
+                "context_text": "stale",
+            },
+            "other-scope": {
+                "scope_id": "build-2",
+                "field_name": "speaker",
+                "schema_version": "v1",
+                "context_text": "other",
+            },
+        }
+
+    def count(self):
+        return len(self.rows)
+
+    def get(self, *, where=None, include=None):
+        ids = [
+            exemplar_id
+            for exemplar_id, row in self.rows.items()
+            if where is None or _matches_where(row, where)
+        ]
+        return {"ids": ids, "metadatas": [self.rows[item] for item in ids]}
+
+    def delete(self, *, ids):
+        for exemplar_id in ids:
+            self.rows.pop(exemplar_id, None)
+
+    def query(self, *, query_embeddings, n_results, where, include):
+        assert query_embeddings == [[1.0, 0.0]]
+        ids = [
+            exemplar_id
+            for exemplar_id, row in self.rows.items()
+            if _matches_where(row, where)
+        ][:n_results]
+        # Give every candidate a deterministic but different vector so MMR runs.
+        vectors = [[1.0, float(index)] for index, _ in enumerate(ids)]
+        return {
+            "ids": [ids],
+            "metadatas": [[self.rows[item] for item in ids]],
+            "distances": [[0.05 + (index * 0.05) for index, _ in enumerate(ids)]],
+            "embeddings": [vectors],
+        }
+
+
+class FakeClient:
+    def __init__(self, collection):
+        self.collection = collection
+
+    def get_collection(self, *, name):
+        assert name == "test_metadata_exemplars"
+        return self.collection
+
+
+class FakeStore:
+    def __init__(self):
+        self.collection = FakeCollection()
+        self.client = FakeClient(self.collection)
+        self.embeddings = FakeEmbeddings()
+
+    def _embedding_spec(self, collection):
+        assert collection is self.collection
+        return "fake", "fake-model"
+
+    def upsert_many(self, store, records, *, document_field, id_field):
+        assert store == "test_metadata_exemplars"
+        for record in records:
+            exemplar_id = str(record[id_field])
+            self.collection.rows[exemplar_id] = dict(record)
+        return {"upserted": len(records), "count": self.collection.count()}
+
+
+def exemplar(exemplar_id, field, value, evidence):
+    return {
+        "metadata_exemplar_id": exemplar_id,
+        "kind": "positive",
+        "record_id": exemplar_id.replace("mex-", "r-"),
+        "record_revision": 2,
+        "source_document_id": "doc-1",
+        "field_name": field,
+        "field_value": value,
+        "assertion_status": "human_confirmed",
+        "assertion_method": "human_review_of_llm_proposal",
+        "evidence_ref": {
+            "block_ids": [f"block-{exemplar_id}"],
+            "quote_hash": f"hash-{exemplar_id}",
+        },
+        "evidence_text": evidence,
+        "context_text": f"Context before. {evidence} Context after.",
+        "schema_id": "schema",
+        "schema_version": "v1",
+        "language": "en",
+        "region_type": "main_text",
+    }
+
+
+def test_candidate_rows_normalizes_array_like_payloads_without_truth_testing():
+    rows = _candidate_rows(
+        {
+            "ids": ArrayLike([["mex-1"]]),
+            "distances": ArrayLike([[0.1]]),
+            "metadatas": ArrayLike([[{"field_name": "speaker"}]]),
+            "embeddings": ArrayLike([[[1.0, 0.0]]]),
+        }
+    )
+    assert rows == [
+        {
+            "id": "mex-1",
+            "metadata": {"field_name": "speaker"},
+            "distance": 0.1,
+            "embedding": [1.0, 0.0],
+        }
+    ]
+
+
+def test_retrieval_embeds_query_once_across_multiple_fields_and_syncs_scope():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        {
+            **exemplar("mex-speaker", "speaker", "Derrida", "Derrida replies to the interviewer."),
+            "record_id": "r-speaker",
+        },
+        exemplar(
+            "mex-holder-1",
+            "position_holder",
+            "Levinas",
+            "For Levinas, responsibility precedes freedom.",
+        ),
+        exemplar(
+            "mex-holder-2",
+            "position_holder",
+            "Kant",
+            "Kant makes autonomy central to practical reason.",
+        ),
+    ]
+
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida discusses Levinas and responsibility.",
+        exemplars=canonical,
+        fields=["speaker", "position_holder"],
+        schema_id="schema",
+        schema_version="v1",
+        field_limits={"speaker": 1, "position_holder": 2},
+    )
+
+    assert result["ok"] is True
+    assert store.embeddings.calls == 1
+    assert "stale" not in store.collection.rows
+    assert "other-scope" in store.collection.rows
+    assert set(result["examples"]) == {"speaker", "position_holder"}
+    assert result["examples"]["speaker"][0]["value"] == "Derrida"
+    assert {
+        item["value"] for item in result["examples"]["position_holder"]
+    } == {"Levinas", "Kant"}
+    assert all(
+        item["evidence_bound"]
+        for items in result["examples"].values()
+        for item in items
+    )
+    assert result["telemetry"]["examples_used"] == 3
+    assert result["telemetry"]["sync"]["upserted"] == 3
+    assert result["telemetry"]["sync"]["deleted"] == 1
+
+
+def test_retrieval_packet_budget_is_global_not_per_field():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        exemplar("mex-speaker", "speaker", "Derrida", "Derrida speaks."),
+        exemplar("mex-holder", "position_holder", "Levinas", "Levinas is named."),
+    ]
+
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida and Levinas",
+        exemplars=canonical,
+        fields=["speaker", "position_holder"],
+        schema_id="schema",
+        schema_version="v1",
+        packet_char_budget=350,
+    )
+
+    used = sum(len(items) for items in result["examples"].values())
+    assert result["ok"] is True
+    assert used <= 1
+    assert result["telemetry"]["packet_chars"] <= 350
+
+
+def test_cross_encoder_reranking_is_bounded_and_preserves_field_quotas(monkeypatch):
+    import app.metadata_exemplar_retrieval as retrieval
+
+    calls = []
+
+    def fake_predict(pairs, *, model_name, timeout_seconds):
+        calls.append((pairs, model_name, timeout_seconds))
+        return [0.2, 0.9], {
+            "mode": "cross_encoder",
+            "provider": "sentence-transformers",
+            "model": model_name,
+            "candidate_count": len(pairs),
+            "reranked_count": len(pairs),
+            "timing_ms": 3,
+        }
+
+    monkeypatch.setattr(retrieval, "predict_scores", fake_predict)
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        exemplar("mex-one", "position_holder", "One", "One responsibility."),
+        exemplar("mex-two", "position_holder", "Two", "Two responsibility."),
+        exemplar("mex-three", "speaker", "Three", "Three responsibility."),
+    ]
+
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="responsibility",
+        exemplars=canonical,
+        fields=["position_holder", "speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        field_limits={"position_holder": 1, "speaker": 1},
+        cross_encoder_enabled=True,
+        cross_encoder_top_k=2,
+        cross_encoder_model="test-cross-encoder",
+    )
+
+    assert len(calls) == 1
+    assert len(calls[0][0]) == 2
+    assert result["telemetry"]["reranking"]["mode"] == "cross_encoder"
+    assert result["telemetry"]["reranking"]["candidate_count"] == 2
+    assert result["telemetry"]["reranking"]["reranked_count"] == 2
+    assert sum(len(items) for items in result["examples"].values()) == 2
+
+
+def test_cross_encoder_failure_falls_back_with_visible_telemetry(monkeypatch):
+    import app.metadata_exemplar_retrieval as retrieval
+
+    def failed_predict(pairs, *, model_name, timeout_seconds):
+        return None, {
+            "mode": "hybrid",
+            "provider": "sentence-transformers",
+            "model": model_name,
+            "candidate_count": len(pairs),
+            "reranked_count": 0,
+            "fallback_reason": "inference_timeout",
+            "timing_ms": 11,
+        }
+
+    monkeypatch.setattr(retrieval, "predict_scores", failed_predict)
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida",
+        exemplars=[exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")],
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        cross_encoder_enabled=True,
+    )
+
+    assert result["ok"] is True
+    assert result["examples"]["speaker"][0]["value"] == "Derrida"
+    assert result["telemetry"]["reranking"]["mode"] == "hybrid"
+    assert result["telemetry"]["reranking"]["fallback_reason"] == "inference_timeout"
+
+
+def test_backend_failure_disables_repeated_semantic_attempts_but_returns_fallback_reason():
+    class BrokenClient:
+        def get_collection(self, *, name):
+            raise RuntimeError("vector backend unavailable")
+
+    class BrokenStore:
+        client = BrokenClient()
+
+    index = ChromaMetadataExemplarIndex(
+        BrokenStore(),
+        collection_name="test_metadata_exemplars",
+    )
+    canonical = [exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")]
+
+    first = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida",
+        exemplars=canonical,
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+    )
+    second = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida",
+        exemplars=canonical,
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+    )
+
+    assert first["ok"] is False
+    assert second["ok"] is False
+    assert first["examples"]["speaker"][0]["value"] == "Derrida"
+    assert first["telemetry"]["fallback_mode"] == "lexical"
+    assert second["examples"]["speaker"][0]["value"] == "Derrida"
+    assert "vector backend unavailable" in second["telemetry"]["fallback_reason"]
+
+
+
+def test_backend_failure_can_decline_lexical_fallback_explicitly():
+    class BrokenClient:
+        def get_collection(self, *, name):
+            raise RuntimeError("vector backend unavailable")
+
+    class BrokenStore:
+        client = BrokenClient()
+
+    index = ChromaMetadataExemplarIndex(
+        BrokenStore(),
+        collection_name="test_metadata_exemplars",
+    )
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida",
+        exemplars=[exemplar("mex-one", "speaker", "Derrida", "Derrida speaks.")],
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        allow_lexical_fallback=False,
+    )
+
+    assert result["ok"] is False
+    assert result["examples"] == {}
+    assert result["telemetry"]["fallback_mode"] == "none"
+    assert result["telemetry"]["fallback_kind"] == "error"
+    assert "vector backend unavailable" in result["telemetry"]["fallback_reason"]
+
+
+def test_selective_sync_does_not_delete_omitted_record_keys():
+    store = FakeStore()
+    store.collection.rows["kept-omitted"] = {
+        "scope_id": "build-1",
+        "record_id": "r-omitted",
+        "field_name": "stance",
+        "schema_version": "v1",
+        "context_text": "older but still canonical outside this selective packet",
+    }
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    desired = [
+        {
+            **exemplar("mex-speaker", "speaker", "Derrida", "Derrida speaks."),
+            "record_id": "r-speaker",
+        }
+    ]
+
+    stats = index.sync("build-1", desired)
+
+    assert "kept-omitted" in store.collection.rows
+    assert stats["deleted"] == 1  # only the obsolete speaker exemplar is replaced
+    assert "stale" not in store.collection.rows
+
+
+def test_rebuild_scope_can_remove_all_stale_rows_deterministically():
+    store = FakeStore()
+    store.collection.rows["obsolete"] = {
+        "scope_id": "build-1",
+        "record_id": "r-old",
+        "field_name": "stance",
+        "schema_version": "v1",
+        "context_text": "obsolete",
+    }
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    desired = [exemplar("mex-new", "stance", "critical", "Derrida criticizes the formulation.")]
+
+    stats = index.rebuild_scope("build-1", desired)
+
+    assert stats["deleted"] == 2
+    assert stats["upserted"] == 1
+    assert "obsolete" not in store.collection.rows
+    assert "stale" not in store.collection.rows
+    assert "other-scope" in store.collection.rows
+    assert "mex-new" in store.collection.rows
+
+def test_missing_metadata_exemplar_collection_is_created_on_first_use():
+    class MissingCollectionError(RuntimeError):
+        pass
+
+    class Client:
+        def __init__(self):
+            self.collection = None
+
+        def get_collection(self, *, name):
+            assert name == "test_metadata_exemplars"
+            if self.collection is None:
+                raise MissingCollectionError("Collection [test_metadata_exemplars] does not exist")
+            return self.collection
+
+        def delete_collection(self, *, name):
+            self.collection = None
+
+    class Store:
+        def __init__(self):
+            self.client = Client()
+            self.created = 0
+
+        @staticmethod
+        def _is_missing_collection_error(exc):
+            return "does not exist" in str(exc).casefold()
+
+        def create_store(self, name, **kwargs):
+            assert name == "test_metadata_exemplars"
+            self.created += 1
+            self.client.collection = FakeCollection()
+            return {"name": name}
+
+    store = Store()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+
+    collection = index._ensure()
+
+    assert collection is store.client.collection
+    assert store.created == 1
+
+
+def test_exemplar_collection_rebuilds_when_configured_embedding_contract_changes():
+    class Client:
+        def __init__(self):
+            self.deleted = 0
+            self.collection = FakeCollection()
+            self.collection.metadata = {
+                "derridai_exemplar_schema": 3,
+                "__derridai_embedding_provider": "ollama",
+                "__derridai_embedding_model": "old-model",
+            }
+
+        def get_collection(self, *, name):
+            assert name == "test_metadata_exemplars"
+            if self.collection is None:
+                raise RuntimeError("Collection [test_metadata_exemplars] does not exist")
+            return self.collection
+
+        def delete_collection(self, *, name):
+            assert name == "test_metadata_exemplars"
+            self.deleted += 1
+            self.collection = None
+
+    class Store:
+        def __init__(self):
+            self.client = Client()
+            self.created = []
+
+        @staticmethod
+        def _is_missing_collection_error(exc):
+            return "does not exist" in str(exc).casefold()
+
+        @staticmethod
+        def default_embedding_spec():
+            return "profile:embedding-lab", "text-embedding-model"
+
+        @staticmethod
+        def _embedding_spec(collection):
+            return (
+                collection.metadata.get("__derridai_embedding_provider"),
+                collection.metadata.get("__derridai_embedding_model"),
+            )
+
+        def create_store(self, name, **kwargs):
+            self.created.append(kwargs)
+            collection = FakeCollection()
+            collection.metadata = {
+                "derridai_exemplar_schema": 3,
+                "__derridai_embedding_provider": kwargs["embedding_provider"],
+                "__derridai_embedding_model": kwargs["embedding_model"],
+            }
+            self.client.collection = collection
+            return {"name": name}
+
+    store = Store()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+
+    collection = index._ensure()
+
+    assert store.client.deleted == 1
+    assert len(store.created) == 1
+    assert store.created[0]["embedding_provider"] == "profile:embedding-lab"
+    assert store.created[0]["embedding_model"] == "text-embedding-model"
+    assert collection.metadata["__derridai_embedding_provider"] == "profile:embedding-lab"
+
+
+def test_exemplar_collection_rejects_precomputed_default_without_losing_canonical_state():
+    class Store:
+        @staticmethod
+        def default_embedding_spec():
+            return "precomputed", None
+
+    index = ChromaMetadataExemplarIndex(Store(), collection_name="test_metadata_exemplars")
+
+    try:
+        index._ensure()
+        raise AssertionError("precomputed defaults cannot generate exemplar vectors")
+    except ValueError as exc:
+        assert "query-capable embedding provider" in str(exc)
+
+
+def test_exemplar_collection_creation_failure_is_not_rewritten_as_missing_collection():
+    class Client:
+        def get_collection(self, *, name):
+            raise RuntimeError("Collection [test_metadata_exemplars] does not exist")
+
+    class Store:
+        client = Client()
+
+        @staticmethod
+        def _is_missing_collection_error(exc):
+            return "does not exist" in str(exc).casefold()
+
+        def create_store(self, name, **kwargs):
+            raise RuntimeError("embedding provider unavailable")
+
+    index = ChromaMetadataExemplarIndex(Store(), collection_name="test_metadata_exemplars")
+
+    try:
+        index._ensure()
+        raise AssertionError("creation failure should propagate")
+    except RuntimeError as exc:
+        assert "embedding provider unavailable" in str(exc)
+
+
+
+def _generic(exemplar_id, value, *, kind="positive", reviewed=None):
+    """A precedent for an arbitrary schema field; nothing here is Derrida-specific."""
+    item = exemplar(exemplar_id, "mood", value, f"Evidence for {exemplar_id}.")
+    item["kind"] = kind
+    if kind == "correction":
+        item["rejected_value"] = "angry"
+    if reviewed is not None:
+        item["reviewed_values"] = reviewed
+    return item
+
+
+def test_corrections_have_their_own_quota_and_cannot_crowd_out_positives():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        _generic("mex-c1", "calm", kind="correction"),
+        _generic("mex-c2", "calm", kind="correction"),
+        _generic("mex-c3", "calm", kind="correction"),
+        _generic("mex-p1", "calm"),
+        _generic("mex-p2", "calm"),
+    ]
+    result = index.retrieve(
+        scope_id="build-1", query_text="calm letter", exemplars=canonical, fields=["mood"],
+        schema_id="schema", schema_version="v1",
+        field_limits={"mood": 2}, field_correction_limits={"mood": 1},
+    )
+    kinds = [item.get("kind", "positive") for item in result["examples"]["mood"]]
+    assert kinds.count("positive") == 2 and kinds.count("correction") == 1
+
+
+def test_declared_conditions_rank_matches_first_and_drop_contradictions():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    genre_letter, genre_essay = '"letter"', '"essay"'
+    canonical = [
+        _generic("mex-unknown", "calm"),
+        _generic("mex-differs", "angry", reviewed={"genre": genre_essay}),
+        _generic("mex-matched", "calm", reviewed={"genre": genre_letter}),
+    ]
+    result = index.retrieve(
+        scope_id="build-1", query_text="calm letter", exemplars=canonical, fields=["mood"],
+        schema_id="schema", schema_version="v1",
+        field_limits={"mood": 3}, field_match_fields={"mood": ["genre"]},
+        current_values={"genre": genre_letter},
+    )
+    items = result["examples"]["mood"]
+    assert [item["record_id"] for item in items] == ["r-matched", "r-unknown"]
+    assert items[0]["match"] == {"tier": "matched", "fields": ["genre"]}
+    assert "match" not in items[1], "an uncomparable precedent is not labelled as matched"
+
+
+def test_conditions_are_skipped_when_the_current_record_is_unreviewed():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [_generic("mex-a", "calm", reviewed={"genre": '"essay"'})]
+    result = index.retrieve(
+        scope_id="build-1", query_text="calm", exemplars=canonical, fields=["mood"],
+        schema_id="schema", schema_version="v1",
+        field_limits={"mood": 2}, field_match_fields={"mood": ["genre"]}, current_values={},
+    )
+    assert [item["record_id"] for item in result["examples"]["mood"]] == ["r-a"]
+
+
+
+def test_retrieval_honors_pipeline_computational_settings():
+    store = FakeStore()
+    index = ChromaMetadataExemplarIndex(store, collection_name="test_metadata_exemplars")
+    canonical = [
+        exemplar("mex-one", "speaker", "Derrida", "Derrida speaks."),
+        exemplar("mex-two", "speaker", "Levinas", "Levinas responds."),
+    ]
+
+    result = index.retrieve(
+        scope_id="build-1",
+        query_text="Derrida responds",
+        exemplars=canonical,
+        fields=["speaker"],
+        schema_id="schema",
+        schema_version="v1",
+        field_limits={"speaker": 2},
+        packet_char_budget=900,
+        fetch_k=7,
+        semantic_weight=0.25,
+        lexical_weight=0.75,
+        mmr_lambda=0.4,
+        cross_encoder_enabled=False,
+    )
+
+    telemetry = result["telemetry"]
+    assert result["ok"] is True
+    assert telemetry["fetch_k"] == 7
+    assert telemetry["semantic_weight"] == pytest.approx(0.25)
+    assert telemetry["lexical_weight"] == pytest.approx(0.75)
+    assert telemetry["mmr_lambda"] == pytest.approx(0.4)
+    assert telemetry["packet_char_budget"] == 900
+    assert telemetry["reranking"]["mode"] == "disabled"

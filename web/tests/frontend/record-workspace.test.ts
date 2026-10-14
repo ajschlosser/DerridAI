@@ -1,12 +1,29 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it, vi } from "vitest";
 import { createRecordWorkspace } from "../../src/domain/recordWorkspace";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 
 // The rendered Record view is covered by the legacy baseline's record scenarios (recorded before this logic moved);
 // these pin the commands that do not need a full workspace to run.
 function setup(overrides: Record<string, unknown> = {}) {
-  const state = createRuntimeState() as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const state = createRuntimeState() as unknown as Record<string, any>;
   const calls: string[] = [];
   const deps = new Proxy(
     { state, tr: (_key: string, fallback: string) => fallback, ...overrides } as Record<
@@ -17,7 +34,7 @@ function setup(overrides: Record<string, unknown> = {}) {
       get: (target, name: string) => {
         if (name in target) return target[name];
         return vi.fn(() => {
-          if (name === "persistPrefs" || name === "syncUrl") calls.push(name);
+          if (name === "persistRecordViewPreferences" || name === "syncUrl") calls.push(name);
         });
       },
     },
@@ -34,7 +51,7 @@ describe("record workspace commands", () => {
     const { state, calls, workspace } = setup();
     expect(workspace.setRecordWorkspaceFind("outside")).toBe("outside");
     expect(state.recordFind).toBe("outside");
-    expect(calls).toEqual(["persistPrefs", "syncUrl"]);
+    expect(calls).toEqual(["persistRecordViewPreferences", "syncUrl"]);
     expect(workspace.setRecordWorkspaceFind(null)).toBe("");
   });
 
@@ -58,7 +75,7 @@ describe("record workspace commands", () => {
       activeFile: () => null,
     });
     await expect(workspace.saveCurrentRecordChanges({ text: "x" })).rejects.toThrow(
-      "No record selected.",
+      "No record selected",
     );
   });
 });

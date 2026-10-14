@@ -1,36 +1,120 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Pure public JSONL schema validation, internal-field filtering, and publication readiness."""
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import re
+import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from .corpus_metadata import DISCOURSE_ROLES, REGION_TYPES
+from .field_assertions import (
+    FieldAssertion,
+    accept_unreviewed_suggestions,
+    current_assertion_by_name,
+    field_identity,
+    migrate_record_assertions,
+    project_record_assertions,
+    store_assertion,
+)
+
+
+def warning_key(text: str) -> str:
+    """A stable identity for a build warning, so an acknowledgement stays attached to the warning it names."""
+    return hashlib.blake2b(str(text).encode("utf-8"), digest_size=8).hexdigest()
+
+
+_RECORD_SCOPED = re.compile(r"^\s*([\w.\-]+):\s")
+
+
+def provenance_warnings(
+    build: dict[str, Any], record_ids: set[str]
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """The build's warnings as provenance: (build-wide warnings, warnings per record ID), with acknowledgements.
+
+    A warning is part of how a corpus was made, so it travels with the corpus. One that names a record
+    ("cosmopolitanism-00006: LLM text touch-up failed") belongs to that record; the rest belong to the build.
+    """
+    acknowledgements = build.get("warning_acknowledgements") or {}
+    build_wide: list[dict[str, Any]] = []
+    per_record: dict[str, list[dict[str, Any]]] = {}
+    for text in [str(item) for item in build.get("warnings") or [] if str(item).strip()]:
+        key = warning_key(text)
+        entry: dict[str, Any] = {"warning_id": key, "text": text}
+        acknowledged = acknowledgements.get(key)
+        if isinstance(acknowledged, dict):
+            entry["acknowledged_by"] = acknowledged.get("acknowledged_by")
+            entry["acknowledged_at"] = acknowledged.get("acknowledged_at")
+        match = _RECORD_SCOPED.match(text)
+        if match and match.group(1) in record_ids:
+            per_record.setdefault(match.group(1), []).append(entry)
+        else:
+            build_wide.append(entry)
+    return build_wide, per_record
 
 
 def validate_publication_record(record: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    record_id = str(record.get("record_id") or "").strip()
+
+    def add(message: str) -> None:
+        prefix = f"Record {record_id}: " if record_id else ""
+        errors.append(f"{prefix}{message}")
+
     if not str(record.get("record_id") or "").strip():
-        errors.append("record_id is required")
+        add("record_id is required")
     if (
         not isinstance(record.get("text"), str)
         or not str(record.get("text") or "").strip()
     ):
-        errors.append("text is required")
+        add("text is required")
+    if not str(record.get("source_document_id") or "").strip():
+        add("source_document_id is required")
+    spans = record.get("source_spans")
+    if not isinstance(spans, list) or not spans:
+        add("source_spans is required")
+    else:
+        source_document_id = str(record.get("source_document_id") or "")
+        for span in spans:
+            if not isinstance(span, dict):
+                add("source_spans must contain objects")
+                continue
+            span_source_id = str(span.get("source_document_id") or source_document_id)
+            if span_source_id != source_document_id:
+                add("source_spans must resolve to source_document_id")
     region = record.get("region_type")
     role = record.get("discourse_role")
     primary = record.get("primary_text")
     if region not in (None, "") and str(region) not in REGION_TYPES:
-        errors.append(f"region_type is not a supported enum value: {region}")
+        add(f"region_type is not a supported enum value: {region}")
     if role not in (None, "") and str(role) not in DISCOURSE_ROLES:
-        errors.append(f"discourse_role is not a supported enum value: {role}")
+        add(f"discourse_role is not a supported enum value: {role}")
     if primary is not None and not isinstance(primary, bool):
-        errors.append("primary_text must be boolean when present")
+        add("primary_text must be boolean when present")
     return errors
 
 
 def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
     public_record = dict(record)
+    migrate_record_assertions(public_record)
     if not public_record.get("source_document_id") and public_record.get("source_asset_id"):
         public_record["source_document_id"] = public_record["source_asset_id"]
     source_document_id = public_record.get("source_document_id")
@@ -69,10 +153,12 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "pdf_pages",
         "topology_index",
         "topology_count",
+        "queue_state_version",
         "boundary_review",
         "boundary_suspicion",
         "metadata_field_status",
         "metadata_evidence",
+        "metadata_guidance_matches",
         "metadata_decisions",
         "metadata_stage_status",
         "metadata_execution_ledger",
@@ -84,6 +170,11 @@ def serialize_public_record(record: dict[str, Any]) -> dict[str, Any]:
         "metadata_enrichment_state",
         "metadata_enrichment_history",
         "metadata_disputes",
+        # Review aid: references to other records' reviewed precedents, not scholarly metadata.
+        "metadata_precedents_cache",
+        # Rebuildable linguistic projections stay outside canonical publication JSONL.
+        "nlp_candidates",
+        "document_intelligence",
         "record_revision",
         "review_state",
         "can_accept",
@@ -125,6 +216,158 @@ SOURCE_TEXT:
 """
 
 
+# Segmentation must conserve text even when review is skipped; page mapping and metadata
+# validation issues are review-resolvable and are carried as unreviewed instead.
+TEXT_CONSERVATION_ERROR_KEYS = (
+    "missing_block_ids",
+    "missing_source_unit_ids",
+    "duplicate_block_ids",
+    "unknown_source_unit_ids",
+    "source_reference_errors",
+    "source_conservation_errors",
+    "text_fidelity_errors",
+    "source_order_errors",
+)
+UNREVIEWED_PUBLISHABLE_STATUSES = frozenset({"ready", "awaiting_review"})
+# Public per-record marker for publications that bypassed human review.
+REVIEWER_ACCEPTED = "reviewer_accepted"
+UNREVIEWED = "unreviewed_suggestion"
+
+
+def _normalize_legacy_reviewed_primary_text(record: dict[str, Any]) -> bool:
+    """Repair only unambiguous, already-reviewed boolean literals in a snapshot.
+
+    Older review endpoints validated "false"/"true" as booleans but persisted
+    the original strings. Their human decisions were about the boolean meaning;
+    a lossless type repair retains that authority and both assertion versions.
+    This never mutates the source build, guesses ambiguous values, or upgrades
+    an unreviewed candidate (which must still be quarantined).
+    """
+    raw = record.get("primary_text")
+    if not isinstance(raw, str) or raw.strip().lower() not in {"true", "false"}:
+        return False
+    assertion = current_assertion_by_name(record, "primary_text")
+    if (
+        assertion is None
+        or assertion.authority_status not in {"human_confirmed", "human_override"}
+        or assertion.value != raw
+    ):
+        return False
+
+    normalized = raw.strip().lower() == "true"
+    store_assertion(record, assertion.model_copy(update={
+        "assertion_id": f"assertion-{uuid.uuid4().hex}",
+        "value": normalized,
+        "legacy_metadata": {
+            **copy.deepcopy(assertion.legacy_metadata or {}),
+            "publication_type_normalization": {
+                "reason_code": "legacy_reviewed_boolean_string",
+                "original_value": raw,
+                "normalized_value": normalized,
+                "prior_assertion_id": assertion.assertion_id,
+            },
+        },
+        "supersedes_assertion_id": assertion.assertion_id,
+        "created_at": datetime.now(UTC).isoformat(),
+    }))
+    project_record_assertions(record)
+    return True
+
+
+def _quarantine_invalid_autonomous_core_values(record: dict[str, Any]) -> int:
+    """Keep malformed core candidates as invalid assertions, never public scalar values.
+
+    An as-is publication may bypass human review, not the public JSONL schema.
+    The source candidate remains in assertion history; only this publication
+    snapshot receives an invalid/unresolved current assertion with no value.
+    Do not coerce truthy strings (especially `"false"`) into booleans.
+    Human-confirmed values are not overridden by an autonomous policy.
+    """
+    invalid_count = 0
+    for field in ("region_type", "primary_text", "discourse_role"):
+        value = record.get(field)
+        invalid = (
+            value is not None and not isinstance(value, bool)
+            if field == "primary_text"
+            else value not in (None, "")
+            and str(value) not in (REGION_TYPES if field == "region_type" else DISCOURSE_ROLES)
+        )
+        if not invalid:
+            continue
+        existing = current_assertion_by_name(record, field)
+        if existing is not None and existing.authority_status in {"human_confirmed", "human_override"}:
+            # A human-owned invalid value requires correction, not silent masking.
+            continue
+        reason = f"Invalid {field} candidate excluded from the autonomous publication projection."
+        provenance = {
+            "reason_code": "invalid_publication_core_value",
+            "candidate_value": copy.deepcopy(value),
+            "prior_assertion_id": existing.assertion_id if existing else None,
+        }
+        if existing is None:
+            invalid_assertion = FieldAssertion(
+                record_id=str(record.get("record_id") or ""),
+                record_revision=int(record.get("record_revision") or 1),
+                field_id=field_identity(field),
+                field_name=field,
+                value=None,
+                derivation_method="imported",
+                evaluation_status="evaluation_failed",
+                value_status="invalid",
+                method="publication_core_value_validation",
+                reason=reason,
+                legacy_metadata={"publication_validation": provenance},
+            )
+        else:
+            invalid_assertion = existing.model_copy(update={
+                "assertion_id": f"assertion-{uuid.uuid4().hex}",
+                "value": None,
+                "evaluation_status": "evaluation_failed",
+                "value_status": "invalid",
+                "legacy_status": None,
+                "reason": reason,
+                "legacy_metadata": {
+                    **copy.deepcopy(existing.legacy_metadata),
+                    "publication_validation": provenance,
+                },
+                "supersedes_assertion_id": existing.assertion_id,
+                "created_at": datetime.now(UTC).isoformat(),
+            })
+        store_assertion(record, invalid_assertion)
+        invalid_count += 1
+    if invalid_count:
+        project_record_assertions(record)
+    return invalid_count
+
+
+def mark_unreviewed_publication(records: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int, int]:
+    """Accept every outstanding suggestion in a publication snapshot, without changing stored review state.
+
+    Reviewer decisions made before the bypass are preserved: rejected records are already
+    excluded, and human-confirmed or overridden fields are never replaced. Every other
+    suggested value is accepted as-is (see `accept_unreviewed_suggestions`), and each record
+    is labelled `reviewer_accepted` or `unreviewed_suggestion`.
+    Returns the snapshot, the number of unreviewed records, and the number of accepted fields.
+    """
+    marked: list[dict[str, Any]] = []
+    unreviewed = 0
+    accepted_fields = 0
+    for record in records:
+        snapshot = copy.deepcopy(record)
+        fields = accept_unreviewed_suggestions(snapshot)
+        # Fix representations from the old review-write bug without overriding
+        # the reviewer's semantic decision or rewriting the authoritative build.
+        _normalize_legacy_reviewed_primary_text(snapshot)
+        invalid_fields = _quarantine_invalid_autonomous_core_values(snapshot)
+        accepted_fields += fields
+        reviewed = bool(record.get("accepted")) and not record.get("needs_review") and not fields and not invalid_fields
+        unreviewed += 0 if reviewed else 1
+        snapshot["needs_review"] = False
+        snapshot["publication_review_status"] = REVIEWER_ACCEPTED if reviewed else UNREVIEWED
+        marked.append(snapshot)
+    return marked, unreviewed, accepted_fields
+
+
 def publishable_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         record
@@ -134,12 +377,67 @@ def publishable_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _source_validation_blocker_message(validation: dict[str, Any]) -> str:
+    """Explain the remaining source-integrity gate without hiding it behind a 409."""
+    base = "Publication is blocked until source coverage and text-fidelity validation pass."
+    raw_issues = validation.get("validation_issues")
+    issues: list[dict[str, Any]] = (
+        [
+            item
+            for item in raw_issues
+            if isinstance(item, dict)
+            and str(item.get("code") or "").startswith("source_")
+        ]
+        if isinstance(raw_issues, list)
+        else []
+    )
+    if issues:
+        details: list[str] = []
+        for index, item in enumerate(issues):
+            if index >= 4:
+                break
+            code = str(item.get("code") or "source_validation")
+            location = " / ".join(
+                value
+                for value in (
+                    str(item.get("record_id") or ""),
+                    str(item.get("field") or ""),
+                )
+                if value
+            )
+            reason = str(item.get("reason") or "").strip()
+            label = f"{code} ({location})" if location else code
+            details.append(f"{label}: {reason}" if reason else label)
+        remainder = len(issues) - len(details)
+        suffix = f" (+{remainder} more)" if remainder > 0 else ""
+        return (
+            f"{base} Remaining source-integrity findings: "
+            + "; ".join(details)
+            + suffix
+            + ". You can also download the unfinished corpus archive for inspection."
+        )
+
+    counts = [
+        (key, len(validation.get(key) or []))
+        for key in TEXT_CONSERVATION_ERROR_KEYS
+        if validation.get(key)
+    ]
+    if counts:
+        summary = ", ".join(f"{key}={count}" for key, count in counts)
+        return (
+            f"{base} Remaining findings: {summary}. "
+            "You can also download the unfinished corpus archive for inspection."
+        )
+    return base
+
+
 def publication_blocker(
     build: dict[str, Any],
     publishable: list[dict[str, Any]],
     validation: dict[str, Any],
     *,
     require_acceptance: bool,
+    accept_unreviewed: bool = False,
 ) -> str | None:
     """The first reason `publish()` would refuse, or None if the build is publishable.
 
@@ -147,7 +445,19 @@ def publication_blocker(
     metadata totals are read from it), but `validation` is passed separately because the
     caller captures it *before* that refresh -- preserved exactly from the original
     inline `publish()` method, not changed here.
+
+    `accept_unreviewed` skips only the human-review gates (document metadata, metadata
+    completion, pending review, acceptance). Text-conservation validation and an empty
+    publication still block: an unreviewed corpus may be unverified, never lossy.
     """
+    if accept_unreviewed:
+        if str(build.get("status") or "") not in UNREVIEWED_PUBLISHABLE_STATUSES:
+            return "Publication is unavailable until the build has finished processing."
+        if not validation or any(validation.get(key) for key in TEXT_CONSERVATION_ERROR_KEYS):
+            return _source_validation_blocker_message(validation or {})
+        if not publishable:
+            return "Publication is unavailable because every record is rejected. Restore at least one record or discard this build."
+        return None
     publication_readiness = build.get("publication_readiness")
     readiness: dict[str, Any] = publication_readiness if isinstance(publication_readiness, dict) else {}
     readiness_blockers_raw = readiness.get("blockers")
@@ -164,8 +474,10 @@ def publication_blocker(
         detail = ", ".join(f"{field}: {count}" for field, count in sorted((by_field or {}).items()))
         suffix = f" Unresolved fields — {detail}." if detail else ""
         return f"Publication is blocked: metadata is complete for {metadata_completed} of {metadata_total} record(s).{suffix} Resolve the metadata issue queue before publishing."
-    if not validation.get("valid"):
-        return "Publication is blocked until source coverage and text-fidelity validation pass."
+    if not validation.get("source_valid", validation.get("valid", False)):
+        return _source_validation_blocker_message(validation)
+    if not validation.get("metadata_valid", validation.get("valid", False)):
+        return "Publication is blocked until metadata validation passes. Inspect the validation issues before publishing."
     if not publishable:
         return "Publication is unavailable because every record is rejected. Restore at least one record or discard this build."
     unresolved = [record for record in publishable if record.get("needs_review")]

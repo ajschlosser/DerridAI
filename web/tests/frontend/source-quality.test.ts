@@ -1,0 +1,252 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { describe, expect, it, beforeEach } from "vitest";
+import { mount } from "@vue/test-utils";
+import { defineComponent, h, nextTick, ref } from "vue";
+import {
+  assetHasExtractionWarning,
+  firstRecordWithSourceWarning,
+  recordHasSourceWarning,
+} from "../../src/domain/sourceQuality";
+import { useCorpusIngestWarning } from "../../src/composables/useCorpusIngestWarning";
+import CorpusRecordFocusReview from "../../src/components/CorpusRecordFocusReview.vue";
+import ProviderProfileSelect from "../../src/components/ProviderProfileSelect.vue";
+import {
+  RUN_GUIDANCE_STORAGE_KEY,
+  useCorpusRunGuidance,
+} from "../../src/composables/useCorpusRunGuidance";
+
+describe("ProviderProfileSelect availability", () => {
+  it("shows unavailable configured profiles as disabled instead of silently hiding them", () => {
+    const wrapper = mount(ProviderProfileSelect, {
+      props: {
+        modelValue: "missing",
+        profiles: [
+          {
+            id: "missing",
+            name: "Missing",
+            type: "ollama",
+            model: "gone",
+            available: false,
+            availability_error: 'Configured model "gone" was not found.',
+          },
+          { id: "ready", name: "Ready", type: "ollama", model: "present", available: true },
+          {
+            id: "offline",
+            name: "Offline",
+            type: "openai",
+            model: "remote",
+            available: false,
+            availability_error: "Endpoint unavailable.",
+          },
+        ],
+      },
+    });
+    const options = wrapper.findAll("option");
+    expect(options).toHaveLength(3);
+    expect(options[0].attributes("disabled")).toBeDefined();
+    expect(options[1].attributes("disabled")).toBeUndefined();
+    expect(options[2].attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".provider-unavailable").text()).toContain("Unavailable");
+    expect(wrapper.get(".provider-unavailable").text()).toContain("gone");
+    wrapper.unmount();
+  });
+});
+
+describe("useCorpusIngestWarning", () => {
+  beforeEach(() => sessionStorage.clear());
+
+  it("opens once per asset and acknowledges through session storage", () => {
+    let warning!: ReturnType<typeof useCorpusIngestWarning>;
+    const asset = ref({ asset_id: "asset-1", extraction_noise: { exceeds_threshold: true } });
+    const Host = defineComponent({
+      setup() {
+        warning = useCorpusIngestWarning(asset);
+        return () => h("div");
+      },
+    });
+
+    describe("useCorpusRunGuidance", () => {
+      it("normalizes editable guidance and projects active build guidance", () => {
+        const schema = ref<any>({
+          id: "schema-a",
+          fields: [{ name: "stance", label: "Stance", group: "semantic" }],
+          groups: [{ key: "semantic", label: "Semantic" }],
+        });
+        const build = ref<any>({
+          schema: { fields: [{ name: "stance", label: "Stance" }] },
+          request: {
+            run_guidance: {
+              stance: { instructions: "Focus", look_for: ["support", ""] },
+            },
+          },
+        });
+        let composable!: ReturnType<typeof useCorpusRunGuidance>;
+        const Host = defineComponent({
+          setup() {
+            composable = useCorpusRunGuidance(schema, build, (_, fallback) => fallback);
+            return () => h("div");
+          },
+        });
+        const wrapper = mount(Host);
+        composable.guidance.value = {
+          stance: { instructions: "  assess  ", look_for: [" support ", "", " ".repeat(2)] },
+        };
+        expect(composable.payload()).toEqual({
+          stance: {
+            instructions: "assess",
+            look_for: ["support"],
+            required: false,
+          },
+        });
+        expect(composable.active.value).toEqual([
+          { field: "stance", label: "Stance", instructions: "Focus", lookFor: ["support", ""] },
+        ]);
+        wrapper.unmount();
+      });
+
+      it("sends required fields and remembers guidance per schema", async () => {
+        localStorage.removeItem(RUN_GUIDANCE_STORAGE_KEY);
+        const field = { name: "stance", label: "Stance", group: "semantic" };
+        const schema = ref<any>({ id: "schema-a", fields: [field], groups: [] });
+        let composable!: ReturnType<typeof useCorpusRunGuidance>;
+        const Host = defineComponent({
+          setup() {
+            composable = useCorpusRunGuidance(schema, ref(null), (_, fallback) => fallback);
+            return () => h("div");
+          },
+        });
+        const wrapper = mount(Host);
+        // Legacy browser storage may still contain the removed placeholder
+        // property. It must not leak into a new build request.
+        composable.guidance.value = {
+          stance: {
+            instructions: "",
+            look_for: [],
+            required: true,
+            default_placeholder: " n/a ",
+          },
+          gone: { instructions: "stale field", look_for: [] },
+        } as any;
+        expect(composable.payload()).toEqual({
+          stance: { instructions: "", look_for: [], required: true },
+        });
+        await nextTick();
+        schema.value = { id: "schema-b", fields: [field], groups: [] };
+        await nextTick();
+        expect(composable.guidance.value).toEqual({});
+        schema.value = { id: "schema-a", fields: [field], groups: [] };
+        await nextTick();
+        expect(composable.guidance.value.stance.required).toBe(true);
+        expect(composable.guidance.value.stance).not.toHaveProperty("default_placeholder");
+        wrapper.unmount();
+        const reopened = mount(Host);
+        expect(composable.guidance.value.stance.required).toBe(true);
+        expect(composable.guidance.value.stance).not.toHaveProperty("default_placeholder");
+        reopened.unmount();
+      });
+    });
+    const wrapper = mount(Host);
+
+    warning.maybeOpen();
+    expect(warning.open.value).toBe(true);
+    warning.acknowledge();
+    expect(warning.open.value).toBe(false);
+    expect(sessionStorage.getItem("derridai.source-quality.seen.asset-1")).toBe("1");
+    warning.maybeOpen();
+    expect(warning.open.value).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("does not open for a clean asset", () => {
+    let warning!: ReturnType<typeof useCorpusIngestWarning>;
+    const asset = ref({ asset_id: "asset-2", extraction_noise: { exceeds_threshold: false } });
+    const Host = defineComponent({
+      setup() {
+        warning = useCorpusIngestWarning(asset);
+        return () => h("div");
+      },
+    });
+    const wrapper = mount(Host);
+    warning.maybeOpen();
+    expect(warning.open.value).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+describe("source extraction warning placement", () => {
+  it("flags ingest noise that exceeds the unusable threshold", () => {
+    expect(assetHasExtractionWarning({ extraction_noise: { exceeds_threshold: true } })).toBe(true);
+    expect(assetHasExtractionWarning({ extraction_noise: { exceeds_threshold: false } })).toBe(
+      false,
+    );
+    expect(assetHasExtractionWarning({ source_quality: { blocking_page_count: 1 } })).toBe(true);
+  });
+
+  it("flags records that still carry source issues", () => {
+    expect(recordHasSourceWarning({ source_quality_issues: [{ code: "illegible_text" }] })).toBe(
+      true,
+    );
+    expect(recordHasSourceWarning({ source_quality_issues: [] })).toBe(false);
+  });
+
+  it("finds the first source-problem record after run hydration", () => {
+    const clean = { record_id: "clean", source_quality_issues: [] };
+    const problem = { record_id: "problem", source_quality_issues: [{ code: "illegible_text" }] };
+    expect(firstRecordWithSourceWarning([clean, problem])).toBe(problem);
+    expect(firstRecordWithSourceWarning([clean])).toBeUndefined();
+  });
+
+  it("puts the source warning on an icon control instead of an inline banner", async () => {
+    const record: any = {
+      record_id: "record-00014",
+      text: "garbled",
+      text_length: 7,
+      page_start: 1,
+      page_end: 1,
+      pdf_pages: [1],
+      source_block_ids: [],
+      source_spans: [],
+      needs_review: true,
+      review_disposition: "pending",
+      source_quality_issues: [{ code: "illegible_text", severity: "blocking", pages: [1] }],
+    };
+    const wrapper = mount(CorpusRecordFocusReview, {
+      attachTo: document.body,
+      props: { record },
+      global: {
+        stubs: {
+          CorpusSourceIssuePanel: true,
+          CorpusMetadataResolutionPanel: true,
+          CorpusTextCleanupDialog: true,
+          CorpusRevisionHistory: true,
+          CorpusBoundarySliceDialog: true,
+          CorpusBoundaryAdjudication: true,
+          CorpusSourceSummary: true,
+          CorpusSourceQualityDialog: true,
+          AppIcon: true,
+        },
+      },
+    });
+    await nextTick();
+    expect(wrapper.find(".focus-source-issue").exists()).toBe(false);
+    expect(wrapper.find(".source-warn-icon").exists()).toBe(true);
+    wrapper.unmount();
+  });
+});

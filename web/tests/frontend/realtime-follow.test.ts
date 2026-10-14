@@ -1,0 +1,111 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { RealtimeClient } from "../../src/realtime/client";
+import { followResource } from "../../src/realtime/follow";
+import { MockSocket, jobEvent } from "./realtime-support";
+
+function liveClient() {
+  const client = new RealtimeClient({
+    createSocket: (url) => new MockSocket(url),
+    url: () => "ws://t",
+    random: () => 1,
+  });
+  client.start();
+  MockSocket.instances[MockSocket.instances.length - 1].ready();
+  return client;
+}
+
+describe("followResource", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockSocket.instances = [];
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("refreshes on the resource's events and does not poll while live", async () => {
+    const client = liveClient();
+    const refresh = vi.fn(async () => {});
+    followResource({ client, topic: "job:a", refresh, fallbackMs: 1000, minIntervalMs: 500 });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(refresh).not.toHaveBeenCalled();
+
+    const socket = MockSocket.instances[0];
+    socket.frame(jobEvent(1, 1, { id: "a" }));
+    socket.frame(jobEvent(2, 2, { id: "a" }));
+    socket.frame(jobEvent(3, 3, { id: "a" }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(1); // a burst collapses into one read
+    socket.frame(jobEvent(4, 4, { id: "a" }));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets a view consume live payloads without triggering a REST refresh", async () => {
+    const client = liveClient();
+    const refresh = vi.fn(async () => {});
+    const onEvent = vi.fn(() => false);
+    followResource({ client, topic: "job:a", refresh, onEvent, fallbackMs: 1000 });
+
+    MockSocket.instances[0].frame(jobEvent(1, 1, { id: "a", completed: 1 }));
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+
+    // A transport failure still falls back to the authoritative read path.
+    MockSocket.instances[0].serverClose(1006);
+    for (let i = 0; i < 3; i += 1) {
+      MockSocket.instances[MockSocket.instances.length - 1].serverClose(1006);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("polls over REST while the socket is unavailable, then stops when done", async () => {
+    const client = liveClient();
+    let done = false;
+    const refresh = vi.fn(async () => {});
+    followResource({ client, topic: "job:a", refresh, fallbackMs: 1000, isDone: () => done });
+    MockSocket.instances[0].serverClose(1006);
+    for (let i = 0; i < 3; i += 1) {
+      MockSocket.instances[MockSocket.instances.length - 1].serverClose(1006);
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(client.live).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    done = true;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads once immediately when asked, through the same serialized path", async () => {
+    const client = liveClient();
+    const refresh = vi.fn(async () => {});
+    const stop = followResource({ client, topic: "job:a", refresh, immediate: true });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    stop();
+    MockSocket.instances[0].frame(jobEvent(1, 1, { id: "a" }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+});

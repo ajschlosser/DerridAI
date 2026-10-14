@@ -1,0 +1,32 @@
+{
+  "name": "@derridai/sdk",
+  "version": "0.1.1",
+  "description": "Framework-neutral, provenance-preserving browser research SDK for DerridAI publications.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "browser": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ajschlosser/DerridAI.git",
+    "directory": "web/sdk"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

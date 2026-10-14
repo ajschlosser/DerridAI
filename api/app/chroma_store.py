@@ -1,15 +1,34 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
 
+import copy
+import functools
 import gc
 import hashlib
+import heapq
 import json
 import logging
 import math
 import re
 import shutil
+import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -17,6 +36,7 @@ from typing import Any
 import chromadb
 import httpx
 
+from . import operation_events
 from .chroma_connection import (
     DEFAULT_DATABASE,
     DEFAULT_HTTP_URL,
@@ -28,6 +48,7 @@ from .chroma_connection import (
     public_http_config,
 )
 from .config import APP_VERSION, settings
+from .retrieval_selection import cosine_similarity, distance_to_relevance
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +97,27 @@ def decode_metadata(metadata: dict[str, Any] | None) -> dict[str, Any]:
         else:
             out[key] = value
     return out
+
+
+def _first_embedding_batch(payload: dict[str, Any]) -> Any:
+    """Return Chroma's first embedding batch without expanding NumPy arrays.
+
+    Chroma commonly returns embeddings as a dense NumPy array. Calling tolist()
+    on a deep candidate set converts every float32 element into a Python float,
+    multiplying the transient heap footprint. Retrieval selectors only need a
+    sequence, so preserve the backend's compact representation until selection
+    finishes.
+    """
+
+    values = payload.get("embeddings")
+    if values is None:
+        return ()
+    try:
+        if len(values) == 0:
+            return ()
+        return values[0]
+    except (TypeError, ValueError, IndexError):
+        return ()
 
 
 def compact_record_payload(record: dict[str, Any], *, include_updates: bool = False) -> dict[str, Any]:
@@ -129,7 +171,9 @@ class Embeddings:
         provider: str | None = None,
         model: str | None = None,
     ) -> list[list[float]]:
-        provider = (provider or settings.embedding_provider).strip().lower()
+        provider = (provider or settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
 
         if provider == "precomputed":
             vectors: list[list[float]] = []
@@ -137,7 +181,10 @@ class Embeddings:
                 value = record.get(embedding_field)
                 if not isinstance(value, list) or not value:
                     raise ValueError(
-                        f"Record {index + 1} has no non-empty '{embedding_field}' array."
+                        f"Record {index + 1} has no non-empty '{embedding_field}' array. "
+                        "This collection uses precomputed vectors, so every record must carry "
+                        "its own embedding. Use Ollama, Chroma's default, or a provider profile "
+                        "to have DerridAI compute embeddings instead."
                     )
                 vectors.append([float(x) for x in value])
             return vectors
@@ -148,10 +195,39 @@ class Embeddings:
                 model=(model or settings.ollama_embed_model).strip(),
             )
 
+        if provider.startswith("profile:"):
+            profile_id = provider.split(":", 1)[1].strip()
+            if not profile_id:
+                raise ValueError("The embedding provider profile ID is empty.")
+            from .system_store import system_store
+
+            profile = system_store.researcher_profile(profile_id)
+            if not profile:
+                raise ValueError(f"Embedding provider profile {profile_id!r} was not found.")
+            profile_type = str(profile.get("type") or "").strip().lower()
+            chosen_model = str(model or profile.get("model") or "").strip()
+            base_url = str(profile.get("base_url") or "").strip()
+            if profile_type == "ollama":
+                return self._ollama(
+                    texts,
+                    model=chosen_model,
+                    base_url=base_url or settings.ollama_base_url,
+                )
+            if profile_type == "openai":
+                return self._openai_compatible(
+                    texts,
+                    model=chosen_model,
+                    base_url=base_url,
+                    api_key=str(profile.get("api_key") or ""),
+                )
+            raise ValueError(
+                f"Provider profile {profile_id!r} has unsupported type {profile_type!r} for embeddings."
+            )
+
         if provider != "chroma":
             raise ValueError(
                 f"Unsupported embedding provider {provider!r}. "
-                "Use chroma, ollama, or precomputed."
+                "Use chroma, precomputed, or profile:<provider-id>."
             )
 
         if self._default is None:
@@ -168,11 +244,13 @@ class Embeddings:
         provider: str | None = None,
         model: str | None = None,
     ) -> list[float]:
-        provider = (provider or settings.embedding_provider).strip().lower()
+        provider = (provider or settings.embedding_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         if provider == "precomputed":
             raise ValueError(
                 "Semantic search cannot create a query embedding for a "
-                "precomputed-vector collection. Use chroma or ollama."
+                "precomputed-vector collection. Use Chroma or a configured provider profile."
             )
         return self.embed(
             [query],
@@ -187,28 +265,80 @@ class Embeddings:
         texts: list[str],
         *,
         model: str,
+        base_url: str | None = None,
     ) -> list[list[float]]:
         if not model:
             raise ValueError("An Ollama embedding model is required.")
-        with httpx.Client(timeout=180.0) as client:
+        # Ollama tokenizes each input over its own loopback connection, so one
+        # request carrying thousands of source units exhausts ephemeral ports
+        # and fails with 400 ("cannot assign requested address"). Bound it.
+        batch_size = max(1, settings.ollama_embed_batch_size)
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), batch_size):
+            vectors.extend(
+                self._ollama_batch(texts[start : start + batch_size], model=model, base_url=base_url)
+            )
+        return vectors
+
+    def _ollama_batch(
+        self,
+        texts: list[str],
+        *,
+        model: str,
+        base_url: str | None = None,
+    ) -> list[list[float]]:
+        root = str(base_url or settings.ollama_base_url).rstrip("/")
+        modern_endpoint = f"{root}/api/embed"
+        legacy_endpoint = f"{root}/api/embeddings"
+        timeout = httpx.Timeout(
+            connect=settings.ollama_connect_timeout_seconds,
+            read=settings.ollama_timeout_seconds,
+            write=settings.ollama_timeout_seconds,
+            pool=settings.ollama_connect_timeout_seconds,
+        )
+        with httpx.Client(timeout=timeout) as client:
             response = client.post(
-                f"{settings.ollama_base_url}/api/embed",
+                modern_endpoint,
                 json={"model": model, "input": texts},
             )
             if response.status_code == 404:
                 vectors: list[list[float]] = []
+                modern_detail = response.text.strip()
                 for text in texts:
                     legacy = client.post(
-                        f"{settings.ollama_base_url}/api/embeddings",
+                        legacy_endpoint,
                         json={"model": model, "prompt": text},
                     )
+                    if legacy.status_code == 404:
+                        legacy_detail = legacy.text.strip()
+                        detail_parts = [
+                            part
+                            for part in (
+                                f"modern response: {modern_detail}" if modern_detail else "",
+                                f"legacy response: {legacy_detail}" if legacy_detail else "",
+                            )
+                            if part
+                        ]
+                        detail = f" ({'; '.join(detail_parts)})" if detail_parts else ""
+                        raise RuntimeError(
+                            "Ollama embeddings are unavailable: both /api/embed and the "
+                            "legacy /api/embeddings endpoint returned 404. Verify that the "
+                            "configured base URL points to Ollama, the installed Ollama "
+                            f"version supports embeddings, and embedding model '{model}' is installed"
+                            f"{detail}."
+                        )
                     legacy.raise_for_status()
                     embedding = legacy.json().get("embedding")
                     if not isinstance(embedding, list):
                         raise RuntimeError("Ollama returned an unexpected legacy embedding response.")
                     vectors.append(list(map(float, embedding)))
                 return vectors
-            response.raise_for_status()
+            if response.status_code >= 400:
+                detail = response.text.strip()[:500]
+                raise RuntimeError(
+                    f"Ollama /api/embed returned HTTP {response.status_code} for model '{model}'"
+                    f"{f': {detail}' if detail else ''}."
+                )
             payload = response.json()
 
         vectors = payload.get("embeddings")
@@ -217,6 +347,99 @@ class Embeddings:
         if not isinstance(vectors, list) or len(vectors) != len(texts):
             raise RuntimeError("Ollama returned an unexpected embedding response.")
         return [list(map(float, vector)) for vector in vectors]
+
+    def _openai_compatible(
+        self,
+        texts: list[str],
+        *,
+        model: str,
+        base_url: str,
+        api_key: str = "",
+    ) -> list[list[float]]:
+        if not model:
+            raise ValueError("An embedding model is required for this provider profile.")
+        if not base_url:
+            raise ValueError("The provider profile needs a base URL for embeddings.")
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        endpoint = f"{base_url.rstrip('/')}/embeddings"
+        timeout = httpx.Timeout(
+            connect=settings.openai_connect_timeout_seconds,
+            read=settings.openai_timeout_seconds,
+            write=settings.openai_timeout_seconds,
+            pool=settings.openai_connect_timeout_seconds,
+        )
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(
+                endpoint,
+                headers=headers,
+                json={"model": model, "input": texts},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        data = payload.get("data")
+        if not isinstance(data, list):
+            raise RuntimeError("The provider returned an unexpected embeddings response.")
+        ordered = sorted(
+            [item for item in data if isinstance(item, dict)],
+            key=lambda item: int(item.get("index") or 0),
+        )
+        vectors = [item.get("embedding") for item in ordered]
+        if len(vectors) != len(texts) or any(not isinstance(vector, list) for vector in vectors):
+            raise RuntimeError("The provider returned an unexpected number of embeddings.")
+        return [list(map(float, vector)) for vector in vectors]
+
+
+def _notes_collection_change(*extra_resources: str):
+    """Tell realtime clients that the vector-collection listing may be stale (key only, no values).
+
+    ``extra_resources`` are noted too. A mutation addressed to the Response Library cache
+    collection also notes ``response_library``.
+    """
+
+    def decorate(method):
+        @functools.wraps(method)
+        def wrapper(self, *args, **kwargs):
+            target = args[0] if args else kwargs.get("name", kwargs.get("store"))
+            response_cache_target = target in {
+                "_response_cache",
+                "derridai_response_cache",
+            }
+            try:
+                result = method(self, *args, **kwargs)
+            finally:
+                # Response Library writes are operational state, not corpus
+                # mutations. Clearing corpus-derived Research caches here made
+                # every completed RAG run invalidate the Work/author inventory
+                # it had just built, forcing the next run to rescan all corpus
+                # metadata. Keep those caches warm across response-cache writes.
+                if not response_cache_target:
+                    inventory_cache = getattr(self, "_research_filter_cache", None)
+                    if isinstance(inventory_cache, dict):
+                        inventory_cache.clear()
+                    scope_cache = getattr(self, "_research_scope_cache", None)
+                    if isinstance(scope_cache, dict):
+                        scope_cache.clear()
+                    self._research_filter_epoch = (
+                        getattr(self, "_research_filter_epoch", 0) + 1
+                    )
+            # Record-size samples are corpus-derived too. A response cache write
+            # cannot change them and must not force another corpus sample.
+            if not response_cache_target:
+                size_cache = getattr(self, "_record_size_cache", None)
+                if isinstance(size_cache, dict):
+                    size_cache.clear()
+            operation_events.note_resource_changed("vector_collections")
+            for resource in extra_resources:
+                operation_events.note_resource_changed(resource)
+            if target == "_response_cache":
+                operation_events.note_resource_changed("response_library")
+            return result
+
+        return wrapper
+
+    return decorate
 
 
 class ChromaStore:
@@ -261,6 +484,41 @@ class ChromaStore:
             "database": str(settings.chroma_database or DEFAULT_DATABASE),
         }
         self.embeddings = Embeddings()
+        self._record_size_cache: dict[tuple[str, int, int], dict[str, int]] = {}
+        self._research_filter_cache: dict[
+            tuple[tuple[str, int], ...], tuple[float, dict[str, Any]]
+        ] = {}
+        # Research source-scope inference needs only Work/author names. Keep a
+        # separate compact metadata-only cache so every Research run does not
+        # materialize entire corpus documents through work_stats().
+        self._research_scope_cache: dict[
+            tuple[int, tuple[str, ...]], list[dict[str, Any]]
+        ] = {}
+        self._research_filter_epoch = 0
+
+    def default_embedding_spec(self) -> tuple[str, str | None]:
+        """Resolve the server-owned default used when a collection omits a contract."""
+
+        try:
+            from .system_store import system_store
+
+            defaults = system_store.embedding_defaults()
+        except Exception:
+            logger.warning(
+                "Could not read persisted embedding defaults; using environment defaults.",
+                exc_info=True,
+            )
+            defaults = {}
+
+        provider = str(
+            defaults.get("embedding_provider") or settings.embedding_provider
+        ).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
+        model = str(defaults.get("embedding_model") or "").strip() or None
+        if provider == "ollama" and not model:
+            model = settings.ollama_embed_model
+        return provider, model
 
     def _normalize_path(self, path: str) -> Path:
         root = self._data_root
@@ -537,15 +795,35 @@ class ChromaStore:
         A one-item probe catches missing Ollama models and records the actual vector
         dimension so dimension mismatches fail before a collection is populated.
         """
-        provider = str(provider or settings.embedding_provider).strip().lower()
-        if provider not in {"chroma", "ollama", "precomputed"}:
-            raise ValueError("Embedding provider must be chroma, ollama, or precomputed.")
+        if provider:
+            provider = str(provider).strip()
+            if not provider.startswith("profile:"):
+                provider = provider.lower()
+        else:
+            provider, default_model = self.default_embedding_spec()
+            if not model:
+                model = default_model
+        if provider not in {"chroma", "ollama", "precomputed"} and not provider.startswith("profile:"):
+            raise ValueError(
+                "Embedding provider must be chroma, precomputed, or profile:<provider-id>."
+            )
         metric = str(distance_metric or "cosine").strip().lower()
         if metric not in {"cosine", "l2", "ip"}:
             raise ValueError("Distance metric must be cosine, l2, or ip.")
         normalized_model = str(model or "").strip() or None
         if provider == "ollama" and not normalized_model:
             normalized_model = settings.ollama_embed_model
+        if provider.startswith("profile:"):
+            profile_id = provider.split(":", 1)[1].strip()
+            from .system_store import system_store
+
+            profile = system_store.researcher_profile(profile_id)
+            if not profile:
+                raise ValueError(f"Embedding provider profile {profile_id!r} was not found.")
+            if not normalized_model:
+                normalized_model = str(profile.get("model") or "").strip() or None
+            if not normalized_model:
+                raise ValueError("Select an embedding model for the provider profile.")
 
         revision: str | None = None
         if provider == "precomputed":
@@ -589,6 +867,8 @@ class ChromaStore:
                 # Revision discovery is provenance enrichment, not a prerequisite
                 # for a successful embedding probe.
                 revision = None
+        elif provider.startswith("profile:"):
+            revision = provider
         elif provider == "chroma":
             revision = f"chromadb-{getattr(chromadb, '__version__', 'unknown')}"
 
@@ -619,15 +899,31 @@ class ChromaStore:
             return default
         return parsed
 
-    def _manifest_spec(self, collection) -> dict[str, Any]:
+    def _manifest_spec(
+        self,
+        collection,
+        *,
+        collection_count: int | None = None,
+        resolve_count: bool = True,
+    ) -> dict[str, Any]:
         metadata = dict(getattr(collection, "metadata", None) or {})
-        count = collection.count()
+        count = collection_count
+        if count is None and resolve_count:
+            count = int(collection.count())
         dimension = metadata.get(self._DIMENSION_KEY)
         try:
             dimension = int(dimension) if dimension not in (None, "") else None
         except (TypeError, ValueError):
             dimension = None
-        status = str(metadata.get(self._STATUS_KEY) or ("ready" if count else "empty"))
+        inferred_nonempty = bool(
+            count
+            if count is not None
+            else metadata.get(self._SOURCE_COUNT_KEY)
+        )
+        status = str(
+            metadata.get(self._STATUS_KEY)
+            or ("ready" if inferred_nonempty else "empty")
+        )
         history = self._decode_json_metadata(metadata.get(self._BUILD_HISTORY_KEY), [])
         if not isinstance(history, list):
             history = []
@@ -660,6 +956,7 @@ class ChromaStore:
             "build_history": history[-20:],
         }
 
+    @_notes_collection_change()
     def set_protection(self, name: str, protected: bool) -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -667,6 +964,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
+    @_notes_collection_change()
     def begin_sync(
         self,
         name: str,
@@ -694,6 +992,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return {"build_id": build_id, "store": self._public_store(collection)}
 
+    @_notes_collection_change()
     def set_build_status(self, name: str, status: str) -> dict[str, Any]:
         allowed = {"empty", "queued", "building", "validating", "ready", "stale", "failed"}
         normalized = str(status or "").strip().lower()
@@ -705,6 +1004,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
+    @_notes_collection_change("corpus_records")
     def finish_sync(self, name: str, *, status: str = "ready") -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -738,6 +1038,7 @@ class ChromaStore:
         collection.modify(metadata=metadata)
         return self._public_store(collection)
 
+    @_notes_collection_change()
     def fail_sync(self, name: str, message: str | None = None) -> dict[str, Any]:
         collection = self._collection(name)
         metadata = dict(collection.metadata or {})
@@ -769,15 +1070,27 @@ class ChromaStore:
 
     def _embedding_spec(self, collection) -> tuple[str, str | None]:
         metadata = dict(getattr(collection, "metadata", None) or {})
-        provider = str(
-            metadata.get(self._PROVIDER_KEY)
-            or settings.embedding_provider
-        ).strip().lower()
+        default_provider, default_model = self.default_embedding_spec()
+        provider = str(metadata.get(self._PROVIDER_KEY) or default_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         model_value = metadata.get(self._MODEL_KEY)
-        model = str(model_value).strip() if model_value else None
+        model = str(model_value).strip() if model_value else default_model
         if provider == "ollama" and not model:
             model = settings.ollama_embed_model
         return provider, model
+
+    def _distance_metric(self, collection) -> str | None:
+        """Return the declared collection metric, or None for legacy collections.
+
+        A missing metric intentionally stays unknown instead of assuming cosine:
+        callers then preserve the pre-manifest inverse-distance behavior. New
+        DerridAI collections always persist an explicit cosine/l2/ip contract.
+        """
+
+        metadata = dict(getattr(collection, "metadata", None) or {})
+        metric = str(metadata.get(self._DISTANCE_KEY) or "").strip().lower()
+        return metric if metric in {"cosine", "l2", "ip"} else None
 
     @staticmethod
     def _normalize_language_code(value: str) -> str | None:
@@ -890,12 +1203,17 @@ class ChromaStore:
 
     def _public_collection_name(self, collection) -> str:
         # The response cache has a stable public alias while using a reserved
-        # internal Chroma collection name.
+        # internal storage name.
         if collection.name == self._RESPONSE_CACHE_STORAGE:
             return self._RESPONSE_CACHE_PUBLIC
         return collection.name
 
-    def _public_store(self, collection) -> dict[str, Any]:
+    def _public_store(
+        self,
+        collection,
+        *,
+        include_count: bool = True,
+    ) -> dict[str, Any]:
         metadata = dict(getattr(collection, "metadata", None) or {})
         provider, model = self._embedding_spec(collection)
         language_codes, role, source_collection = self._language_spec(collection)
@@ -932,11 +1250,15 @@ class ChromaStore:
             for key, value in metadata.items()
             if key not in private
         }
-        manifest = self._manifest_spec(collection)
-        return {
+        collection_count = int(collection.count()) if include_count else None
+        manifest = self._manifest_spec(
+            collection,
+            collection_count=collection_count,
+            resolve_count=include_count,
+        )
+        result = {
             "name": self._public_collection_name(collection),
             "storage_name": collection.name,
-            "count": collection.count(),
             "metadata": public_metadata,
             "embedding_provider": provider,
             "embedding_model": model,
@@ -946,7 +1268,40 @@ class ChromaStore:
             **manifest,
             "last_build_error": metadata.get("__derridai_last_build_error"),
         }
+        if include_count:
+            result["count"] = int(collection_count or 0)
+        return result
 
+    def list_store_descriptors(self) -> list[dict[str, Any]]:
+        """List collection routing metadata without loading vector segments.
+
+        Research source routing only needs collection identity, language role,
+        and manifest metadata. Calling count() for every collection can make
+        embedded Chroma load every unrelated vector segment into the API process.
+        Counts are resolved later only for collections the Research run actually
+        searches.
+        """
+
+        stores: list[dict[str, Any]] = []
+        for collection in self.client.list_collections():
+            name = collection.name if hasattr(collection, "name") else str(collection)
+            col = (
+                collection
+                if hasattr(collection, "metadata")
+                else self.client.get_collection(name)
+            )
+            metadata = dict(getattr(col, "metadata", None) or {})
+            if bool(metadata.get("derridai_hidden_system_collection")):
+                continue
+            stores.append(self._public_store(col, include_count=False))
+        return sorted(stores, key=lambda item: item["name"].casefold())
+
+    def collection_count(self, name: str) -> int:
+        """Count one selected collection after Research routing is resolved."""
+
+        return int(self._collection(name).count())
+
+    @_notes_collection_change()
     def set_language_tags(
         self,
         name: str,
@@ -972,6 +1327,7 @@ class ChromaStore:
         return self._public_store(collection)
 
 
+    @_notes_collection_change()
     def set_embedding(
         self,
         name: str,
@@ -1018,6 +1374,9 @@ class ChromaStore:
         for collection in self.client.list_collections():
             name = collection.name if hasattr(collection, "name") else str(collection)
             col = self.client.get_collection(name)
+            metadata = dict(getattr(col, "metadata", None) or {})
+            if bool(metadata.get("derridai_hidden_system_collection")):
+                continue
             stores.append(self._public_store(col))
         return sorted(stores, key=lambda item: item["name"].casefold())
 
@@ -1026,6 +1385,7 @@ class ChromaStore:
             self.client.get_collection(name=self._storage_name(name))
         )
 
+    @_notes_collection_change()
     def create_store(
         self,
         name: str,
@@ -1050,7 +1410,11 @@ class ChromaStore:
         # user-created names that begin with underscores; this exception is only
         # reachable by the internal response-cache lifecycle.
         name = self._storage_name(requested_name)
-        validation_name = name if requested_name == self._RESPONSE_CACHE_PUBLIC else requested_name
+        validation_name = (
+            name
+            if requested_name == self._RESPONSE_CACHE_PUBLIC
+            else requested_name
+        )
         if len(validation_name) < 3 or len(validation_name) > 128:
             raise ValueError("Collection names must contain 3 to 128 characters.")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]", validation_name):
@@ -1071,8 +1435,13 @@ class ChromaStore:
                 "collection or choose a new name; Create never reuses an existing collection."
             )
 
-        provider = (embedding_provider or settings.embedding_provider).strip().lower()
+        default_provider, default_model = self.default_embedding_spec()
+        provider = str(embedding_provider or default_provider).strip()
+        if not provider.startswith("profile:"):
+            provider = provider.lower()
         model = (embedding_model or "").strip() or None
+        if not model and provider == default_provider:
+            model = default_model
         preflight = self.preflight_embedding(
             provider=provider,
             model=model,
@@ -1122,11 +1491,21 @@ class ChromaStore:
             collection_metadata[self._MODEL_KEY] = model
 
         try:
-            col = self.client.create_collection(
-                name=name,
-                metadata=collection_metadata,
-                configuration={"hnsw": {"space": metric}},
-            )
+            try:
+                col = self.client.create_collection(
+                    name=name,
+                    metadata=collection_metadata,
+                    configuration={"hnsw": {"space": metric}},
+                )
+            except TypeError:
+                # Chroma 1.x releases do not all expose collection configuration
+                # through the same constructor. The distance contract is already
+                # retained in metadata, so creation remains deterministic on
+                # clients that require the older constructor shape.
+                col = self.client.create_collection(
+                    name=name,
+                    metadata=collection_metadata,
+                )
         except Exception as exc:
             # Chroma's exception type differs across releases. Convert the race
             # between the explicit existence check and create into a 409-capable
@@ -1138,6 +1517,7 @@ class ChromaStore:
             raise
         return self._public_store(col)
 
+    @_notes_collection_change("corpus_records")
     def delete_store(self, name: str, *, force: bool = False) -> None:
         collection = self._collection(name)
         if self._manifest_spec(collection).get("protected") and not force:
@@ -1149,6 +1529,7 @@ class ChromaStore:
     def _collection(self, name: str):
         return self.client.get_collection(name=self._storage_name(name))
 
+    @_notes_collection_change()
     def upsert_many(
         self,
         store: str,
@@ -1283,6 +1664,7 @@ class ChromaStore:
         storage_id = str(raw_id)
         return f"{id_prefix}::{storage_id}" if id_prefix else storage_id
 
+    @_notes_collection_change()
     def sync_language_children(
         self,
         source_name: str,
@@ -1407,6 +1789,7 @@ class ChromaStore:
         )
         return {**result, "language_sync": language_sync}
 
+    @_notes_collection_change("corpus_records")
     def update_existing(
         self,
         store: str,
@@ -1485,6 +1868,8 @@ class ChromaStore:
         filters: dict[str, str] | None = None,
         include_updates: bool = False,
     ) -> dict[str, Any]:
+        """Return one Record page without a collection-sized decoded working set."""
+
         col = self._collection(store)
         filters = {
             str(key): str(value)
@@ -1492,9 +1877,27 @@ class ChromaStore:
             if str(value).strip()
         }
 
-        # Plain work-only browsing can stay fully delegated to Chroma. Column
-        # text filters/sorting require decoded flat records, so those are
-        # handled deterministically in Python and paginated afterward.
+        def count_where(where: dict[str, Any]) -> int:
+            total = 0
+            scan_offset = 0
+            page_size = 1000
+            while True:
+                payload = col.get(
+                    where=where,
+                    include=[],
+                    limit=page_size,
+                    offset=scan_offset,
+                )
+                ids = list(payload.get("ids") or [])
+                total += len(ids)
+                if len(ids) < page_size:
+                    break
+                scan_offset += len(ids)
+            return total
+
+        # Plain work-only browsing can stay fully delegated to Chroma. Counting
+        # a filtered Work still pages ids only instead of materializing all of
+        # that Work's metadata.
         if not filters and not sort_field:
             where = {"work": work} if work else None
             kwargs: dict[str, Any] = {
@@ -1505,13 +1908,12 @@ class ChromaStore:
             if where:
                 kwargs["where"] = where
             payload = col.get(**kwargs)
-            if where:
-                count_payload = col.get(where=where, include=["metadatas"])
-                count = len(count_payload.get("ids") or [])
-            else:
-                count = col.count()
+            count = count_where(where) if where else col.count()
             return {
-                "records": self._decode_result(payload, include_updates=include_updates),
+                "records": self._decode_result(
+                    payload,
+                    include_updates=include_updates,
+                ),
                 "count": count,
                 "limit": limit,
                 "offset": offset,
@@ -1520,12 +1922,6 @@ class ChromaStore:
                 "sort_dir": sort_dir,
                 "filters": filters,
             }
-
-        scan_kwargs: dict[str, Any] = {"include": ["documents", "metadatas"]}
-        if work:
-            scan_kwargs["where"] = {"work": work}
-        payload = col.get(**scan_kwargs)
-        records = self._decode_result(payload, include_updates=include_updates)
 
         def searchable(value: Any) -> str:
             if value is None:
@@ -1539,34 +1935,80 @@ class ChromaStore:
                 )
             return str(value)
 
-        for field, query in filters.items():
-            needle = query.casefold().strip()
-            records = [
-                record
-                for record in records
-                if needle in searchable(record.get(field)).casefold()
-            ]
+        reverse = str(sort_dir).lower() == "desc"
+
+        def sort_value(record: dict[str, Any]) -> tuple[int, int, Any]:
+            value = record.get(sort_field) if sort_field else None
+            if value is None:
+                return (1, 2, "")
+            if isinstance(value, bool):
+                return (0, 0, 1.0 if value else 0.0)
+            if isinstance(value, (int, float)):
+                return (0, 0, float(value))
+            return (0, 1, searchable(value).casefold())
+
+        scan_kwargs: dict[str, Any] = {
+            "include": ["documents", "metadatas"],
+        }
+        if work:
+            scan_kwargs["where"] = {"work": work}
+
+        scan_offset = 0
+        page_size = 512
+        matched_count = 0
+        page_records: list[dict[str, Any]] = []
+        sorted_window: list[dict[str, Any]] = []
+        window_end = max(0, int(offset)) + max(0, int(limit))
+
+        while True:
+            payload = col.get(
+                **scan_kwargs,
+                limit=page_size,
+                offset=scan_offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+
+            records = self._decode_result(
+                payload,
+                include_updates=include_updates,
+            )
+            for field, query in filters.items():
+                needle = query.casefold().strip()
+                records = [
+                    record
+                    for record in records
+                    if needle in searchable(record.get(field)).casefold()
+                ]
+
+            previous_count = matched_count
+            matched_count += len(records)
+            if sort_field:
+                if window_end:
+                    sorted_window.extend(records)
+                    sorted_window.sort(key=sort_value, reverse=reverse)
+                    if len(sorted_window) > window_end:
+                        del sorted_window[window_end:]
+            elif records and window_end > offset:
+                local_start = max(0, int(offset) - previous_count)
+                local_end = min(
+                    len(records),
+                    window_end - previous_count,
+                )
+                if local_start < local_end:
+                    page_records.extend(records[local_start:local_end])
+
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
 
         if sort_field:
-            reverse = str(sort_dir).lower() == "desc"
+            page_records = sorted_window[offset:offset + limit]
 
-            def sort_value(record: dict[str, Any]):
-                value = record.get(sort_field)
-                if value is None:
-                    return (1, 2, "")
-                if isinstance(value, bool):
-                    return (0, 0, 1.0 if value else 0.0)
-                if isinstance(value, (int, float)):
-                    return (0, 0, float(value))
-                return (0, 1, searchable(value).casefold())
-
-            records.sort(key=sort_value, reverse=reverse)
-
-        count = len(records)
-        page = records[offset:offset + limit]
         return {
-            "records": page,
-            "count": count,
+            "records": page_records,
+            "count": matched_count,
             "limit": limit,
             "offset": offset,
             "work": work,
@@ -1578,32 +2020,204 @@ class ChromaStore:
     def list_works(self, store: str) -> list[str]:
         return [item["work"] for item in self.work_stats(store)]
 
+    def research_filter_inventory(self, names: list[str]) -> dict[str, Any]:
+        from .research_filter_catalog import indexed_filter_inventory
+
+        collections = [self._collection(name) for name in dict.fromkeys(names)]
+        key = tuple((str(getattr(col, "id", name)), col.count()) for name, col in zip(dict.fromkeys(names), collections))
+        epoch = getattr(self, "_research_filter_epoch", 0)
+        cache = getattr(self, "_research_filter_cache", None)
+        if cache is None:
+            cache = self._research_filter_cache = {}
+        cached = cache.get(key)
+        if cached and time.monotonic() - cached[0] < 30:
+            return copy.deepcopy(cached[1])
+        result = indexed_filter_inventory(collections)
+        if epoch == getattr(self, "_research_filter_epoch", 0):
+            if len(cache) >= 8:
+                cache.clear()
+            cache[key] = (time.monotonic(), result)
+        return copy.deepcopy(result)
+
+    def research_scope_inventory(self, names: Sequence[str]) -> list[dict[str, Any]]:
+        """Return compact Work/author scope labels without loading source documents.
+
+        Research scope inference runs on every ordinary Research request. Calling
+        work_stats() there is pathological because that method intentionally loads
+        every document to compute word counts. This inventory reads only Chroma
+        metadata in bounded pages and caches the small result until a collection
+        mutation invalidates it.
+        """
+
+        unique_names = [
+            str(name).strip()
+            for name in dict.fromkeys(names)
+            if str(name).strip()
+        ]
+        if not unique_names:
+            return []
+
+        collections = [self._collection(name) for name in unique_names]
+        epoch = int(getattr(self, "_research_filter_epoch", 0))
+        key = (
+            epoch,
+            tuple(
+                str(getattr(collection, "id", name))
+                for name, collection in zip(unique_names, collections)
+            ),
+        )
+        cache = getattr(self, "_research_scope_cache", None)
+        if cache is None:
+            cache = self._research_scope_cache = {}
+        cached = cache.get(key)
+        if cached is not None:
+            return copy.deepcopy(cached)
+
+        from .research_semantics import source_author, source_work_label
+
+        works: dict[str, set[str]] = {}
+        page_size = max(1, min(int(settings.api_batch_size), 1000))
+        for collection in collections:
+            offset = 0
+            while True:
+                payload = collection.get(
+                    include=["metadatas"],
+                    limit=page_size,
+                    offset=offset,
+                )
+                metadatas = payload.get("metadatas") or []
+                if not metadatas:
+                    break
+                for metadata in metadatas:
+                    raw_metadata = metadata or {}
+                    # Chroma returns the whole metadata object even when documents
+                    # are excluded. Decode only the fields needed for scope routing;
+                    # audit histories and unrelated JSON metadata can themselves be
+                    # large enough to create avoidable per-run allocation spikes.
+                    record = decode_metadata({
+                        field: raw_metadata[field]
+                        for field in (
+                            "work",
+                            "document_author",
+                            "field_assertions",
+                            "current_field_assertions",
+                        )
+                        if field in raw_metadata
+                    })
+                    work = source_work_label(record)
+                    if not work:
+                        continue
+                    authors = works.setdefault(work, set())
+                    author = source_author(record)
+                    if author:
+                        authors.add(author)
+                offset += len(metadatas)
+                if len(metadatas) < page_size:
+                    break
+
+        result = [
+            {
+                "scope_label": work,
+                "source_authors": sorted(authors),
+            }
+            for work, authors in sorted(
+                works.items(),
+                key=lambda item: item[0].casefold(),
+            )
+        ]
+        if len(cache) >= 8:
+            cache.clear()
+        cache[key] = result
+        return copy.deepcopy(result)
+
     def work_stats(self, store: str) -> list[dict[str, Any]]:
+        """Aggregate Work metadata without a collection-sized temporary payload.
+
+        Only one value per Work/field is needed to decide whether that field is
+        uniform or mixed. Keep that compact state while scanning Chroma in
+        bounded pages instead of retaining every document and every distinct
+        metadata value at once.
+        """
+
         col = self._collection(store)
-        payload = col.get(include=["metadatas", "documents"])
-        fields = ("document_author", "year", "publication_year", "publisher", "publication_place", "translator", "edition", "isbn", "document_language", "original_language", "canonical_work_id", "full_citation", "cover_url")
+        fields = (
+            "document_author",
+            "year",
+            "publication_year",
+            "publisher",
+            "publication_place",
+            "translator",
+            "edition",
+            "isbn",
+            "document_language",
+            "original_language",
+            "canonical_work_id",
+            "full_citation",
+            "cover_url",
+        )
         grouped: dict[str, dict[str, Any]] = {}
-        metadatas = payload.get("metadatas") or []
-        documents = payload.get("documents") or []
-        for index, metadata in enumerate(metadatas):
-            decoded = decode_metadata(metadata or {})
-            value = decoded.get("work")
-            if value is None or not str(value).strip():
-                continue
-            key = str(value)
-            item = grouped.setdefault(key, {"work": key, "count": 0, "total_words": 0, "_values": {field: set() for field in fields}})
-            item["count"] += 1
-            document = documents[index] if index < len(documents) else ""
-            item["total_words"] += len(str(document or "").split())
-            for field in fields:
-                field_value = decoded.get(field)
-                if field_value is None or not str(field_value).strip():
+        offset = 0
+        page_size = 512
+
+        while True:
+            payload = col.get(
+                include=["metadatas", "documents"],
+                limit=page_size,
+                offset=offset,
+            )
+            ids = list(payload.get("ids") or [])
+            metadatas = list(payload.get("metadatas") or [])
+            documents = list(payload.get("documents") or [])
+            if not ids:
+                break
+
+            for index, metadata in enumerate(metadatas):
+                decoded = decode_metadata(metadata or {})
+                value = decoded.get("work")
+                if value is None or not str(value).strip():
                     continue
-                try:
-                    token = json.dumps(field_value, ensure_ascii=False, sort_keys=True)
-                except TypeError:
-                    token = json.dumps(str(field_value), ensure_ascii=False)
-                item["_values"][field].add(token)
+                key = str(value)
+                item = grouped.setdefault(
+                    key,
+                    {
+                        "work": key,
+                        "count": 0,
+                        "total_words": 0,
+                        "_values": {},
+                        "_mixed": set(),
+                    },
+                )
+                item["count"] += 1
+                document = documents[index] if index < len(documents) else ""
+                item["total_words"] += len(str(document or "").split())
+
+                values = item["_values"]
+                mixed = item["_mixed"]
+                for field in fields:
+                    if field in mixed:
+                        continue
+                    field_value = decoded.get(field)
+                    if field_value is None or not str(field_value).strip():
+                        continue
+                    try:
+                        token = json.dumps(
+                            field_value,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        )
+                    except TypeError:
+                        token = json.dumps(str(field_value), ensure_ascii=False)
+                    prior = values.get(field)
+                    if prior is None:
+                        values[field] = token
+                    elif prior != token:
+                        values.pop(field, None)
+                        mixed.add(field)
+
+            offset += len(ids)
+            if len(ids) < page_size:
+                break
+
         output: list[dict[str, Any]] = []
         for work in sorted(grouped, key=str.casefold):
             item = grouped[work]
@@ -1611,13 +2225,17 @@ class ChromaStore:
                 "work": work,
                 "count": item["count"],
                 "total_words": int(item.get("total_words") or 0),
-                "average_record_length": round((item.get("total_words") or 0) / item["count"]) if item["count"] else 0,
+                "average_record_length": round(
+                    (item.get("total_words") or 0) / item["count"]
+                )
+                if item["count"]
+                else 0,
             }
-            for field, values in item["_values"].items():
-                if len(values) == 1:
-                    result[field] = json.loads(next(iter(values)))
-                elif len(values) > 1:
+            for field in fields:
+                if field in item["_mixed"]:
                     result[f"{field}_mixed"] = True
+                elif field in item["_values"]:
+                    result[field] = json.loads(item["_values"][field])
             output.append(result)
         return output
 
@@ -1645,6 +2263,7 @@ class ChromaStore:
                 codes.add(normalized)
         return codes
 
+    @_notes_collection_change()
     def derive_language_stores(
         self,
         source_name: str,
@@ -1799,7 +2418,7 @@ class ChromaStore:
     ) -> list[float]:
         """Deterministic local cache vector; no embedding service required."""
         vector = [0.0] * dimensions
-        tokens = re.findall(r"\\w+", str(text or "").casefold())
+        tokens = re.findall(r"\w+", str(text or "").casefold())
         for token in tokens:
             digest = hashlib.blake2b(
                 token.encode("utf-8"),
@@ -1840,6 +2459,78 @@ class ChromaStore:
         mentions_capability = any(token in message for token in ("unsupported", "not supported", "invalid", "unexpected"))
         return mentions_feature and mentions_capability
 
+    def get_legacy_response_summaries(self, owner: str, *, limit: int = 200, offset: int = 0) -> dict[str, Any]:
+        """Owner-scoped, bounded metadata scan; never decode answer/evidence payloads."""
+        try:
+            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return {"records": [], "scanned": 0}
+            raise
+        payload = collection.get(where={"owner": owner}, include=["metadatas"], limit=limit, offset=offset)
+        metadata = payload.get("metadatas") or []
+        summaries = []
+        for storage_id, item in zip(payload.get("ids") or [], metadata, strict=True):
+            item = item or {}
+            if item.get("owner") != owner or item.get("research_thread"):
+                continue
+            if not item.get("question") or not item.get("response_id"):
+                continue
+            summaries.append({
+                "record_id": item.get("record_id") or storage_id,
+                "question": item["question"], "run_id": item["response_id"],
+                "created_at": item.get("created_at"), "instructions": item.get("instructions"),
+            })
+        return {"records": summaries, "scanned": len(metadata)}
+
+    def _response_cache_collection(self) -> Any | None:
+        """Open the response-cache collection without materializing its records."""
+
+        try:
+            return self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
+        except Exception as exc:
+            if self._is_missing_collection_error(exc):
+                return None
+            raise RuntimeError(f"Could not open response-cache collection: {exc}") from exc
+
+    def response_cache_count(self) -> int:
+        """Return the saved-response count without reading response payloads."""
+
+        collection = self._response_cache_collection()
+        return int(collection.count()) if collection is not None else 0
+
+    def iter_response_cache_records(
+        self,
+        *,
+        page_size: int = 100,
+    ) -> Iterator[dict[str, Any]]:
+        """Yield saved responses in bounded Chroma pages.
+
+        Maintenance jobs do not need the Response Library sort order. Streaming
+        directly from Chroma prevents cache-wide grading from hydrating every
+        answer, evidence packet, and metadata object at once.
+        """
+
+        collection = self._response_cache_collection()
+        if collection is None:
+            return
+        bounded_page = max(1, min(1000, int(page_size)))
+        offset = 0
+        while True:
+            payload = collection.get(
+                include=["documents", "metadatas"],
+                limit=bounded_page,
+                offset=offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for record in self._decode_result(payload):
+                yield compact_nested_record_payloads(record)
+            offset += len(ids)
+            if len(ids) < bounded_page:
+                break
+
     def get_response_cache_records(
         self,
         *,
@@ -1847,59 +2538,104 @@ class ChromaStore:
         offset: int = 0,
         query: str | None = None,
     ) -> dict[str, Any]:
-        """Read the current response-cache collection."""
-        try:
-            collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
-        except Exception as exc:
-            if self._is_missing_collection_error(exc):
-                return {
-                    "records": [],
-                    "count": 0,
-                    "total": 0,
-                    "limit": limit,
-                    "offset": offset,
-                    "query": query or "",
-                    "exists": False,
-                }
-            raise RuntimeError(f"Could not open response-cache collection: {exc}") from exc
+        """Read one Response Library page without hydrating the whole cache.
+
+        Chroma does not expose an order-by-created-at query. Scan metadata in
+        bounded pages, retain only the newest ``offset + limit`` identifiers,
+        then hydrate just the requested page. The large answer/evidence payloads
+        therefore never scale with total response-cache size.
+        """
+
+        bounded_limit = max(1, int(limit))
+        bounded_offset = max(0, int(offset))
+        collection = self._response_cache_collection()
+        if collection is None:
+            return {
+                "records": [],
+                "count": 0,
+                "total": 0,
+                "limit": bounded_limit,
+                "offset": bounded_offset,
+                "query": query or "",
+                "exists": False,
+            }
 
         try:
-            payload = collection.get(include=["documents", "metadatas"])
-            records = [dict(record) for record in self._decode_result(payload)]
+            total = int(collection.count())
+            needle = str(query or "").strip().casefold()
+            keep_count = min(total, bounded_offset + bounded_limit)
+            newest: list[tuple[str, str]] = []
+            match_count = 0
+            scan_offset = 0
+            scan_page = 512
+
+            while scan_offset < total:
+                batch_limit = min(scan_page, total - scan_offset)
+                payload = collection.get(
+                    include=["metadatas"],
+                    limit=batch_limit,
+                    offset=scan_offset,
+                )
+                ids = list(payload.get("ids") or [])
+                metadatas = list(payload.get("metadatas") or [])
+                if not ids:
+                    break
+                for index, chroma_id in enumerate(ids):
+                    metadata = metadatas[index] if index < len(metadatas) else {}
+                    metadata = metadata or {}
+                    if needle and needle not in str(metadata.get("question") or "").casefold():
+                        continue
+                    match_count += 1
+                    if keep_count <= 0:
+                        continue
+                    item = (
+                        str(metadata.get("created_at") or metadata.get("updated_at") or ""),
+                        str(chroma_id),
+                    )
+                    if len(newest) < keep_count:
+                        heapq.heappush(newest, item)
+                    elif item > newest[0]:
+                        heapq.heapreplace(newest, item)
+                scan_offset += len(ids)
+                if len(ids) < batch_limit:
+                    break
+
+            selected_ids = [
+                chroma_id
+                for _created_at, chroma_id in sorted(newest, reverse=True)[
+                    bounded_offset:bounded_offset + bounded_limit
+                ]
+            ]
+            if selected_ids:
+                payload = collection.get(
+                    ids=selected_ids,
+                    include=["documents", "metadatas"],
+                )
+                by_id = {
+                    str(record.get("_chroma_id") or record.get("record_id") or ""): record
+                    for record in self._decode_result(payload)
+                }
+                page = [
+                    compact_nested_record_payloads(by_id[chroma_id])
+                    for chroma_id in selected_ids
+                    if chroma_id in by_id
+                ]
+            else:
+                page = []
         except Exception as exc:
             raise RuntimeError(f"Could not read response-cache records: {exc}") from exc
 
-        records.sort(
-            key=lambda record: str(
-                record.get("created_at")
-                or record.get("updated_at")
-                or ""
-            ),
-            reverse=True,
-        )
-        total = len(records)
-        needle = str(query or "").strip().casefold()
-        if needle:
-            records = [
-                record
-                for record in records
-                if needle in str(record.get("question") or "").casefold()
-            ]
-        count = len(records)
-        page = [
-            compact_nested_record_payloads(record)
-            for record in records[offset:offset + limit]
-        ]
         return {
             "records": page,
-            "count": count,
+            "count": match_count,
             "total": total,
-            "limit": limit,
-            "offset": offset,
+            "limit": bounded_limit,
+            "offset": bounded_offset,
             "query": query or "",
             "exists": True,
         }
 
+    @_notes_collection_change("response_library")
     def ensure_response_cache(self) -> dict[str, Any]:
         try:
             collection = self.client.get_collection(name=self._RESPONSE_CACHE_STORAGE)
@@ -1921,6 +2657,7 @@ class ChromaStore:
                 },
             )
 
+    @_notes_collection_change("response_library")
     def cache_rag_response(
         self,
         *,
@@ -1928,6 +2665,7 @@ class ChromaStore:
         request: dict[str, Any],
         result: dict[str, Any],
         created_at: str,
+        owner: str | None = None,
     ) -> dict[str, Any]:
         self.ensure_response_cache()
         record_id = f"rag-response::{job_id}"
@@ -1948,6 +2686,11 @@ class ChromaStore:
             "record_id": record_id,
             "response_id": job_id,
             "response_type": "rag",
+            "owner": owner,
+            "research_thread": result.get("research_thread"),
+            "pipeline": result.get("pipeline"),
+            "prompt_contract": result.get("prompt_contract"),
+            "query_contract": result.get("query_contract"),
             "question": result.get("prompt") or request.get("prompt") or "",
             "instructions": request.get("instructions") or "",
             "text": result.get("answer") or "",
@@ -1986,6 +2729,7 @@ class ChromaStore:
             "count": payload.get("count"),
         }
 
+    @_notes_collection_change("response_library")
     def update_response_cache_grade(
         self,
         response_record_id: str,
@@ -2047,6 +2791,62 @@ class ChromaStore:
             metadatas=[metadata],
         )
         return clean
+
+    def export_site_projection(
+        self,
+        store: str,
+        works: Sequence[str],
+    ) -> dict[str, Any]:
+        """Export selected Works with their existing vectors for a static research site.
+
+        This is a publication projection, not a new authoritative corpus. Records are
+        decoded from the collection exactly as ordinary reads are, while embeddings
+        remain a separate derived payload so callers cannot mistake them for scholarly
+        Record metadata.
+        """
+        selected = {str(work).strip() for work in works if str(work).strip()}
+        collection = self._collection(store)
+        total = collection.count()
+        output: list[dict[str, Any]] = []
+        batch_size = min(1000, max(1, settings.api_batch_size * 4))
+        for offset in range(0, total, batch_size):
+            payload = collection.get(
+                limit=min(batch_size, total - offset),
+                offset=offset,
+                include=["documents", "metadatas", "embeddings"],
+            )
+            ids = list(payload.get("ids") or [])
+            documents = list(payload.get("documents") or [])
+            metadatas = list(payload.get("metadatas") or [])
+            raw_embeddings = payload.get("embeddings")
+            if hasattr(raw_embeddings, "tolist"):
+                raw_embeddings = raw_embeddings.tolist()
+            embeddings = list(raw_embeddings or [])
+            for index, chroma_id in enumerate(ids):
+                metadata = decode_metadata(
+                    metadatas[index] if index < len(metadatas) else {}
+                )
+                if selected and str(metadata.get("work") or "") not in selected:
+                    continue
+                document_field = metadata.pop("_document_field", "text")
+                logical_id = metadata.pop("_record_id", None)
+                record = dict(metadata)
+                if logical_id is not None and "record_id" not in record:
+                    record["record_id"] = logical_id
+                record[document_field] = (
+                    documents[index] if index < len(documents) else ""
+                )
+                record["_chroma_id"] = chroma_id
+                output.append(
+                    {
+                        "record": compact_record_payload(record, include_updates=False),
+                        "embedding": (
+                            embeddings[index] if index < len(embeddings) else None
+                        ),
+                    }
+                )
+        return {"store": self._public_store(collection), "records": output}
+
 
     def export_records(
         self,
@@ -2189,6 +2989,7 @@ class ChromaStore:
         metas.clear()
         embeddings.clear()
 
+    @_notes_collection_change("response_library")
     def restore_logical_backup(
         self,
         root: Path,
@@ -2267,6 +3068,7 @@ class ChromaStore:
             restored.append(self._public_store(collection))
         return {"collections": restored, "count": len(restored)}
 
+    @_notes_collection_change("response_library")
     def nuke(self) -> dict[str, Any]:
         names: list[str] = []
         mode = self.mode
@@ -2425,6 +3227,7 @@ class ChromaStore:
         records = self._decode_result(payload, include_updates=include_updates)
         return records[0] if records else None
 
+    @_notes_collection_change("corpus_records")
     def patch_existing(
         self,
         store: str,
@@ -2462,9 +3265,11 @@ class ChromaStore:
             embedding_field=embedding_field,
         )
 
+    @_notes_collection_change("corpus_records")
     def delete_record(self, store: str, chroma_id: str) -> None:
         self._collection(store).delete(ids=[chroma_id])
 
+    @_notes_collection_change("corpus_records")
     def delete_record_with_language_sync(self, store: str, chroma_id: str) -> dict[str, Any]:
         collection = self._collection(store)
         _, role, _ = self._language_spec(collection)
@@ -2476,6 +3281,9 @@ class ChromaStore:
                 mirrored.append(child["name"])
         return {"deleted": chroma_id, "mirrored_deletes": mirrored}
 
+    UNTITLED_WORK = "(Untitled work)"
+
+    @_notes_collection_change("corpus_records")
     def delete_work_with_language_sync(self, store: str, work: str) -> dict[str, Any]:
         """Delete every record whose decoded ``work`` metadata equals ``work``.
 
@@ -2485,9 +3293,23 @@ class ChromaStore:
         """
         collection = self._collection(store)
         _, role, _ = self._language_spec(collection)
-        where = {"work": str(work)}
-        payload = collection.get(where=where, include=["metadatas"])
-        ids = [str(value) for value in (payload.get("ids") or [])]
+        untitled = str(work) == self.UNTITLED_WORK
+
+        def work_ids(target: Any) -> list[str]:
+            if not untitled:
+                payload = target.get(where={"work": str(work)}, include=["metadatas"])
+                return [str(value) for value in (payload.get("ids") or [])]
+            # The UI groups records that have no ``work`` under one placeholder name, and Chroma
+            # cannot filter on an absent key, so scan for records whose work is missing or blank.
+            payload = target.get(include=["metadatas"])
+            found = []
+            for chroma_id, meta in zip(payload.get("ids") or [], payload.get("metadatas") or []):
+                decoded = decode_metadata(meta or {})
+                if not str(decoded.get("work") or "").strip() or decoded.get("work") == self.UNTITLED_WORK:
+                    found.append(str(chroma_id))
+            return found
+
+        ids = work_ids(collection)
         if ids:
             collection.delete(ids=ids)
 
@@ -2495,8 +3317,7 @@ class ChromaStore:
         if role == "primary":
             for child in self._language_children(store):
                 child_collection = self._collection(child["name"])
-                child_payload = child_collection.get(where=where, include=["metadatas"])
-                child_ids = [str(value) for value in (child_payload.get("ids") or [])]
+                child_ids = work_ids(child_collection)
                 if child_ids:
                     child_collection.delete(ids=child_ids)
                 mirrored[child["name"]] = len(child_ids)
@@ -2506,35 +3327,138 @@ class ChromaStore:
             "mirrored_deletes": mirrored,
         }
 
+    def record_size_stats(
+        self,
+        store: str,
+        *,
+        sample_size: int = 256,
+    ) -> dict[str, int]:
+        """Return a bounded robust Record-size sample for Research auto-sizing.
+
+        This intentionally reads only document text, never embeddings or complete
+        metadata. Results are cached until any vector-collection mutation.
+        """
+
+        col = self._collection(store)
+        count = int(col.count())
+        if count <= 0:
+            return {"count": 0, "sample_count": 0, "median_record_chars": 0}
+
+        bounded_sample = min(count, max(1, int(sample_size)))
+        key = (str(store), count, bounded_sample)
+        cached = self._record_size_cache.get(key)
+        if cached is not None:
+            return dict(cached)
+
+        payload = col.get(limit=bounded_sample, include=["documents"])
+        lengths = sorted(
+            len(" ".join(str(document or "").split()))
+            for document in (payload.get("documents") or [])
+            if str(document or "").strip()
+        )
+        if not lengths:
+            stats = {
+                "count": count,
+                "sample_count": 0,
+                "median_record_chars": 0,
+            }
+        else:
+            midpoint = len(lengths) // 2
+            if len(lengths) % 2:
+                median = lengths[midpoint]
+            else:
+                median = int(round((lengths[midpoint - 1] + lengths[midpoint]) / 2))
+            stats = {
+                "count": count,
+                "sample_count": len(lengths),
+                "median_record_chars": median,
+            }
+        self._record_size_cache[key] = stats
+        return dict(stats)
+
+    def document_records(
+        self,
+        store: str,
+        source_document_id: str,
+    ) -> list[dict[str, Any]]:
+        """Load same-document Records with a bounded Chroma working page."""
+
+        source_id = str(source_document_id or "").strip()
+        if not source_id:
+            return []
+        col = self._collection(store)
+        page_size = 512
+
+        for field in ("source_document_id", "source_asset_id"):
+            records: list[dict[str, Any]] = []
+            offset = 0
+            try:
+                while True:
+                    payload = col.get(
+                        where={field: source_id},
+                        include=["documents", "metadatas"],
+                        limit=page_size,
+                        offset=offset,
+                    )
+                    ids = list(payload.get("ids") or [])
+                    if not ids:
+                        break
+                    records.extend(
+                        self._decode_result(
+                            payload,
+                            include_updates=False,
+                        )
+                    )
+                    offset += len(ids)
+                    if len(ids) < page_size:
+                        break
+            except Exception as exc:
+                if not self._is_query_capability_error(exc):
+                    raise
+                continue
+            if records:
+                return records
+        return []
+
     def semantic_candidates(
         self,
         store: str,
         query: str,
         n_results: int,
+        where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
+        *,
+        include_embeddings: bool = True,
     ) -> list[dict[str, Any]]:
         col = self._collection(store)
         count = col.count()
         if count == 0:
             return []
         provider, model = self._embedding_spec(col)
+        distance_metric = self._distance_metric(col)
         vector = self.embeddings.embed_query(
             query,
             provider=provider,
             model=model,
         )
-        payload = col.query(
-            query_embeddings=[vector],
-            n_results=min(max(1, n_results), count),
-            include=["documents", "metadatas", "distances", "embeddings"],
-        )
+        include = ["documents", "metadatas", "distances"]
+        if include_embeddings:
+            include.append("embeddings")
+        query_args: dict[str, Any] = {
+            "query_embeddings": [vector],
+            "n_results": min(max(1, n_results), count),
+            "include": include,
+        }
+        if where:
+            query_args["where"] = where
+        if where_document:
+            query_args["where_document"] = where_document
+        payload = col.query(**query_args)
         ids = (payload.get("ids") or [[]])[0]
         documents = (payload.get("documents") or [[]])[0]
         metadatas = (payload.get("metadatas") or [[]])[0]
         distances = (payload.get("distances") or [[]])[0]
-        embedding_payload = payload.get("embeddings")
-        if hasattr(embedding_payload, "tolist"):
-            embedding_payload = embedding_payload.tolist()
-        embeddings = (embedding_payload or [[]])[0]
+        embeddings = _first_embedding_batch(payload)
         output: list[dict[str, Any]] = []
         for index, chroma_id in enumerate(ids):
             meta = decode_metadata(
@@ -2556,8 +3480,6 @@ class ChromaStore:
                 if index < len(embeddings)
                 else None
             )
-            if hasattr(embedding, "tolist"):
-                embedding = embedding.tolist()
             output.append({
                 "id": chroma_id,
                 "record": record,
@@ -2566,13 +3488,13 @@ class ChromaStore:
                     if index < len(distances) and distances[index] is not None
                     else None
                 ),
-                "embedding": (
-                    [float(x) for x in embedding]
-                    if embedding is not None
-                    else None
-                ),
-                "query_embedding": [float(x) for x in vector],
+                "embedding": embedding if include_embeddings else None,
                 "collection": store,
+                "distance_metric": distance_metric,
+                "relevance": distance_to_relevance(
+                    distances[index] if index < len(distances) else None,
+                    distance_metric,
+                ),
             })
         return output
 
@@ -2630,96 +3552,172 @@ class ChromaStore:
 
     @staticmethod
     def _cosine(a: list[float] | None, b: list[float] | None) -> float:
-        # Chroma may return embeddings as NumPy arrays. Never truth-test an
-        # array: ``if not array`` raises the ambiguous truth-value error.
-        if (
-            a is None
-            or b is None
-            or len(a) == 0
-            or len(b) == 0
-            or len(a) != len(b)
-        ):
-            return 0.0
-        dot = sum(float(x) * float(y) for x, y in zip(a, b))
-        na = sum(float(x) * float(x) for x in a) ** 0.5
-        nb = sum(float(y) * float(y) for y in b) ** 0.5
-        return dot / (na * nb) if na and nb else 0.0
+        """Compatibility wrapper around the shared cosine implementation."""
 
-    def mmr_search(self, store: str, query: str, n_results: int, where: dict[str, Any] | None = None, *, fetch_k: int = 100, lambda_mult: float = 0.7) -> list[dict[str, Any]]:
+        return cosine_similarity(a, b)
+
+    def mmr_candidates(
+        self,
+        store: str,
+        query: str,
+        fetch_k: int,
+        where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Dense candidates with embeddings and metric-aware relevance, for MMR selection.
+
+        Selection itself belongs to the store-search pipeline's ``select.mmr`` stage.
+        """
+
         col = self._collection(store)
-        if col.count() == 0:
+        count = col.count()
+        if count == 0:
             return []
+
         provider, model = self._embedding_spec(col)
-        query_vector = self.embeddings.embed_query(query, provider=provider, model=model)
-        payload = col.query(query_embeddings=[query_vector], n_results=min(max(n_results, fetch_k), col.count()), where=where, include=["documents", "metadatas", "distances", "embeddings"])
+        distance_metric = self._distance_metric(col)
+        query_vector = self.embeddings.embed_query(
+            query,
+            provider=provider,
+            model=model,
+        )
+        query_args: dict[str, Any] = {
+            "query_embeddings": [query_vector],
+            "n_results": min(fetch_k, count),
+            "include": ["documents", "metadatas", "distances", "embeddings"],
+        }
+        if where:
+            query_args["where"] = where
+        if where_document:
+            query_args["where_document"] = where_document
+        payload = col.query(**query_args)
         ids = (payload.get("ids") or [[]])[0]
         docs = (payload.get("documents") or [[]])[0]
         metas = (payload.get("metadatas") or [[]])[0]
         distances = (payload.get("distances") or [[]])[0]
-        embedding_payload = payload.get("embeddings")
-        # Chroma commonly returns embeddings as a NumPy ndarray. Convert it
-        # before fallback/default handling so Python never evaluates the array
-        # as a boolean.
-        if hasattr(embedding_payload, "tolist"):
-            embedding_payload = embedding_payload.tolist()
-        embeddings = (embedding_payload or [[]])[0]
-        candidates=[]
-        for index,chroma_id in enumerate(ids):
-            meta=decode_metadata(metas[index] if index < len(metas) else {})
-            document_field=meta.pop("_document_field","text"); logical_id=meta.pop("_record_id",None); record=dict(meta)
-            if logical_id is not None and "record_id" not in record: record["record_id"]=logical_id
-            record[document_field]=docs[index] if index < len(docs) else ""; record["_chroma_id"]=chroma_id
-            record=compact_record_payload(record,include_updates=False)
-            candidates.append({"id":chroma_id,"distance":distances[index] if index < len(distances) else None,"record":record,"embedding":embeddings[index] if index < len(embeddings) else None})
-        selected: list[dict[str, Any]] = []; remaining=list(candidates)
-        while remaining and len(selected)<n_results:
-            best_index=0; best_score=-float("inf")
-            for index,candidate in enumerate(remaining):
-                relevance=1.0/(1.0+max(0.0,float(candidate.get("distance") or 0.0)))
-                diversity=max((self._cosine(candidate.get("embedding"),chosen.get("embedding")) for chosen in selected),default=0.0)
-                score=lambda_mult*relevance-(1.0-lambda_mult)*diversity
-                if score>best_score: best_score=score; best_index=index
-            chosen=remaining.pop(best_index); chosen["mmr_score"]=best_score; chosen.pop("embedding",None); selected.append(chosen)
-        return selected
+        embeddings = _first_embedding_batch(payload)
 
-    def filter_search(self, store: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        for index, chroma_id in enumerate(ids):
+            meta = decode_metadata(metas[index] if index < len(metas) else {})
+            document_field = meta.pop("_document_field", "text")
+            logical_id = meta.pop("_record_id", None)
+            record = dict(meta)
+            if logical_id is not None and "record_id" not in record:
+                record["record_id"] = logical_id
+            record[document_field] = docs[index] if index < len(docs) else ""
+            record["_chroma_id"] = chroma_id
+            record = compact_record_payload(record, include_updates=False)
+            distance = distances[index] if index < len(distances) else None
+            candidates.append(
+                {
+                    "id": chroma_id,
+                    "distance": distance,
+                    "distance_metric": distance_metric,
+                    "relevance": distance_to_relevance(distance, distance_metric),
+                    "record": record,
+                    "embedding": embeddings[index] if index < len(embeddings) else None,
+                }
+            )
+
+        return candidates
+
+    def filter_search(
+        self,
+        store: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return filter matches without decoding an unbounded native result set."""
+
         col = self._collection(store)
         where = where or {}
         contains_filters: dict[str, str] = {}
         native_where: dict[str, Any] = {}
         for field, value in where.items():
             if isinstance(value, dict) and "$contains" in value:
-                contains_filters[field] = str(value.get("$contains") or "").casefold()
+                contains_filters[field] = str(
+                    value.get("$contains") or ""
+                ).casefold()
             else:
                 native_where[field] = value
+
         args: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if native_where:
             args["where"] = native_where
-        # A contains filter may target array-like metadata that Chroma persists
-        # through DerridAI's metadata codec. Fetch the native-filtered set,
-        # decode it, then perform membership/substring matching on the decoded
-        # values. Exact-only filters retain Chroma's efficient limit path.
         if not contains_filters:
             args["limit"] = n_results
-        rows = self._decode_result(col.get(**args))
-        if contains_filters:
-            def matches(record: dict[str, Any]) -> bool:
-                for field, needle in contains_filters.items():
-                    value = record.get(field)
-                    if isinstance(value, (list, tuple, set)):
-                        values = [str(item).casefold() for item in value]
-                        if needle not in values and not any(needle in item for item in values):
-                            return False
-                    elif isinstance(value, dict):
-                        if needle not in " ".join(f"{k} {v}" for k, v in value.items()).casefold():
-                            return False
-                    elif needle not in str(value or "").casefold():
-                        return False
-                return True
-            rows = [row for row in rows if matches(row)]
-        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows[:n_results]]
+            exact_rows = self._decode_result(col.get(**args))
+            return [
+                {
+                    "id": row.get("_chroma_id") or row.get("record_id"),
+                    "distance": None,
+                    "record": row,
+                }
+                for row in exact_rows[:n_results]
+            ]
 
-    def keyword_search(self, store: str, query: str, n_results: int, where: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        def matches(record: dict[str, Any]) -> bool:
+            for field, needle in contains_filters.items():
+                value = record.get(field)
+                if isinstance(value, (list, tuple, set)):
+                    values = [str(item).casefold() for item in value]
+                    if needle not in values and not any(
+                        needle in item for item in values
+                    ):
+                        return False
+                elif isinstance(value, dict):
+                    if needle not in " ".join(
+                        f"{key} {item}"
+                        for key, item in value.items()
+                    ).casefold():
+                        return False
+                elif needle not in str(value or "").casefold():
+                    return False
+            return True
+
+        # Contains filters target decoded metadata that Chroma may persist through
+        # DerridAI's JSON metadata codec. Chroma cannot perform these comparisons
+        # natively, but the API only needs the first n results in source order.
+        # Scan bounded pages and stop as soon as that result window is full.
+        rows: list[dict[str, Any]] = []
+        scan_offset = 0
+        page_size = 512
+        while len(rows) < n_results:
+            payload = col.get(
+                **args,
+                limit=page_size,
+                offset=scan_offset,
+            )
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for row in self._decode_result(payload):
+                if matches(row):
+                    rows.append(row)
+                    if len(rows) >= n_results:
+                        break
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
+
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "record": row,
+            }
+            for row in rows
+        ]
+
+    def keyword_search(
+        self,
+        store: str,
+        query: str,
+        n_results: int,
+        where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         """Case-insensitive record-text search with metadata filtering.
 
         Chroma's ``$contains`` document filter is case-sensitive on some
@@ -2732,12 +3730,19 @@ class ChromaStore:
         args: dict[str, Any] = {"include": ["documents", "metadatas"], "limit": n_results}
         if where:
             args["where"] = where
+        if where_document:
+            args["where_document"] = where_document
         if not needle:
             rows = self._decode_result(col.get(**args))
             return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
 
         fast_args = dict(args)
-        fast_args["where_document"] = {"$contains": needle}
+        query_document_filter = {"$contains": needle}
+        fast_args["where_document"] = (
+            {"$and": [where_document, query_document_filter]}
+            if where_document
+            else query_document_filter
+        )
         try:
             rows = self._decode_result(col.get(**fast_args))
         except Exception as exc:
@@ -2750,19 +3755,49 @@ class ChromaStore:
         scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
         if where:
             scan_args["where"] = where
-        # Keep the fallback predictable on very large corpora while making the
-        # common researcher search robust across capitalization differences.
-        try:
-            scan_args["limit"] = min(max(n_results * 50, 1000), 10000)
-            candidates = self._decode_result(col.get(**scan_args))
-        except Exception as exc:
-            if not self._is_query_capability_error(exc):
-                raise
-            scan_args.pop("limit", None)
-            candidates = self._decode_result(col.get(**scan_args))
+        if where_document:
+            scan_args["where_document"] = where_document
+        # Preserve case-insensitive search semantics without ever materializing
+        # the collection at once. Continue paging until enough matches are found
+        # or the filtered collection is exhausted; the bound is peak page size,
+        # not an arbitrary total-candidate cutoff that can hide valid matches.
+        page_size = 512
         folded = needle.casefold()
-        rows = [row for row in candidates if folded in str(row.get("text") or "").casefold()][:n_results]
-        return [{"id": row.get("_chroma_id") or row.get("record_id"), "distance": None, "record": row} for row in rows]
+        fallback_rows: list[dict[str, Any]] = []
+        scan_offset = 0
+        while len(fallback_rows) < n_results:
+            try:
+                payload = col.get(
+                    **scan_args,
+                    limit=page_size,
+                    offset=scan_offset,
+                )
+            except Exception as exc:
+                if self._is_query_capability_error(exc):
+                    raise RuntimeError(
+                        "The vector-store backend cannot perform the bounded "
+                        "keyword-search fallback required for memory safety."
+                    ) from exc
+                raise
+            ids = list(payload.get("ids") or [])
+            if not ids:
+                break
+            for row in self._decode_result(payload):
+                if folded in str(row.get("text") or "").casefold():
+                    fallback_rows.append(row)
+                    if len(fallback_rows) >= n_results:
+                        break
+            scan_offset += len(ids)
+            if len(ids) < page_size:
+                break
+        return [
+            {
+                "id": row.get("_chroma_id") or row.get("record_id"),
+                "distance": None,
+                "record": row,
+            }
+            for row in fallback_rows
+        ]
 
     @staticmethod
     def _lexical_tokens(value: Any) -> list[str]:
@@ -2778,154 +3813,201 @@ class ChromaStore:
         query: str,
         n_results: int,
         where: dict[str, Any] | None = None,
+        where_document: dict[str, Any] | None = None,
+        *,
+        candidate_pool_size: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Bounded BM25-style lexical ranking over stored record text/metadata.
+        """Bounded BM25-style lexical ranking without materializing the corpus.
 
-        Chroma does not expose a sparse/BM25 index in the local collection API,
-        so DerridAI supplies a deterministic lexical leg for hybrid retrieval.
-        The scorer is intentionally query-local: it computes document frequency
-        only for terms in the current query and adds a modest exact-phrase boost.
+        Chroma does not expose a sparse/BM25 index in the local collection API.
+        The previous implementation fetched and decoded as many as 20,000 full
+        Records at once, then retained every document string and token list until
+        ranking completed. Repeated Research runs therefore drove the API process
+        to a new allocator high-water mark even after Python released the objects.
+
+        This implementation pages through document text only. Metadata filters
+        are still applied by Chroma, but large cELF metadata payloads (especially
+        FieldAssertions and audit/provenance JSON) are never transferred for the
+        lexical candidate scan. Only compact term-frequency statistics plus
+        Chroma ids are retained, and complete Records are fetched for final top-N
+        results after ranking. candidate_pool_size preserves a deeper scoring
+        window without forcing every candidate in that window to become a fully
+        hydrated Record.
         """
+
         query = str(query or "").strip()
         if not query:
-            return self.keyword_search(store, query, n_results, where)
-        col = self._collection(store)
-        scan_args: dict[str, Any] = {"include": ["documents", "metadatas"]}
-        if where:
-            scan_args["where"] = where
-        try:
-            scan_args["limit"] = min(max(n_results * 100, 2000), 20000)
-            candidates = self._decode_result(col.get(**scan_args))
-        except Exception as exc:
-            if not self._is_query_capability_error(exc):
-                raise
-            scan_args.pop("limit", None)
-            candidates = self._decode_result(col.get(**scan_args))
-        if not candidates:
-            return []
+            return self.keyword_search(
+                store,
+                query,
+                n_results,
+                where,
+                where_document,
+            )
 
         query_tokens = self._lexical_tokens(query)
         if not query_tokens:
-            return self.keyword_search(store, query, n_results, where)
-        query_terms = list(dict.fromkeys(query_tokens))
-        docs: list[tuple[dict[str, Any], list[str], str]] = []
-        document_frequencies = {term: 0 for term in query_terms}
-        total_length = 0
-        for row in candidates:
-            searchable = " ".join(
-                str(row.get(field) or "")
-                for field in (
-                    "text",
-                    "work",
-                    "record_id",
-                    "document_author",
-                    "speaker",
-                    "quoted_speaker",
-                    "position_holder",
-                    "target",
-                )
+            return self.keyword_search(
+                store,
+                query,
+                n_results,
+                where,
+                where_document,
             )
-            folded = searchable.casefold()
-            tokens = self._lexical_tokens(searchable)
-            docs.append((row, tokens, folded))
-            total_length += len(tokens)
-            token_set = set(tokens)
-            for term in query_terms:
-                if term in token_set:
-                    document_frequencies[term] += 1
 
-        count = len(docs)
-        avg_length = max(1.0, total_length / max(1, count))
+        col = self._collection(store)
+        query_terms = list(dict.fromkeys(query_tokens))
+        term_indexes = {term: index for index, term in enumerate(query_terms)}
+        document_frequencies = [0] * len(query_terms)
+        total_length = 0
+        document_count = 0
+        folded_phrase = query.casefold()
+
+        candidate_depth = max(
+            max(1, int(n_results)),
+            max(1, int(candidate_pool_size or n_results)),
+        )
+        scan_limit = min(max(candidate_depth * 100, 2000), 20000)
+        page_size = min(
+            scan_limit,
+            max(1, min(int(settings.api_batch_size), 512)),
+        )
+        scan_args: dict[str, Any] = {}
+        if where:
+            scan_args["where"] = where
+        if where_document:
+            scan_args["where_document"] = where_document
+
+        # (chroma id, document length, per-query-term frequencies,
+        #  exact-phrase match, original scan ordinal)
+        compact_candidates: list[
+            tuple[str, int, tuple[int, ...], bool, int]
+        ] = []
+        offset = 0
+        ordinal = 0
+        while offset < scan_limit:
+            requested = min(page_size, scan_limit - offset)
+            page = col.get(
+                **scan_args,
+                include=["documents"],
+                limit=requested,
+                offset=offset,
+            )
+            ids = list(page.get("ids") or [])
+            if not ids:
+                break
+            documents = list(page.get("documents") or [])
+
+            for index, chroma_id in enumerate(ids):
+                searchable = (
+                    documents[index]
+                    if index < len(documents)
+                    else ""
+                )
+                folded = searchable.casefold()
+                tokens = self._lexical_tokens(searchable)
+                frequencies = [0] * len(query_terms)
+                for token in tokens:
+                    term_index = term_indexes.get(token)
+                    if term_index is not None:
+                        frequencies[term_index] += 1
+
+                length = len(tokens)
+                if length:
+                    for term_index, frequency in enumerate(frequencies):
+                        if frequency:
+                            document_frequencies[term_index] += 1
+                    total_length += length
+                    document_count += 1
+                    compact_candidates.append(
+                        (
+                            str(chroma_id),
+                            length,
+                            tuple(frequencies),
+                            bool(folded_phrase and folded_phrase in folded),
+                            ordinal,
+                        )
+                    )
+                ordinal += 1
+
+            returned = len(ids)
+            offset += returned
+            if returned < requested:
+                break
+
+        if not compact_candidates:
+            return []
+
+        avg_length = max(1.0, total_length / max(1, document_count))
         k1 = 1.2
         b = 0.75
-        folded_phrase = query.casefold()
-        scored: list[tuple[float, dict[str, Any]]] = []
-        for row, tokens, folded in docs:
-            if not tokens:
+        top_limit = max(1, int(n_results))
+        # Heap entries are ordered from worst to best. For equal scores, later
+        # source order is worse so stable ranking matches the previous sort.
+        heap: list[tuple[float, int, str]] = []
+        for (
+            chroma_id,
+            length,
+            frequencies,
+            phrase_match,
+            source_ordinal,
+        ) in compact_candidates:
+            if length <= 0:
                 continue
-            frequencies: dict[str, int] = {}
-            for token in tokens:
-                if token in document_frequencies:
-                    frequencies[token] = frequencies.get(token, 0) + 1
             score = 0.0
-            length = len(tokens)
-            for term in query_terms:
-                tf = frequencies.get(term, 0)
+            for term_index, tf in enumerate(frequencies):
                 if not tf:
                     continue
-                df = document_frequencies.get(term, 0)
-                # Robertson/Sparck Jones BM25 IDF with a positive floor.
-                idf = max(0.0, math.log(1.0 + (count - df + 0.5) / (df + 0.5)))
-                denominator = tf + k1 * (1.0 - b + b * length / avg_length)
+                df = document_frequencies[term_index]
+                idf = max(
+                    0.0,
+                    math.log(
+                        1.0
+                        + (document_count - df + 0.5)
+                        / (df + 0.5)
+                    ),
+                )
+                denominator = tf + k1 * (
+                    1.0 - b + b * length / avg_length
+                )
                 score += idf * (tf * (k1 + 1.0)) / max(denominator, 1e-9)
-            if folded_phrase and folded_phrase in folded:
+            if phrase_match:
                 score += 2.5
-            if score > 0:
-                scored.append((score, row))
-        scored.sort(key=lambda item: item[0], reverse=True)
+            if score <= 0:
+                continue
+
+            entry = (score, -source_ordinal, chroma_id)
+            if len(heap) < top_limit:
+                heapq.heappush(heap, entry)
+            elif entry > heap[0]:
+                heapq.heapreplace(heap, entry)
+
+        if not heap:
+            return []
+
+        ranked = sorted(
+            heap,
+            key=lambda item: (-item[0], -item[1]),
+        )
+        top_ids = [item[2] for item in ranked]
+        payload = col.get(
+            ids=top_ids,
+            include=["documents", "metadatas"],
+        )
+        records_by_id = {
+            str(row.get("_chroma_id") or row.get("record_id")): row
+            for row in self._decode_result(payload)
+        }
         return [
             {
-                "id": row.get("_chroma_id") or row.get("record_id"),
+                "id": chroma_id,
                 "distance": None,
                 "lexical_score": score,
-                "record": row,
+                "record": records_by_id[chroma_id],
             }
-            for score, row in scored[:n_results]
+            for score, _negative_ordinal, chroma_id in ranked
+            if chroma_id in records_by_id
         ]
-
-    def hybrid_search(
-        self,
-        store: str,
-        query: str,
-        n_results: int,
-        where: dict[str, Any] | None = None,
-        *,
-        rrf_k: int = 60,
-    ) -> list[dict[str, Any]]:
-        """Fuse dense semantic and BM25-style lexical retrieval with reciprocal rank.
-
-        This deliberately uses DerridAI's stored document text for the lexical leg
-        rather than requiring a second infrastructure service. It gives exact names,
-        quotations, neologisms, and multilingual terminology an independent path
-        into the candidate set while preserving semantic recall.
-        """
-        query = str(query or "").strip()
-        if not query:
-            return self.filter_search(store, n_results, where)
-        fetch_n = min(max(n_results * 4, 32), 400)
-        semantic: list[dict[str, Any]] = []
-        try:
-            semantic = self.search(store, query, fetch_n, where)
-        except ValueError:
-            # Precomputed-vector collections do not have a query embedding function.
-            semantic = []
-        lexical = self.lexical_search(store, query, fetch_n, where)
-
-        fused: dict[str, dict[str, Any]] = {}
-        for search_type, rows in (("semantic", semantic), ("lexical", lexical)):
-            for rank, row in enumerate(rows, start=1):
-                item_id = str(row.get("id") or (row.get("record") or {}).get("record_id") or "")
-                if not item_id:
-                    continue
-                score = 1.0 / (float(rrf_k) + float(rank))
-                if item_id not in fused:
-                    fused[item_id] = {
-                        **row,
-                        "hybrid_score": score,
-                        "retrieval_hits": [{"type": search_type, "rank": rank}],
-                    }
-                else:
-                    fused[item_id]["hybrid_score"] += score
-                    fused[item_id]["retrieval_hits"].append({"type": search_type, "rank": rank})
-                    if row.get("distance") is not None:
-                        current = fused[item_id].get("distance")
-                        if current is None or float(row["distance"]) < float(current):
-                            fused[item_id]["distance"] = row["distance"]
-        return sorted(
-            fused.values(),
-            key=lambda item: (float(item.get("hybrid_score") or 0.0), -float(item.get("distance") or 0.0)),
-            reverse=True,
-        )[:n_results]
 
     def _decode_result(
         self,

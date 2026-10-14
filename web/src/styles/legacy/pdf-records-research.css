@@ -1,0 +1,314 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+.pdf-record-bridge.active {
+  border-color: var(--tone-ok-edge);
+  background: var(--soft);
+}
+.pdf-current-links .linked-record-row {
+  align-items: center;
+}
+.pdf-current-links .linked-record {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-pdf-link .btn svg {
+  width: 12px;
+  height: 12px;
+}
+.record-preview-field.proposed-field {
+  border-color: var(--tone-ok-edge);
+  background: var(--soft);
+}
+.btn.tiny {
+  justify-self: start;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 3px 6px;
+  font-size: 0.8125rem;
+}
+
+/* 0.8.0 — provider separation, operation details, RAG stage visibility, chart grading */
+
+.ollama-config {
+  border-left: 4px solid var(--tone-ok-border);
+}
+.rag-stage-node.done {
+  border-color: var(--tone-ok-edge);
+  background: var(--soft);
+  opacity: 1;
+}
+.rag-stage-node.done > i {
+  border-color: var(--tone-ok-edge);
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+}
+.rag-stage-node.current {
+  border-color: var(--tone-ok-border);
+  background: var(--tone-ok-bg);
+  box-shadow: 0 0 0 2px rgba(70, 116, 94, 0.08);
+  opacity: 1;
+}
+.rag-stage-node.current > i {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-on);
+}
+.rag-generation-grid .field-full {
+  grid-column: 1/-1;
+}
+.cancel-pending {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.operation-progress .btn.tiny {
+  min-height: 24px;
+  padding: 3px 7px;
+}
+
+/* 0.9.0 — review diffs, work metadata, richer background operations */
+.review-no-changes-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--tone-ok-edge);
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--tone-ok-fg);
+}
+.review-no-changes-empty h3 {
+  margin: 0 0 4px;
+  font:
+    600 15px/1.2 Georgia,
+    serif;
+  color: var(--tone-ok-fg);
+}
+.review-no-changes-empty p {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.review-no-changes-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+  font-size: 1.0625rem;
+  font-weight: 900;
+  flex: 0 0 auto;
+}
+.unchanged-review-list {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+}
+.unchanged-review-list summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  background: var(--card);
+}
+.unchanged-review-list summary > span {
+  display: grid;
+  gap: 2px;
+}
+.unchanged-review-list summary b {
+  font-size: 0.8125rem;
+}
+.unchanged-review-list summary small {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.unchanged-review-grid {
+  display: grid;
+  padding: 7px 10px;
+}
+.unchanged-review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 2px;
+  border-top: 1px solid var(--line);
+}
+.unchanged-review-row:first-child {
+  border-top: 0;
+}
+.unchanged-review-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.unchanged-review-row b,
+.unchanged-review-row span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.unchanged-review-row b {
+  font-size: 0.8125rem;
+}
+.unchanged-review-row span {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.change-diff {
+  min-height: 42px;
+  padding: 7px;
+  border-radius: 7px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+.current-diff .del {
+  background: var(--tone-danger-bg);
+  color: var(--tone-danger-fg);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.proposed-diff .ins {
+  background: var(--tone-ok-bg);
+  color: var(--tone-ok-fg);
+}
+.job-change-table tr:not(.stale-change) td {
+  background: var(--card);
+}
+.job-change-table .stale-change td {
+  background: var(--tone-warn-bg);
+}
+
+.job-status.cancelling {
+  background: var(--tone-warn-bg);
+  color: var(--tone-warn-fg);
+}
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.operation-progress-stack.minimized .operation-stack-items {
+  display: none;
+}
+.operation-progress-stack.minimized {
+  width: max-content;
+  max-width: calc(100vw - 28px);
+  white-space: nowrap;
+}
+
+.ui-collapse-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  margin-left: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+.ui-collapse-toggle:hover {
+  background: var(--accent-soft);
+  color: var(--accent-fg);
+}
+.ui-collapsed {
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+.tablewrap.ui-collapsed > table {
+  display: none !important;
+}
+.provider-readiness.default-provider {
+  border-color: var(--tone-ok-edge);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.store-table .column-filter-row th {
+  padding: 4px;
+  background: var(--soft);
+}
+
+.storeitem {
+  padding: 8px !important;
+}
+.storeitem b {
+  font-size: 0.8125rem;
+}
+.storeitem span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8125rem;
+}
+
+.pdfgrid-v2 {
+  grid-template-columns: minmax(0, 1.7fr) minmax(330px, 0.72fr) !important;
+}
+.pdftext {
+  height: auto !important;
+  min-height: 260px !important;
+  max-height: 44vh;
+  overflow: auto;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace !important;
+}
+
+.bulk-field-dialog {
+  width: min(760px, calc(100% - 24px));
+}
+.bulk-field-body {
+  display: grid;
+  gap: 8px;
+}
+.bulk-field-body textarea {
+  min-height: 130px;
+  font:
+    12px/1.45 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+}
+
+@media (max-width: 1100px) {
+  .pdfgrid-v2 {
+    grid-template-columns: 1fr !important;
+  }
+}

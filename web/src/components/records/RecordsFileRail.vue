@@ -1,4 +1,21 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
 import UiButton from "../ui/UiButton.vue";
@@ -10,7 +27,7 @@ const props = withDefaults(
     files: RecordsFileTab[];
     canManage?: boolean;
   }>(),
-  {canManage: true},
+  { canManage: true },
 );
 const emit = defineEmits<{
   select: [id: string];
@@ -40,50 +57,50 @@ function originLine(file: RecordsFileTab) {
 }
 
 function closeLabel(file: RecordsFileTab) {
-  return i18n.tf("records.close_named", "Close {name}", {name: file.name});
+  return i18n.tf("records.close_named", { name: file.name });
 }
 </script>
 <template>
-  <aside class="card records-file-rail" :aria-label="i18n.t('records.files', 'Local JSONL')">
+  <aside class="card records-file-rail" :aria-label="i18n.t('records.files')">
     <div class="records-file-head">
       <div>
-        <b>{{ i18n.t("records.files", "Local JSONL") }}</b>
+        <b>{{ i18n.t("records.files") }}</b>
         <span>{{
-          i18n.tf("records.file_count", "{count} files", {
+          i18n.tf("records.file_count", {
             count: props.files.length.toLocaleString(i18n.locale),
           })
         }}</span>
       </div>
     </div>
-    <p class="records-file-help">{{
-      i18n.t(
-        "records.files_help",
-        "Browser-local corpus files. The selected file is the one Records, Vector sync, and PDF matching use.",
-      )
-    }}</p>
+    <p class="records-file-help">{{ i18n.t("records.files_help") }}</p>
     <div
       v-if="props.canManage"
       class="records-file-actions"
-      :aria-label="i18n.t('records.file_actions', 'JSONL file actions')"
+      :aria-label="i18n.t('records.file_actions')"
     >
-      <UiButton size="small" icon="upload" :label="i18n.t('ui.open_jsonl', 'Open JSONL')" @click="emit('open')" />
+      <UiButton size="small" icon="upload" :label="i18n.t('ui.open_jsonl')" @click="emit('open')" />
       <UiButton
         size="small"
         icon="plus"
-        :label="i18n.t('ui.merge_tabs', 'Merge files')"
+        :label="i18n.t('ui.merge_tabs')"
         :disabled="props.files.length < 2"
-        :disabled-reason="i18n.t('ui.need_two_tabs_merge', 'Load at least two JSONL files to merge them.')"
+        :disabled-reason="i18n.t('ui.need_two_tabs_merge')"
         @click="emit('merge')"
       />
-      <UiButton size="small" icon="filter" :label="i18n.t('ui.create_subset', 'Create subset')" @click="emit('subset')" />
-      <UiButton size="small" icon="download" :label="i18n.t('ui.export', 'Export')" @click="emit('export')" />
+      <UiButton
+        size="small"
+        icon="filter"
+        :label="i18n.t('ui.create_subset')"
+        @click="emit('subset')"
+      />
+      <UiButton size="small" icon="download" :label="i18n.t('ui.export')" @click="emit('export')" />
     </div>
     <div class="records-file-list" role="list">
       <div
         v-for="file in props.files"
         :key="file.id"
         class="records-file-item"
-        :class="{active: file.active}"
+        :class="{ active: file.active }"
         role="listitem"
       >
         <button
@@ -95,10 +112,12 @@ function closeLabel(file: RecordsFileTab) {
           <span class="records-file-name">{{ file.name }}</span>
           <small>
             <span v-if="file.dirty" class="records-file-edited">{{
-              i18n.t("records.file_edited", "Edited since load")
+              i18n.t("records.file_edited")
             }}</span>
             <span>{{ originLine(file) }}</span>
-            <span>{{ file.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records", "records") }}</span>
+            <span
+              >{{ file.count.toLocaleString(i18n.locale) }} {{ i18n.t("dynamic.records") }}</span
+            >
           </small>
         </button>
         <button

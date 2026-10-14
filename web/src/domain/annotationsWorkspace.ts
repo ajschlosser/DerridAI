@@ -1,9 +1,26 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 // The Annotations workspace: gathering the local and shared annotations, describing them for the Annotations view, and the
 // commands it sends (search, view, open a record or work, remove one). Moved verbatim from the legacy runtime; the
 // runtime's state object and helpers are passed in as dependencies.
 import { annotationMatches } from "./reviewPresentation";
+import { toast } from "../composables/notifications";
 
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 /** Parameters of these legacy functions were never typed; they keep the shape their callers give them. */
@@ -23,9 +40,11 @@ type Helper =
   | "label"
   | "memoCorpus"
   | "navigateTo"
-  | "notifyToast"
   | "persistFileNow"
-  | "persistPrefs"
+  | "persistAnnotationsPreferences"
+  | "persistRecordViewPreferences"
+  | "persistVectorPreferences"
+  | "persistWorksPreferences"
   | "recordStores"
   | "refreshStores"
   | "reviewItemFromKey"
@@ -47,9 +66,11 @@ export function createAnnotationsWorkspace(deps: Deps) {
     label,
     memoCorpus,
     navigateTo,
-    notifyToast,
     persistFileNow,
-    persistPrefs,
+    persistAnnotationsPreferences,
+    persistRecordViewPreferences,
+    persistVectorPreferences,
+    persistWorksPreferences,
     recordStores,
     refreshStores,
     reviewItemFromKey,
@@ -75,7 +96,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
       store: annotation.store || "",
     }));
   }
-  async function refreshServerAnnotations(force = false) {
+  async function refreshServerAnnotations(force = false, strict = false) {
     if (isResearcher() && !hasCapability("annotations.read")) {
       state.serverAnnotations = [];
       state.serverAnnotationsStore = "";
@@ -95,6 +116,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
       state.serverAnnotationsStore = storeName;
       state.annotationsFetchedAt = Date.now();
     } catch (error) {
+      if (strict) throw error;
       console.warn("Could not load shared annotations", error);
     }
     return state.serverAnnotations || [];
@@ -104,10 +126,11 @@ export function createAnnotationsWorkspace(deps: Deps) {
       ? []
       : memoCorpus("annotations-all", () => {
           const items: Loose[] = [];
-          for (const { file, record, index } of allRows()) {
+          const rows = allRows();
+          for (const { file, record, index } of rows) {
             const annotations = Array.isArray(record.annotations) ? record.annotations : [];
-            annotations.forEach((annotation: Any, annotationIndex: Any) =>
-              items.push({
+            annotations.forEach((annotation: Any, annotationIndex: Any) => {
+              const base = {
                 file,
                 record,
                 index,
@@ -115,8 +138,42 @@ export function createAnnotationsWorkspace(deps: Deps) {
                 annotationIndex,
                 work: String(record.work || "(Untitled work)"),
                 server: false,
-              }),
-            );
+              };
+              items.push(base);
+              const linked = new Set(
+                Array.isArray(annotation.linked_record_ids)
+                  ? annotation.linked_record_ids.map(String)
+                  : [],
+              );
+              if (annotation.scope === "work") {
+                for (const row of rows) {
+                  if (
+                    String(row.record?.work || "") === String(record.work || "") &&
+                    row.record !== record
+                  ) {
+                    items.push({
+                      ...base,
+                      record: row.record,
+                      file: row.file,
+                      index: row.index,
+                      projected: true,
+                    });
+                  }
+                }
+              } else {
+                for (const row of rows) {
+                  const rowId = String(row.record?._chroma_id || row.record?.record_id || "");
+                  if (linked.has(rowId))
+                    items.push({
+                      ...base,
+                      record: row.record,
+                      file: row.file,
+                      index: row.index,
+                      projected: true,
+                    });
+                }
+              }
+            });
           }
           return items;
         });
@@ -178,26 +235,31 @@ export function createAnnotationsWorkspace(deps: Deps) {
       item.server &&
       (state.userContext?.role === "admin" ||
         Number(annotation.user_id || 0) === Number(state.userContext?.id || -1));
-    const canDeleteLocal = !item.server && canUse("editLocalRecords");
+    const canDeleteLocal = !item.server && !item.projected && canUse("editLocalRecords");
     return {
       id: String(
         annotation.id || `${item.file?.id || "annotation"}-${item.index}-${item.annotationIndex}`,
       ),
-      record_id: String(item.record?.record_id || tr("nav.record", "Record")),
+      scope:
+        annotation.scope === "work" || annotation.scope === "record" ? annotation.scope : "text",
+      record_id: String(item.record?.record_id || tr("nav.record")),
       work: item.work,
-      field: annotation.field
-        ? label(annotation.field)
-        : tr("annotations.record_note", "Record note"),
+      linked_record_ids: Array.isArray(annotation.linked_record_ids)
+        ? annotation.linked_record_ids.map(String)
+        : [],
+      parent_id: annotation.parent_id ? String(annotation.parent_id) : null,
+      thread_id: String(annotation.thread_id || annotation.id || ""),
+      deleted_at: annotation.deleted_at || null,
+      reply_count: Number(annotation.reply_count || 0),
+      field: annotation.field ? label(annotation.field) : tr("annotations.record_note"),
       quote: String(annotation.quote || ""),
       note: String(annotation.note || ""),
       tags: Array.isArray(annotation.tags) ? annotation.tags.map(String) : [],
       author: String(
-        annotation.initiated_by ||
-          annotation.author ||
-          tr("annotations.unknown_author", "Unknown author"),
+        annotation.initiated_by || annotation.author || tr("annotations.unknown_author"),
       ),
       source: item.server
-        ? annotation.store || tr("annotations.shared", "Shared annotation")
+        ? annotation.store || tr("annotations.shared")
         : String(item.file?.name || ""),
       created_at: annotation.created_at || null,
       server: Boolean(item.server),
@@ -210,33 +272,36 @@ export function createAnnotationsWorkspace(deps: Deps) {
   }
   async function loadAnnotationsWorkspace(force = false) {
     if (isResearcher() && !state.activeStore) {
-      try {
-        await refreshStores();
-        state.activeStore = recordStores()[0]?.name || "";
-      } catch (error) {
-        console.warn("Could not select an annotations store", error);
-      }
+      await refreshStores();
+      state.activeStore = recordStores()[0]?.name || "";
+      if (state.activeStore) persistVectorPreferences();
     }
     await refreshServerAnnotations(
       force || (isResearcher() && state.serverAnnotationsStore !== String(state.activeStore || "")),
+      true,
     );
     return getAnnotationsWorkspaceSnapshot();
   }
   function setAnnotationsWorkspaceQuery(value: Any) {
     state.annotationSearch = String(value || "");
-    persistPrefs();
+    persistAnnotationsPreferences();
     syncUrl({ replace: true });
   }
   function setAnnotationsWorkspaceView(value: Any) {
     state.annotationView = value === "recent" ? "recent" : "works";
-    persistPrefs();
+    persistAnnotationsPreferences();
     syncUrl({ replace: true });
   }
   function openAnnotationsWorkspaceRecord(item: Any) {
+    if (item.scope === "work" && item.work) {
+      openAnnotationsWorkspaceWork(item.work);
+      return;
+    }
     if (item.server) {
       state.activeStore = String(item.source || state.activeStore || "");
       state.researcherRecordId = String(item.record_id || "");
-      persistPrefs();
+      persistVectorPreferences();
+      persistRecordViewPreferences();
       navigateTo("record");
       return;
     }
@@ -244,7 +309,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
   }
   function openAnnotationsWorkspaceWork(work: Any) {
     state.workOverview = String(work || "");
-    persistPrefs();
+    persistWorksPreferences();
     navigateTo("works");
   }
   async function removeAnnotationsWorkspaceItem(item: Any) {
@@ -252,7 +317,9 @@ export function createAnnotationsWorkspace(deps: Deps) {
     if (item.server) {
       await api(`/api/annotations/${encodeURIComponent(item.id)}`, { method: "DELETE" });
     } else {
-      const local = reviewItemFromKey(reviewKey(item.local_file_id, item.local_index));
+      // reviewKey is shared with record selection and expects a file-shaped value, while
+      // the workspace item intentionally stores only the stable file id.
+      const local = reviewItemFromKey(reviewKey({ id: item.local_file_id }, item.local_index));
       const annotations = Array.isArray(local?.record?.annotations) ? local.record.annotations : [];
       const annotationIndex = Number(item.local_annotation_index);
       const annotation = Number.isInteger(annotationIndex) ? annotations[annotationIndex] : null;
@@ -275,7 +342,7 @@ export function createAnnotationsWorkspace(deps: Deps) {
     }
     state.annotationsFetchedAt = 0;
     await refreshServerAnnotations(true);
-    notifyToast(tr("annotations.removed", "Annotation removed."), { tone: "success" });
+    toast(tr("annotations.removed"), { tone: "success" });
   }
   return {
     serverAnnotationItems,

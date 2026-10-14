@@ -1,12 +1,43 @@
-<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
-import * as runtime from "../runtime/runtime.js";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { copyCitation, copyJsonToClipboard } from "../domain/clipboardCopy";
+import {
+  ensureCompareLibrary,
+  getCompareLibrary,
+  getCompareRecord,
+  invalidateCompareLibrary,
+} from "../domain/sharedCompareLibrary";
 import { useAuthStore } from "../stores/auth";
-import { useCompareStore } from "../stores/workspace";
+import { useCompareStore, useRecordViewStore } from "../stores/workspace";
 import { corpusState } from "../state/workspaceState";
 import { useI18nStore } from "../stores/i18n";
+import { useNewerData } from "../composables/useNewerData";
+import {
+  loadCompareDraft,
+  saveCompareDraft,
+  type CompareDraft,
+} from "../features/compare/compareDraft";
+import NewerDataBanner from "../components/ui/NewerDataBanner.vue";
 import UiButton from "../components/ui/UiButton.vue";
+import UiLoadingState from "../components/ui/UiLoadingState.vue";
 import UiCard from "../components/ui/UiCard.vue";
 import UiStatusBadge from "../components/ui/UiStatusBadge.vue";
 import UiTabs from "../components/ui/UiTabs.vue";
@@ -25,12 +56,9 @@ import {
 
 const auth = useAuthStore();
 const i18n = useI18nStore();
-// The shared Compare fields live in the compare store; the researcher's picks are still on the runtime's own state.
+// The Compare fields live in the compare store; the researcher's picks are in the record-view store.
 const compare = useCompareStore();
-const runtimeState = runtime.state as unknown as {
-  researcherCompareA: string;
-  researcherCompareB: string;
-};
+const recordView = useRecordViewStore();
 const workspace = compare as unknown as {
   compareA: string;
   compareB: string;
@@ -42,6 +70,9 @@ const workspace = compare as unknown as {
   compareFilter?: string;
 };
 const library = ref<CompareLibraryOption[]>([]);
+const libraryLoading = ref(true);
+const libraryError = ref("");
+let libraryRequest = 0;
 const sourceA = ref<CompareSource>(
   workspace.compareSourceA === "scratch" || workspace.compareMode === "paste"
     ? "scratch"
@@ -53,21 +84,35 @@ const sourceB = ref<CompareSource>(
     : "library",
 );
 const keyA = ref(
-  auth.isResearcher ? runtimeState.researcherCompareA || "" : workspace.compareA || "",
+  auth.isResearcher ? recordView.researcherCompareA || "" : workspace.compareA || "",
 );
 const keyB = ref(
-  auth.isResearcher ? runtimeState.researcherCompareB || "" : workspace.compareB || "",
+  auth.isResearcher ? recordView.researcherCompareB || "" : workspace.compareB || "",
 );
 const pasteA = ref(workspace.comparePasteA || "");
 const pasteB = ref(workspace.comparePasteB || "");
 const filter = ref<CompareFilter>(workspace.compareFilter === "all" ? "all" : "changed");
 const liveMessage = ref("");
+let draftTimer = 0;
+
+function compareDraft(): CompareDraft {
+  return {
+    sourceA: sourceA.value,
+    sourceB: sourceB.value,
+    keyA: keyA.value,
+    keyB: keyB.value,
+    pasteA: pasteA.value,
+    pasteB: pasteB.value,
+    filter: filter.value,
+  };
+}
+const initialDraft = compareDraft();
 
 const parsedA = computed(() =>
   sourceA.value === "scratch"
     ? parseCompareRecord(pasteA.value)
     : {
-        record: runtime.getCompareRecord?.(keyA.value)?.record || null,
+        record: getCompareRecord(keyA.value)?.record || null,
         errorKey: "",
         errorFallback: "",
       },
@@ -76,32 +121,39 @@ const parsedB = computed(() =>
   sourceB.value === "scratch"
     ? parseCompareRecord(pasteB.value)
     : {
-        record: runtime.getCompareRecord?.(keyB.value)?.record || null,
+        record: getCompareRecord(keyB.value)?.record || null,
         errorKey: "",
         errorFallback: "",
       },
 );
 const recordA = computed(() => parsedA.value.record);
 const recordB = computed(() => parsedB.value.record);
+const allRows = computed(() => buildCompareRows(recordA.value, recordB.value, "all"));
 const rows = computed(() =>
-  buildCompareRows(recordA.value, recordB.value, filter.value).map((row) => ({
-    ...row,
-    label: i18n.t(`field.${row.key}`, humanizeField(row.key)),
-  })),
+  (filter.value === "changed" ? allRows.value.filter((row) => row.changed) : allRows.value).map(
+    (row) => ({
+      ...row,
+      label: i18n.t(`field.${row.key}`, humanizeField(row.key)),
+    }),
+  ),
 );
-const changedCount = computed(
-  () => buildCompareRows(recordA.value, recordB.value, "all").filter((row) => row.changed).length,
-);
-const totalCount = computed(() => buildCompareRows(recordA.value, recordB.value, "all").length);
+const changedCount = computed(() => allRows.value.filter((row) => row.changed).length);
+const totalCount = computed(() => allRows.value.length);
 const ready = computed(() => Boolean(recordA.value && recordB.value));
+const comparisonPending = computed(
+  () =>
+    !ready.value &&
+    libraryLoading.value &&
+    (sourceA.value === "library" || sourceB.value === "library"),
+);
 
 function t(key: string, fallback: string) {
   return i18n.t(key, fallback);
 }
 function persist() {
   if (auth.isResearcher) {
-    runtimeState.researcherCompareA = keyA.value;
-    runtimeState.researcherCompareB = keyB.value;
+    recordView.researcherCompareA = keyA.value;
+    recordView.researcherCompareB = keyB.value;
   } else {
     workspace.compareA = keyA.value;
     workspace.compareB = keyB.value;
@@ -113,14 +165,35 @@ function persist() {
   workspace.compareFilter = filter.value;
   workspace.compareMode =
     sourceA.value === "scratch" && sourceB.value === "scratch" ? "paste" : "workspace";
-  runtime.persistPrefs?.();
+  window.clearTimeout(draftTimer);
+  const draft = compareDraft();
+  draftTimer = window.setTimeout(() => {
+    draftTimer = 0;
+    void saveCompareDraft(draft);
+  }, 300);
 }
 function refreshLibrary() {
-  library.value = runtime.getCompareLibrary?.() || [];
+  library.value = getCompareLibrary();
+}
+
+async function loadLibrary() {
+  const request = ++libraryRequest;
+  libraryLoading.value = true;
+  libraryError.value = "";
+  try {
+    await ensureCompareLibrary();
+    if (request !== libraryRequest) return;
+    refreshLibrary();
+  } catch (error) {
+    if (request !== libraryRequest) return;
+    libraryError.value = error instanceof Error ? error.message : String(error);
+  } finally {
+    if (request === libraryRequest) libraryLoading.value = false;
+  }
 }
 function loadIntoEditor(side: "A" | "B") {
   const key = side === "A" ? keyA.value : keyB.value;
-  const found = runtime.getCompareRecord?.(key);
+  const found = getCompareRecord(key);
   if (!found?.record) return;
   const text = prettyRecord(found.record);
   if (side === "A") {
@@ -171,20 +244,23 @@ function copyAtoB() {
 }
 function copyJson(side: "A" | "B") {
   const record = side === "A" ? recordA.value : recordB.value;
-  if (record)
-    void runtime.copyJsonToClipboard?.(record, record.record_id || (side === "A" ? "A" : "B"));
+  if (record) void copyJsonToClipboard(record, record.record_id || (side === "A" ? "A" : "B"));
 }
 function cite(side: "A" | "B", kind: "inline" | "full") {
   const record = side === "A" ? recordA.value : recordB.value;
-  if (record) void runtime.copyCitation?.(record, kind);
+  if (record) void copyCitation(record, kind);
 }
 function statusFor(side: "A" | "B") {
   const parsed = side === "A" ? parsedA.value : parsedB.value;
   const source = side === "A" ? sourceA.value : sourceB.value;
-  if (source === "library")
+  const key = side === "A" ? keyA.value : keyB.value;
+  if (source === "library") {
+    if (libraryLoading.value && key)
+      return { tone: "neutral" as const, label: i18n.t("ui.loading") };
     return parsed.record
       ? { tone: "success" as const, label: t("compare.status.library", "Library record") }
       : { tone: "warning" as const, label: t("compare.status.pick", "Pick a record") };
+  }
   if (!(side === "A" ? pasteA.value : pasteB.value).trim())
     return { tone: "neutral" as const, label: t("compare.editor_empty", "Empty editor") };
   if (parsed.errorKey)
@@ -195,17 +271,49 @@ function statusFor(side: "A" | "B") {
 watch([sourceA, sourceB, keyA, keyB, pasteA, pasteB, filter], persist);
 // The picker searches the library read here. Records loaded or edited while Compare is open used to be missing from it
 // until you left the view and came back, so read it again whenever the loaded corpus changes.
-watch(() => [corpusState.version, corpusState.activeFileId], refreshLibrary, { flush: "post" });
-onMounted(async () => {
-  if (typeof runtime.ensureCompareLibrary === "function") await runtime.ensureCompareLibrary();
-  refreshLibrary();
+watch(
+  () => [corpusState.contentVersion, corpusState.structureVersion, corpusState.activeFileId],
+  refreshLibrary,
+  { flush: "post" },
+);
+const newer = useNewerData();
+// ensureCompareLibrary only loads when the store page is empty, so clear it to read the new data.
+async function loadNewer() {
+  newer.acknowledge();
+  invalidateCompareLibrary();
+  await loadLibrary();
+}
+onMounted(() => {
+  void loadLibrary();
+  void loadCompareDraft().then((saved) => {
+    if (!saved) return;
+    // Do not let a delayed IndexedDB read overwrite editing that began while
+    // the page was becoming interactive.
+    if (JSON.stringify(compareDraft()) !== JSON.stringify(initialDraft)) return;
+    sourceA.value = saved.sourceA;
+    sourceB.value = saved.sourceB;
+    keyA.value = saved.keyA;
+    keyB.value = saved.keyB;
+    pasteA.value = saved.pasteA;
+    pasteB.value = saved.pasteB;
+    filter.value = saved.filter;
+  });
+});
+onBeforeUnmount(() => {
+  ++libraryRequest;
+  if (draftTimer) {
+    window.clearTimeout(draftTimer);
+    draftTimer = 0;
+    void saveCompareDraft(compareDraft());
+  }
 });
 </script>
 <template>
   <main class="compare-page" aria-labelledby="compare-title">
+    <NewerDataBanner :visible="newer.hasNewer.value" @load="loadNewer" />
     <p class="sr-only" aria-live="polite">{{ liveMessage }}</p>
     <UiPageHeader
-      :kicker="t('section.tools', 'Tools')"
+      :kicker="t('section.corpora', 'Corpora')"
       :title="t('nav.compare', 'Compare')"
       title-id="compare-title"
       :description="
@@ -293,6 +401,15 @@ onMounted(async () => {
           role="tabpanel"
           :hidden="(side === 'A' ? sourceA : sourceB) !== 'library'"
         >
+          <UiLoadingState
+            v-if="libraryLoading"
+            :variant="library.length ? 'inline' : 'skeleton'"
+            :label="i18n.t(library.length ? 'loading.updating' : 'ui.loading')"
+          />
+          <div v-if="libraryError" class="info error compare-library-error" role="alert">
+            <span>{{ libraryError }}</span>
+            <UiButton size="small" :label="i18n.t('ui.retry')" @click="loadLibrary" />
+          </div>
           <ComparePicker
             :model-value="side === 'A' ? keyA : keyB"
             :options="library"
@@ -300,12 +417,16 @@ onMounted(async () => {
             :placeholder="t('compare.picker_placeholder', 'Type record ID, work, author, or file…')"
             :selected-hint="t('compare.selected', 'Selected · {label}')"
             :empty-hint="
-              library.length
-                ? t('compare.library_help', 'Start typing to search loaded records.')
-                : t(
-                    'compare.library_empty',
-                    'Load JSONL files or browse the corpus database first.',
-                  )
+              libraryLoading && !library.length
+                ? i18n.t('ui.loading')
+                : libraryError && !library.length
+                  ? libraryError
+                  : library.length
+                    ? t('compare.library_help', 'Start typing to search loaded records.')
+                    : t(
+                        'compare.library_empty',
+                        'Load JSONL files or browse the corpus database first.',
+                      )
             "
             :no-matches="t('compare.no_matches', 'No matching records.')"
             :clear-label="t('ui.clear', 'Clear')"
@@ -413,7 +534,8 @@ onMounted(async () => {
           {{ t("compare.diff_all", "All fields") }}</label
         >
       </fieldset>
-      <div v-if="!ready" class="compare-empty">
+      <UiLoadingState v-if="comparisonPending" variant="skeleton" :label="i18n.t('ui.loading')" />
+      <div v-else-if="!ready" class="compare-empty">
         <b>{{ t("compare.need_two", "Two records are needed") }}</b>
         <span>{{
           auth.isResearcher
@@ -477,6 +599,13 @@ h2 {
   color: var(--muted);
   font-size: 0.875rem;
   line-height: 1.5;
+}
+.compare-library-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 .compare-editor-actions {
   display: flex;

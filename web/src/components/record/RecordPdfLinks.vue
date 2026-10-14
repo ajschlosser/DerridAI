@@ -1,3 +1,21 @@
+<!--
+This file is part of DerridAI, a cELF-compliant research workspace
+Copyright © 2026  Aaron John Schlosser, PhD
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
+
 <script setup lang="ts">
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
@@ -25,8 +43,8 @@ const i18n = useI18nStore();
   <section class="record-pdf-panel" aria-labelledby="recordPdfHeading">
     <header>
       <div>
-        <p>{{ i18n.t("record.source_documents", "Source documents") }}</p>
-        <h3 id="recordPdfHeading">{{ i18n.t("record.pdf_links", "PDF links") }}</h3>
+        <p>{{ i18n.t("record.source_documents") }}</p>
+        <h3 id="recordPdfHeading">{{ i18n.t("record.pdf_links") }}</h3>
       </div>
       <span>{{ props.links.length }}</span>
     </header>
@@ -35,37 +53,37 @@ const i18n = useI18nStore();
         <div class="pdf-link-icon"><AppIcon name="pdf" /></div>
         <div class="pdf-link-copy">
           <strong>{{ link.pdf_file }}</strong
-          ><span>{{ i18n.tf("record.pdf_page", "Page {page}", { page: link.pdf_page }) }}</span>
+          ><span>{{ i18n.tf("record.pdf_page", { page: link.pdf_page }) }}</span>
         </div>
         <div class="pdf-link-actions">
           <button v-if="props.canOpen" type="button" @click="emit('open', index)">
-            {{ i18n.t("record.open_page", "Open page") }}</button
+            {{ i18n.t("record.open_page") }}</button
           ><button
             v-if="props.canManage"
             type="button"
             class="danger"
             @click="emit('remove', index)"
           >
-            {{ i18n.t("ui.remove", "Remove") }}
+            {{ i18n.t("ui.remove") }}
           </button>
         </div>
       </article>
     </div>
     <div v-else class="pdf-empty">
-      <p>{{ i18n.t("record.no_pdf_links", "No PDF pages are linked to this record.") }}</p>
+      <p>{{ i18n.t("record.no_pdf_links") }}</p>
     </div>
     <footer>
       <button v-if="props.canOpen" type="button" @click="emit('explorer')">
-        <AppIcon name="pdf" />{{ i18n.t("record.pdf_explorer", "PDF Explorer") }}</button
+        <AppIcon name="pdf" />{{ i18n.t("record.pdf_explorer") }}</button
       ><button v-if="props.canManage && props.pdfLoaded" type="button" @click="emit('linkCurrent')">
-        {{ i18n.t("record.link_current_pdf", "Link current PDF page") }}</button
+        {{ i18n.t("record.link_current_pdf") }}</button
       ><button
         v-if="props.canManage && props.links.length > 1"
         type="button"
         class="danger"
         @click="emit('removeAll')"
       >
-        {{ i18n.t("record.remove_all_pdf", "Remove all PDF links") }}
+        {{ i18n.t("record.remove_all_pdf") }}
       </button>
     </footer>
   </section>

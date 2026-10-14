@@ -1,0 +1,93 @@
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Shared shape for every walkable cELF instance graph (record_graph, vector_store record graphs).
+fragment ResearchObjectGraphFields on ResearchObjectGraph {
+  specification_version
+  root_id
+  hidden_assertion_count
+  record_state_origin
+  nodes {
+    id
+    object_type
+    object_id
+    label
+    summary
+    materialization
+    status
+    details
+    field_assertion {
+      assertion_id
+      field_id
+      field_name
+      value
+      derivation_method
+      evaluation_status
+      authority_status
+      value_status
+      confidence
+      reason
+      method
+      actor
+      model
+      run_id
+      record_revision
+      evidence
+      created_at
+      supersedes_assertion_id
+      is_current
+    }
+    source_span {
+      source_document_id
+      source_span_id
+      source_unit_ids
+      locator_kind
+      physical_page_start
+      physical_page_end
+      printed_page_start
+      printed_page_end
+      character_start
+      character_end
+      time_start
+      time_end
+      speaker
+    }
+    evidence_ref {
+      evidence_ref_id
+      locator_kind
+      record_id
+      record_revision
+      source_document_id
+    }
+    generated_claim {
+      claim_id
+      claim_text
+      validation_status
+    }
+  }
+  edges {
+    id
+    source
+    target
+    relation
+    inverse_relation
+    normative
+    source_cardinality
+    target_cardinality
+    profile
+    status
+  }
+}

@@ -1,11 +1,30 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { describe, expect, it } from "vitest";
-import { createRuntimeState } from "../../src/runtime/runtimeState";
+import { createRuntimeState } from "../../src/state/runtimeState";
 import { createPinia, setActivePinia } from "pinia";
 import { nextTick, watch } from "vue";
 import {
   compareState,
   corpusState,
+  layoutState,
+  resetWorkspaceGroupsForSessionChange,
   searchState,
   touchCorpus,
   vectorState,
@@ -14,7 +33,15 @@ import {
 import {
   useCompareStore,
   useCorpusStore,
+  useAnnotationsStore,
+  useFaqStore,
+  useConfigStore,
+  useLayoutStore,
+  useListsStore,
+  useRecordViewStore,
   useSearchStore,
+  useStatusStore,
+  useUpsertProgressStore,
   useVectorStore,
   useWorksStore,
 } from "../../src/stores/workspace";
@@ -47,6 +74,7 @@ const ORIGINAL_INITIAL_VALUES = {
   storePresence: {},
   storePresenceIds: {},
   storePresenceCheckedAt: {},
+  presenceVersion: 0,
   compareA: "",
   compareB: "",
   compareMode: "workspace",
@@ -159,5 +187,162 @@ describe("per-view workspace state", () => {
     state.activeFileId = null;
     state.worksSearch = "";
     state.workOverview = "";
+  });
+});
+
+describe("session workspace reset", () => {
+  it("clears user-owned records, credentials and search state before another identity restores", () => {
+    const state = createRuntimeState();
+    state.files = [{ id: "secret", records: [{ text: "private" }] }] as never;
+    state.activeFileId = "secret";
+    state.storeSearchResults = [{ id: "result", record: { text: "private" } }] as never;
+    state.globalSearch = "private query";
+    state.selectedEvidence = { evidence: { text: "private" } };
+    state.appConfig = { ...state.appConfig, openai_api_key: "secret-key" };
+
+    resetWorkspaceGroupsForSessionChange();
+
+    expect(state.files).toEqual([]);
+    expect(state.activeFileId).toBeNull();
+    expect(state.storeSearchResults).toEqual([]);
+    expect(state.globalSearch).toBe("");
+    expect(state.selectedEvidence).toEqual({});
+    expect(state.appConfig.openai_api_key).toBe("");
+  });
+});
+
+describe("shell layout state", () => {
+  it("keeps the runtime's fields and defaults, and shares them with the layout store", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.sidebarCollapsed).toBe(false);
+    expect(state.collectionsCollapsed).toBe(false);
+    expect(state.operationToastsMinimized).toBe(false);
+    expect(state.operationStackPosition).toBeNull();
+    expect(state.collapsedPanels).toEqual({});
+
+    const layout = useLayoutStore();
+    const seen: boolean[] = [];
+    watch(
+      () => layout.sidebarCollapsed,
+      (value) => seen.push(value),
+    );
+    state.sidebarCollapsed = true;
+    await nextTick();
+    expect(seen).toEqual([true]);
+    expect(layoutState.sidebarCollapsed).toBe(true);
+
+    const panels = state.collapsedPanels;
+    panels.notes = true;
+    expect(layout.collapsedPanels).toBe(panels);
+    layoutState.sidebarCollapsed = false;
+  });
+});
+
+describe("annotations and FAQ state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.annotationView).toBe("works");
+    expect(state.serverAnnotations).toEqual([]);
+    expect(state.annotationsFetchedAt).toBe(0);
+    expect(state.faqPage).toBe(1);
+    expect(state.faqExpanded).toEqual({});
+
+    const faq = useFaqStore();
+    const seen: number[] = [];
+    watch(
+      () => faq.faqPage,
+      (value) => seen.push(value),
+    );
+    state.faqPage = 3;
+    await nextTick();
+    expect(seen).toEqual([3]);
+
+    const annotations = useAnnotationsStore();
+    state.serverAnnotations = [{ id: "a" }];
+    expect(annotations.serverAnnotations).toEqual([{ id: "a" }]);
+    state.faqPage = 1;
+    state.serverAnnotations = [];
+  });
+});
+
+describe("table list state", () => {
+  it("keeps the runtime's defaults and shares them with the lists store", async () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.pageSize).toBe(100);
+    expect(state.selected).toEqual({});
+    expect(state.tableColumns).toEqual({});
+
+    const lists = useListsStore();
+    const seen: number[] = [];
+    watch(
+      () => lists.pageSize,
+      (value) => seen.push(value),
+    );
+    state.pageSize = 50;
+    await nextTick();
+    expect(seen).toEqual([50]);
+    const pages = state.pages as Record<string, number>;
+    pages.works = 2;
+    expect(lists.pages).toBe(pages);
+    state.pageSize = 100;
+    state.pages = {};
+  });
+});
+
+describe("configuration, PDF and review state", () => {
+  it("keeps the runtime's defaults and shares them with their stores", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    expect(state.ragConfig.k).toBe(64);
+    expect(state.appConfig.chat_provider).toBe("ollama");
+    expect(state.llmConfig.num_ctx).toBe(16384);
+    expect(state.pdf.page).toBe(1);
+    expect(state.reviewSelection.size).toBe(0);
+    expect(state.selectedEvidence).toEqual({});
+
+    const config = useConfigStore();
+    expect(config.ragConfig).toBe(state.ragConfig);
+    state.ragConfig = { ...state.ragConfig, k: 8 };
+    expect(config.ragConfig.k).toBe(8);
+    config.ragConfig = { ...config.ragConfig, k: 64 };
+  });
+});
+
+describe("service status state", () => {
+  it("is shared between the runtime state and the status store", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    const store = useStatusStore();
+    expect(state.health).toBeNull();
+    expect(state.warmup).toEqual({ status: "idle", message: "" });
+    expect(state.providerStatuses).toEqual({});
+
+    state.health = { ok: true };
+    state.providerWarmups = { local: { status: "ready" } };
+    expect(store.health).toEqual({ ok: true });
+    expect(store.providerWarmups).toEqual({ local: { status: "ready" } });
+
+    store.llmStatus = { available: true };
+    expect(state.llmStatus).toEqual({ available: true });
+  });
+});
+
+describe("record view and upsert progress state", () => {
+  it("shares fields between the runtime state and their stores", () => {
+    setActivePinia(createPinia());
+    const state = createRuntimeState();
+    const view = useRecordViewStore();
+    const upsert = useUpsertProgressStore();
+    expect(state.dashboardMetricIndex).toBe(0);
+    expect(state.lastViewedRecord).toBeNull();
+    expect(state.operationProgress).toEqual({});
+
+    state.researcherCompareA = "a";
+    expect(view.researcherCompareA).toBe("a");
+    upsert.foregroundUpsertActive = true;
+    expect(state.foregroundUpsertActive).toBe(true);
   });
 });

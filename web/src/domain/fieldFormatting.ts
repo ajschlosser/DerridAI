@@ -1,4 +1,21 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { FIELD_LABELS } from "./runtimeConstants";
 
 // Field labels, value display and the parsers that report errors by field label. Moved verbatim from the
@@ -25,8 +42,7 @@ export function createFieldFormatting(deps: Deps) {
         ? value.map((v) => (typeof v === "object" ? JSON.stringify(v) : String(v))).join(", ")
         : "—";
     if (typeof value === "object") return JSON.stringify(value);
-    if (typeof value === "boolean")
-      return value ? tr("runtime.yes", "Yes") : tr("runtime.no", "No");
+    if (typeof value === "boolean") return value ? tr("runtime.yes") : tr("runtime.no");
     return String(value);
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

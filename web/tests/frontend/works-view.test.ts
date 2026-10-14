@@ -1,5 +1,22 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
-import { flushPromises, mount } from "@vue/test-utils";
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorksItem, WorksSnapshot } from "../../src/types/works";
@@ -25,11 +42,13 @@ function workItem(overrides: Partial<WorksItem> = {}): WorksItem {
     translator: biblio({ field_label: "Translator" }),
     metadata: [
       {
+        field_id: "derridai.document.document_author",
         field: "document_author",
         field_label: "Document author",
         value: "Jacques Derrida",
         mixed: false,
         unique_count: 0,
+        empty: false,
       },
     ],
     status: { kind: "synced", label: "Synced" },
@@ -55,14 +74,39 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
     shared: false,
     error: "",
     works: [item],
+    scopeWorks: [
+      {
+        work: item.work,
+        count: item.count,
+        authors: item.authors,
+        year_label: item.year_label,
+      },
+    ],
     selected: null,
     query: "",
     selectedWork: "",
     stores: [{ name: "derrida-primary", count: 40 }],
     activeStore: "derrida-primary",
     activeStoreCount: 40,
+    indexFreshness: {
+      state: "current",
+      totalRecords: 12,
+      currentRecords: 12,
+      changedRecords: 0,
+      presentRecords: 0,
+      absentRecords: 0,
+      unknownRecords: 0,
+      unavailableRecords: 0,
+    },
     totalWorks: 1,
+    visibleWorks: 1,
     totalRecords: 12,
+    sourceFileCount: 1,
+    totalReview: 2,
+    authors: ["Jacques Derrida"],
+    sort: "title-asc",
+    filters: { needsReview: false, dbStatus: "", author: "" },
+    viewMode: "cards",
     dbUnavailableReason: "",
     storesEmptyLabel: "No corpus Chroma collections",
     citationLabel: "Full citation",
@@ -78,12 +122,20 @@ function adminSnapshot(overrides: Partial<WorksSnapshot> = {}): WorksSnapshot {
 const runtime = vi.hoisted(() => ({
   state: { view: "home" },
   getWorksWorkspaceSnapshot: vi.fn(),
+  getWorksViewState: vi.fn(() => ({
+    query: "",
+    sort: "title-asc",
+    filters: { needsReview: false, dbStatus: "", author: "" },
+    viewMode: "cards",
+  })),
+  ensureCorpusWorkspaceLoaded: vi.fn(async () => undefined),
   prepareWorksWorkspace: vi.fn(async () => ({ error: "" })),
   getShellSnapshot: vi.fn(() => ({
     files: [{ id: "f1", name: "glas.jsonl", count: 12, dirty: 0, active: true }],
   })),
   setWorksSearch: vi.fn(),
   setWorksOverview: vi.fn(),
+  setWorksView: vi.fn(),
   setWorksStore: vi.fn(async () => undefined),
   syncWork: vi.fn(async () => true),
   syncAllWorks: vi.fn(async () => true),
@@ -103,12 +155,60 @@ const runtime = vi.hoisted(() => ({
   decorateDisabledControls: vi.fn(),
   setTranslationDictionary: vi.fn(),
 }));
-vi.mock("../../src/runtime/runtime.js", () => ({ ...runtime }));
+vi.mock("../../src/domain/shellSnapshot", () => ({
+  getShellSnapshot: (...args: unknown[]) =>
+    (runtime.getShellSnapshot as (...a: unknown[]) => unknown)(...args),
+}));
+vi.mock("../../src/domain/appBootstrap", () => ({ ...runtime }));
+vi.mock("../../src/domain/sharedWorksWorkspace", () => ({
+  worksWorkspace: {
+    ...runtime,
+    openWorkMetadataLlmDialogForVue: runtime.openWorkMetadataLlmDialog,
+    openWorkMetadataEditorForVue: runtime.openWorkMetadataEditor,
+  },
+}));
+vi.mock("../../src/domain/sharedWorkDialogs", () => ({
+  workDialogs: { openSeparateWorksModal: runtime.openSeparateWorksModal },
+}));
+vi.mock("../../src/domain/sharedUrlState", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  state: runtime.state,
+}));
+vi.mock("../../src/domain/sharedCorpusHydration", () => ({
+  ensureCorpusWorkspaceLoaded: () => runtime.ensureCorpusWorkspaceLoaded(),
+}));
+vi.mock("../../src/domain/semanticMapSources", () => ({
+  listSemanticMapSources: vi.fn(() => ({
+    records: [{ id: "record-1", work: "Glas", concepts: [], topics: ["writing"], persons: [] }],
+    focusId: "record-1",
+  })),
+}));
+
+const siteApi = vi.hoisted(() => ({
+  exportOptions: vi.fn(),
+  exportSite: vi.fn(),
+  downloadTransformersRuntime: vi.fn(async () => undefined),
+  deleteTransformersRuntime: vi.fn(),
+}));
+vi.mock("../../src/api/sites", () => ({ sitesApi: siteApi }));
+vi.mock("../../src/api/corpus", () => ({
+  corpusBuildsApi: {
+    workSemanticMapRecords: vi.fn(async () => ({ records: [] })),
+  },
+}));
 
 import WorksView from "../../src/views/WorksView.vue";
 import { useI18nStore } from "../../src/stores/i18n";
 import { useShellStore } from "../../src/stores/shell";
 import { useAuthStore } from "../../src/stores/auth";
+
+HTMLDialogElement.prototype.showModal = function showModal() {
+  this.setAttribute("open", "");
+};
+HTMLDialogElement.prototype.close = function close() {
+  this.removeAttribute("open");
+  this.dispatchEvent(new Event("close"));
+};
 
 async function waitForCards() {
   await flushPromises();
@@ -116,6 +216,31 @@ async function waitForCards() {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
   );
   await flushPromises();
+}
+
+/** Opens the menu whose trigger has this accessible name and chooses an item. */
+async function chooseMenuItem(wrapper: VueWrapper, trigger: string, item: string) {
+  const button = wrapper
+    .findAll("button.ui-menu-trigger")
+    .find((candidate) => (candidate.attributes("aria-label") || candidate.text()) === trigger);
+  expect(button, `menu trigger ${trigger}`).toBeDefined();
+  await button!.trigger("click");
+  const entry = wrapper.findAll("[role='menuitem']").find((node) => node.text().includes(item));
+  expect(entry, `menu item ${item}`).toBeDefined();
+  await entry!.trigger("click");
+  await flushPromises();
+}
+
+function setViewportWide(wide: boolean) {
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: wide,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }),
+  });
 }
 
 async function mountWorks() {
@@ -127,6 +252,46 @@ async function mountWorks() {
 describe("WorksView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    setViewportWide(true);
+    siteApi.exportOptions.mockResolvedValue({
+      languages: [
+        { code: "en-US", name: "English", flag: "🇺🇸" },
+        { code: "fr-CA", name: "Français", flag: "🇨🇦" },
+      ],
+      transformers_runtime: {
+        version: "4.3.0",
+        cached: false,
+        download_bytes: 14_871_000,
+        inline_bytes: 5_700_000,
+      },
+      browser_embedding_profile: {
+        model: "Xenova/multilingual-e5-small",
+        revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+        dimension: 384,
+        dtype: "q8",
+        pooling: "mean",
+        normalize: true,
+        query_prefix: "query: ",
+        document_prefix: "passage: ",
+        download_bytes: 118_308_185,
+      },
+    });
+    siteApi.exportSite.mockResolvedValue({
+      blob: new Blob(["site"], { type: "application/zip" }),
+      filename: "glas-site.zip",
+      publicationId: "sitepub-1",
+      recordCount: 12,
+      workCount: 1,
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:site"),
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
     setActivePinia(createPinia());
     const snap = adminSnapshot();
     runtime.getWorksWorkspaceSnapshot.mockReturnValue(snap);
@@ -144,13 +309,62 @@ describe("WorksView", () => {
     const wrapper = await mountWorks();
     expect(runtime.prepareWorksWorkspace).toHaveBeenCalled();
     expect(runtime.state.view).toBe("works");
-    expect(wrapper.get("#worksSearch").exists()).toBe(true);
+    expect(wrapper.get("h1").text()).toBe("Works");
+    expect(wrapper.find(".ui-page-header").exists()).toBe(true);
+    expect(wrapper.find("#worksSearch").exists()).toBe(true);
     expect(wrapper.text()).toContain("Glas");
-    expect(wrapper.text()).toContain("Sync all works");
     expect(wrapper.get("[data-work-status='Glas']").attributes("data-tone")).toBe("success");
-    expect(wrapper.get(".work-library-card").text()).not.toMatch(/Synchroniser/);
-    await wrapper.get(".work-library-card").trigger("click");
+    // The per-card Sync no longer outranks review and Records: it lives in the card menu.
+    expect(wrapper.get(".works-card-footer").text()).not.toMatch(/\bSync\b/);
+    await wrapper.get(".works-card-select").trigger("click");
     expect(runtime.setWorksOverview).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("presents authoritative corpus state and derived search-index freshness compactly", async () => {
+    const wrapper = await mountWorks();
+    const loaded = wrapper.get("[data-works-context='loaded']");
+    expect(loaded.text()).toContain("Working corpus");
+    expect(loaded.text()).toContain("1 source files · 12 records");
+
+    const database = wrapper.get("[data-works-context='database']");
+    expect(database.text()).toContain("Search index");
+    expect(database.text()).toContain("12 / 12 records current");
+    await database
+      .findAll("button")
+      .find((button) => button.text().includes("Update search index"))!
+      .trigger("click");
+    expect(runtime.syncAllWorks).toHaveBeenCalled();
+
+    // Derived-index maintenance stays contextual rather than competing with page-level actions.
+    const header = wrapper.get(".ui-page-header-actions");
+    expect(header.text()).not.toMatch(/Update search index/);
+    expect(header.findAll("button.ui-button")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("shows stale search-index records as needing an update", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        indexFreshness: {
+          state: "stale",
+          totalRecords: 12,
+          currentRecords: 9,
+          changedRecords: 2,
+          presentRecords: 0,
+          absentRecords: 1,
+          unknownRecords: 0,
+          unavailableRecords: 0,
+        },
+      }),
+    );
+    const wrapper = await mountWorks();
+    expect(wrapper.get("[data-works-context='database']").text()).toContain(
+      "9 / 12 records current · 3 need updating",
+    );
+    expect(wrapper.get("[data-index-state='stale']").classes()).toContain(
+      "works-context-index-summary",
+    );
     wrapper.unmount();
   });
 
@@ -162,14 +376,391 @@ describe("WorksView", () => {
       }),
     );
     const wrapper = await mountWorks();
-    await wrapper.get("#overviewSearchWork").trigger("click");
+    const inspector = wrapper.get(".works-inspector-pane");
+    await inspector
+      .findAll("button")
+      .find((button) => button.text().includes("Open records"))!
+      .trigger("click");
     expect(runtime.searchWorkOverview).toHaveBeenCalledWith("Glas");
-    await wrapper.get("#populateAllWorks").trigger("click");
+    await chooseMenuItem(wrapper, "More actions", "Populate all metadata with LLM");
     expect(runtime.populateAllWorksMetadata).toHaveBeenCalled();
-    await wrapper.get("#syncAllWorks").trigger("click");
-    expect(runtime.syncAllWorks).toHaveBeenCalled();
-    await wrapper.get("[data-upsert-work='Glas']").trigger("click");
+    await chooseMenuItem(wrapper, "More actions", "Separate works");
+    expect(runtime.openSeparateWorksModal).toHaveBeenCalled();
+    await chooseMenuItem(wrapper, "Actions for Glas", "Sync this work to database");
     expect(runtime.syncWork).toHaveBeenCalledWith("Glas");
+    await chooseMenuItem(wrapper, "Actions for Glas", "Semantic map");
+    await chooseMenuItem(wrapper, "Actions for Glas", "Edit metadata");
+    expect(runtime.openWorkMetadataEditor).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("opens the records that need review from the review count", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("[data-work-review='Glas']").trigger("click");
+    expect(runtime.searchWorkRecords).toHaveBeenCalledWith("Glas", { needsReview: true });
+    await wrapper.get("[data-work-records='Glas']").trigger("click");
+    expect(runtime.searchWorkRecords).toHaveBeenCalledWith("Glas", { needsReview: false });
+    wrapper.unmount();
+  });
+
+  it("selects a work with the keyboard-operable card button and keeps the library in place", async () => {
+    const wrapper = await mountWorks();
+    const select = wrapper.get(".works-card-select");
+    expect(select.element.tagName).toBe("BUTTON");
+    expect(select.attributes("aria-pressed")).toBe("false");
+    const scroll = vi.spyOn(window, "scrollTo");
+    await select.trigger("click");
+    expect(scroll).not.toHaveBeenCalled();
+    expect(wrapper.find("article[role], article[tabindex]").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("places the selected work in a stable inspector beside the library, not above it", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
+    );
+    const wrapper = await mountWorks();
+    const layout = wrapper.get(".works-layout");
+    expect(layout.classes()).toContain("has-inspector");
+    const children = Array.from(layout.element.children).map((node) => node.className);
+    expect(children[0]).toContain("works-library");
+    expect(children[1]).toContain("works-inspector-pane");
+    expect(wrapper.get(".works-inspector-pane h2").text()).toBe("Glas");
+    await wrapper.get("button[aria-label='Close work details']").trigger("click");
+    expect(runtime.setWorksOverview).toHaveBeenCalledWith("");
+    wrapper.unmount();
+  });
+
+  it("opens the selected work in an accessible dialog on narrow screens", async () => {
+    setViewportWide(false);
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({ selected: workItem(), selectedWork: "Glas" }),
+    );
+    const wrapper = await mountWorks();
+    expect(wrapper.find(".works-inspector-pane").exists()).toBe(false);
+    expect(wrapper.get(".works-layout").classes()).not.toContain("has-inspector");
+    const dialog = document.body.querySelector("[role='dialog']");
+    expect(dialog?.getAttribute("aria-modal")).toBe("true");
+    expect(dialog?.textContent).toContain("Glas");
+    expect(dialog?.textContent).toContain("Open records");
+    expect(wrapper.findAll("h1")).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("does not change page-wide totals when a search narrows the library", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        works: [],
+        visibleWorks: 0,
+        totalWorks: 64,
+        totalRecords: 3218,
+        totalReview: 7,
+      }),
+    );
+    const wrapper = await mountWorks();
+    expect(wrapper.get("[data-works-context='loaded']").text()).toContain("3,218 records");
+    expect(wrapper.get(".works-toolbar-summary").text()).toContain("0 of 64 works");
+    expect(wrapper.get(".works-toolbar-summary").text()).toContain("7 need review");
+    expect(wrapper.text()).toContain("No works match the current search and filters.");
+    wrapper.unmount();
+  });
+
+  it("sends sort, filter and view-mode changes through the typed command", async () => {
+    const wrapper = await mountWorks();
+    await wrapper.get("#worksSort").setValue("records-desc");
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ sort: "records-desc" });
+    await wrapper.get(".works-toolbar-views .ui-button-wrap:last-child button").trigger("click");
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ viewMode: "list" });
+    const filters = wrapper.findAll("button").find((button) => button.text().includes("Filters"))!;
+    await filters.trigger("click");
+    await wrapper.get("#works-filter-panel input[type='checkbox']").setValue(true);
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ needsReview: true });
+    wrapper.unmount();
+  });
+
+  it("shows active filters as removable chips outside the filter panel", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        filters: {
+          needsReview: true,
+          dbStatus: "changed",
+          author: "Jacques Derrida",
+        },
+      }),
+    );
+    const wrapper = await mountWorks();
+    const chips = wrapper.findAll(".works-filter-chip");
+    expect(chips.map((chip) => chip.text())).toEqual(
+      expect.arrayContaining([
+        "Only works needing review×Remove",
+        "Pending changes×Remove",
+        "Jacques Derrida×Remove",
+      ]),
+    );
+
+    await chips.find((chip) => chip.text().includes("Jacques Derrida"))!.trigger("click");
+    expect(runtime.setWorksView).toHaveBeenCalledWith({ author: "" });
+    wrapper.unmount();
+  });
+
+  it("paginates large card libraries instead of revealing all cards by animation frame", async () => {
+    const items = Array.from({ length: 50 }, (_, index) =>
+      workItem({ work: `Work ${String(index + 1).padStart(2, "0")}` }),
+    );
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        works: items,
+        scopeWorks: items.map((item) => ({
+          work: item.work,
+          count: item.count,
+          authors: item.authors,
+          year_label: item.year_label,
+        })),
+        totalWorks: items.length,
+        visibleWorks: items.length,
+      }),
+    );
+    const wrapper = await mountWorks();
+
+    expect(wrapper.findAll(".works-card")).toHaveLength(48);
+    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 1 / 2");
+    const next = wrapper
+      .get(".works-library-pagination")
+      .findAll("button")
+      .find((button) => button.text().includes("Next"))!;
+    await next.trigger("click");
+    expect(wrapper.findAll(".works-card")).toHaveLength(2);
+    expect(wrapper.get(".works-library-pagination").text()).toContain("Page 2 / 2");
+    wrapper.unmount();
+  });
+
+  it("renders List mode as a semantic dense table rather than compressed cards", async () => {
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(adminSnapshot({ viewMode: "list" }));
+    const wrapper = await mountWorks();
+
+    const table = wrapper.get("table.works-list");
+    expect(table.get("thead").text()).toContain("Work");
+    expect(table.get("thead").text()).toContain("Author / year");
+    expect(table.get("thead").text()).toContain("Index status");
+    expect(table.get("tbody tr").text()).toContain("Glas");
+    expect(wrapper.find(".works-card").exists()).toBe(false);
+
+    await table.get(".works-list-select").trigger("click");
+    expect(runtime.setWorksOverview).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("defaults to browser-ready multilingual semantic vectors", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    const recommended = dialog.get("input[name='site-vector-profile'][value='browser-default']");
+    expect(recommended.element).toHaveProperty("checked", true);
+    expect(dialog.text()).toContain("Xenova/multilingual-e5-small");
+    expect(dialog.text()).toContain("384");
+    expect(dialog.text()).toContain("Recommended");
+    wrapper.unmount();
+  });
+
+  it("creates a static site from selected works in the active corpus database", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    expect(dialog.attributes("open")).toBeDefined();
+    expect(dialog.text()).toContain("Glas");
+
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[placeholder='Research collection']").setValue("Glas research site");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "Glas research site",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US", "fr-CA"],
+      export_format: "two-file",
+      record_profile: "complete",
+      include_transformers: true,
+      vector_strategy: "browser-default",
+      provider_proxy_upstream: null,
+    });
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("exports any selected subset of installed languages and can include the Transformers.js runtime", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("[data-site-language='fr-CA']").setValue(false);
+    await dialog.get("input[placeholder='Research collection']").setValue("English-only Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "English-only Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US"],
+      export_format: "two-file",
+      record_profile: "complete",
+      include_transformers: true,
+      vector_strategy: "browser-default",
+      provider_proxy_upstream: null,
+    });
+    wrapper.unmount();
+  });
+
+  it("can export the research site as a single-container nginx bundle", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[value='nginx-docker']").setValue(true);
+    await dialog.get("input[placeholder='Research collection']").setValue("Hosted Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "Hosted Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US", "fr-CA"],
+      export_format: "nginx-docker",
+      record_profile: "complete",
+      include_transformers: true,
+      vector_strategy: "browser-default",
+      provider_proxy_upstream: null,
+    });
+    wrapper.unmount();
+  });
+
+  it("can export an nginx bundle with a same-origin provider proxy", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[value='nginx-docker']").setValue(true);
+    await dialog.get("[data-site-provider-proxy-enabled]").setValue(true);
+    await dialog.get("[data-site-provider-proxy-upstream]").setValue("http://localhost:11434/v1");
+    await dialog.get("input[placeholder='Research collection']").setValue("Proxied Glas");
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith({
+      store: "derrida-primary",
+      works: ["Glas"],
+      title: "Proxied Glas",
+      description: "",
+      locale: "en-US",
+      languages: ["en-US", "fr-CA"],
+      export_format: "nginx-docker",
+      record_profile: "complete",
+      include_transformers: true,
+      vector_strategy: "browser-default",
+      provider_proxy_upstream: "http://localhost:11434/v1",
+    });
+    wrapper.unmount();
+  });
+
+  it("can omit publication vectors so each static-site browser builds its own index", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[name='site-vector-profile'][value='browser']").setValue(true);
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        works: ["Glas"],
+        vector_strategy: "browser",
+      }),
+    );
+    wrapper.unmount();
+  });
+
+  it("says the Transformers.js runtime is downloaded once on first use, then cached", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+    const section = wrapper.get(".create-site-dialog [data-site-transformers]");
+    expect(section.get("[data-transformers-source]").text()).toContain("not in the DerridAI image");
+    expect(section.get("[data-transformers-source]").text()).toContain("14.2 MB");
+    expect(section.find("[data-transformers-download]").exists()).toBe(true);
+    wrapper.unmount();
+
+    siteApi.exportOptions.mockResolvedValue({
+      languages: [{ code: "en-US", name: "English", flag: "🇺🇸" }],
+      transformers_runtime: {
+        version: "4.3.0",
+        cached: true,
+        download_bytes: 14_871_000,
+        inline_bytes: 5_700_000,
+      },
+      browser_embedding_profile: {
+        model: "Xenova/multilingual-e5-small",
+        revision: "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+        dimension: 384,
+        dtype: "q8",
+        pooling: "mean",
+        normalize: true,
+        query_prefix: "query: ",
+        document_prefix: "passage: ",
+        download_bytes: 118_308_185,
+      },
+    });
+    const cached = await mountWorks();
+    await chooseMenuItem(cached, "More actions", "Create site");
+    expect(cached.get("[data-transformers-source]").text()).toContain("already downloaded");
+    expect(cached.find("[data-transformers-delete]").exists()).toBe(true);
+    cached.unmount();
+  });
+
+  it("describes where the Transformers.js runtime goes for the single-container format", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+    const dialog = wrapper.get(".create-site-dialog");
+    expect(dialog.get("[data-site-transformers]").text()).toContain("5.4 MB");
+    await dialog.get("input[value='nginx-docker']").setValue(true);
+    expect(dialog.get("[data-site-transformers]").text()).toContain("separate files");
+    wrapper.unmount();
+  });
+
+  it("offers a reader-optimized record profile and states its cELF status", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "More actions", "Create site");
+
+    const dialog = wrapper.get(".create-site-dialog");
+    // The complete profile is the default and is described as carrying the assertion layer.
+    expect(
+      dialog.get("input[name='site-record-profile'][value='complete']").element,
+    ).toHaveProperty("checked", true);
+    expect(dialog.get("[data-celf='complete']").text()).toContain("cELF-compliant");
+    expect(dialog.get("[data-celf='reader']").text()).toContain("not a full cELF publication");
+
+    await dialog.get("[data-site-work='Glas']").setValue(true);
+    await dialog.get("input[name='site-record-profile'][value='reader']").setValue(true);
+    await dialog.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(siteApi.exportSite).toHaveBeenCalledWith(
+      expect.objectContaining({ works: ["Glas"], record_profile: "reader" }),
+    );
     wrapper.unmount();
   });
 
@@ -216,9 +807,121 @@ describe("WorksView", () => {
     );
     const wrapper = await mountWorks();
     expect(wrapper.get("#works-page-title").text()).toContain("Works");
-    expect(wrapper.get(".researcher-work-menu-card").text()).toContain("Glas");
-    await wrapper.get("#browseResearchWork").trigger("click");
+    // Same header grammar as the admin variant, without corpus-management controls.
+    expect(wrapper.find(".ui-page-header").exists()).toBe(true);
+    expect(wrapper.find(".ui-page-header-actions").exists()).toBe(false);
+    expect(wrapper.find("[data-works-context='loaded']").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Sync workspace to database");
+    expect(wrapper.find("[data-work-review]").exists()).toBe(false);
+    expect(wrapper.get(".works-card").text()).toContain("Glas");
+    await wrapper
+      .get(".works-inspector-pane")
+      .findAll("button")
+      .find((button) => button.text().includes("Browse records"))!
+      .trigger("click");
     expect(runtime.browseResearcherWork).toHaveBeenCalledWith("Glas");
+    wrapper.unmount();
+  });
+
+  it("opens the canonical semantic map when no persisted build is available", async () => {
+    const wrapper = await mountWorks();
+    await chooseMenuItem(wrapper, "Actions for Glas", "Semantic map");
+    await flushPromises();
+
+    expect(wrapper.find(".works-semantic-map-dialog").attributes("open")).toBeDefined();
+    expect(wrapper.find(".semantic-map-frame").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("A semantic map is not available");
+    wrapper.unmount();
+  });
+});
+
+describe("Works progressive loading", () => {
+  it("keeps the library controls and loading region mounted until a researcher snapshot arrives", async () => {
+    setActivePinia(createPinia());
+    runtime.getWorksViewState.mockReturnValue({
+      query: "gla",
+      sort: "records-desc",
+      filters: { needsReview: false, dbStatus: "", author: "Jacques Derrida" },
+      viewMode: "list",
+    });
+    useAuthStore().user = {
+      id: 2,
+      username: "reader",
+      role: "researcher",
+      capabilities: ["page.works"],
+    } as never;
+    let finish!: () => void;
+    runtime.prepareWorksWorkspace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve({ error: "" });
+        }),
+    );
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(
+      adminSnapshot({
+        mode: "researcher",
+        query: "gla",
+        sort: "records-desc",
+        filters: { needsReview: false, dbStatus: "", author: "Jacques Derrida" },
+        viewMode: "list",
+        capabilities: {
+          canManageCorpus: false,
+          canSync: false,
+          canSyncAll: false,
+          canPopulate: false,
+        },
+      }),
+    );
+
+    const wrapper = mount(WorksView);
+    await flushPromises();
+
+    expect(wrapper.find("#works-page-title").exists()).toBe(true);
+    expect(wrapper.find(".empty").exists()).toBe(false);
+    expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
+    expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
+    expect((wrapper.get("#worksSearch").element as HTMLInputElement).value).toBe("gla");
+    expect((wrapper.get("#worksSort").element as HTMLSelectElement).value).toBe("records-desc");
+    const viewButtons = wrapper.findAll(".works-toolbar-views button");
+    expect(viewButtons[1]?.attributes("aria-pressed")).toBe("true");
+    expect(wrapper.get(".works-toolbar-summary").text()).not.toContain("0 of 0");
+    expect(wrapper.find("[data-works-loading]").exists()).toBe(true);
+
+    finish();
+    await flushPromises();
+
+    expect(wrapper.find("[data-works-loading]").exists()).toBe(false);
+    expect(wrapper.get("#worksSearch").attributes("disabled")).toBeUndefined();
+    expect(wrapper.find("table.works-list").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("keeps the toolbar frame visible after a failed first read without claiming an empty library", async () => {
+    setActivePinia(createPinia());
+    runtime.getWorksViewState.mockReturnValue({
+      query: "",
+      sort: "title-asc",
+      filters: { needsReview: false, dbStatus: "", author: "Jacques Derrida" },
+      viewMode: "cards",
+    });
+    useAuthStore().user = {
+      id: 2,
+      username: "reader",
+      role: "researcher",
+      capabilities: ["page.works"],
+    } as never;
+    runtime.getWorksWorkspaceSnapshot.mockReturnValue(undefined);
+    runtime.prepareWorksWorkspace.mockRejectedValueOnce(new Error("Works service unavailable"));
+
+    const wrapper = mount(WorksView);
+    await flushPromises();
+
+    expect(wrapper.find(".works-toolbar-shell").exists()).toBe(true);
+    expect(wrapper.get("#worksSearch").attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".works-toolbar-summary").text()).toContain("Unavailable");
+    expect(wrapper.get(".works-filter-chip").attributes("disabled")).toBeDefined();
+    expect(wrapper.get("[role='alert']").text()).toContain("Works service unavailable");
+    expect(wrapper.find(".empty").exists()).toBe(false);
     wrapper.unmount();
   });
 });

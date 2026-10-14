@@ -1,13 +1,37 @@
-# Copyright 2026 Aaron John Schlosser, PhD.
+# This file is part of DerridAI, a cELF-compliant research workspace
+# Copyright © 2026  Aaron John Schlosser, PhD
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 from __future__ import annotations
 
 import re
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, BeforeValidator, Field, field_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from .enrichment_cycles import MAX_PASSES
 from .metadata_schema import MetadataSchema
+from .pipelines.models import PipelineConfigOverrideSet
+from .research_filters import normalize_document_filter, normalize_metadata_filter
 
 LanguageCode = Literal["en", "fr"]
 CollectionRole = Literal["primary", "language", "general"]
@@ -49,7 +73,7 @@ def _clamp_concurrency(value: Any) -> Any:
     """A provider profile may allow more parallel requests (a FreeLLM profile defaults to 32) than one corpus operation
     uses. Clamp to the operation's ceiling instead of rejecting the whole request with a 422."""
     try:
-        return max(1, min(16, int(value)))
+        return max(1, min(64, int(value)))
     except (TypeError, ValueError):
         return value
 
@@ -72,11 +96,30 @@ class ChromaConnectionUpdate(BaseModel):
     database: str | None = Field(default=None, max_length=128)
 
 
+class SystemEmbeddingDefaultsUpdate(BaseModel):
+    embedding_provider: str = Field(min_length=1, max_length=256)
+    embedding_model: str | None = Field(default=None, max_length=512)
+
+
+class SystemAudioTranscriptionUpdate(BaseModel):
+    base_url: str = Field(min_length=8, max_length=512)
+    model: str = Field(min_length=1, max_length=200)
+    # Omitted keeps the stored key; an empty string is treated as omitted. Use clear_key to remove it.
+    api_key: str | None = Field(default=None, max_length=512)
+    clear_key: bool = False
+
+
+class SystemEmbeddingDefaultsProbe(BaseModel):
+    """A draft embedding default to test before saving it."""
+    embedding_provider: str = Field(min_length=1, max_length=256)
+    embedding_model: str | None = Field(default=None, max_length=512)
+
+
 class StoreCreate(BaseModel):
     name: str = Field(min_length=3, max_length=128)
     metadata: dict[str, Any] | None = None
     description: str | None = Field(default=None, max_length=2000)
-    embedding_provider: Literal["chroma", "ollama", "precomputed"] | None = None
+    embedding_provider: str | None = Field(default=None, max_length=256)
     embedding_model: str | None = None
     embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
     distance_metric: DistanceMetric = "cosine"
@@ -116,7 +159,7 @@ class StoreCreate(BaseModel):
 
 
 class EmbeddingPreflightRequest(BaseModel):
-    embedding_provider: Literal["chroma", "ollama", "precomputed"] = "ollama"
+    embedding_provider: str = Field(default="ollama", min_length=1, max_length=256)
     embedding_model: str | None = None
     embedding_dimension: int | None = Field(default=None, ge=1, le=65536)
     distance_metric: DistanceMetric = "cosine"
@@ -127,7 +170,7 @@ class StoreProtectionUpdate(BaseModel):
 
 
 class StoreEmbeddingUpdate(BaseModel):
-    embedding_provider: Literal["chroma", "ollama", "precomputed"]
+    embedding_provider: str = Field(min_length=1, max_length=256)
     embedding_model: str | None = None
 
 
@@ -191,7 +234,9 @@ class UpsertJobCreate(BaseModel):
     items: list[UpsertJobItem] = Field(min_length=1, max_length=50000)
     document_field: str = "text"
     embedding_field: str = "embedding"
-    batch_size: int = Field(default=500, ge=1, le=1000)
+    # Keep individual embedding/upsert calls bounded so a slow local model or
+    # Chroma server reports progress instead of appearing to hang for one huge batch.
+    batch_size: int = Field(default=128, ge=1, le=1000)
     mirror_languages: bool = True
     include_updates: bool = False
     source_kind: Literal["browser_workspace", "database", "subset", "manual"] = "browser_workspace"
@@ -216,9 +261,14 @@ class SearchRequest(BaseModel):
     query: str = ""
     n_results: int = Field(default=10, ge=1, le=100)
     where: dict[str, Any] | None = None
-    mode: Literal["similarity", "mmr", "filter", "keyword", "lexical", "hybrid"] = "similarity"
+    # Each mode runs its built-in store_search.<mode> pipeline; "assigned" runs
+    # the vector_store_search assignment. Administrators may instead name an
+    # exact saved pipeline version.
+    mode: Literal["similarity", "mmr", "filter", "keyword", "lexical", "hybrid", "assigned"] = "similarity"
     fetch_k: int = Field(default=100, ge=1, le=1000)
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
+    pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
+    pipeline_version: int | None = Field(default=None, ge=1)
 
 
 class OllamaTouchupOptions(BaseModel):
@@ -322,6 +372,92 @@ class LLMResultResolutionRequest(BaseModel):
 class LLMJobRejectRequest(BaseModel):
     dismiss: bool = True
 
+LEGACY_RAG_PROMPT_METADATA_FIELDS = [
+    "speaker",
+    "quoted_speaker",
+    "quoted_author",
+    "quoted_work",
+    "quoted_position_holder",
+    "position_holder",
+    "stance",
+    "proposition_status",
+    "target",
+    "discourse_role",
+]
+
+
+def _default_rag_prompt_metadata_fields() -> list[str]:
+    return list(LEGACY_RAG_PROMPT_METADATA_FIELDS)
+
+
+class RAGPromptMetadataPolicy(BaseModel):
+    """Metadata explicitly allowed into each Research generation-prompt channel.
+
+    Source identity, citation data, evidence text, and record IDs remain part of
+    the deterministic evidence envelope. These selectors control scholarly
+    metadata only and may use either a field name or stable FieldAssertion
+    field_id.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    evidence: list[str] = Field(default_factory=_default_rag_prompt_metadata_fields, max_length=120)
+    context: list[str] = Field(default_factory=list, max_length=120)
+    record: list[str] = Field(default_factory=list, max_length=120)
+
+    @field_validator("evidence", "context", "record", mode="before")
+    @classmethod
+    def clean_prompt_metadata_fields(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("Research prompt metadata fields must be a list.")
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        reserved = {
+            "text", "updates", "activity", "field_assertions", "current_field_assertions",
+            "metadata_field_status", "metadata_evidence", "metadata_decisions",
+            "metadata_execution_ledger", "source_spans", "source_units",
+            "source_block_ids", "source_unit_ids",
+        }
+        for raw in value:
+            field = str(raw or "").strip()
+            if not field:
+                continue
+            if len(field) > 120:
+                raise ValueError("Research prompt metadata field identifiers must be 120 characters or fewer.")
+            if field in reserved or field.startswith("_"):
+                raise ValueError(f"Internal field '{field}' cannot be included in a Research prompt.")
+            if field not in seen:
+                cleaned.append(field)
+                seen.add(field)
+        return cleaned
+
+class ResearchFilterPlan(BaseModel):
+    """Executable retrieval scope compiled from explicit or interpreted instructions."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    metadata_filter: dict[str, Any] | None = None
+    document_filter: dict[str, Any] | None = None
+    source: Literal[
+        "explicit",
+        "deterministic_natural_language",
+        "model_assisted",
+    ] = "explicit"
+    original_text: str | None = Field(default=None, max_length=8000)
+    remaining_instructions: str | None = Field(default=None, max_length=8000)
+
+    @field_validator("metadata_filter")
+    @classmethod
+    def validate_metadata_filter(cls, value: Any) -> dict[str, Any] | None:
+        return normalize_metadata_filter(value)
+
+    @field_validator("document_filter")
+    @classmethod
+    def validate_document_filter(cls, value: Any) -> dict[str, Any] | None:
+        return normalize_document_filter(value)
+
+
 class RAGEvidenceSelection(BaseModel):
     """A user-selected evidence item supplied to a RAG run.
 
@@ -338,13 +474,37 @@ class RAGEvidenceSelection(BaseModel):
 class RAGRunRequest(BaseModel):
     prompt: str = Field(min_length=1)
     instructions: str | None = None
+    # Research thread linkage. Only identifiers travel from the client; the
+    # server loads any thread content itself and never accepts prior answers.
+    thread_id: str | None = Field(default=None, min_length=1, max_length=80)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=120)
+    # Explicit follow-up context scope: prior turn IDs of the same thread whose
+    # exact text the server loads as advisory context. ``None`` keeps automatic
+    # selection; an empty list means no prior-turn context.
+    context_turn_ids: list[Annotated[str, Field(min_length=1, max_length=80)]] | None = Field(
+        default=None, max_length=16
+    )
+    # Pipeline identity is resolved server-side from the active Research
+    # assignment unless an authorized caller explicitly selects another
+    # executable version. Persisting it on the request makes each run auditable.
+    pipeline_id: str | None = Field(default=None, min_length=1, max_length=160)
+    pipeline_version: int | None = Field(default=None, ge=1)
+    # Pipeline Studio is the baseline. Settings may override registered stage
+    # configuration for this exact immutable version, and one Research run may
+    # override Settings again. Neither layer can rewrite pipeline topology.
+    settings_pipeline_overrides: PipelineConfigOverrideSet | None = None
+    run_pipeline_overrides: PipelineConfigOverrideSet | None = None
     # Empty is valid only for selected-evidence-only runs. The pipeline enforces
     # a collection when vector retrieval is enabled.
     source_collection: str = ""
+    filter_plan: ResearchFilterPlan | None = None
     locales: list[LanguageCode] = Field(default_factory=_default_locales)
     search_types: list[SearchType] = Field(default_factory=_default_search_types)
     k: int = Field(default=64, ge=1, le=500)
     fetch_k: int = Field(default=500, ge=1, le=5000)
+    # Off by default preserves exact historical count-based retrieval. When
+    # enabled, these values become bounded floors for Record-size-aware sizing.
+    automatic_sizing: bool = False
     lambda_mult: float = Field(default=0.7, ge=0.0, le=1.0)
     rrf_k: int = Field(default=60, ge=1, le=10000)
     rerank_top_n: int = Field(default=24, ge=1, le=500)
@@ -365,8 +525,14 @@ class RAGRunRequest(BaseModel):
     ollama_concurrency_limit: int | None = Field(default=None, ge=1, le=32)
     bind_citations: bool = True
     include_works_cited: bool = True
+    prompt_metadata: RAGPromptMetadataPolicy = Field(default_factory=RAGPromptMetadataPolicy)
     selected_evidence: list[RAGEvidenceSelection] = Field(default_factory=list, max_length=500)
     skip_retrieval: bool = False
+    # These are independent steering channels.  Neither may silently become
+    # current source evidence; canonical re-resolution happens before binding.
+    use_prior_response_memory: bool = False
+    use_prior_claim_memory: bool = False
+    memory_profile_id: str | None = None
     auto_grade: bool = False
     # Auto-grading can use an independent provider/model from answer generation.
     # These execution fields are resolved server-side from the selected profile.
@@ -379,7 +545,7 @@ class RAGRunRequest(BaseModel):
 
 
 class PdfLlmRequest(BaseModel):
-    mode: Literal["clean_text", "draft_record", "link_record"]
+    mode: Literal["clean_text", "draft_record", "link_record", "detect_language"]
     raw_text: str = ""
     pdf_file: str | None = None
     pdf_title: str | None = None
@@ -398,6 +564,102 @@ class PdfPageLabelsPatch(BaseModel):
     labels: dict[int, str | None] = Field(default_factory=dict)
 
 
+class PageEstimatePatch(BaseModel):
+    words_per_page: int = Field(default=300, ge=50, le=2000)
+    one_record_per_page: bool = True
+
+
+class PdfAssetLanguagePatch(BaseModel):
+    """One explicit reviewer decision for an unresolved source language."""
+
+    language: str | None = Field(default=None, max_length=35)
+    skip_language: bool = False
+
+    @model_validator(mode="after")
+    def require_one_decision(self) -> PdfAssetLanguagePatch:
+        if self.skip_language == (self.language is not None):
+            raise ValueError("Provide one language or set skip_language=true.")
+        if self.language is not None:
+            value = self.language.strip().replace("_", "-").lower()
+            if not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})?", value):
+                raise ValueError("language must be a BCP-47-style language code.")
+            self.language = value
+        return self
+
+
+class PdfAssetMetadataPatch(BaseModel):
+    """Explicit source-level metadata decisions made before corpus enrichment."""
+
+    metadata: dict[str, Any] = Field(default_factory=dict, max_length=30)
+    skip_fields: list[str] = Field(default_factory=list, max_length=30)
+
+    @model_validator(mode="after")
+    def validate_decisions(self) -> PdfAssetMetadataPatch:
+        from .source_text import MANIFEST_FIELDS
+
+        allowed = set(MANIFEST_FIELDS) | {"original_language", "document_is_translation"}
+        unknown = (set(self.metadata) | set(self.skip_fields)) - allowed
+        if unknown:
+            raise ValueError("Unsupported source metadata field(s): " + ", ".join(sorted(unknown)))
+        overlap = set(self.metadata) & set(self.skip_fields)
+        if overlap:
+            raise ValueError("A source metadata field cannot be entered and skipped together.")
+        cleaned: dict[str, Any] = {}
+        for field, value in self.metadata.items():
+            if value in (None, "", []):
+                raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+            if isinstance(value, str):
+                value = value.strip()
+                if not value:
+                    raise ValueError(f"Metadata field '{field}' needs a value or must be skipped.")
+            cleaned[field] = value
+        self.metadata = cleaned
+        self.skip_fields = sorted(set(self.skip_fields))
+        if not self.metadata and not self.skip_fields:
+            raise ValueError("Provide at least one metadata value or skipped field.")
+        return self
+
+
+class PdfSourceUnitPolicy(BaseModel):
+    """How finely a source is divided into evidence units."""
+
+    mode: Literal["default", "paragraph", "line", "sentence", "chars"] = "default"
+    chars: int | None = Field(default=None, ge=60, le=20000)
+    # Optional documentary-language hint for orthographic segmentation. The
+    # repository also falls back to source metadata and Unicode script.
+    language: str | None = Field(default=None, max_length=64)
+    # "Every N paragraphs / sentences"; only meaningful for the paragraph and sentence modes.
+    per: int | None = Field(default=None, ge=1, le=50)
+
+
+class BuildWarningAcknowledgement(BaseModel):
+    warnings: list[str] = Field(min_length=1, max_length=500)
+
+
+class PdfSourceUrlImport(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+    source_illegibility: float = Field(default=0, ge=0, le=100)
+    page_number_detection: Literal["auto", "auto_llm", "off"] = "auto"
+    provider_profile_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
+    # A browser-held (administrator) profile sends its connection with the request, as a build does.
+    provider: str | None = Field(default=None, max_length=80)
+    base_url: str | None = Field(default=None, max_length=2000)
+    api_key: str | None = Field(default=None, max_length=4000)
+
+
+class GutenbergImport(BaseModel):
+    etext_id: int = Field(ge=1)
+    source_illegibility: float = Field(default=0, ge=0, le=100)
+    page_number_detection: Literal["auto", "auto_llm", "off"] = "auto"
+    provider_profile_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
+    # A browser-held (administrator) profile sends its connection with the request, as a build does.
+    provider: str | None = Field(default=None, max_length=80)
+    base_url: str | None = Field(default=None, max_length=2000)
+    api_key: str | None = Field(default=None, max_length=4000)
+
+
 class PdfDocumentLayoutPatch(BaseModel):
     page_layout: Literal["single", "two_up"] = "single"
     reading_order: Literal["left_to_right", "right_to_left"] = "left_to_right"
@@ -408,6 +670,9 @@ class PdfDocumentLayoutPatch(BaseModel):
     thread_mode: Literal["continuous", "odd_even", "even_odd", "left_right", "right_left"] = "continuous"
     thread_a_language: str | None = None
     thread_b_language: str | None = None
+    unit_policy: dict[str, Any] | None = None
+    # Repeating rectangles (margin, infobox, quotation, running matter). Empty keeps the page-level thread pattern.
+    layout_regions: list[dict[str, Any]] | None = Field(default=None, max_length=24)
 
 
 class PdfCorpusProviderConfig(BaseModel):
@@ -454,10 +719,10 @@ class PdfCorpusRecordSizing(BaseModel):
     post-segmentation normalization toward readable/retrievable records while
     protected attribution and discourse structure remain higher priority.
     """
-    preferred_record_chars: int = Field(default=1750, ge=600, le=12000)
-    record_length_tolerance: int = Field(default=200, ge=50, le=2000)
-    long_record_chars: int = Field(default=3500, ge=1200, le=24000)
-    absolute_record_chars: int = Field(default=6000, ge=1800, le=48000)
+    preferred_record_chars: int = Field(default=1750, ge=100, le=12000)
+    record_length_tolerance: int = Field(default=200, ge=10, le=2000)
+    long_record_chars: int = Field(default=3500, ge=100, le=24000)
+    absolute_record_chars: int = Field(default=6000, ge=100, le=48000)
 
     def model_post_init(self, __context: Any) -> None:
         preferred = self.preferred_record_chars
@@ -466,6 +731,14 @@ class PdfCorpusRecordSizing(BaseModel):
             raise ValueError("long_record_chars must be at least preferred_record_chars + record_length_tolerance")
         if self.absolute_record_chars < self.long_record_chars:
             raise ValueError("absolute_record_chars must be at least long_record_chars")
+
+
+class PdfCorpusTopologyPolicy(BaseModel):
+    """Explicit relationship between SourceUnits, Records, and synthetic pages."""
+
+    mode: Literal["semantic", "source_units"] = "semantic"
+    source_units_per_record: int = Field(default=1, ge=1, le=100)
+    records_per_page: int | None = Field(default=None, ge=1, le=100)
 
 
 class PdfCorpusExperimentArm(BaseModel):
@@ -487,7 +760,7 @@ class PdfCorpusExperiment(BaseModel):
 
 
 class PdfCorpusAutonomy(BaseModel):
-    """Hands-free mode: nobody reviews the records, so a stated policy makes the decisions. Off unless enabled."""
+    """Autonomous decision policy; it never grants human authority."""
 
     enabled: bool = False
     passes: int = Field(default=1, ge=0, le=3)
@@ -497,8 +770,67 @@ class PdfCorpusAutonomy(BaseModel):
     publish: bool = False
 
 
+class PdfCorpusFieldRunGuidance(BaseModel):
+    """A temporary, build-specific instruction for one metadata field."""
+
+    model_config = ConfigDict(extra="forbid")
+    instructions: str = Field(default="", max_length=1200)
+    look_for: list[str] = Field(default_factory=list, max_length=40)
+    required: bool = False
+    # Legacy compatibility only. Missing values are represented by cELF evaluation/value state, never text placeholders.
+    default_placeholder: str = Field(default="", max_length=200)
+
+    @field_validator("instructions", mode="before")
+    @classmethod
+    def trim_instructions(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+    @field_validator("look_for", mode="before")
+    @classmethod
+    def clean_terms(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("look_for must be a list of phrases")
+        if len(value) > 40:
+            raise ValueError("A field can have at most 40 look-for phrases")
+        terms: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            term = str(item or "").strip()
+            if not term:
+                continue
+            if len(term) > 160:
+                raise ValueError("Each look-for phrase must be 160 characters or fewer")
+            if term.casefold() not in seen:
+                terms.append(term)
+                seen.add(term.casefold())
+        return terms
+
+    @field_validator("default_placeholder", mode="before")
+    @classmethod
+    def trim_placeholder(cls, value: Any) -> str:
+        return str(value or "").strip()
+
+
+class PdfCorpusSourceScope(BaseModel):
+    """Build-specific subset of source pages; an empty list means the complete source."""
+
+    model_config = ConfigDict(extra="forbid")
+    pages: list[int] = Field(default_factory=list, max_length=10000)
+
+    @field_validator("pages")
+    @classmethod
+    def normalize_pages(cls, value: list[int]) -> list[int]:
+        pages = sorted(set(value))
+        if any(page < 1 for page in pages):
+            raise ValueError("Source pages must be positive integers")
+        return pages
+
+
 class PdfCorpusBuildCreate(BaseModel):
     asset_id: str = Field(min_length=1, max_length=200)
+    source_scope: PdfCorpusSourceScope | None = None
     profile_id: str = Field(default="derrida-scholarly-v12", min_length=1, max_length=200)
     provider: Literal["ollama", "openai"] = "ollama"
     model: str | None = None
@@ -513,17 +845,37 @@ class PdfCorpusBuildCreate(BaseModel):
     stage_limits: PdfCorpusStageLimits = Field(default_factory=PdfCorpusStageLimits)
     stage_timeouts: PdfCorpusStageTimeouts = Field(default_factory=PdfCorpusStageTimeouts)
     record_sizing: PdfCorpusRecordSizing = Field(default_factory=PdfCorpusRecordSizing)
+    topology_policy: PdfCorpusTopologyPolicy = Field(default_factory=PdfCorpusTopologyPolicy)
     auto_enrich_work_metadata: bool = True
     experiment: PdfCorpusExperiment | None = None
     schema_id: str = Field(default="default", min_length=1, max_length=64)
+    run_guidance: dict[str, PdfCorpusFieldRunGuidance] = Field(default_factory=dict, max_length=60)
     autonomous: PdfCorpusAutonomy | None = None
-    auto_clean_text: bool = True
+    auto_clean_text: bool = False
     llm_touchup_during_enrichment: bool = False
     noise_unusable_threshold: float = Field(default=45, ge=0, le=100)
     llm_assess_text_noise: bool = False
     text_cleanup_rules: list[TextCleanupRule] = Field(default_factory=_default_text_cleanup_rules)
     enrichment_mode: Literal["fast", "deep"] = "fast"
     semantic_indexing: bool = False
+    # Whole-document linguistic analysis is a derived enrichment layer. "auto"
+    # prefers BookNLP for English when an isolated provider is configured and
+    # otherwise falls back to the installed local spaCy pipeline.
+    document_intelligence_profile: Literal["none", "general", "fiction", "scholarly"] = "scholarly"
+    document_nlp_provider: Literal["auto", "spacy", "booknlp"] = "auto"
+    document_nlp_include_events: bool = False
+    # Values for corpus-scoped schema fields, supplied before segmentation.
+    work_metadata: dict[str, Any] = Field(default_factory=dict, max_length=60)
+    # Reviewer-supplied document fields (title, document_author, ...) that detection on source load could not fill.
+    document_metadata: dict[str, Any] = Field(default_factory=dict, max_length=20)
+
+    @field_validator("run_guidance")
+    @classmethod
+    def bound_run_guidance(cls, value: dict[str, PdfCorpusFieldRunGuidance]) -> dict[str, PdfCorpusFieldRunGuidance]:
+        total = sum(len(item.instructions) + sum(map(len, item.look_for)) for item in value.values())
+        if total > 24000:
+            raise ValueError("Run guidance must contain 24,000 characters or fewer in total")
+        return value
 
 
 class PdfCorpusManifestPatch(BaseModel):
@@ -547,6 +899,59 @@ class PdfCorpusMetadataDecision(BaseModel):
     value: Any = None
     confirm_no_supported_value: bool = False
     expected_revision: int | None = Field(default=None, ge=1)
+    # Save the value and bind these source blocks as its evidence in one request.
+    evidence_block_ids: list[str] | None = Field(default=None, max_length=500)
+    # Cite the reviewer's own knowledge instead of a source span, or spans elsewhere in the same source.
+    evidence_source: Literal["reviewer_knowledge"] | None = None
+    evidence_note: str = Field(default="", max_length=2000)
+    external_evidence_block_ids: list[str] | None = Field(default=None, max_length=100)
+
+
+class PdfCorpusMetadataCacheClear(BaseModel):
+    field: str | None = Field(default=None, min_length=1, max_length=120)
+
+
+class PdfCorpusMetadataDecisionBatch(BaseModel):
+    changes: dict[str, Any] = Field(min_length=1, max_length=60)
+    confirmed_absent_fields: list[str] = Field(default_factory=list, max_length=60)
+    expected_revision: int | None = Field(default=None, ge=1)
+
+
+class PdfCorpusSemanticAliasSet(BaseModel):
+    """A reviewer's statement that these surfaces name one identity of ``kind``."""
+
+    kind: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.-]{0,119}$")
+    canonical_label: str = Field(min_length=1, max_length=200)
+    aliases: list[str] = Field(default_factory=list, max_length=50)
+    reason: str = Field(default="", max_length=1000)
+    # Retire this active set and record the new one in its place.
+    replaces: str | None = Field(default=None, max_length=64)
+
+
+class PdfCorpusSemanticAliasImport(BaseModel):
+    """Copy another build's reviewed identities into this one (all of them when none are named)."""
+
+    source_build_id: str = Field(min_length=1, max_length=64)
+    alias_set_ids: list[str] | None = Field(default=None, max_length=2000)
+
+
+class PdfAudioVoiceAssignments(BaseModel):
+    """Human names assigned to immutable diarized voice identifiers."""
+
+    assignments: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("assignments")
+    @classmethod
+    def valid_assignments(cls, value: dict[str, str]) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for voice_id, display_name in value.items():
+            if not re.fullmatch(r"SPEAKER_[1-9]\d*", voice_id):
+                raise ValueError("Voice identifiers must use SPEAKER_1, SPEAKER_2, and so on.")
+            name = str(display_name).strip()
+            if len(name) > 200:
+                raise ValueError("Speaker names must contain 200 characters or fewer.")
+            normalized[voice_id] = name
+        return normalized
 
 
 class PdfCorpusEvidencePatch(BaseModel):
@@ -555,6 +960,19 @@ class PdfCorpusEvidencePatch(BaseModel):
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     reason: str = Field(default="", max_length=2000)
     expected_revision: int | None = Field(default=None, ge=1)
+    source_kind: Literal["source_span", "reviewer_knowledge"] = "source_span"
+    external_block_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class PdfCorpusEvidenceSuggestLlm(BaseModel):
+    """Provider selection for an LLM evidence suggestion; nothing here is persisted."""
+    field: str = Field(min_length=1, max_length=120)
+    provider_profile_id: str | None = Field(default=None, max_length=200)
+    model: str | None = Field(default=None, max_length=200)
+    provider: str | None = Field(default=None, max_length=40)
+    base_url: str | None = Field(default=None, max_length=500)
+    api_key: str | None = Field(default=None, max_length=500)
+    limit: int = Field(default=5, ge=1, le=20)
 
 
 class PdfCorpusRecordAccept(BaseModel):
@@ -599,13 +1017,24 @@ class PdfCorpusRecordMerge(BaseModel):
 
 
 class PdfCorpusRecordSplit(BaseModel):
-    after_block_id: str = Field(min_length=1, max_length=200)
+    """Split at a source block boundary or at a character offset in the record text."""
+    after_block_id: str | None = Field(default=None, min_length=1, max_length=200)
+    offset: int | None = Field(default=None, ge=1, le=500000)
     expected_revision: int | None = Field(default=None, ge=1)
 
-class PdfCorpusRecordSlice(BaseModel):
-    direction: Literal["previous", "next", "keep", "new"]
-    offset: int = Field(ge=1, le=500000)
-    keep_end: int | None = Field(default=None, ge=2, le=500000)
+    @model_validator(mode="after")
+    def _one_split_point(self) -> PdfCorpusRecordSplit:
+        if (self.after_block_id is None) == (self.offset is None):
+            raise ValueError("Provide exactly one of after_block_id or offset.")
+        return self
+
+
+class PdfCorpusRecordFromSelection(BaseModel):
+    """Create a new record from ``text[start:end]``; left/right text joins a neighbour or stands alone."""
+    start: int = Field(ge=0, le=500000)
+    end: int = Field(ge=1, le=500000)
+    left: Literal["distinct", "merge_prior"] = "distinct"
+    right: Literal["distinct", "merge_next"] = "distinct"
     expected_revision: int | None = Field(default=None, ge=1)
 
 
@@ -629,6 +1058,50 @@ class PdfCorpusProviderSwitch(BaseModel):
     generation: OllamaTouchupOptions | None = None
     review_provider_profile_id: str | None = None
     review_provider: PdfCorpusProviderConfig | None = None
+
+
+class PdfCorpusResumeRecordSizing(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    preferred_record_chars: int | None = Field(default=None, ge=100, le=12000)
+    record_length_tolerance: int | None = Field(default=None, ge=10, le=2000)
+    long_record_chars: int | None = Field(default=None, ge=100, le=24000)
+    absolute_record_chars: int | None = Field(default=None, ge=100, le=48000)
+
+
+class PdfCorpusResumeStageLimits(PdfCorpusStageLimits):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PdfCorpusResumeStageTimeouts(PdfCorpusStageTimeouts):
+    model_config = ConfigDict(extra="forbid")
+
+
+class PdfCorpusBuildResume(BaseModel):
+    """Sparse execution overrides; omitted/null settings preserve the saved values."""
+    model_config = ConfigDict(extra="forbid")
+    provider: Literal["ollama", "openai"] | None = None
+    model: str | None = None
+    base_url: str | None = None
+    api_key: str | None = None
+    provider_profile_id: str | None = None
+    review_provider_profile_id: str | None = None
+    review_provider: PdfCorpusProviderConfig | None = None
+    generation: OllamaTouchupOptions | None = None
+    use_profile_defaults: bool | None = None
+    max_concurrent_requests: ClampedConcurrency | None = None
+    stage_limits: PdfCorpusResumeStageLimits | None = None
+    stage_timeouts: PdfCorpusResumeStageTimeouts | None = None
+    record_sizing: PdfCorpusResumeRecordSizing | None = None
+    enrichment_mode: Literal["fast", "deep"] | None = None
+    semantic_indexing: bool | None = None
+    document_intelligence_profile: Literal["none", "general", "fiction", "scholarly"] | None = None
+    document_nlp_provider: Literal["auto", "spacy", "booknlp"] | None = None
+    document_nlp_include_events: bool | None = None
+    auto_clean_text: bool | None = None
+    llm_touchup_during_enrichment: bool | None = None
+    noise_unusable_threshold: float | None = Field(default=None, ge=0, le=100)
+    llm_assess_text_noise: bool | None = None
+    text_cleanup_rules: list[TextCleanupRule] | None = None
 
 
 class PdfCorpusRecordRerun(BaseModel):
@@ -679,6 +1152,9 @@ class PdfCorpusTextTouchupProposalStatus(BaseModel):
 
 class PdfCorpusPublishRequest(BaseModel):
     require_acceptance: bool = True
+    # Compatibility path for older clients. This changes decision provenance,
+    # but does not determine cELF conformance.
+    accept_unreviewed: bool = False
 
 class RAGGradeRequest(BaseModel):
     question: str = Field(min_length=1)
@@ -708,6 +1184,7 @@ class RAGGradeBatchRequest(BaseModel):
 class WorkMetadataSeed(BaseModel):
     work: str = Field(min_length=1, max_length=500)
     current_metadata: dict[str, Any] = Field(default_factory=dict)
+    source_type_scope: str = Field(default="unknown", min_length=1, max_length=64)
 
 
 class WorkMetadataRequest(BaseModel):
@@ -762,14 +1239,43 @@ class ResearcherProviderStatusRequest(BaseModel):
 
 class AnnotationCreateRequest(BaseModel):
     store: str | None = Field(default=None, max_length=300)
-    record_id: str = Field(min_length=1, max_length=500)
+    scope: Literal["text", "record", "work"] | None = None
+    record_id: str | None = Field(default=None, max_length=500)
     work: str | None = Field(default=None, max_length=500)
+    linked_record_ids: list[str] = Field(default_factory=list, max_length=100)
+    parent_id: str | None = Field(default=None, max_length=200)
     page_start: int | str | None = None
     page_end: int | str | None = None
     field: str = Field(default="text", max_length=200)
     quote: str = Field(default="", max_length=10000)
     note: str = Field(default="", max_length=20000)
     tags: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_scope_targets(self) -> AnnotationCreateRequest:
+        if self.scope is None:
+            self.scope = "text" if self.quote.strip() else "record"
+        if self.scope in {"text", "record"} and not self.record_id:
+            raise ValueError("Text and record annotations require a record_id.")
+        if self.scope == "work" and not self.work:
+            raise ValueError("Work annotations require a work.")
+        if self.scope == "text" and not self.quote.strip():
+            raise ValueError("Text annotations require selected text.")
+        if self.record_id and self.record_id in self.linked_record_ids:
+            raise ValueError("The primary record must not be repeated in linked_record_ids.")
+        return self
+
+
+class AnnotationReplyRequest(BaseModel):
+    note: str = Field(default="", max_length=20000)
+    quote: str = Field(default="", max_length=10000)
+    tags: list[str] = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_content(self) -> AnnotationReplyRequest:
+        if not self.note.strip() and not self.quote.strip() and not self.tags:
+            raise ValueError("Replies require text or tags.")
+        return self
 
 
 class LanguageDictionaryUpdate(BaseModel):

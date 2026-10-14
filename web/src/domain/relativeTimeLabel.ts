@@ -1,6 +1,23 @@
-/* Copyright 2026 Aaron John Schlosser, PhD. */
-type Tr = (key: string, fallback: string) => string;
-type Trf = (key: string, fallback: string, values: Record<string, unknown>) => string;
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import type { Tr, Trf } from "../i18n/bindCopy";
+import { bindCopy } from "../i18n/bindCopy";
 
 const FALLBACKS = {
   minutes: ["{count} minute ago", "{count} minutes ago"],
@@ -17,13 +34,16 @@ export function relativeTimeLabel(
   nowMs: number,
   { tr, trf, locale }: { tr: Tr; trf: Trf; locale?: string },
 ): string {
+  const copy = bindCopy(tr, trf);
+  const translate = copy.tr;
+  const interpolate = copy.trf;
   const date = new Date((value as string | number | Date) || 0);
-  if (!Number.isFinite(date.getTime())) return tr("time.recently", "Recently");
+  if (!Number.isFinite(date.getTime())) return translate("time.recently");
   const seconds = Math.max(0, Math.round((nowMs - date.getTime()) / 1000));
-  if (seconds < 60) return tr("time.just_now", "just now");
+  if (seconds < 60) return translate("time.just_now");
   const count = (unit: keyof typeof FALLBACKS, n: number) => {
     const one = n === 1;
-    return trf(`time.${unit}_ago_${one ? "one" : "other"}`, FALLBACKS[unit][one ? 0 : 1], {
+    return interpolate(`time.${unit}_ago_${one ? "one" : "other"}`, FALLBACKS[unit][one ? 0 : 1], {
       count: n.toLocaleString(locale || undefined),
     });
   };

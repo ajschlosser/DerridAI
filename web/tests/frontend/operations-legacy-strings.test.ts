@@ -1,12 +1,29 @@
+/*
+ * This file is part of DerridAI, a cELF-compliant research workspace
+ * Copyright © 2026  Aaron John Schlosser, PhD
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  operationDetailPairs,
-  operationViewModel,
-  setTranslationDictionary,
-  state,
-} from "../../src/runtime/runtime.js";
+import "../../src/domain/appBootstrap";
+import { operationPresenters } from "../../src/domain/sharedOperationPresenters";
+import { setTranslationDictionary } from "../../src/domain/sharedTranslate";
+import { state } from "../../src/domain/sharedUrlState";
+const { operationDetailPairs, operationViewModel } = operationPresenters;
 import { formatDuration } from "../../src/domain/operationsPanel";
 
 // The Operations panel and its details dialog get their labels, fact names and sentence fragments from the
@@ -28,7 +45,7 @@ const base = {
   started_at: "2026-09-20T10:00:05Z",
   finished_at: "2026-09-20T10:01:00Z",
 };
-const JOBS = [
+const JOBS: Array<Record<string, any>> = [
   {
     id: "auto",
     type: "llm",
@@ -108,8 +125,7 @@ describe("Operations legacy strings are translatable", () => {
 
   it("the decision and result counts are translated, not raw enum text", () => {
     const pairs = operationDetailPairs(JOBS.find((j) => j.id === "auto")!);
-    const byName = (name: string) =>
-      pairs.find(([n]: [string]) => n === `⟦operations.fact.${name}⟧`)?.[1];
+    const byName = (name: string) => pairs.find(([n]) => n === `⟦operations.fact.${name}⟧`)?.[1];
     expect(byName("decision")).toBe("⟦operations.decision.partially_accepted⟧");
     expect(byName("accepted")).toBe("⟦operations.fact.result_field_counts⟧");
     expect(byName("rejected")).toBe("⟦operations.fact.result_field_counts⟧");
