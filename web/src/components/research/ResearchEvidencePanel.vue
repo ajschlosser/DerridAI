@@ -250,11 +250,13 @@ function selectedRows(item: ResearchEvidenceSelection) {
             ><small>{{ active.inline_citation || "" }}</small>
           </div>
           <span class="research-evidence-cited" :class="{ uncited: !citedCount }">
-            {{ citedCount
+            {{
+              citedCount
                 ? citedCount === 1
                   ? i18n.t("research.cited_in_answer_one")
                   : i18n.tf("research.cited_in_answer_other", { count: citedCount })
-                : i18n.t("research.not_cited_in_answer") }}
+                : i18n.t("research.not_cited_in_answer")
+            }}
           </span>
         </div>
         <div

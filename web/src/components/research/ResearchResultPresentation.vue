@@ -72,7 +72,12 @@ const previewIndex = ref<number | null>(null);
 const highlightIndex = computed(() =>
   props.result?.evidence?.length ? (previewIndex.value ?? props.activeEvidenceIndex) : null,
 );
-watch(() => props.result, () => { previewIndex.value = null; });
+watch(
+  () => props.result,
+  () => {
+    previewIndex.value = null;
+  },
+);
 </script>
 
 <template>

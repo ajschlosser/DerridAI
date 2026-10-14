@@ -30,15 +30,17 @@ describe("research answer formatting", () => {
       { evidence_id: "E2", inline_citation: "(Derrida 1997: 11)" },
       { evidence_id: "E3", inline_citation: "(Derrida 2002: 13)" },
     ];
-    const answer = "An attribution [[E1]] and again [E1]. Ambiguous (Derrida 1997: 11)." +
+    const answer =
+      "An attribution [[E1]] and again [E1]. Ambiguous (Derrida 1997: 11)." +
       "\n\n- A further claim [[E3]].\n\nWorks Cited\n(Derrida 1997: 11) (Derrida 2002: 13)";
     expect(evidenceCitationCounts(answer, evidence)).toEqual([2, 0, 1]);
   });
 
   it("does not count unsupported or bibliography-only references", () => {
     const evidence = [{ evidence_id: "E1", inline_citation: "(Derrida 1997: 11)" }];
-    expect(evidenceCitationCounts("Unknown [E9].\n\nWorks Cited\n(Derrida 1997: 11)", evidence))
-      .toEqual([0]);
+    expect(
+      evidenceCitationCounts("Unknown [E9].\n\nWorks Cited\n(Derrida 1997: 11)", evidence),
+    ).toEqual([0]);
   });
 
   it("does not turn a generated paragraph wrapped in strong markers into a bold paragraph", () => {

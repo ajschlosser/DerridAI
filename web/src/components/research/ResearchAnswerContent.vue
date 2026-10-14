@@ -54,7 +54,10 @@ function segments(text: string) {
             <button
               v-if="segment.evidenceIndex != null"
               class="research-inline-citation"
-              :class="{ 'thread-answer-citation': compact, 'research-citation-corresponding': segment.evidenceIndex === highlightIndex }"
+              :class="{
+                'thread-answer-citation': compact,
+                'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
+              }"
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
@@ -72,7 +75,10 @@ function segments(text: string) {
             <button
               v-if="segment.evidenceIndex != null"
               class="research-inline-citation"
-              :class="{ 'thread-answer-citation': compact, 'research-citation-corresponding': segment.evidenceIndex === highlightIndex }"
+              :class="{
+                'thread-answer-citation': compact,
+                'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
+              }"
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
@@ -89,7 +95,10 @@ function segments(text: string) {
           <button
             v-if="segment.evidenceIndex != null"
             class="research-inline-citation"
-            :class="{ 'thread-answer-citation': compact, 'research-citation-corresponding': segment.evidenceIndex === highlightIndex }"
+            :class="{
+              'thread-answer-citation': compact,
+              'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
+            }"
             type="button"
             :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
             @click="emit('evidence', segment.evidenceIndex)"

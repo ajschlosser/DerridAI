@@ -90,6 +90,10 @@ describe("ResearchEvidencePanel links", () => {
     const disclosures = wrapper.findAll(".research-evidence-disclosure");
     expect(disclosures).toHaveLength(1);
     expect(disclosures[0].attributes("open")).toBeUndefined();
-    expect(disclosures[0].text()).toContain("Derrida, Jacques. Test Work.");
+    expect(disclosures[0].text()).not.toContain("Derrida, Jacques. Test Work.");
+    expect(disclosures[0].text()).toContain("derrida_primary");
+    expect(wrapper.get(".research-evidence-citation").text()).toContain(
+      "Derrida, Jacques. Test Work.",
+    );
   });
 });

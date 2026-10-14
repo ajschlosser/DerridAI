@@ -61,21 +61,50 @@ const summary = computed(() => {
   const result = props.result;
   const request = props.job?.request ?? result.rag_request ?? {};
   const evidence = result.evidence || [];
-  const cited = evidenceCitationCounts(result.answer, evidence).filter((count) => count > 0).length;
-  const source = request.skip_retrieval === true
-    ? i18n.t("research.evidence_only")
-    : String(request.source_collection || props.job?.source_collection || result.collections?.join(", ") || "");
-  const preset = request.k != null || request.skip_retrieval === true
-    ? i18n.t("research.preset_" + inferResearchPreset(request))
-    : "";
+  const cited = evidenceCitationCounts(result.answer || "", evidence).filter(
+    (count) => count > 0,
+  ).length;
+  const source =
+    request.skip_retrieval === true
+      ? i18n.t("research.evidence_only")
+      : String(
+          request.source_collection ||
+            props.job?.source_collection ||
+            result.collections?.join(", ") ||
+            "",
+        );
+  const preset =
+    request.k != null || request.skip_retrieval === true
+      ? i18n.t("research.preset_" + inferResearchPreset(request))
+      : "";
   const duration = Number(result.elapsed_seconds);
   return [
     { key: "source", label: i18n.t("research.collection"), value: source },
     { key: "preset", label: i18n.t("research.retrieval_profile"), value: preset },
-    { key: "evidence", label: i18n.t("research.evidence"), value: evidence.length ? i18n.tf("research.cited_of_retrieved", { cited, total: evidence.length }) : "" },
-    { key: "model", label: i18n.t("research.model"), value: [result.provider || props.job?.provider, result.model || props.job?.model].filter(Boolean).join(" · ") },
-    { key: "elapsed", label: i18n.t("research.elapsed"), value: Number.isFinite(duration) && duration > 0 ? duration.toFixed(1) + " s" : "" },
-    { key: "cache", label: i18n.t("research.cached"), value: result.response_cache?.record_id ? i18n.t("research.cached") : "" },
+    {
+      key: "evidence",
+      label: i18n.t("research.evidence"),
+      value: evidence.length
+        ? i18n.tf("research.cited_of_retrieved", { cited, total: evidence.length })
+        : "",
+    },
+    {
+      key: "model",
+      label: i18n.t("research.model"),
+      value: [result.provider || props.job?.provider, result.model || props.job?.model]
+        .filter(Boolean)
+        .join(" · "),
+    },
+    {
+      key: "elapsed",
+      label: i18n.t("research.elapsed"),
+      value: Number.isFinite(duration) && duration > 0 ? duration.toFixed(1) + " s" : "",
+    },
+    {
+      key: "cache",
+      label: i18n.t("research.cached"),
+      value: result.response_cache?.record_id ? i18n.t("research.cached") : "",
+    },
   ].filter((item) => item.value);
 });
 const statusLabel = computed(() => {
