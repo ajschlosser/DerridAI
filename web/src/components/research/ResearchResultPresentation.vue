@@ -17,12 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <script setup lang="ts">
+import { computed, ref, watch } from "vue";
 import type { ResearchDraftState } from "../../features/research/useResearchDraft";
 import ResearchAnswerWorkspace from "./ResearchAnswerWorkspace.vue";
 import ResearchEvidencePanel from "./ResearchEvidencePanel.vue";
 import type { ResearchEvidenceSelection, ResearchJob, ResearchResult } from "../../types/research";
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     job?: ResearchJob | null;
     result?: ResearchResult | null;
@@ -66,6 +67,17 @@ const emit = defineEmits<{
   openRecord: [index: number];
   openRelationships: [index: number, mode: "trace" | "model"];
 }>();
+// Previewing by pointer or keyboard should never alter the selected evidence.
+const previewIndex = ref<number | null>(null);
+const highlightIndex = computed(() =>
+  props.result?.evidence?.length ? (previewIndex.value ?? props.activeEvidenceIndex) : null,
+);
+watch(
+  () => props.result,
+  () => {
+    previewIndex.value = null;
+  },
+);
 </script>
 
 <template>
@@ -76,6 +88,7 @@ const emit = defineEmits<{
       :draft="draft"
       :busy="busy"
       :can-grade="canGrade"
+      :highlight-index="highlightIndex"
       :read-only="readOnly"
       :instance-id="instanceId"
       :context-label="instanceLabel"
@@ -90,10 +103,12 @@ const emit = defineEmits<{
       :context-label="instanceLabel"
       :selected-evidence="selectedEvidence"
       :result-evidence="result?.evidence || []"
+      :answer="result?.answer || ''"
       :active-index="activeEvidenceIndex"
       :can-remove="canRemoveSelected"
       :researcher="researcher"
       @select="emit('selectEvidence', $event)"
+      @preview="previewIndex = $event"
       @remove="emit('removeSelected', $event)"
       @clear="emit('clearSelected')"
       @open-record="emit('openRecord', $event)"
@@ -101,3 +116,32 @@ const emit = defineEmits<{
     />
   </div>
 </template>
+
+<style>
+/* Container queries reflect the actual width of the nested thread workspace. */
+.research-thread-workspace,
+.thread-answer-inspector {
+  container-type: inline-size;
+}
+.research-workspace-grid.research-result-presentation {
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr);
+}
+@container (max-width: 820px) {
+  .research-workspace-grid.research-result-presentation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .research-workspace-grid.research-result-presentation .research-evidence-panel {
+    position: static;
+    max-height: none;
+  }
+}
+@media (max-width: 1100px) {
+  .research-workspace-grid.research-result-presentation {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .research-workspace-grid.research-result-presentation .research-evidence-panel {
+    position: static;
+    max-height: none;
+  }
+}
+</style>

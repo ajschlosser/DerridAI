@@ -29,8 +29,9 @@ const props = withDefaults(
     /** Keep the thread reading layout without changing citation semantics. */
     compact?: boolean;
     readOnly?: boolean;
+    highlightIndex?: number | null;
   }>(),
-  { evidence: () => [], compact: false, readOnly: false },
+  { evidence: () => [], compact: false, readOnly: false, highlightIndex: null },
 );
 const emit = defineEmits<{ evidence: [index: number] }>();
 const i18n = useI18nStore();
@@ -53,7 +54,10 @@ function segments(text: string) {
             <button
               v-if="segment.evidenceIndex != null"
               class="research-inline-citation"
-              :class="{ 'thread-answer-citation': compact }"
+              :class="{
+                'thread-answer-citation': compact,
+                'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
+              }"
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
@@ -71,7 +75,10 @@ function segments(text: string) {
             <button
               v-if="segment.evidenceIndex != null"
               class="research-inline-citation"
-              :class="{ 'thread-answer-citation': compact }"
+              :class="{
+                'thread-answer-citation': compact,
+                'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
+              }"
               type="button"
               :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
               @click="emit('evidence', segment.evidenceIndex)"
@@ -88,7 +95,10 @@ function segments(text: string) {
           <button
             v-if="segment.evidenceIndex != null"
             class="research-inline-citation"
-            :class="{ 'thread-answer-citation': compact }"
+            :class="{
+              'thread-answer-citation': compact,
+              'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
+            }"
             type="button"
             :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
             @click="emit('evidence', segment.evidenceIndex)"
@@ -165,6 +175,11 @@ function segments(text: string) {
   line-height: 1.25;
   vertical-align: 0.02em;
   cursor: pointer;
+}
+.research-inline-citation.research-citation-corresponding {
+  box-shadow: inset 0 0 0 2px var(--ui-accent-border);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .research-inline-citation:hover {
   box-shadow: inset 0 0 0 1px var(--ui-accent-border);

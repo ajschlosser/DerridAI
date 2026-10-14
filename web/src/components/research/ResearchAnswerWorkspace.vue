@@ -18,6 +18,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { evidenceCitationCounts } from "../../features/research/researchCitationCounts";
+import { inferResearchPreset } from "./researchPreset";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchDraftState } from "../../features/research/useResearchDraft";
@@ -35,6 +37,7 @@ const props = withDefaults(
     busy?: boolean;
     canGrade?: boolean;
     readOnly?: boolean;
+    highlightIndex?: number | null;
     instanceId?: string;
     contextLabel?: string;
   }>(),
@@ -53,6 +56,57 @@ const runDetail = computed(() =>
     ? researchJobDetail(props.job, (key, fallback) => i18n.t(key, fallback), i18n.locale)
     : "",
 );
+const summary = computed(() => {
+  if (!props.result?.answer) return [];
+  const result = props.result;
+  const request = props.job?.request ?? result.rag_request ?? {};
+  const evidence = result.evidence || [];
+  const cited = evidenceCitationCounts(result.answer || "", evidence).filter(
+    (count) => count > 0,
+  ).length;
+  const source =
+    request.skip_retrieval === true
+      ? i18n.t("research.evidence_only")
+      : String(
+          request.source_collection ||
+            props.job?.source_collection ||
+            result.collections?.join(", ") ||
+            "",
+        );
+  const preset =
+    request.k != null || request.skip_retrieval === true
+      ? i18n.t(`research.preset_${inferResearchPreset(request)}`)
+      : "";
+  const duration = Number(result.elapsed_seconds);
+  return [
+    { key: "source", label: i18n.t("research.collection"), value: source },
+    { key: "preset", label: i18n.t("research.retrieval_profile"), value: preset },
+    {
+      key: "evidence",
+      label: i18n.t("research.evidence"),
+      value: evidence.length
+        ? i18n.tf("research.cited_of_retrieved", { cited, total: evidence.length })
+        : "",
+    },
+    {
+      key: "model",
+      label: i18n.t("research.model"),
+      value: [result.provider || props.job?.provider, result.model || props.job?.model]
+        .filter(Boolean)
+        .join(" · "),
+    },
+    {
+      key: "elapsed",
+      label: i18n.t("research.elapsed"),
+      value: Number.isFinite(duration) && duration > 0 ? duration.toFixed(1) + " s" : "",
+    },
+    {
+      key: "cache",
+      label: i18n.t("research.cached"),
+      value: result.response_cache?.record_id ? i18n.t("research.cached") : "",
+    },
+  ].filter((item) => item.value);
+});
 const statusLabel = computed(() => {
   if (!props.job) return "";
   if (props.job.status === "completed") return i18n.t("research.complete");
@@ -72,12 +126,12 @@ const statusLabel = computed(() => {
           <component :is="readOnly ? 'h5' : 'h2'">{{
             result.prompt || job?.prompt || i18n.t("research.answer")
           }}</component>
-          <p>
-            {{ result.provider || job?.provider }} · {{ result.model || job?.model
-            }}<template v-if="result.elapsed_seconds">
-              · {{ Number(result.elapsed_seconds).toFixed(2) }}s</template
-            >
-          </p>
+          <dl class="research-run-summary">
+            <div v-for="item in summary" :key="item.key">
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          </dl>
         </div>
         <div v-if="!readOnly" class="research-answer-actions">
           <button class="btn" type="button" @click="emit('copy')">
@@ -98,6 +152,7 @@ const statusLabel = computed(() => {
         :answer="result.answer"
         :evidence="result.evidence || []"
         :read-only="readOnly"
+        :highlight-index="highlightIndex"
         @evidence="emit('evidence', $event)"
       />
       <ResearchClaimReviewPanel
@@ -110,8 +165,6 @@ const statusLabel = computed(() => {
         @evidence="emit('evidence', $event)"
       />
       <footer class="research-answer-footer">
-        <span>{{ result.evidence?.length || 0 }} {{ i18n.t("research.evidence_records") }}</span>
-        <span v-if="result.response_cache?.record_id">{{ i18n.t("research.cached") }}</span>
         <button v-if="!readOnly" class="research-text-action" type="button" @click="emit('rerun')">
           {{ i18n.t("research.rerun") }}
         </button>
@@ -156,6 +209,26 @@ const statusLabel = computed(() => {
 </template>
 
 <style scoped>
+.research-run-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 8px 0 0;
+}
+.research-run-summary > div {
+  display: flex;
+  gap: 5px;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.research-run-summary dt {
+  color: var(--muted);
+}
+.research-run-summary dd {
+  margin: 0;
+  color: var(--text-2);
+  font-weight: var(--fw-semibold);
+}
 .research-answer-kicker {
   display: block;
   margin-bottom: 3px;
