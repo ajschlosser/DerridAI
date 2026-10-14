@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { currentFieldAssertions } from "../../domain/fieldAssertions";
+import { evidenceCitationCounts } from "../../features/research/researchCitationCounts";
 import { useI18nStore } from "../../stores/i18n";
 import type {
   ResearchEvidenceSelection,
@@ -30,6 +31,7 @@ const props = withDefaults(
   defineProps<{
     selectedEvidence?: ResearchEvidenceSelection[];
     resultEvidence?: ResearchResultEvidence[];
+    answer?: string;
     activeIndex?: number;
     canRemove?: boolean;
     researcher?: boolean;
@@ -39,6 +41,7 @@ const props = withDefaults(
   {
     selectedEvidence: () => [],
     resultEvidence: () => [],
+    answer: "",
     activeIndex: 0,
     canRemove: false,
     researcher: false,
@@ -48,6 +51,7 @@ const props = withDefaults(
 );
 const emit = defineEmits<{
   select: [index: number];
+  preview: [index: number | null];
   remove: [key: string];
   clear: [];
   openRecord: [index: number];
@@ -66,6 +70,8 @@ const active = computed(() =>
     : null,
 );
 const record = computed(() => active.value?.record || {});
+const citationCounts = computed(() => evidenceCitationCounts(props.answer, props.resultEvidence));
+const citedCount = computed(() => citationCounts.value[props.activeIndex] ?? 0);
 const excerptExpanded = ref(false);
 const EXCERPT_COLLAPSE_CHARS = 900;
 const activeText = computed(() => display(record.value.text));
@@ -211,6 +217,10 @@ function selectedRows(item: ResearchEvidenceSelection) {
             :class="{ active: index === activeIndex }"
             :aria-current="index === activeIndex ? 'true' : undefined"
             @click="emit('select', index)"
+            @mouseenter="emit('preview', index)"
+            @mouseleave="emit('preview', null)"
+            @focus="emit('preview', index)"
+            @blur="emit('preview', null)"
           >
             <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
             <span
@@ -239,6 +249,13 @@ function selectedRows(item: ResearchEvidenceSelection) {
             }}</b
             ><small>{{ active.inline_citation || "" }}</small>
           </div>
+          <span class="research-evidence-cited" :class="{ uncited: !citedCount }">
+            {{ citedCount
+                ? citedCount === 1
+                  ? i18n.t("research.cited_in_answer_one")
+                  : i18n.tf("research.cited_in_answer_other", { count: citedCount })
+                : i18n.t("research.not_cited_in_answer") }}
+          </span>
         </div>
         <div
           v-if="linkable"
@@ -296,6 +313,10 @@ function selectedRows(item: ResearchEvidenceSelection) {
           }}
         </p>
 
+        <p v-if="active.full_citation" class="research-evidence-citation">
+          <b>{{ i18n.t("research.full_citation") }}</b>
+          {{ active.full_citation }}
+        </p>
         <details v-if="relationRows.length" class="research-evidence-disclosure" open>
           <summary>
             <span>{{ i18n.t("research.evidence_context", "Evidence context") }}</span>
@@ -311,7 +332,6 @@ function selectedRows(item: ResearchEvidenceSelection) {
 
         <details
           v-if="
-            active.full_citation ||
             active.collection ||
             active.rerank_score != null ||
             display(record.topics) ||
@@ -320,13 +340,9 @@ function selectedRows(item: ResearchEvidenceSelection) {
           class="research-evidence-disclosure"
         >
           <summary>
-            <span>{{ i18n.t("research.source_details", "Source details") }}</span>
+            <span>{{ i18n.t("research.retrieval_details") }}</span>
           </summary>
           <div class="research-evidence-metadata">
-            <span v-if="active.full_citation"
-              ><b>{{ i18n.t("research.full_citation") }}</b
-              >{{ active.full_citation }}</span
-            >
             <span v-if="active.collection"
               ><b>{{ i18n.t("research.collection") }}</b
               >{{ active.collection }}</span
@@ -486,6 +502,31 @@ function selectedRows(item: ResearchEvidenceSelection) {
   align-items: center;
   margin-bottom: 12px;
 }
+.research-evidence-cited {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.research-evidence-cited.uncited {
+  color: var(--muted);
+  background: var(--surface-raised);
+}
+.research-evidence-citation {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.research-evidence-citation b {
+  display: block;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
 .research-evidence-inspector-head > div {
   display: grid;
   gap: 2px;
@@ -502,8 +543,8 @@ function selectedRows(item: ResearchEvidenceSelection) {
   margin: 0;
   color: var(--text-2);
   font-family: var(--font-reading);
-  font-size: var(--fs-sm);
-  line-height: 1.62;
+  font-size: 0.9375rem;
+  line-height: 1.7;
   white-space: pre-line;
 }
 .research-evidence-metadata {
