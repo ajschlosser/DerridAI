@@ -75,7 +75,7 @@ const summary = computed(() => {
         );
   const preset =
     request.k != null || request.skip_retrieval === true
-      ? i18n.t("research.preset_" + inferResearchPreset(request))
+      ? i18n.t(`research.preset_${inferResearchPreset(request)}`)
       : "";
   const duration = Number(result.elapsed_seconds);
   return [
