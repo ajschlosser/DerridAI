@@ -8,6 +8,7 @@ const props = withDefaults(
     selectedEvidence?: ResearchEvidenceSelection[];
     resultEvidence?: ResearchResultEvidence[];
     activeIndex?: number;
+    answer?: string;
     canRemove?: boolean;
     researcher?: boolean;
   }>(),
@@ -15,11 +16,17 @@ const props = withDefaults(
     selectedEvidence: () => [],
     resultEvidence: () => [],
     activeIndex: 0,
+    answer: "",
     canRemove: false,
     researcher: false,
   },
 );
-const emit = defineEmits<{ select: [index: number]; remove: [key: string]; clear: [] }>();
+const emit = defineEmits<{
+  select: [index: number];
+  preview: [index: number | null];
+  remove: [key: string];
+  clear: [];
+}>();
 const i18n = useI18nStore();
 const showingResult = computed(() => props.resultEvidence.length > 0);
 const active = computed(() =>
@@ -30,6 +37,20 @@ const active = computed(() =>
     : null,
 );
 const record = computed(() => active.value?.record || {});
+// How often the answer cites the active item, so the reader can see whether a
+// passage carries the answer or was merely retrieved.
+const citedCount = computed(() => {
+  const citation = String(active.value?.inline_citation || "").trim();
+  if (!citation || !props.answer) return 0;
+  return props.answer.split(citation).length - 1;
+});
+const hasRetrievalDetails = computed(
+  () =>
+    Boolean(active.value?.collection) ||
+    active.value?.rerank_score != null ||
+    Boolean(display(record.value.topics)) ||
+    Boolean(display(record.value.concepts)),
+);
 function pageLabel(record: Record<string, unknown>) {
   const start = record.page_start ?? record.page ?? null,
     end = record.page_end ?? null;
@@ -101,6 +122,10 @@ const relationRows = computed(() =>
           role="listitem"
           :class="{ active: index === activeIndex }"
           @click="emit('select', index)"
+          @mouseenter="emit('preview', index)"
+          @mouseleave="emit('preview', null)"
+          @focus="emit('preview', index)"
+          @blur="emit('preview', null)"
         >
           <span class="research-evidence-tag">{{ item.evidence_id || `E${index}` }}</span>
           <span
@@ -128,16 +153,26 @@ const relationRows = computed(() =>
               display(record.record_id) ||
               i18n.t("research.evidence", "Evidence")
             }}</b
-            ><small>{{ active.inline_citation || "" }}</small>
+            ><small
+              ><template v-if="pageLabel(record)">pp. {{ pageLabel(record) }} · </template
+              >{{ active.inline_citation || "" }}</small
+            >
           </div>
+          <span class="research-evidence-cited" :class="{ uncited: !citedCount }">{{
+            citedCount
+              ? i18n.tf(
+                  citedCount === 1
+                    ? "research.cited_in_answer_one"
+                    : "research.cited_in_answer_other",
+                  citedCount === 1 ? "Cited once in the answer" : "Cited {count}× in the answer",
+                  { count: citedCount },
+                )
+              : i18n.t("research.not_cited_in_answer", "Retrieved, not cited")
+          }}</span>
         </div>
-        <dl v-if="relationRows.length" class="research-relation-grid">
-          <template v-for="([label, value], index) in relationRows" :key="index"
-            ><dt>{{ label }}</dt>
-            <dd>{{ display(value) }}</dd></template
-          >
-        </dl>
-        <p v-if="display(record.text)" class="research-evidence-text">{{ display(record.text) }}</p>
+        <blockquote v-if="display(record.text)" class="research-evidence-text">
+          {{ display(record.text) }}
+        </blockquote>
         <p v-else class="note">
           {{
             researcher
@@ -151,20 +186,18 @@ const relationRows = computed(() =>
                 )
           }}
         </p>
-        <div
-          v-if="
-            active.full_citation ||
-            active.collection ||
-            active.rerank_score != null ||
-            display(record.topics) ||
-            display(record.concepts)
-          "
-          class="research-evidence-metadata"
-        >
-          <span v-if="active.full_citation"
-            ><b>{{ i18n.t("research.full_citation", "Full citation") }}</b
-            >{{ active.full_citation }}</span
+        <p v-if="active.full_citation" class="research-evidence-citation">
+          <b>{{ i18n.t("research.full_citation", "Full citation") }}</b
+          >{{ active.full_citation }}
+        </p>
+        <dl v-if="relationRows.length" class="research-relation-grid">
+          <template v-for="([label, value], index) in relationRows" :key="index"
+            ><dt>{{ label }}</dt>
+            <dd>{{ display(value) }}</dd></template
           >
+        </dl>
+        <details v-if="hasRetrievalDetails" class="research-evidence-metadata">
+          <summary>{{ i18n.t("research.retrieval_details", "Retrieval details") }}</summary>
           <span v-if="active.collection"
             ><b>{{ i18n.t("research.collection", "Collection") }}</b
             >{{ active.collection }}</span
@@ -181,7 +214,7 @@ const relationRows = computed(() =>
             ><b>{{ i18n.t("research.concepts", "Concepts") }}</b
             >{{ display(record.concepts) }}</span
           >
-        </div>
+        </details>
       </section>
     </template>
 
@@ -285,7 +318,7 @@ const relationRows = computed(() =>
 }
 .research-evidence-inspector-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 9px;
   align-items: center;
   margin-bottom: 12px;
@@ -302,19 +335,60 @@ const relationRows = computed(() =>
   font-size: 0.8125rem;
   color: var(--muted);
 }
+.research-evidence-cited {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--ui-accent-soft);
+  color: var(--accent-fg);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.research-evidence-cited.uncited {
+  background: var(--surface-raised);
+  color: var(--muted);
+}
 .research-evidence-text {
-  margin: 0;
-  color: var(--text-2);
+  margin: 0 0 12px;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--ui-accent-border);
+  color: var(--text);
   font:
-    13px/1.65 Georgia,
+    15px/1.7 Georgia,
     "Times New Roman",
     serif;
   white-space: pre-line;
 }
+.research-evidence-citation {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+.research-evidence-citation b {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.045em;
+  color: var(--muted);
+}
 .research-evidence-metadata {
   display: grid;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 4px;
+}
+.research-evidence-metadata > summary {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.research-evidence-metadata > summary:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
 }
 .research-evidence-metadata span {
   display: grid;

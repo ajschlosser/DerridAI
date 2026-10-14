@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import ResearchAnswerWorkspace from "./ResearchAnswerWorkspace.vue";
 import ResearchEvidencePanel from "./ResearchEvidencePanel.vue";
 import type { ResearchEvidenceSelection, ResearchJob, ResearchResult } from "../../types/research";
 
-withDefaults(defineProps<{
+const props=withDefaults(defineProps<{
   job?:ResearchJob|null;
   result?:ResearchResult|null;
   selectedEvidence?:ResearchEvidenceSelection[];
@@ -33,6 +34,10 @@ const emit=defineEmits<{
   removeSelected:[key:string];
   clearSelected:[];
 }>();
+// Citations for the evidence item being previewed (hover/focus) or, failing
+// that, the item open in the inspector are highlighted in the answer.
+const previewIndex=ref<number|null>(null);
+const highlightIndex=computed(()=>props.result?.evidence?.length?(previewIndex.value??props.activeEvidenceIndex):null);
 </script>
 
 <template>
@@ -42,6 +47,7 @@ const emit=defineEmits<{
       :result="result"
       :busy="busy"
       :can-grade="canGrade"
+      :highlight-index="highlightIndex"
       @copy="emit('copy')"
       @grade="emit('grade')"
       @rerun="emit('rerun')"
@@ -52,9 +58,11 @@ const emit=defineEmits<{
       :selected-evidence="selectedEvidence"
       :result-evidence="result?.evidence||[]"
       :active-index="activeEvidenceIndex"
+      :answer="result?.answer||''"
       :can-remove="canRemoveSelected"
       :researcher="researcher"
       @select="emit('selectEvidence',$event)"
+      @preview="previewIndex=$event"
       @remove="emit('removeSelected',$event)"
       @clear="emit('clearSelected')"
     />

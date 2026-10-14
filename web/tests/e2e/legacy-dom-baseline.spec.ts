@@ -1336,7 +1336,7 @@ const scenarios: Scenario[] = [
     fixtures: jobFixtures(RAG_JOBS),
     steps: async (page) => {
       await researchWithEvidence(page);
-      await page.getByRole("button", { name: "Runs", exact: true }).click();
+      await page.getByRole("button", { name: /View all runs/ }).click();
       await page.waitForTimeout(700);
     },
   },

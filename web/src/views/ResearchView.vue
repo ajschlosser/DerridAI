@@ -6,7 +6,7 @@ import ResearchComposer from "../components/research/ResearchComposer.vue";
 import ResearchResultPresentation from "../components/research/ResearchResultPresentation.vue";
 import ResearchSettingsDrawer from "../components/research/ResearchSettingsDrawer.vue";
 import ResearchRunsDrawer from "../components/research/ResearchRunsDrawer.vue";
-import ResearchPipelineBar from "../components/research/ResearchPipelineBar.vue";
+import ResearchThreadList from "../components/research/ResearchThreadList.vue";
 import { useAuthStore } from "../stores/auth";
 import { useI18nStore } from "../stores/i18n";
 import type {
@@ -17,6 +17,7 @@ import type {
 } from "../types/research";
 import * as runtime from "../runtime/runtime.js";
 import UiPageHeader from "../components/ui/UiPageHeader.vue";
+import { inferResearchPreset } from "../components/research/researchPreset";
 
 const route = useRoute();
 const router = useRouter();
@@ -39,6 +40,9 @@ const jobs = ref<ResearchJob[]>([]);
 const activeJob = ref<ResearchJob | null>(null);
 const sessionJobIds = ref<Set<string>>(new Set());
 const activeEvidenceIndex = ref(0);
+// While a run is open the composer shrinks to one line so the answer leads.
+const composerExpanded = ref(false);
+const composerCompact = computed(() => Boolean(activeJob.value) && !composerExpanded.value);
 const settingsDrawer = ref<{ open: () => void } | null>(null);
 const runsDrawer = ref<{ open: () => void; close: () => void } | null>(null);
 let pollTimer: number | undefined;
@@ -108,19 +112,7 @@ function profileModel(profile: ResearchProfile | null) {
     ? "auto"
     : String(profile.model || "");
 }
-function inferPreset(cfg: ResearchConfig) {
-  if (cfg.skip_retrieval) return "evidence";
-  if (cfg.k === 40 && cfg.fetch_k === 320 && cfg.rerank_top_n === 16) return "precision";
-  if (cfg.k === 96 && cfg.fetch_k === 1000 && cfg.rerank_top_n === 32) return "recall";
-  if (
-    cfg.k === 64 &&
-    cfg.fetch_k === 500 &&
-    cfg.rerank_top_n === 24 &&
-    Math.abs(Number(cfg.lambda_mult) - 0.7) < 0.001
-  )
-    return "balanced";
-  return "custom";
-}
+const inferPreset = (cfg: ResearchConfig) => inferResearchPreset(cfg);
 function hydrate(
   snapshot: ResearchWorkspaceSnapshot,
   { preserveDraft = false, preserveActive = true } = {},
@@ -183,10 +175,6 @@ async function loadWorkspace(refresh = true) {
       if (!jobs.value.some((job) => job.id === activeJob.value?.id))
         jobs.value = [activeJob.value, ...jobs.value];
       activeEvidenceIndex.value = 0;
-      await nextTick();
-      document
-        .querySelector(".research-answer-workspace")
-        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (activeJob.value?.status === "completed" && !activeJob.value.result) {
       activeJob.value = (await runtime.getResearchJob(activeJob.value.id)) as ResearchJob;
     }
@@ -272,12 +260,9 @@ async function runResearch() {
     sessionJobIds.value.add(job.id);
     activeJob.value = job;
     activeEvidenceIndex.value = 0;
+    composerExpanded.value = false;
     jobs.value = [job, ...jobs.value.filter((item) => item.id !== job.id)];
     schedulePoll(true);
-    await nextTick();
-    document
-      .querySelector(".research-answer-workspace")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   } finally {
@@ -337,15 +322,14 @@ function schedulePoll(force = false) {
 }
 async function openJob(job: ResearchJob) {
   try {
-    if (route.query.job) await router.replace({ path: "/rag" });
     activeJob.value =
       job.status === "completed" ? ((await runtime.getResearchJob(job.id)) as ResearchJob) : job;
     activeEvidenceIndex.value = 0;
+    composerExpanded.value = false;
     runsDrawer.value?.close();
-    await nextTick();
-    document
-      .querySelector(".research-answer-workspace")
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // The URL is the thread's address, so it can be reloaded or shared. The
+    // route watcher skips reloading when the active job already matches.
+    if (route.query.job !== job.id) await router.replace({ path: "/rag", query: { job: job.id } });
   } catch (error) {
     runtime.notifyToast(error instanceof Error ? error.message : String(error), { tone: "danger" });
   }
@@ -377,6 +361,20 @@ async function removeJob(job: ResearchJob) {
 async function refreshRuns() {
   jobs.value = (await runtime.refreshResearchJobs()) as ResearchJob[];
   schedulePoll();
+}
+function expandComposer() {
+  composerExpanded.value = true;
+  void nextTick(() => document.querySelector<HTMLTextAreaElement>("#researchQuestion")?.focus());
+}
+function newQuestion() {
+  if (route.query.job) void router.replace({ path: "/rag" });
+  activeJob.value = null;
+  activeEvidenceIndex.value = 0;
+  void nextTick(() => {
+    const field = document.querySelector<HTMLTextAreaElement>("#researchQuestion");
+    field?.scrollIntoView({ behavior: "smooth", block: "center" });
+    field?.focus();
+  });
 }
 function loadHistory(item: Record<string, unknown>) {
   prompt.value = String(item.prompt || "");
@@ -482,7 +480,8 @@ watch(prompt, persistDraft);
 watch(instructions, persistDraft);
 watch(
   () => [route.name, route.query.job],
-  ([name]) => {
+  ([name, job]) => {
+    if (name === "rag" && job && job === activeJob.value?.id) return;
     window.clearTimeout(pollTimer);
     if (name === "rag") void loadWorkspace(true);
   },
@@ -572,6 +571,7 @@ onBeforeUnmount(() => {
         :can-configure="canConfigureResearch"
         :can-manage-runs="canManageRuns"
         :disabled-reason="runDisabledReason"
+        :compact="composerCompact"
         @update:source-collection="updateConfig({ source_collection: $event })"
         @update:provider-profile-id="changeProfile"
         @update:response-language="updateConfig({ response_language: $event })"
@@ -580,35 +580,38 @@ onBeforeUnmount(() => {
         @settings="settingsDrawer?.open()"
         @runs="runsDrawer?.open()"
         @history="loadHistory"
+        @expand="expandComposer"
       />
 
-      <ResearchPipelineBar
-        :jobs="jobs"
-        :selected-job-id="activeJob?.id || ''"
-        :can-manage="canManageRuns"
-        @select="openJob"
-        @cancel="cancelJob"
-        @open-runs="runsDrawer?.open()"
-      />
-
-      <ResearchResultPresentation
-        :job="activeJob"
-        :result="activeResult"
-        :selected-evidence="selectedEvidence"
-        :active-evidence-index="activeEvidenceIndex"
-        :busy="starting"
-        :can-grade="canGrade"
-        :can-remove-selected="workspace.can_select_evidence && auth.can('evidence.select')"
-        :researcher="workspace.is_researcher"
-        @copy="copyAnswer"
-        @grade="gradeAnswer"
-        @rerun="prepareRerun"
-        @details="runsDrawer?.open()"
-        @evidence="focusEvidence"
-        @select-evidence="activeEvidenceIndex = $event"
-        @remove-selected="removeEvidence"
-        @clear-selected="clearEvidence"
-      />
+      <div class="research-thread-layout">
+        <ResearchThreadList
+          :jobs="jobs"
+          :selected-job-id="activeJob?.id || ''"
+          :can-manage="canManageRuns"
+          @select="openJob"
+          @cancel="cancelJob"
+          @new="newQuestion"
+          @open-runs="runsDrawer?.open()"
+        />
+        <ResearchResultPresentation
+          :job="activeJob"
+          :result="activeResult"
+          :selected-evidence="selectedEvidence"
+          :active-evidence-index="activeEvidenceIndex"
+          :busy="starting"
+          :can-grade="canGrade"
+          :can-remove-selected="workspace.can_select_evidence && auth.can('evidence.select')"
+          :researcher="workspace.is_researcher"
+          @copy="copyAnswer"
+          @grade="gradeAnswer"
+          @rerun="prepareRerun"
+          @details="runsDrawer?.open()"
+          @evidence="focusEvidence"
+          @select-evidence="activeEvidenceIndex = $event"
+          @remove-selected="removeEvidence"
+          @clear-selected="clearEvidence"
+        />
+      </div>
 
       <ResearchSettingsDrawer
         ref="settingsDrawer"

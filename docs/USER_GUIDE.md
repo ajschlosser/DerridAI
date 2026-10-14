@@ -500,6 +500,39 @@ The record header keeps navigation available while the text or inspector is scro
 
 RAG runs as a background operation and exposes the pipeline itself rather than hiding it.
 
+### Workspace layout
+
+The Research page has three parts: the question, the threads and the
+answer with its evidence. On wide screens (1440px and up) the threads sit in
+a column to the left of the answer; on narrower screens they sit above it.
+
+- **Question.** With no run open you see the full composer: question,
+  additional instructions, corpus, Research profile, retrieval preset and
+  answer language. While a run is open it shrinks to one line with a summary
+  of those settings; you can still edit and run the question there, or choose
+  **More options** for the full composer. Ctrl+Enter (Cmd+Enter on macOS)
+  runs the question.
+- **Threads.** Every retained run is a thread. Running threads come first,
+  with their current stage and a cancel button, then up to twelve recent
+  threads, newest first, with their corpus and age. Click a thread, or use the
+  arrow keys and Enter, to open it. The open thread's address is
+  `/rag?job=<id>`, which you can reload or share with someone who can read
+  that run. **New question** clears the open thread; **View all runs** opens
+  the full history, where runs can be removed and retrieval diagnostics read.
+- **Answer.** The header shows the question and a summary of the run: corpus
+  (or Evidence only), retrieval preset, how many retrieved evidence items the
+  answer cites, provider and model, time and whether the answer came from the
+  response cache. Copy, Analyze & grade, Re-run and Run details sit beside
+  it. Inline citations open the matching evidence item.
+- **Evidence.** The answer and evidence share the width roughly evenly and
+  stack when space is tight. The inspector shows, in order: the passage, the
+  full citation and pages, then the attribution fields (speaker, quoted
+  speaker, position holder, stance, proposition status, discourse role,
+  target), each separately. Retrieval details (collection, rerank score,
+  topics, concepts) are folded away. A badge says how often the answer cites
+  the item, or that it was retrieved but not cited. Hovering or focusing an
+  item in the evidence list highlights its citations in the answer.
+
 Visible stages:
 
 1. Query decomposition

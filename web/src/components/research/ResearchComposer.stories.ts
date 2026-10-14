@@ -24,3 +24,4 @@ export default meta;
 type Story=StoryObj<typeof ResearchComposer>;
 export const Default:Story={};
 export const Empty:Story={args:{prompt:"",instructions:"",evidenceCount:0}};
+export const Compact:Story={args:{compact:true}};

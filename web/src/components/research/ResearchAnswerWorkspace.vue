@@ -4,6 +4,7 @@ import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchJob, ResearchResult } from "../../types/research";
 import { researchJobDetail } from "./researchI18n";
+import { inferResearchPreset, researchPresetLabel } from "./researchPreset";
 
 const props = withDefaults(
   defineProps<{
@@ -11,8 +12,9 @@ const props = withDefaults(
     result?: ResearchResult | null;
     busy?: boolean;
     canGrade?: boolean;
+    highlightIndex?: number | null;
   }>(),
-  { job: null, result: null, busy: false, canGrade: true },
+  { job: null, result: null, busy: false, canGrade: true, highlightIndex: null },
 );
 const emit = defineEmits<{
   copy: [];
@@ -80,6 +82,60 @@ function citedSegments(value: string): TextSegment[] {
       return match ? { text, evidenceIndex: match.index } : { text };
     });
 }
+// Run identity, most important first: what was searched, how, by which
+// model, and how much of the retrieved evidence the answer actually cites.
+const summary = computed(() => {
+  const result = props.result;
+  if (!result) return [];
+  const request = (props.job?.request || result.rag_request || {}) as Record<string, unknown>;
+  const skip = Boolean(request.skip_retrieval);
+  const source = skip
+    ? i18n.t("research.evidence_only", "Evidence only")
+    : String(
+        request.source_collection ||
+          props.job?.source_collection ||
+          (result.collections || []).join(", "),
+      );
+  const preset = skip || request.k != null ? inferResearchPreset(request) : "";
+  const evidence = result.evidence || [];
+  const answer = String(result.answer || "");
+  const cited = evidence.filter((item) => {
+    const citation = String(item.inline_citation || "").trim();
+    return citation && answer.includes(citation);
+  }).length;
+  const model = [result.provider || props.job?.provider, result.model || props.job?.model]
+    .filter(Boolean)
+    .join(" · ");
+  return [
+    { key: "source", label: i18n.t("research.corpus", "Corpus"), value: source },
+    {
+      key: "preset",
+      label: i18n.t("research.retrieval_profile", "Retrieval"),
+      value: preset ? researchPresetLabel(preset, (key, fallback) => i18n.t(key, fallback)) : "",
+    },
+    {
+      key: "evidence",
+      label: i18n.t("research.evidence", "Evidence"),
+      value: evidence.length
+        ? i18n.tf("research.cited_of_retrieved", "{cited} cited of {total}", {
+            cited,
+            total: evidence.length,
+          })
+        : "",
+    },
+    { key: "model", label: i18n.t("research.model", "Model"), value: model },
+    {
+      key: "elapsed",
+      label: i18n.t("research.elapsed", "Time"),
+      value: result.elapsed_seconds ? `${Number(result.elapsed_seconds).toFixed(1)} s` : "",
+    },
+    {
+      key: "cache",
+      label: i18n.t("research.cached", "Cached"),
+      value: result.response_cache?.record_id ? i18n.t("research.cached", "Cached") : "",
+    },
+  ].filter((item) => item.value);
+});
 const runDetail = computed(() =>
   props.job
     ? researchJobDetail(props.job, (key, fallback) => i18n.t(key, fallback), i18n.locale)
@@ -102,12 +158,16 @@ const statusLabel = computed(() => {
         <div>
           <span class="research-answer-kicker">{{ i18n.t("research.answer", "Answer") }}</span>
           <h2>{{ result.prompt || job?.prompt || i18n.t("research.answer", "Answer") }}</h2>
-          <p>
-            {{ result.provider || job?.provider }} · {{ result.model || job?.model
-            }}<template v-if="result.elapsed_seconds">
-              · {{ Number(result.elapsed_seconds).toFixed(2) }}s</template
+          <dl class="research-run-summary">
+            <div
+              v-for="item in summary"
+              :key="item.key"
+              :class="`research-run-summary-${item.key}`"
             >
-          </p>
+              <dt>{{ item.label }}</dt>
+              <dd>{{ item.value }}</dd>
+            </div>
+          </dl>
         </div>
         <div class="research-answer-actions">
           <button class="btn" type="button" @click="emit('copy')">
@@ -115,6 +175,9 @@ const statusLabel = computed(() => {
           </button>
           <button v-if="canGrade" class="btn" type="button" @click="emit('grade')">
             <AppIcon name="spark" />{{ i18n.t("research.grade", "Analyze & grade") }}
+          </button>
+          <button class="btn" type="button" @click="emit('rerun')">
+            <AppIcon name="refresh" />{{ i18n.t("research.rerun_short", "Re-run") }}
           </button>
           <button class="btn" type="button" @click="emit('details')">
             <AppIcon name="history" />{{ i18n.t("research.run_details", "Run details") }}
@@ -133,6 +196,7 @@ const statusLabel = computed(() => {
                 ><button
                   v-if="segment.evidenceIndex != null"
                   class="research-inline-citation"
+                  :class="{ highlighted: segment.evidenceIndex === highlightIndex }"
                   type="button"
                   :aria-label="`${i18n.t('research.inspect_evidence', 'Inspect evidence for')} ${segment.text}`"
                   @click="emit('evidence', segment.evidenceIndex)"
@@ -148,6 +212,7 @@ const statusLabel = computed(() => {
                 ><button
                   v-if="segment.evidenceIndex != null"
                   class="research-inline-citation"
+                  :class="{ highlighted: segment.evidenceIndex === highlightIndex }"
                   type="button"
                   :aria-label="`${i18n.t('research.inspect_evidence', 'Inspect evidence for')} ${segment.text}`"
                   @click="emit('evidence', segment.evidenceIndex)"
@@ -164,6 +229,7 @@ const statusLabel = computed(() => {
               ><button
                 v-if="segment.evidenceIndex != null"
                 class="research-inline-citation"
+                  :class="{ highlighted: segment.evidenceIndex === highlightIndex }"
                 type="button"
                 :aria-label="`${i18n.t('research.inspect_evidence', 'Inspect evidence for')} ${segment.text}`"
                 @click="emit('evidence', segment.evidenceIndex)"
@@ -174,18 +240,6 @@ const statusLabel = computed(() => {
           </p>
         </template>
       </article>
-      <footer class="research-answer-footer">
-        <span
-          >{{ result.evidence?.length || 0 }}
-          {{ i18n.t("research.evidence_records", "evidence records") }}</span
-        >
-        <span v-if="result.response_cache?.record_id">{{
-          i18n.t("research.cached", "Cached")
-        }}</span>
-        <button class="research-text-action" type="button" @click="emit('rerun')">
-          {{ i18n.t("research.rerun", "Re-run with these parameters") }}
-        </button>
-      </footer>
     </template>
 
     <template v-else-if="job">
@@ -230,6 +284,38 @@ const statusLabel = computed(() => {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+.research-run-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+.research-run-summary > div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-size: 0.75rem;
+}
+.research-run-summary dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+.research-run-summary dd {
+  margin: 0;
+  color: var(--text-2);
+  font-weight: 650;
+}
+.research-run-summary-cache dt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
 }
 .research-answer-prose {
   max-width: 960px;
@@ -337,6 +423,10 @@ const statusLabel = computed(() => {
     sans-serif;
   vertical-align: baseline;
   cursor: pointer;
+}
+.research-inline-citation.highlighted {
+  background: var(--accent);
+  color: var(--accent-on);
 }
 .research-inline-citation:hover {
   box-shadow: inset 0 0 0 1px var(--ui-accent-border);

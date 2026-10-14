@@ -14,101 +14,26 @@
 </div>
 </div>
 </header>
-<section class="research-composer-v031 card" aria-labelledby="research-compose-title">
-<header class="research-composer-heading">
-<div>
-<span class="section-label">Research</span>
-<h2 id="research-compose-title">What are you researching?</h2>
-<p>Ask a scholarly question. DerridAI will retrieve, rerank, synthesize, and bind the answer to inspectable evidence.</p>
-</div>
-<div class="research-heading-actions">
-<button class="btn" type="button">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
-</path>
-<path d="M3 3v5h5M12 7v5l3 2">
-</path>
-</svg>Runs</button>
-<button class="btn" type="button">
+<section class="research-composer-compact card" aria-label="Research question">
+<label class="sr-only" for="researchQuestion">Research question</label>
+<textarea id="researchQuestion" class="research-compact-input" rows="1" placeholder="Ask about a concept, passage, relation, attribution, or disagreement…" value="">
+</textarea>
+<p class="research-compact-context">
+<span>derrida_primary</span>
+<span>Local Ollama</span>
+<span>Selected evidence only</span>
+<span>1 selected evidence</span>
+</p>
+<div class="research-compact-actions">
+<button class="btn" type="button" aria-controls="researchQuestion">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <circle cx="12" cy="12" r="3">
 </circle>
 <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21h-4v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1-.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H3v-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V3h4v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9A1.7 1.7 0 0 0 21 10h.1v4H21a1.7 1.7 0 0 0-1.6 1Z">
 </path>
-</svg>Expert settings</button>
-</div>
-</header>
-<div class="research-question-shell">
-<label class="sr-only" for="researchQuestion">Research question</label>
-<textarea id="researchQuestion" class="research-question-input" placeholder="Ask about a concept, passage, relation, attribution, or disagreement…" value="">
-</textarea>
-<div class="research-question-tools">
-<div class="research-history-popover">
-<button class="research-text-action" type="button" aria-expanded="false" aria-controls="researchHistoryMenu">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-<path d="M3 12a9 9 0 1 0 3-6.7L3 8">
-</path>
-<path d="M3 3v5h5M12 7v5l3 2">
-</path>
-</svg>Recent questions</button>
-</div>
-<span>0 characters</span>
-</div>
-</div>
-<details class="research-instructions-disclosure">
-<summary>Additional instructions<span>Optional</span>
-</summary>
-<label class="sr-only" for="researchInstructions">Additional instructions</label>
-<textarea id="researchInstructions" placeholder="Optional constraints on framing, comparison, citation, or answer form." value="">
-</textarea>
-</details>
-<fieldset class="research-compose-context">
-<legend class="sr-only">Research context</legend>
-<label>
-<span>Corpus</span>
-<select class="control" value="derrida_primary">
-<option value="derrida_primary">derrida_primary · 3</option>
-</select>
-<small>general · bge-m3:latest</small>
-</label>
-<label>
-<span>Research profile</span>
-<select class="control" value="ollama-default">
-<option value="ollama-default">Local Ollama</option>
-<option value="openai-default">FreeLLM / OpenAI-compatible</option>
-</select>
-<small>gemma4:e2b</small>
-</label>
-<label>
-<span>Retrieval</span>
-<select class="control" value="evidence">
-<option value="balanced">Balanced</option>
-<option value="precision">High precision</option>
-<option value="recall">High recall</option>
-<option value="evidence">Selected evidence only</option>
-<option value="custom">Custom</option>
-</select>
-<small>1 selected evidence</small>
-</label>
-<label>
-<span>Answer language</span>
-<select class="control" value="auto">
-<option value="auto">Automatic</option>
-<option value="en">English</option>
-<option value="fr">French</option>
-</select>
-<small>Source-language routing remains independent.</small>
-</label>
-</fieldset>
-<footer class="research-compose-footer">
-<div class="research-run-context-summary">
-<span>
-<i>
-</i>1 selected evidence</span>
-<span>Local Ollama</span>
-</div>
+</svg>More options</button>
 <span class="action-tooltip-wrap" data-tooltip="Enter a research question.">
-<button class="btn primary research-run-button" type="button" disabled="" aria-disabled="true">
+<button class="btn primary" type="button" disabled="" aria-disabled="true">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="m12 3 1.2 4.1L17 9l-3.8 1.9L12 15l-1.2-4.1L7 9l3.8-1.9L12 3Z">
 </path>
@@ -116,18 +41,46 @@
 </path>
 </svg>Research</button>
 </span>
-</footer>
+</div>
 </section>
-<section class="research-pipeline-bar" aria-labelledby="research-pipeline-bar-title">
-<div class="research-pipeline-bar-head">
-<div>
-<span class="research-live-dot" aria-hidden="true">
+<div class="research-thread-layout">
+<nav class="research-thread-list card" aria-label="Research threads">
+<header class="research-thread-head">
+<b>Threads</b>
+<button class="btn" type="button">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+<path d="M12 5v14M5 12h14">
+</path>
+</svg>New question</button>
+</header>
+<ul class="research-thread-items">
+<li class="research-thread-group" aria-hidden="true">Running</li>
+<li class="research-thread running selected">
+<button class="research-thread-main" type="button" tabindex="0" aria-current="true">
+<span class="research-run-status-dot running" aria-hidden="true">
 </span>
-<div>
-<b id="research-pipeline-bar-title">1 pipeline in progress</b>
-<small>Start another question at any time. Each run continues independently and provider concurrency limits determine when queued work executes.</small>
-</div>
-</div>
+<span class="research-thread-copy">
+<b>What is différance?</b>
+<small>Retrieving candidate evidence</small>
+</span>
+<span class="sr-only">running</span>
+</button>
+<button class="research-thread-cancel" type="button" aria-label="Cancel research run: What is différance?"> × </button>
+</li>
+<li class="research-thread-group" aria-hidden="true">Recent</li>
+<li class="research-thread completed">
+<button class="research-thread-main" type="button" tabindex="-1">
+<span class="research-run-status-dot completed" aria-hidden="true">
+</span>
+<span class="research-thread-copy">
+<b>What is the trace?</b>
+<small>derrida_primary · 9 minutes ago</small>
+</span>
+<span class="sr-only">completed</span>
+</button>
+</li>
+</ul>
+<footer class="research-thread-foot">
 <button class="research-text-action" type="button">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 <path d="M3 12a9 9 0 1 0 3-6.7L3 8">
@@ -135,22 +88,8 @@
 <path d="M3 3v5h5M12 7v5l3 2">
 </path>
 </svg>View all runs</button>
-</div>
-<div class="research-pipeline-scroll" role="list" aria-label="Active research pipelines">
-<article class="research-pipeline-chip selected" role="listitem">
-<button class="research-pipeline-chip-main" type="button">
-<span class="research-run-status-dot running" aria-hidden="true">
-</span>
-<span>
-<b>What is différance?</b>
-<small>Retrieving candidate evidence</small>
-</span>
-<span class="research-run-status">running</span>
-</button>
-<button class="research-pipeline-chip-cancel" type="button" aria-label="Cancel research run">×</button>
-</article>
-</div>
-</section>
+</footer>
+</nav>
 <div class="research-workspace-grid research-result-presentation">
 <section class="research-answer-workspace card" aria-live="polite">
 <div class="research-run-state running">
@@ -195,6 +134,7 @@
 </article>
 </div>
 </aside>
+</div>
 </div>
 <dialog class="research-settings-dialog research-settings-studio-dialog" aria-labelledby="research-settings-title">
 <div class="research-settings-studio-shell">

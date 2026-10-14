@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchProfile, ResearchStore } from "../../types/research";
+import { researchPresetLabel } from "./researchPreset";
 
 const props=withDefaults(defineProps<{
   prompt:string;
@@ -20,7 +21,8 @@ const props=withDefaults(defineProps<{
   canConfigure?:boolean;
   canManageRuns?:boolean;
   disabledReason?:string;
-}>(),{busy:false,canRun:true,canConfigure:true,canManageRuns:true,disabledReason:""});
+  compact?:boolean;
+}>(),{compact:false,busy:false,canRun:true,canConfigure:true,canManageRuns:true,disabledReason:""});
 const emit=defineEmits<{
   "update:prompt":[value:string];
   "update:instructions":[value:string];
@@ -31,6 +33,7 @@ const emit=defineEmits<{
   run:[];
   settings:[];
   runs:[];
+  expand:[];
   history:[item:Record<string,unknown>];
 }>();
 const i18n=useI18nStore();
@@ -48,11 +51,34 @@ function historyLabel(item:Record<string,unknown>){
   const value=String(item.prompt||item.instructions||i18n.t("research.saved_prompt","Saved prompt")).replace(/\s+/g," ").trim();
   return value.length>92?`${value.slice(0,89)}…`:value;
 }
+const presetLabel=computed(()=>researchPresetLabel(props.preset,(key,fallback)=>i18n.t(key,fallback)));
+// Ctrl/Cmd+Enter runs from either composer state.
+function onQuestionKeydown(event:KeyboardEvent){
+  if(event.key==="Enter"&&(event.ctrlKey||event.metaKey)&&props.canRun&&!props.busy){event.preventDefault();emit("run")}
+}
 function pickHistory(item:Record<string,unknown>){emit("history",item);historyOpen.value=false;historyQuery.value=""}
 </script>
 
 <template>
-  <section class="research-composer-v031 card" aria-labelledby="research-compose-title">
+  <section v-if="compact" class="research-composer-compact card" :aria-label="i18n.t('research.question','Research question')">
+    <label class="sr-only" for="researchQuestion">{{i18n.t('research.question','Research question')}}</label>
+    <textarea id="researchQuestion" class="research-compact-input" rows="1" :value="prompt" :disabled="!canConfigure" :placeholder="i18n.t('research.question_placeholder','Ask about a concept, passage, relation, attribution, or disagreement…')" @input="emit('update:prompt',($event.target as HTMLTextAreaElement).value)" @keydown="onQuestionKeydown"></textarea>
+    <p class="research-compact-context">
+      <span>{{sourceCollection||i18n.t('research.evidence_only','Evidence only')}}</span>
+      <span>{{selectedProfile?.name||selectedProfile?.id||i18n.t('research.no_profile','No profile')}}</span>
+      <span>{{presetLabel}}</span>
+      <span v-if="evidenceCount">{{evidenceCount}} {{i18n.t('rag.selected_evidence','selected evidence')}}</span>
+    </p>
+    <div class="research-compact-actions">
+      <button class="btn" type="button" aria-controls="researchQuestion" @click="emit('expand')"><AppIcon name="gear"/>{{i18n.t('research.more_options','More options')}}</button>
+      <span class="action-tooltip-wrap" :data-tooltip="!canRun?disabledReason:''">
+        <button class="btn primary" type="button" :disabled="busy||!canRun" :aria-disabled="busy||!canRun" @click="emit('run')">
+          <AppIcon name="spark"/>{{busy?i18n.t('research.starting','Starting…'):i18n.t('research.run','Research')}}
+        </button>
+      </span>
+    </div>
+  </section>
+  <section v-else class="research-composer-v031 card" aria-labelledby="research-compose-title">
     <header class="research-composer-heading">
       <div>
         <span class="section-label">{{i18n.t('nav.rag','Research')}}</span>
@@ -67,7 +93,7 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
 
     <div class="research-question-shell">
       <label class="sr-only" for="researchQuestion">{{i18n.t('research.question','Research question')}}</label>
-      <textarea id="researchQuestion" class="research-question-input" :value="prompt" :disabled="!canConfigure" :placeholder="i18n.t('research.question_placeholder','Ask about a concept, passage, relation, attribution, or disagreement…')" @input="emit('update:prompt',($event.target as HTMLTextAreaElement).value)"></textarea>
+      <textarea id="researchQuestion" class="research-question-input" :value="prompt" :disabled="!canConfigure" :placeholder="i18n.t('research.question_placeholder','Ask about a concept, passage, relation, attribution, or disagreement…')" @input="emit('update:prompt',($event.target as HTMLTextAreaElement).value)" @keydown="onQuestionKeydown"></textarea>
       <div class="research-question-tools">
         <div class="research-history-popover">
           <button class="research-text-action" type="button" :disabled="!canConfigure" :aria-expanded="historyOpen" aria-controls="researchHistoryMenu" @click="historyOpen=!historyOpen">
@@ -148,6 +174,55 @@ function pickHistory(item:Record<string,unknown>){emit("history",item);historyOp
 </template>
 
 <style scoped>
+.research-composer-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 13px;
+}
+.research-compact-input {
+  min-height: 40px;
+  max-height: 120px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  resize: vertical;
+}
+.research-compact-input:focus-visible {
+  outline: 3px solid var(--ui-accent-focus);
+  outline-offset: 1px;
+}
+.research-compact-actions {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.research-compact-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+@media (max-width: 560px) {
+  .research-composer-compact {
+    grid-template-columns: 1fr;
+  }
+  .research-compact-actions {
+    grid-row: auto;
+    grid-column: auto;
+  }
+}
 .research-history-list {
   max-height: 300px;
   overflow: auto;
