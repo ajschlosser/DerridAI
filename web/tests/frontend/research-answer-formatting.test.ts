@@ -17,12 +17,30 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { evidenceCitationCounts } from "../../src/features/research/researchCitationCounts";
 import {
   parseResearchAnswer,
   segmentResearchAnswer,
 } from "../../src/components/research/researchAnswerFormatting";
 
 describe("research answer formatting", () => {
+  it("counts uniquely bound citations in prose and lists, but not Works Cited", () => {
+    const evidence = [
+      { evidence_id: "E1", inline_citation: "(Derrida 1997: 11)" },
+      { evidence_id: "E2", inline_citation: "(Derrida 1997: 11)" },
+      { evidence_id: "E3", inline_citation: "(Derrida 2002: 13)" },
+    ];
+    const answer = "An attribution [[E1]] and again [E1]. Ambiguous (Derrida 1997: 11)." +
+      "\n\n- A further claim [[E3]].\n\nWorks Cited\n(Derrida 1997: 11) (Derrida 2002: 13)";
+    expect(evidenceCitationCounts(answer, evidence)).toEqual([2, 0, 1]);
+  });
+
+  it("does not count unsupported or bibliography-only references", () => {
+    const evidence = [{ evidence_id: "E1", inline_citation: "(Derrida 1997: 11)" }];
+    expect(evidenceCitationCounts("Unknown [E9].\n\nWorks Cited\n(Derrida 1997: 11)", evidence))
+      .toEqual([0]);
+  });
+
   it("does not turn a generated paragraph wrapped in strong markers into a bold paragraph", () => {
     const blocks = parseResearchAnswer(
       "**Responsibility cannot be reduced to a programmable rule because the decision remains exposed to undecidability.**",
