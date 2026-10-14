@@ -6,11 +6,13 @@ import {
 } from "../../components/research/researchAnswerFormatting";
 
 /** Count only run-local, unambiguously bound answer citations; not bibliography entries. */
-export function evidenceCitationCounts(answer: string, evidence: ResearchResultEvidence[]): number[] {
+export function evidenceCitationCounts(
+  answer: string,
+  evidence: ResearchResultEvidence[],
+): number[] {
   const counts = evidence.map(() => 0);
   for (const block of parseResearchAnswer(answer, "Works Cited")) {
-    if (block.kind === "heading" && block.text?.trim().toLowerCase() === "works cited")
-      break;
+    if (block.kind === "heading" && block.text?.trim().toLowerCase() === "works cited") break;
     for (const text of block.items ?? [block.text || ""]) {
       for (const segment of segmentResearchAnswer(text, evidence)) {
         if (segment.evidenceIndex !== undefined) counts[segment.evidenceIndex] += 1;
