@@ -766,7 +766,8 @@
 
 .research-relation-grid {
   display: grid;
-  grid-template-columns: 105px minmax(0, 1fr);
+  /* Size labels to the longest one ("Proposition status") so they never wrap. */
+  grid-template-columns: max-content minmax(0, 1fr);
   gap: 4px 10px;
   margin: 0 0 13px;
   padding: 9px 10px;
@@ -1114,9 +1115,6 @@
   }
   .research-answer-actions .btn:last-child {
     grid-column: 1/-1;
-  }
-  .research-relation-grid {
-    grid-template-columns: 88px minmax(0, 1fr);
   }
   .research-drawer-head {
     padding: 14px;

@@ -261,3 +261,38 @@ Phase 0 was not done before implementation; this records the same measurements a
 - **Contrast:** the selected thread row's metadata used `--text-tertiary` on the dark `--soft` background (4.06:1), which failed the existing "active thread previews" axe test on `master`. Selected rows now use `--text-secondary`.
 - **Scenario inventory:** Playwright `research-threads.spec.ts` covers URL state and guarded follow-ups, thread management, retry, active previews in both themes, per-turn inspection with saved-answer recovery, first question, follow-up, Library import, and cross-thread/archived/missing-artifact navigation; `research-progressive-loading.spec.ts` and `research-filter-editor-a11y.spec.ts` cover loading and filters. Storybook has `Research/Turn Inspector` and `Research/Turn Comparison`. Answer markup and citation activation are characterized in `research-answer-content.test.ts` and `research-answer-formatting.test.ts`, which now include several citations (resolved, repeated and unresolved) in one paragraph.
 - **Performance (one local run, Chromium, mock backend; not asserted):** opening a thread with 10 or 100 turns rendered all turns and reached network idle in about 70–160 ms with 5 API requests, of which **one** was a job result, so turn results load lazily rather than once per turn. The 1-turn figure (~3.9 s, 8 requests) includes cold application start-up and is not comparable.
+
+## 15. Visual review and layout fixes (2026-10-15)
+
+Screenshots of the production build against the e2e mock backend, with a realistic two-turn thread (Derrida passages, five evidence items, several threads), at 390, 820, 1280, 1440 and 1920px in light and dark. These are review aids and are not committed.
+
+### Done (merged in #615)
+
+- **Wrong citation badge (provenance):** `ResearchTurnInspector` did not pass the turn's answer to `ResearchEvidencePanel`, so every evidence item in a thread turn read "Retrieved, not cited" even when cited. Fixed; `tests/frontend/research-turn-inspector.test.ts` fails without the fix.
+- The conversation no longer scrolls inside a box capped at `min(52dvh, 590px)` (about 270px of answer was visible at 1440px); it flows with the page.
+- Each turn is a size container (`thread-turn`). Evidence sits beside the answer (at least 400px) only when the turn is 1040px or wider; otherwise it is full width below the answer.
+- Thread cards no longer repeat the title as the last question; the follow-up composer's settings are one wrapped line.
+
+### Done (this branch)
+
+- Thread tools (**Manage thread**, **Compare turns**, **Search this thread**) are one toolbar row under the title; an opened panel takes its own row. The first answer now starts near the top of the window.
+- Per-turn secondary actions (**Open answer and evidence**, **Follow up on this turn**) are grouped in one row.
+- The follow-up composer is titled **Ask a follow-up** (`research.follow_up_title`, en-US and fr-CA; `enUsDefaults.json` regenerated with `scripts/export-en-us-defaults.mjs`), with a two-line question box and no character counter.
+- Attribution labels in the evidence inspector size to the longest label, so "Position holder" and "Proposition status" no longer wrap.
+- `research-threads.spec.ts`: the theme switches in the "active thread previews" and "each turn inspects its own evidence" axe checks did not wait for colour transitions, so axe sampled colours between the two themes (for example, a background of `#969897`) and failed intermittently. Both now use a shared `setTheme` helper that waits for transitions.
+
+### Verification
+
+- `scripts/preflight.sh`: ok (it does not run browser suites).
+- `research-threads.spec.ts` and `research-progressive-loading.spec.ts`: 10/10, twice, against `vite preview` at 1440×900.
+- Locale parity tests pass.
+- Not run locally: the full Playwright suite, the Storybook build, Docker builds. CI runs the browser gates for the affected surfaces.
+
+### Remaining work
+
+1. Inline citations render as long underlined links ("Derrida, Of Grammatology: 61") with a space before the following punctuation. Compact markers, with the full citation on hover or focus and in the inspector, would read better in running prose.
+2. **Inspect this answer and its evidence** and **Open answer and evidence** overlap in purpose and sit on separate rows; consolidate them, or explain the difference in the UI.
+3. Thread list: **Previous threads** / **Next threads** paging and "Questions: 2" labels read like a form; consider a scrolling list with compact metadata.
+4. At 1920px the side-by-side inspector scrolls on its own (`max-height: min(70dvh, 850px)`), leaving empty space under short answers; consider a sticky inspector instead.
+5. The turn status line ("Completed") under every question adds little for completed turns; consider showing status only when it is not completed.
+6. Manual review is still needed: screen reader, keyboard-only, 200–400% zoom and reduced motion.

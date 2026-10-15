@@ -184,7 +184,9 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
     <header class="research-composer-heading">
       <div>
         <span v-if="!compact" class="section-label">{{ i18n.t("nav.rag") }}</span>
-        <h2 id="research-compose-title">{{ i18n.t("research.ask_title") }}</h2>
+        <h2 id="research-compose-title">
+          {{ i18n.t(compact ? "research.follow_up_title" : "research.ask_title") }}
+        </h2>
         <p v-if="!compact">{{ i18n.t("research.ask_help") }}</p>
       </div>
       <div class="research-heading-actions">
@@ -253,7 +255,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
             </div>
           </div>
         </div>
-        <span
+        <span v-if="!compact"
           >{{ prompt.length.toLocaleString(i18n.locale) }} {{ i18n.t("research.characters") }}</span
         >
       </div>
@@ -652,11 +654,19 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 .research-composer-followup summary {
   pointer-events: auto;
 }
+/* A follow-up continues a thread: a short heading and a two-line box keep
+   the conversation, not the form, in view. */
 .research-composer-followup .research-composer-heading {
   margin-bottom: var(--space-2, 8px);
 }
+.research-composer-followup .research-composer-heading h2 {
+  font-size: 1rem;
+}
 .research-composer-followup .research-question-input {
-  min-height: 76px;
+  min-height: 56px;
+}
+.research-composer-followup .research-question-tools:empty {
+  display: none;
 }
 @media (max-width: 600px) {
   .research-composer-followup {

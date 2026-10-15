@@ -4869,6 +4869,7 @@ EN_US: dict[str, str] = {'loading.loading': "Loading…",
  'research.ask_help': 'Ask a scholarly question. DerridAI will retrieve, rerank, synthesize, and bind the answer to '
                       'inspectable evidence.',
  'research.ask_title': 'What are you researching?',
+ 'research.follow_up_title': 'Ask a follow-up',
  'research.auto_grade': 'Auto-grade final response',
  'research.auto_grade_help': 'Runs as the final background-pipeline step.',
  'research.bind_citations': 'Bind evidence tags to citations',
