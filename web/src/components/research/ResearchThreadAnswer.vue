@@ -272,9 +272,12 @@ watch(
   min-width: 0;
   outline-offset: 3px;
 }
-@media (min-width: 1280px) {
+/* Side by side only when the turn itself is wide enough for both a readable
+   answer and a readable evidence column; otherwise evidence follows the
+   answer at full width. */
+@container thread-turn (min-width: 1040px) {
   .thread-answer-workspace:has(.thread-answer-inspector) {
-    grid-template-columns: minmax(0, 1fr) minmax(310px, 42%);
+    grid-template-columns: minmax(0, 1fr) minmax(400px, 45%);
   }
   .thread-answer-workspace:has(.thread-answer-inspector) > .thread-answer-text {
     grid-column: 1;

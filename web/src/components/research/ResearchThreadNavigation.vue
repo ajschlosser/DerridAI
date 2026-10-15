@@ -199,9 +199,11 @@ function clearSearch(event: KeyboardEvent) {
               <span class="research-thread-turn-count">{{
                 i18n.tf("research.thread_turn_count", { count: item.turn_count })
               }}</span>
-              <span v-if="showPreview && item.last_question" class="research-thread-preview">{{
-                item.last_question
-              }}</span>
+              <span
+                v-if="showPreview && item.last_question && item.last_question !== item.title"
+                class="research-thread-preview"
+                >{{ item.last_question }}</span
+              >
               <time :datetime="item.updated_at">{{
                 new Date(item.updated_at).toLocaleDateString(i18n.locale)
               }}</time>
@@ -569,11 +571,16 @@ function clearSearch(event: KeyboardEvent) {
 .research-thread-workspace-layout .research-thread-primary {
   min-height: min(72dvh, 760px);
 }
+/* The conversation flows with the page. A capped inner scroll box left about
+   270px of answer visible above the composer at common laptop sizes. */
 .research-thread-workspace-layout .research-thread-conversation {
-  max-height: min(52dvh, 590px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding-inline-end: 8px;
+}
+/* Each turn is a size container so its answer/inspector split follows the
+   turn's own width, not the viewport (the app sidebar and thread list take
+   a large share of it). */
+.research-thread-turns > li {
+  container: thread-turn / inline-size;
 }
 .research-thread-workspace {
   display: grid;

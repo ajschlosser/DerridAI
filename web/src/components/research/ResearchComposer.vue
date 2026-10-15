@@ -549,10 +549,13 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
   border-radius: 7px;
   font-size: 0.8125rem;
 }
+/* One wrapping line of "Label value" pairs: the follow-up composer states
+   its settings without a five-row table pushing the conversation away. */
 .research-composer-effective dl {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -560,7 +563,13 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
   color: var(--text-tertiary);
 }
 .research-composer-effective dd {
-  margin: 0;
+  margin: 0 12px 0 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.research-composer-effective dd.research-composer-context-scope {
+  flex-basis: 100%;
+  font-weight: 400;
 }
 .research-composer-settings-toggle {
   justify-self: start;
