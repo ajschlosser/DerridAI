@@ -294,11 +294,11 @@ Screenshots of the production build against the e2e mock backend, with a realist
 - **Item 5:** the status line under a question is shown only for turns that are not completed.
 - **Item 4:** at 1040px turn width and wider, the inspector is sticky (`top: 12px`, `max-height: calc(100dvh - 24px)`) rather than a fixed-height scroll box, so it stays beside a long answer as it scrolls.
 - **Item 3 (partial):** thread rows show "2 questions · date" on one line (`research.thread_turn_count_one` / `_other` replace `research.thread_turn_count`), and paging controls render only when there is a previous or next page. A continuously scrolling list was not attempted.
-- **Item 1 (partial):** inline citations in a thread answer lose their padding and margin, which read as a space before the following punctuation, and use a regular-weight dotted underline. They still show the run's full inline citation; replacing them with compact markers is a reading-design decision (it hides the work and page from running prose and changes copied text) and was left open.
+- **Item 1 (partial):** inline citations in a thread answer lose their padding and margin, which read as a space before the following punctuation, and use a regular-weight dotted underline. They keep the full citation text (decided 2026-10-15, no compact markers), now in MLA in-text form: `_citation_strings` produces "Derrida, Of Grammatology 61" (surname, short title without subtitle, locator; no year or colon) instead of "Derrida 1967: 61". Titles are not italicized because the string is plain text and the work type (book versus essay) is not recorded reliably.
 
 ### Remaining work
 
-1. Inline citations render as long underlined links ("Derrida, Of Grammatology: 61") with a space before the following punctuation. Compact markers, with the full citation on hover or focus and in the inspector, would read better in running prose.
+1. ~~Inline citation presentation~~: resolved above (full MLA text, spacing fixed).
 2. **Inspect this answer and its evidence** and **Open answer and evidence** overlap in purpose and sit on separate rows; consolidate them, or explain the difference in the UI.
 3. Thread list: **Previous threads** / **Next threads** paging and "Questions: 2" labels read like a form; consider a scrolling list with compact metadata.
 4. At 1920px the side-by-side inspector scrolls on its own (`max-height: min(70dvh, 850px)`), leaving empty space under short answers; consider a sticky inspector instead.

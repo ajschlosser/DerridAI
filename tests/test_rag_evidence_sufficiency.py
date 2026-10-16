@@ -77,6 +77,7 @@ def test_partition_excludes_only_provenance_incomplete_records():
         "document_author": "Jacques Derrida", "text": "Il n'y a pas de hors-texte.",
     }}
     authorless = {"record": {"record_id": "r2", "work": "Anonymous gloss", "text": "Unattributed."}}
+    # MLA cites an authorless work by title, so only the author is missing.
     kept, excluded = partition_sufficient_records([authorless, complete])
     assert [item["record"]["record_id"] for item in kept] == ["r1"]
-    assert excluded == [{"record_id": "r2", "missing": "document_author, inline_citation"}]
+    assert excluded == [{"record_id": "r2", "missing": "document_author"}]
