@@ -196,17 +196,25 @@ function clearSearch(event: KeyboardEvent) {
               >
                 {{ i18n.t(`research.thread_status_${item.last_status}`) }}
               </span>
-              <span class="research-thread-turn-count">{{
-                i18n.tf("research.thread_turn_count", { count: item.turn_count })
-              }}</span>
               <span
                 v-if="showPreview && item.last_question && item.last_question !== item.title"
                 class="research-thread-preview"
                 >{{ item.last_question }}</span
               >
-              <time :datetime="item.last_asked_at ?? item.updated_at">{{
-                new Date(item.last_asked_at ?? item.updated_at).toLocaleDateString(i18n.locale)
-              }}</time>
+              <span class="research-thread-meta"
+                ><span class="research-thread-turn-count">{{
+                  i18n.tf(
+                    item.turn_count === 1
+                      ? "research.thread_turn_count_one"
+                      : "research.thread_turn_count_other",
+                    { count: item.turn_count },
+                  )
+                }}</span>
+                <span aria-hidden="true">·</span>
+                <time :datetime="item.last_asked_at ?? item.updated_at">{{
+                  new Date(item.last_asked_at ?? item.updated_at).toLocaleDateString(i18n.locale)
+                }}</time></span
+              >
             </button>
           </li>
         </ul>
@@ -218,7 +226,7 @@ function clearSearch(event: KeyboardEvent) {
             : i18n.t("research.threads_empty")
         }}
       </p>
-      <div class="research-thread-pages">
+      <div v-if="offset > 0 || hasMore" class="research-thread-pages">
         <button
           type="button"
           class="btn"
@@ -339,7 +347,7 @@ function clearSearch(event: KeyboardEvent) {
           >
             <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
               <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
-              <p class="research-thread-turn-status">
+              <p v-if="turn.status !== 'completed'" class="research-thread-turn-status">
                 {{ i18n.t(`research.thread_status_${turn.status}`) }}
               </p>
               <slot name="answer" :turn="turn" />
@@ -362,8 +370,9 @@ function clearSearch(event: KeyboardEvent) {
               </div>
               <p v-if="turn.error" role="alert">{{ turn.error }}</p>
               <div class="research-thread-turn-actions">
+                <!-- A completed turn's answer carries its own inspector toggle. -->
                 <button
-                  v-if="turn.job_id"
+                  v-if="turn.job_id && turn.status !== 'completed'"
                   type="button"
                   class="btn"
                   :aria-current="selectedJobId === turn.job_id ? 'true' : undefined"
@@ -371,7 +380,7 @@ function clearSearch(event: KeyboardEvent) {
                 >
                   {{ i18n.t("research.thread_open_run") }}
                 </button>
-                <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
+                <p v-else-if="!turn.job_id">{{ i18n.t("research.thread_run_unavailable") }}</p>
                 <button
                   v-if="turn.status === 'completed' && !thread.archived_at && $slots.workspace"
                   type="button"
@@ -514,6 +523,11 @@ function clearSearch(event: KeyboardEvent) {
   -webkit-line-clamp: 2;
   overflow: hidden;
   line-height: 1.4;
+}
+.research-thread-index button .research-thread-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
 }
 .research-thread-index button .research-thread-state {
   font-weight: 650;

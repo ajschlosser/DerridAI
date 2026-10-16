@@ -56,19 +56,14 @@ def _citation_strings(record: dict[str, Any]) -> tuple[str, str]:
             + (f" [{span['speaker']}]" if span.get("speaker") else "")
             for span in timed_spans
         )
-    if year:
-        citation_head = " ".join(part for part in (last, str(year)) if part).strip()
-    elif last and work:
-        # Author-only page citations are ambiguous when a Research answer uses
-        # multiple works by the same author. Without a year, retain the work
-        # title in the inline citation rather than fabricating bibliographic data.
-        citation_head = f"{last}, {work}"
-    else:
-        citation_head = last
-    if pages:
-        inline = f"{citation_head}: {pages}" if citation_head else pages
-    else:
-        inline = citation_head
+    # MLA in-text form: author surname and short title, then the locator with
+    # no comma, colon or "p." ("Derrida, Of Grammatology 61"). The title is
+    # kept because one answer often cites several works by the same author;
+    # MLA drops the subtitle in the short form. No year: MLA in-text
+    # citations do not use one. Nothing is invented when a field is absent.
+    short_title = work.split(": ", 1)[0].strip()
+    citation_head = ", ".join(part for part in (last, short_title) if part)
+    inline = " ".join(part for part in (citation_head, pages) if part)
 
     parts = author.split()
     reversed_name = (
@@ -140,7 +135,8 @@ def mla_in_text(record: dict[str, Any], *, include_title: bool) -> str:
     author has several cited works or the Record names no author."""
     author = source_author(record)
     last = author.split()[-1] if author.split() else ""
-    title = source_work_label(record)
+    # MLA short title: the subtitle is dropped, as in the run's inline citation.
+    title = source_work_label(record).split(": ", 1)[0].strip()
     head = last
     if title and (include_title or not last):
         italic = _markdown_italic(title)

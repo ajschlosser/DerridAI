@@ -1233,7 +1233,7 @@ def test_explicit_json_binding_stays_valid_json_without_appended_bibliography(mo
     result = run_rag_pipeline(request, _LexicalOnlyStore())
 
     parsed = json.loads(result["answer"])
-    assert "1976" in parsed["answer"]
+    assert "(Derrida, Of Grammatology 65)" in parsed["answer"]
     assert "Works Cited" not in result["answer"]
 
 

@@ -59,6 +59,8 @@ def test_in_text_uses_author_and_pages_and_adds_the_title_only_when_needed() -> 
         "(*Anonymous Tract* 4)"
     )
     assert mla_in_text({"record_id": "bare"}, include_title=False) == ""
+    subtitled = {**GRAMMATOLOGIE, "work": "Of Grammatology: Corrected Edition"}
+    assert mla_in_text(subtitled, include_title=True) == "(Derrida, *Of Grammatology* 23\u201325)"
 
 
 def test_bound_answer_ends_with_an_unnumbered_alphabetical_mla_works_cited() -> None:

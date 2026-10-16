@@ -487,13 +487,17 @@ describe("Research thread shell", () => {
     expect(jobs.read).not.toHaveBeenCalled();
   });
   it("opens the correct run without submitting historical answer content", async () => {
+    // Completed turns inspect inline; only other turns offer the run link.
+    const detail = thread("a");
+    detail.turns[0].status = "failed";
+    api.get.mockResolvedValue(detail);
     const wrapper = browser();
     await flushPromises();
     await wrapper
       .findAll("article[aria-labelledby] button")
       .find((item) => item.text() === "Open answer")!
       .trigger("click");
-    expect(wrapper.emitted("open")?.[0]).toEqual([thread("a").turns[0]]);
+    expect(wrapper.emitted("open")?.[0]).toEqual([detail.turns[0]]);
     expect(api.get).toHaveBeenCalledWith("a");
     expect(wrapper.find('[aria-current="true"]')).toBeTruthy();
   });
@@ -562,19 +566,26 @@ describe("Research thread shell", () => {
       "Question a",
       "Second question",
     ]);
+    // The completed turn inspects inline: no duplicate run link, no "Completed" line.
     expect(
       wrapper.findAll("article button").filter((item) => item.text() === "Open answer"),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
+    const statuses = wrapper.findAll(".research-thread-turn-status");
+    expect(statuses).toHaveLength(1);
+    expect(statuses[0].element.closest("article")?.textContent).toContain("Second question");
     expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
     await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
     expect(wrapper.emitted("page")).toEqual([[50]]);
     // An exactly full last page does not offer an empty next page.
-    await wrapper.setProps({ hasMore: false });
+    await wrapper.setProps({ offset: 50, hasMore: false });
     expect(
       wrapper.findAll(".research-thread-pages button")[1].attributes("disabled"),
     ).toBeDefined();
     await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
+    // A single page shows no paging controls.
+    await wrapper.setProps({ offset: 0, hasMore: false });
+    expect(wrapper.find(".research-thread-pages").exists()).toBe(false);
   });
   it("focuses the newly loaded thread heading only when focus is unclaimed", async () => {
     const wrapper = mount(ResearchThreadNavigation, {

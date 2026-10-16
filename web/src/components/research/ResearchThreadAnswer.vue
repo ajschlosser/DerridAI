@@ -271,7 +271,12 @@ watch(
   .thread-answer-workspace:has(.thread-answer-inspector) > .thread-answer-inspector {
     grid-column: 2;
     grid-row: 1 / span 3;
-    max-height: min(70dvh, 850px);
+    /* Stay in view while a long answer scrolls, instead of scrolling inside
+       a fixed-height box beside a short one. */
+    align-self: start;
+    position: sticky;
+    top: 12px;
+    max-height: calc(100dvh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
   }

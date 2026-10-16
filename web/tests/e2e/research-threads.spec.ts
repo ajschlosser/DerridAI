@@ -90,8 +90,10 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await expect(navigation.getByRole("heading", { name: "Question a", level: 3 })).toBeVisible();
   await expect(navigation.locator(".thread-answer-text")).toHaveText("Answer A");
   await expect(page.locator(".research-run-button")).toBeDisabled();
-  await navigation.getByRole("button", { name: "Open answer and evidence" }).click();
-  await expect(page).toHaveURL(/job=job-a/);
+  // A completed turn has one inspection control, beside its answer.
+  await expect(navigation.getByRole("button", { name: "Open answer and evidence" })).toHaveCount(0);
+  await navigation.getByRole("button", { name: "Inspect this answer and its evidence" }).click();
+  await expect(navigation.locator(".thread-answer-inspector")).toBeVisible();
   await expect(navigation.locator(".thread-answer-text")).toContainText("Answer A");
   await expect(page.locator("#research-selected-run")).toHaveCount(0);
   const next = navigation.getByRole("button", { name: "Inquiry b" });
