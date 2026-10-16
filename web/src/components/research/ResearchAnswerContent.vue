@@ -20,7 +20,12 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed } from "vue";
 import { useI18nStore } from "../../stores/i18n";
 import type { ResearchResultEvidence } from "../../types/research";
-import { parseResearchAnswer, segmentResearchAnswer } from "./researchAnswerFormatting";
+import {
+  citationNumbers,
+  compactCitationGroups,
+  parseResearchAnswer,
+  segmentResearchAnswer,
+} from "./researchAnswerFormatting";
 
 const props = withDefaults(
   defineProps<{
@@ -38,9 +43,25 @@ const i18n = useI18nStore();
 const blocks = computed(() => parseResearchAnswer(props.answer, i18n.t("research.works_cited")));
 const heading = computed(() => (props.compact ? "h4" : props.readOnly ? "h6" : "h3"));
 
+const numbers = computed(() => citationNumbers(blocks.value, props.evidence));
+
 function segments(text: string) {
   // Evidence IDs and inline citations are resolved only against this answer's packet.
-  return segmentResearchAnswer(text, props.evidence);
+  return compactCitationGroups(segmentResearchAnswer(text, props.evidence));
+}
+
+function entrySegments(text: string) {
+  // Bibliography entries are formatted text, never bound citations.
+  return segmentResearchAnswer(text, []);
+}
+
+function citationLabel(index: number, citation: string) {
+  return `${i18n.t("research.inspect_evidence")} ${numbers.value.get(index) ?? ""}: ${citation}`;
+}
+
+function citationTitle(index: number, citation: string) {
+  // The MLA in-text form, as plain text, on hover; the source panel shows it formatted.
+  return (props.evidence[index]?.mla_in_text || citation).replace(/\*/g, "");
 }
 </script>
 
@@ -59,12 +80,17 @@ function segments(text: string) {
                 'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
               }"
               type="button"
-              :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
+              :aria-label="citationLabel(segment.evidenceIndex, segment.text)"
+              :title="citationTitle(segment.evidenceIndex, segment.text)"
               @click="emit('evidence', segment.evidenceIndex)"
             >
-              {{ segment.text }}
+              {{ numbers.get(segment.evidenceIndex) }}
             </button>
-            <strong v-else-if="segment.bold">{{ segment.text }}</strong>
+            <strong v-else-if="segment.bold"
+              ><em v-if="segment.italic">{{ segment.text }}</em
+              ><template v-else>{{ segment.text }}</template></strong
+            >
+            <em v-else-if="segment.italic">{{ segment.text }}</em>
             <template v-else>{{ segment.text }}</template>
           </template>
         </li>
@@ -80,12 +106,25 @@ function segments(text: string) {
                 'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
               }"
               type="button"
-              :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
+              :aria-label="citationLabel(segment.evidenceIndex, segment.text)"
+              :title="citationTitle(segment.evidenceIndex, segment.text)"
               @click="emit('evidence', segment.evidenceIndex)"
             >
-              {{ segment.text }}
+              {{ numbers.get(segment.evidenceIndex) }}
             </button>
-            <strong v-else-if="segment.bold">{{ segment.text }}</strong>
+            <strong v-else-if="segment.bold"
+              ><em v-if="segment.italic">{{ segment.text }}</em
+              ><template v-else>{{ segment.text }}</template></strong
+            >
+            <em v-else-if="segment.italic">{{ segment.text }}</em>
+            <template v-else>{{ segment.text }}</template>
+          </template>
+        </li>
+      </ul>
+      <ul v-else-if="block.kind === 'works_cited'" class="research-works-cited">
+        <li v-for="(item, itemIndex) in block.items" :key="itemIndex">
+          <template v-for="(segment, segmentIndex) in entrySegments(item)" :key="segmentIndex">
+            <em v-if="segment.italic">{{ segment.text }}</em>
             <template v-else>{{ segment.text }}</template>
           </template>
         </li>
@@ -100,12 +139,17 @@ function segments(text: string) {
               'research-citation-corresponding': segment.evidenceIndex === highlightIndex,
             }"
             type="button"
-            :aria-label="`${i18n.t('research.inspect_evidence')} ${segment.text}`"
+            :aria-label="citationLabel(segment.evidenceIndex, segment.text)"
+            :title="citationTitle(segment.evidenceIndex, segment.text)"
             @click="emit('evidence', segment.evidenceIndex)"
           >
-            {{ segment.text }}
+            {{ numbers.get(segment.evidenceIndex) }}
           </button>
-          <strong v-else-if="segment.bold">{{ segment.text }}</strong>
+          <strong v-else-if="segment.bold"
+            ><em v-if="segment.italic">{{ segment.text }}</em
+            ><template v-else>{{ segment.text }}</template></strong
+          >
+          <em v-else-if="segment.italic">{{ segment.text }}</em>
           <template v-else>{{ segment.text }}</template>
         </template>
       </p>
@@ -159,27 +203,28 @@ function segments(text: string) {
   font-weight: 700;
 }
 .research-inline-citation {
-  min-height: 24px;
+  min-width: 20px;
+  min-height: 20px;
   display: inline-flex;
   align-items: center;
-  margin: 0 0.08em;
-  padding: 0 0.28em;
-  border: 0;
+  justify-content: center;
+  margin: 0 0.06em;
+  padding: 0 0.3em;
+  border: 1px solid var(--ui-accent-border);
   border-radius: 5px;
   background: var(--ui-accent-soft);
   color: var(--accent-fg);
-  font: inherit;
-  font-family: inherit;
-  font-size: 0.94em;
+  font-family: var(--font-ui);
+  font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
-  line-height: 1.25;
-  vertical-align: 0.02em;
+  line-height: 1;
+  vertical-align: 0.15em;
   cursor: pointer;
 }
 .research-inline-citation.research-citation-corresponding {
-  box-shadow: inset 0 0 0 2px var(--ui-accent-border);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  border-color: var(--accent-fg);
+  background: var(--accent-fg);
+  color: var(--accent-on);
 }
 .research-inline-citation:hover {
   box-shadow: inset 0 0 0 1px var(--ui-accent-border);
@@ -195,21 +240,16 @@ function segments(text: string) {
   font-size: 1rem;
   line-height: 1.65;
 }
-/* No padding or margin: in running prose either reads as a space before the
-   following punctuation. */
-.thread-answer-text .research-inline-citation {
-  display: inline;
-  margin: 0;
+.research-works-cited {
+  margin: 0 0 1.35em;
   padding: 0;
-  background: transparent;
-  font-weight: var(--fw-regular);
-  text-decoration: underline dotted;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  list-style: none;
 }
-.thread-answer-text .research-inline-citation:hover {
-  box-shadow: none;
-  text-decoration-style: solid;
+.research-answer-prose .research-works-cited li {
+  margin: 0 0 0.5em;
+  /* MLA hanging indent. */
+  padding-left: 2em;
+  text-indent: -2em;
 }
 @media (max-width: 860px) {
   .research-answer-prose:not(.thread-answer-text) {

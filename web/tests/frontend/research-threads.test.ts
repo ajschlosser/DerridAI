@@ -106,8 +106,14 @@ beforeEach(() => {
     id: path.split("/").pop(),
     status: "completed",
     result: {
-      answer: `Answer ${path}`,
-      evidence: [{ evidence_id: "E0", full_citation: `Citation ${path}` }],
+      answer: `Answer ${path} [E0]`,
+      evidence: [
+        {
+          evidence_id: "E0",
+          inline_citation: `Citation ${path}`,
+          full_citation: `Citation ${path}`,
+        },
+      ],
     },
   }));
   api.patch.mockResolvedValue(thread("a"));
@@ -262,10 +268,14 @@ describe("Research thread shell", () => {
     await flushPromises();
     const turns = wrapper.findAll("article[aria-labelledby]");
     expect(turns[0].text()).toContain("Answer /api/jobs/job-a");
-    expect(turns[0].text()).toContain("Citation /api/jobs/job-a");
+    expect(turns[0].find(".thread-answer-citation").attributes("aria-label")).toContain(
+      "Citation /api/jobs/job-a",
+    );
     expect(turns[0].text()).not.toContain("job-b");
     expect(turns[1].text()).toContain("Answer /api/jobs/job-b");
-    expect(turns[1].text()).toContain("Citation /api/jobs/job-b");
+    expect(turns[1].find(".thread-answer-citation").attributes("aria-label")).toContain(
+      "Citation /api/jobs/job-b",
+    );
   });
   it("opens only the cited turn's passage when two turns reuse the same evidence marker", async () => {
     const detail = thread("a");
@@ -674,7 +684,7 @@ describe("Research thread management", () => {
     const wrapper = browser();
     await flushPromises();
     api.exportThread.mockResolvedValue({
-      format: "derridai-research-thread-export-v1",
+      format: "derridai-research-thread-export-v2",
       thread: { thread_id: "a", title: "a", created_at: "", updated_at: "", archived_at: "now" },
       turns: [],
       works_cited: ["Derrida, Jacques. Margins."],
@@ -685,7 +695,7 @@ describe("Research thread management", () => {
     expect(api.exportThread).toHaveBeenLastCalledWith("a");
     const [markdown, name] = downloads.blob.mock.calls.at(-1)!;
     expect(name).toBe("research-thread-a.md");
-    expect(await (markdown as Blob).text()).toContain("1. Derrida, Jacques. Margins.");
+    expect(await (markdown as Blob).text()).toContain("\nDerrida, Jacques. Margins.\n");
     await buttons()[1].trigger("click");
     await flushPromises();
     const [json, jsonName] = downloads.blob.mock.calls.at(-1)!;

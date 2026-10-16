@@ -34,6 +34,8 @@ export interface ResearchThreadSummary extends ResearchThread {
   first_question: string | null;
   last_question: string | null;
   last_status: ResearchTurnStatus | null;
+  /** When the owner last asked a question (thread creation when none); the list's sort key. */
+  last_asked_at?: string;
 }
 
 export interface ResearchTurn {
@@ -67,6 +69,8 @@ export interface ResearchExportReference {
   record_revision: number | null;
   inline_citation: string | null;
   full_citation: string | null;
+  mla_citation?: string | null;
+  mla_in_text?: string | null;
   locator: Record<string, string | number>;
 }
 

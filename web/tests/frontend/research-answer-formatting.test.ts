@@ -70,6 +70,37 @@ describe("research answer formatting", () => {
     ]);
   });
 
+  it("renders single-delimiter emphasis such as foreign terms as italic, not literal asterisks", () => {
+    expect(
+      segmentResearchAnswer("Being as substance (*ousia*) or the _now_ of **presence**.", []),
+    ).toEqual([
+      { text: "Being as substance (" },
+      { text: "ousia", italic: true },
+      { text: ") or the " },
+      { text: "now", italic: true },
+      { text: " of " },
+      { text: "presence", bold: true },
+      { text: "." },
+    ]);
+  });
+
+  it("keeps arithmetic, footnote asterisks and identifiers literal", () => {
+    expect(segmentResearchAnswer("2 * 3 * 4, a note* and snake_case_name", [])).toEqual([
+      { text: "2 * 3 * 4, a note* and snake_case_name" },
+    ]);
+  });
+
+  it("keeps a citation bound when italic text precedes it", () => {
+    const evidence = [{ evidence_id: "E0", inline_citation: "Derrida 1967: 23" }];
+    expect(segmentResearchAnswer("The *stigmè* [E0].", evidence)).toEqual([
+      { text: "The " },
+      { text: "stigmè", italic: true },
+      { text: " " },
+      { text: "Derrida 1967: 23", evidenceIndex: 0 },
+      { text: "." },
+    ]);
+  });
+
   it("binds a citation even when the model wrapped all or part of it in bold markers", () => {
     const evidence = [
       {

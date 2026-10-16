@@ -40,7 +40,12 @@ describe("shared Research answer content", () => {
     expect(wrapper.find("strong").text()).toBe("qualified");
     expect(wrapper.findAll("ol li")).toHaveLength(2);
     expect(wrapper.findAll("button.thread-answer-citation")).toHaveLength(2);
-    expect(wrapper.text()).toContain("(Derrida 1997: 11)");
+    // Numbered markers; the run's citation stays in the accessible name.
+    expect(wrapper.findAll("button.thread-answer-citation").map((b) => b.text())).toEqual([
+      "1",
+      "1",
+    ]);
+    expect(wrapper.find("button").attributes("aria-label")).toContain("(Derrida 1997: 11)");
     expect(wrapper.text()).not.toContain("[[E1]]");
     await wrapper.find("button.thread-answer-citation").trigger("click");
     expect(wrapper.emitted("evidence")?.[0]).toEqual([0]);
@@ -54,9 +59,9 @@ describe("shared Research answer content", () => {
         evidence: packet("E1", "(Work A: 10)"),
       },
     });
-    expect(wrapper.find("button").text()).toBe("(Work A: 10)");
+    expect(wrapper.find("button").attributes("aria-label")).toContain("(Work A: 10)");
     await wrapper.setProps({ evidence: packet("E1", "(Work B: 40)") });
-    expect(wrapper.find("button").text()).toBe("(Work B: 40)");
+    expect(wrapper.find("button").attributes("aria-label")).toContain("(Work B: 40)");
     await wrapper.find("button").trigger("click");
     expect(wrapper.emitted("evidence")?.[0]).toEqual([0]);
     wrapper.unmount();
@@ -74,14 +79,66 @@ describe("shared Research answer content", () => {
       },
     });
     const buttons = wrapper.findAll("button.thread-answer-citation");
-    expect(buttons.map((button) => button.text())).toEqual([
-      "(Work A: 1)",
-      "(Work B: 2)",
-      "(Work A: 1)",
-    ]);
+    // Numbered by first citation, so a repeated source keeps its number.
+    expect(buttons.map((button) => button.text())).toEqual(["1", "2", "1"]);
     for (const button of buttons) await button.trigger("click");
     expect(wrapper.emitted("evidence")).toEqual([[0], [1], [0]]);
     expect(wrapper.text()).toContain("E7");
+    wrapper.unmount();
+  });
+
+  it("replaces a parenthesis of bound citations with markers but keeps other parentheses", () => {
+    const wrapper = mount(ResearchAnswerContent, {
+      props: {
+        answer:
+          "Writing (Derrida 1965: 23-25; Derrida 1981: 95). Speech (see Derrida 1965: 23-25).",
+        evidence: [
+          { evidence_id: "E0", inline_citation: "Derrida 1965: 23-25" },
+          { evidence_id: "E1", inline_citation: "Derrida 1981: 95" },
+        ] as ResearchResultEvidence[],
+      },
+    });
+    const text = wrapper.find("p").text().replace(/\s+/g, "");
+    expect(text).toBe("Writing12.Speech(see1).");
+    wrapper.unmount();
+  });
+
+  it("renders the Works Cited as an unnumbered MLA list with italic titles", () => {
+    const wrapper = mount(ResearchAnswerContent, {
+      props: {
+        answer:
+          "Presence [[E0]].\n\n**Works Cited**\n\nDerrida, Jacques. *De la grammatologie*. Éditions de Minuit, 1965.\n---. *Dissemination*. U of Chicago P, 1981.",
+        evidence: [
+          {
+            evidence_id: "E0",
+            inline_citation: "Derrida 1965: 23-25",
+            mla_in_text: "(Derrida, *De la grammatologie* 23–25)",
+          },
+        ] as ResearchResultEvidence[],
+      },
+    });
+    const entries = wrapper.findAll(".research-works-cited li");
+    expect(entries.map((entry) => entry.text())).toEqual([
+      "Derrida, Jacques. De la grammatologie. Éditions de Minuit, 1965.",
+      "---. Dissemination. U of Chicago P, 1981.",
+    ]);
+    expect(entries[0].find("em").text()).toBe("De la grammatologie");
+    expect(wrapper.find("ol").exists()).toBe(false);
+    expect(wrapper.find("button").attributes("title")).toBe("(Derrida, De la grammatologie 23–25)");
+    wrapper.unmount();
+  });
+
+  it("drops the numbers from a Works Cited saved before MLA", () => {
+    const wrapper = mount(ResearchAnswerContent, {
+      props: {
+        answer:
+          "Text.\n\n**Works Cited**\n\n1. Derrida, Jacques. Margins.\n2. Heidegger, Martin. Nietzsche.",
+      },
+    });
+    expect(wrapper.findAll(".research-works-cited li").map((entry) => entry.text())).toEqual([
+      "Derrida, Jacques. Margins.",
+      "Heidegger, Martin. Nietzsche.",
+    ]);
     wrapper.unmount();
   });
 

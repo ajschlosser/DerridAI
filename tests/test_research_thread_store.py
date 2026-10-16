@@ -200,6 +200,33 @@ def test_pinned_threads_list_first_without_changing_activity_order_or_other_owne
     assert [t["thread_id"] for t in store.list_threads("alice")] == [newer, older]
 
 
+def test_list_orders_by_last_question_asked_not_run_progress_or_rename(store) -> None:
+    first = _thread(store)
+    second = _thread(store)
+    first_turn, _ = store.append_turn(first, "alice", "What is the trace?")
+    store.append_turn(second, "alice", "What is the supplement?")
+    assert [t["thread_id"] for t in store.list_threads("alice")] == [second, first]
+
+    # Finishing the earlier question's run and renaming its thread are not new questions.
+    _finish(store, first_turn)
+    store.rename_thread(first, "alice", "Renamed")
+    assert [t["thread_id"] for t in store.list_threads("alice")] == [second, first]
+
+    store.append_turn(first, "alice", "And différance?")
+    listed = store.list_threads("alice")
+    assert [t["thread_id"] for t in listed] == [first, second]
+    assert listed[0]["last_asked_at"] > listed[1]["last_asked_at"]
+
+
+def test_thread_without_questions_sorts_by_its_creation_time(store) -> None:
+    asked = _thread(store)
+    store.append_turn(asked, "alice", "What is the trace?")
+    empty = _thread(store)
+    listed = store.list_threads("alice")
+    assert [t["thread_id"] for t in listed] == [empty, asked]
+    assert listed[0]["last_asked_at"] == listed[0]["created_at"]
+
+
 def test_pinned_column_is_added_to_an_existing_thread_table(tmp_path) -> None:
     import sqlite3
     path = tmp_path / "legacy.sqlite3"

@@ -192,14 +192,6 @@ watch(
           read-only
           @evidence="inspectCitation"
         />
-        <details v-if="result.evidence?.length">
-          <summary>{{ i18n.t("research.works_cited") }}</summary>
-          <ul>
-            <li v-for="(item, index) in result.evidence" :key="item.evidence_id || index">
-              {{ item.full_citation || item.inline_citation || item.evidence_id }}
-            </li>
-          </ul>
-        </details>
         <button
           type="button"
           class="btn thread-answer-inspect-toggle"
@@ -254,13 +246,6 @@ watch(
   max-width: 78ch;
   margin-block: 0;
 }
-.thread-answer-workspace > details {
-  min-width: 0;
-}
-.thread-answer-workspace > details summary {
-  cursor: pointer;
-  padding: 8px 0;
-}
 .thread-answer-inspect-toggle {
   justify-self: start;
   /* Wrap the label instead of overflowing a 320px viewport. */
@@ -294,9 +279,6 @@ watch(
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
     overscroll-behavior: contain;
-  }
-  .thread-answer-workspace:has(.thread-answer-inspector) > details {
-    grid-column: 1;
   }
 }
 @media (max-width: 600px) {

@@ -95,6 +95,10 @@ export type ResearchResultEvidence = {
   evidence_id?: string;
   inline_citation?: string;
   full_citation?: string;
+  /** MLA 9 Works Cited entry from the Record's metadata; titles in Markdown italics. */
+  mla_citation?: string;
+  /** MLA 9 parenthetical in-text citation, e.g. "(Derrida 23–25)". */
+  mla_in_text?: string;
   collection?: string;
   rerank_score?: number | null;
   record?: Record<string, unknown>;

@@ -24,6 +24,7 @@ import type {
   ResearchClaimSupportBinding,
   ResearchResultEvidence,
 } from "../../types/research";
+import { segmentResearchAnswer } from "./researchAnswerFormatting";
 
 // Shows only provenance the run actually recorded for one EvidenceRef. Source
 // location, record revision, support binding and claim validation stay
@@ -46,6 +47,23 @@ function range(start: unknown, end: unknown) {
 }
 
 const record = computed(() => props.evidence.record || {});
+// MLA strings are built server-side from the Record's metadata; titles carry italics.
+const mlaRows = computed(() =>
+  [
+    {
+      key: "in_text",
+      label: i18n.t("research.provenance_mla_in_text"),
+      value: props.evidence.mla_in_text,
+    },
+    {
+      key: "entry",
+      label: i18n.t("research.provenance_mla_entry"),
+      value: props.evidence.mla_citation,
+    },
+  ]
+    .filter((row) => Boolean(row.value))
+    .map((row) => ({ ...row, segments: segmentResearchAnswer(row.value || "", []) })),
+);
 // Source units come from the Record's own spans (or its recorded unit list);
 // they are shown only when the run's evidence carried them.
 const sourceUnits = computed(() => {
@@ -144,6 +162,15 @@ function revisionMismatch(binding: ResearchClaimSupportBinding) {
       <template v-for="row in sourceRows" :key="row.key">
         <dt>{{ row.label }}</dt>
         <dd>{{ row.value }}</dd>
+      </template>
+      <template v-for="row in mlaRows" :key="row.key">
+        <dt>{{ row.label }}</dt>
+        <dd>
+          <template v-for="(segment, index) in row.segments" :key="index"
+            ><em v-if="segment.italic">{{ segment.text }}</em
+            ><template v-else>{{ segment.text }}</template></template
+          >
+        </dd>
       </template>
       <dt>{{ i18n.t("research.provenance_locator") }}</dt>
       <dd :class="{ 'research-evidence-provenance-missing': !locator }">

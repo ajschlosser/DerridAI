@@ -653,7 +653,7 @@ test("switching threads drops the open inspector; archived and missing-artifact 
       "/api/jobs/job-a": { id: "job-a", status: "completed", result: result("a") },
       "/api/jobs/job-c": { id: "job-c", status: "completed", result: result("c") },
       "/api/research/threads/c/export": {
-        format: "derridai-research-thread-export-v1",
+        format: "derridai-research-thread-export-v2",
         thread: { thread_id: "c", title: "Inquiry c", archived_at: archived.archived_at },
         turns: [],
         works_cited: ["Source c"],

@@ -54,3 +54,32 @@ export const Narrow: Story = {
   args: { answer, evidence, compact: true, readOnly: true },
   parameters: { viewport: { defaultViewport: "mobile1" } },
 };
+
+/** Numbered markers in the prose; an alphabetical MLA 9 Works Cited with hanging indents. */
+export const MlaWorksCited: Story = {
+  args: {
+    compact: true,
+    readOnly: true,
+    answer: [
+      "Logocentrism identifies being with presence (*ousia*) (Derrida 1965: 23-25).",
+      "The pharmakon resists that presence (Derrida 1981: 95).",
+      "",
+      "**Works Cited**",
+      "",
+      "Derrida, Jacques. *De la grammatologie*. Éditions de Minuit, 1965.",
+      "---. *Dissemination*. Translated by Barbara Johnson, U of Chicago P, 1981.",
+    ].join("\n"),
+    evidence: [
+      {
+        evidence_id: "E0",
+        inline_citation: "Derrida 1965: 23-25",
+        mla_in_text: "(Derrida, *De la grammatologie* 23–25)",
+      },
+      {
+        evidence_id: "E1",
+        inline_citation: "Derrida 1981: 95",
+        mla_in_text: "(Derrida, *Dissemination* 95)",
+      },
+    ],
+  },
+};

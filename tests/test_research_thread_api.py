@@ -517,9 +517,10 @@ def test_export_keeps_run_and_record_identity_without_passage_text(store, monkey
     first, second = export["turns"]
     assert first["research_run_id"] == "job" and first["answer"] == "Answer (Derrida, Margins 3)"
     assert first["references"] == [{"evidence_id": "E1", "collection": "c", "record_id": "r1", "record_revision": 2, "source_document_id": "doc-1",
-        **cite, "locator": {"printed_page_start": 3}}]
+        **cite, "mla_citation": None, "mla_in_text": None, "locator": {"printed_page_start": 3}}]
     assert second["status"] == "failed" and not second["answer_available"] and second["references"] == []
     assert export["works_cited"] == ["Derrida, Jacques. Margins."]
+    assert export["format"] == "derridai-research-thread-export-v2"
     monkeypatch.setattr(routes, "request_user", lambda _: SimpleNamespace(username="bob", role="researcher"))
     with pytest.raises(HTTPException) as exc:
         routes.export_thread(thread_id, None)

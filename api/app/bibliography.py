@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 
@@ -29,8 +30,16 @@ def _mla_author_name(value: str | None) -> str:
     return f"{parts[-1]}, {' '.join(parts[:-1])}"
 
 
-def _mla_citation(metadata: dict[str, Any]) -> str:
-    """Render common MLA 9 containers for books, journal articles, and chapters."""
+def _plain(value: str) -> str:
+    return value
+
+
+def _mla_citation(metadata: dict[str, Any], *, emphasis: Callable[[str], str] = _plain) -> str:
+    """Render common MLA 9 containers for books, journal articles, and chapters.
+
+    ``emphasis`` marks the titles MLA italicizes (a standalone work or a container);
+    the default leaves plain text for callers that cannot render emphasis.
+    """
     source_type = str(metadata.get("source_type") or metadata.get("document_type") or metadata.get("work_type") or "book").casefold().replace("-", "_").replace(" ", "_")
     author = metadata.get("document_author") or metadata.get("author")
     title = metadata.get("document_title") or metadata.get("title")
@@ -45,7 +54,7 @@ def _mla_citation(metadata: dict[str, Any]) -> str:
         article = f'“{str(title).strip().strip(chr(34))}.”' if title else ""
         journal = str(metadata.get("journal_title") or metadata.get("container_title") or "").strip()
         parts = []
-        if journal: parts.append(journal)
+        if journal: parts.append(emphasis(journal))
         if metadata.get("volume") not in (None, ""): parts.append(f"vol. {metadata.get('volume')}")
         if metadata.get("issue") not in (None, ""): parts.append(f"no. {metadata.get('issue')}")
         if year not in (None, ""): parts.append(str(year))
@@ -59,7 +68,7 @@ def _mla_citation(metadata: dict[str, Any]) -> str:
         chapter = f'“{str(title).strip().strip(chr(34))}.”' if title else ""
         container = str(metadata.get("container_title") or metadata.get("book_title") or "").strip()
         parts = []
-        if container: parts.append(container)
+        if container: parts.append(emphasis(container))
         editor = str(metadata.get("editor") or "").strip()
         if editor: parts.append(f"edited by {editor}")
         translator = str(metadata.get("translator") or "").strip()
@@ -73,7 +82,7 @@ def _mla_citation(metadata: dict[str, Any]) -> str:
     # Default: standalone book / monograph.
     opening_parts = []
     if author: opening_parts.append(_mla_author_name(str(author)).rstrip(". ") + ".")
-    if title: opening_parts.append(str(title).strip().rstrip(". ") + ".")
+    if title: opening_parts.append(emphasis(str(title).strip().rstrip(". ")) + ".")
     publication = []
     if metadata.get("translator"): publication.append(f"Translated by {str(metadata.get('translator')).strip()}")
     if metadata.get("editor"): publication.append(f"Edited by {str(metadata.get('editor')).strip()}")
