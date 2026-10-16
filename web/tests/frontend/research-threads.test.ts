@@ -106,8 +106,14 @@ beforeEach(() => {
     id: path.split("/").pop(),
     status: "completed",
     result: {
-      answer: `Answer ${path}`,
-      evidence: [{ evidence_id: "E0", full_citation: `Citation ${path}` }],
+      answer: `Answer ${path} [E0]`,
+      evidence: [
+        {
+          evidence_id: "E0",
+          inline_citation: `Citation ${path}`,
+          full_citation: `Citation ${path}`,
+        },
+      ],
     },
   }));
   api.patch.mockResolvedValue(thread("a"));

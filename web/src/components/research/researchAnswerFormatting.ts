@@ -28,6 +28,7 @@ export type ResearchAnswerSegment = {
   text: string;
   evidenceIndex?: number;
   bold?: boolean;
+  italic?: boolean;
 };
 
 function stripOuterStrong(value: string): string | null {
@@ -158,7 +159,38 @@ function normalizeStrongMarkup(value: string) {
     index += delimiter.length;
   }
 
-  return { text, boldRanges };
+  return { text, ...normalizeEmphasisMarkup(text, boldRanges) };
+}
+
+// Single-delimiter emphasis must open before a non-space and close after one, and an underscore
+// pair must sit at word boundaries, so arithmetic, footnote asterisks and identifiers such as
+// snake_case stay literal. Unmatched single delimiters are answer content and are kept.
+const EMPHASIS_PATTERN =
+  /(?<![\w*])\*(?=[^\s*])([^*\n]*?[^\s*])\*(?![\w*])|(?<![\w_])_(?=[^\s_])([^_\n]*?[^\s_])_(?![\w_])/gu;
+
+function normalizeEmphasisMarkup(
+  source: string,
+  boldRanges: Array<{ start: number; end: number }>,
+) {
+  const removed: number[] = [];
+  const rawItalic: Array<{ start: number; end: number }> = [];
+  for (const match of source.matchAll(EMPHASIS_PATTERN)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    removed.push(start, end - 1);
+    rawItalic.push({ start: start + 1, end: end - 1 });
+  }
+  if (!removed.length) return { boldRanges, italicRanges: [] };
+
+  // Map positions in the delimited text to positions after the delimiters are removed.
+  const shift = (position: number) => position - removed.filter((index) => index < position).length;
+  const remap = (ranges: Array<{ start: number; end: number }>) =>
+    ranges
+      .map(({ start, end }) => ({ start: shift(start), end: shift(end) }))
+      .filter(({ start, end }) => end > start);
+  const removedSet = new Set(removed);
+  const text = [...source].filter((_, index) => !removedSet.has(index)).join("");
+  return { text, boldRanges: remap(boldRanges), italicRanges: remap(rawItalic) };
 }
 
 type CitationCandidate = { marker: string; evidenceIndex: number; display: string };
@@ -254,7 +286,7 @@ export function segmentResearchAnswer(
   }
 
   const cuts = new Set<number>([0, normalized.text.length]);
-  normalized.boldRanges.forEach(({ start, end }) => {
+  [...normalized.boldRanges, ...normalized.italicRanges].forEach(({ start, end }) => {
     cuts.add(start);
     cuts.add(end);
   });
@@ -276,17 +308,20 @@ export function segmentResearchAnswer(
     const bold =
       !citation && normalized.boldRanges.some((range) => start >= range.start && end <= range.end);
 
+    const italic =
+      !citation &&
+      normalized.italicRanges.some((range) => start >= range.start && end <= range.end);
+
     const next: ResearchAnswerSegment = citation
       ? { text, evidenceIndex: citation.evidenceIndex }
-      : bold
-        ? { text, bold: true }
-        : { text };
+      : { text, ...(bold ? { bold: true } : {}), ...(italic ? { italic: true } : {}) };
 
     const previous = segments.at(-1);
     if (
       previous &&
       previous.evidenceIndex === next.evidenceIndex &&
-      Boolean(previous.bold) === Boolean(next.bold)
+      Boolean(previous.bold) === Boolean(next.bold) &&
+      Boolean(previous.italic) === Boolean(next.italic)
     ) {
       previous.text += next.text;
     } else {

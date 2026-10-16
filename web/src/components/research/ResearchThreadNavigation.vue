@@ -204,8 +204,8 @@ function clearSearch(event: KeyboardEvent) {
                 class="research-thread-preview"
                 >{{ item.last_question }}</span
               >
-              <time :datetime="item.updated_at">{{
-                new Date(item.updated_at).toLocaleDateString(i18n.locale)
+              <time :datetime="item.last_asked_at ?? item.updated_at">{{
+                new Date(item.last_asked_at ?? item.updated_at).toLocaleDateString(i18n.locale)
               }}</time>
             </button>
           </li>

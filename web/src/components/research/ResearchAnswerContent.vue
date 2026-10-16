@@ -64,7 +64,11 @@ function segments(text: string) {
             >
               {{ segment.text }}
             </button>
-            <strong v-else-if="segment.bold">{{ segment.text }}</strong>
+            <strong v-else-if="segment.bold"
+              ><em v-if="segment.italic">{{ segment.text }}</em
+              ><template v-else>{{ segment.text }}</template></strong
+            >
+            <em v-else-if="segment.italic">{{ segment.text }}</em>
             <template v-else>{{ segment.text }}</template>
           </template>
         </li>
@@ -85,7 +89,11 @@ function segments(text: string) {
             >
               {{ segment.text }}
             </button>
-            <strong v-else-if="segment.bold">{{ segment.text }}</strong>
+            <strong v-else-if="segment.bold"
+              ><em v-if="segment.italic">{{ segment.text }}</em
+              ><template v-else>{{ segment.text }}</template></strong
+            >
+            <em v-else-if="segment.italic">{{ segment.text }}</em>
             <template v-else>{{ segment.text }}</template>
           </template>
         </li>
@@ -105,7 +113,11 @@ function segments(text: string) {
           >
             {{ segment.text }}
           </button>
-          <strong v-else-if="segment.bold">{{ segment.text }}</strong>
+          <strong v-else-if="segment.bold"
+            ><em v-if="segment.italic">{{ segment.text }}</em
+            ><template v-else>{{ segment.text }}</template></strong
+          >
+          <em v-else-if="segment.italic">{{ segment.text }}</em>
           <template v-else>{{ segment.text }}</template>
         </template>
       </p>

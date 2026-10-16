@@ -223,9 +223,11 @@ class ResearchThreadStore(PipelineDatabase):
               (SELECT user_question FROM research_turns t WHERE t.thread_id=h.thread_id
                  ORDER BY ordinal DESC LIMIT 1) AS last_question,
               (SELECT status FROM research_turns t WHERE t.thread_id=h.thread_id
-                 ORDER BY ordinal DESC LIMIT 1) AS last_status
+                 ORDER BY ordinal DESC LIMIT 1) AS last_status,
+              COALESCE((SELECT MAX(t.created_at) FROM research_turns t WHERE t.thread_id=h.thread_id),
+                 h.created_at) AS last_asked_at
             FROM research_threads h WHERE {" AND ".join(where)}
-            ORDER BY (h.pinned_at IS NULL), h.pinned_at DESC, h.updated_at DESC, h.thread_id LIMIT ? OFFSET ?"""  # noqa: S608 - fixed fragments; values bound
+            ORDER BY (h.pinned_at IS NULL), h.pinned_at DESC, last_asked_at DESC, h.thread_id LIMIT ? OFFSET ?"""  # noqa: S608 - fixed fragments; values bound
         with self.lock, self.connect() as conn:
             rows = conn.execute(sql, (*args, limit, max(0, int(offset)))).fetchall()
         out = []
@@ -236,6 +238,9 @@ class ResearchThreadStore(PipelineDatabase):
                 first_question=row["first_question"],
                 last_question=row["last_question"],
                 last_status=row["last_status"],
+                # Recency is when the owner last asked a question. Run progress, retries and
+                # renames update updated_at but must not reorder the owner's list.
+                last_asked_at=row["last_asked_at"],
             )
             out.append(item)
         return out
