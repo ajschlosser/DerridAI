@@ -195,11 +195,21 @@ function segments(text: string) {
   font-size: 1rem;
   line-height: 1.65;
 }
+/* No padding or margin: in running prose either reads as a space before the
+   following punctuation. */
 .thread-answer-text .research-inline-citation {
   display: inline;
-  padding: 0 2px;
+  margin: 0;
+  padding: 0;
   background: transparent;
-  text-decoration: underline;
+  font-weight: var(--fw-regular);
+  text-decoration: underline dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.thread-answer-text .research-inline-citation:hover {
+  box-shadow: none;
+  text-decoration-style: solid;
 }
 @media (max-width: 860px) {
   .research-answer-prose:not(.thread-answer-text) {
