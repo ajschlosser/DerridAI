@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -51,6 +52,8 @@ from .routers.system import router as system_router
 from .routers.system_data import router as system_data_router
 from .validation_handlers import request_validation_error_handler
 
+logger = logging.getLogger(__name__)
+
 ROUTERS = (
     auth_router,
     annotations_router,
@@ -83,8 +86,14 @@ realtime_observer = RealtimeObserver(realtime_broker)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    from .services import retention_scheduler
+    from . import research_threads
+    from .services import rag_jobs, retention_scheduler
 
+    try:
+        # Before serving: turns whose runs a restart interrupted become failed and retryable.
+        research_threads.reconcile_active_turns(rag_jobs, startup=True)
+    except Exception:  # noqa: BLE001 - reconciliation must not prevent start-up
+        logger.exception("Could not reconcile interrupted Research turns")
     if settings.realtime_enabled:
         realtime_observer.start()
     retention_scheduler.start()

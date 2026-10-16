@@ -296,11 +296,24 @@ Screenshots of the production build against the e2e mock backend, with a realist
 - **Item 3 (partial):** thread rows show "2 questions · date" on one line (`research.thread_turn_count_one` / `_other` replace `research.thread_turn_count`), and paging controls render only when there is a previous or next page. A continuously scrolling list was not attempted.
 - **Item 1 (partial):** inline citations in a thread answer lose their padding and margin, which read as a space before the following punctuation, and use a regular-weight dotted underline. They keep the full citation text (decided 2026-10-15, no compact markers), now in MLA in-text form: `_citation_strings` produces "Derrida, Of Grammatology 61" (surname, short title without subtitle, locator; no year or colon) instead of "Derrida 1967: 61". Titles are not italicized because the string is plain text and the work type (book versus essay) is not recorded reliably.
 
+### Done (#618)
+
+- Answers render `*term*` / `_term_` emphasis as italics; arithmetic, stray asterisks and identifiers stay literal.
+- Citations in answer text are numbered markers (numbered by first citation), reversing the 2026-10-15 "full MLA text" decision above; each marker keeps the run's citation in its accessible name and shows the MLA in-text form on hover. Each new answer ends with a deterministic MLA 9 Works Cited; saved answers keep their stored text. The duplicate per-turn "Works Cited" list was removed.
+- Thread export is `derridai-research-thread-export-v2` with MLA citations recomputed from each run's Records.
+- Threads are ordered by when the owner last asked a question (`last_asked_at`), after pinned threads.
+
+### Interrupted turns (follow-up branch)
+
+- A restart marks interrupted jobs failed in the job ledger but left their turns `running`, so the thread refused every follow-up and retry. At start-up, before serving, `research_threads.reconcile_active_turns` gives each queued/running turn its job's outcome, and fails a turn whose job is missing or that never got one. Reading a thread settles its turns whose job has ended; a missing job is only conclusive at start-up, because a turn is bound before its job is registered. Tests: `tests/test_research_turn_reconciliation.py`.
+
 ### Remaining work
 
-1. ~~Inline citation presentation~~: resolved above (full MLA text, spacing fixed).
-2. **Inspect this answer and its evidence** and **Open answer and evidence** overlap in purpose and sit on separate rows; consolidate them, or explain the difference in the UI.
-3. Thread list: **Previous threads** / **Next threads** paging and "Questions: 2" labels read like a form; consider a scrolling list with compact metadata.
-4. At 1920px the side-by-side inspector scrolls on its own (`max-height: min(70dvh, 850px)`), leaving empty space under short answers; consider a sticky inspector instead.
-5. The turn status line ("Completed") under every question adds little for completed turns; consider showing status only when it is not completed.
+Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done. What is left comes from the layout mockup reviewed with #618 (not yet implemented):
+
+1. **Two columns at most:** the thread list collapses to a toggle when a source is open, so the answer keeps its width; threads + reading, or reading + source, never all three.
+2. **Question box always visible:** the follow-up composer stays at the bottom of the reading column while the conversation scrolls.
+3. **Honest turn states:** a running turn shows the job's reported stage and a Cancel control; a failed turn shows its reason and Retry on one row.
+4. **Evidence warnings (needs design):** flag narrow evidence (most citations on one passage) and a question naming an author or work none of the cited Records matches. Flag only; never rewrite the answer.
+5. Thread list: a continuously scrolling list grouped by date was not attempted.
 6. Manual review is still needed: screen reader, keyboard-only, 200–400% zoom and reduced motion.
