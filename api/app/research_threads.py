@@ -193,6 +193,52 @@ def sync_turn_from_job(job: dict[str, Any]) -> None:
     notify_changed()
 
 
+RUN_UNAVAILABLE_ERROR = (
+    "This question's run is no longer available; it was probably interrupted by a restart."
+)
+NOT_STARTED_ERROR = "This question was interrupted before its run started."
+
+
+def reconcile_active_turns(jobs: Any, *, thread_id: str | None = None, startup: bool = False) -> int:
+    """Settle queued/running turns whose job already ended; returns how many changed.
+
+    A restart marks interrupted jobs failed in the job ledger without touching
+    their turns, which would otherwise stay "running" and block the thread's
+    follow-ups and retries. A missing job or an unbound queued turn is only
+    conclusive at ``startup``: during normal operation a turn is bound before
+    its job is registered, so a lookup can briefly miss a run that is starting.
+    """
+    store = thread_store()
+    changed = 0
+    for turn in store.active_turns(thread_id):
+        owner = turn["owner"]
+        error: str | None = None
+        if turn["job_id"]:
+            try:
+                job = jobs.get(turn["job_id"])
+            except KeyError:
+                job = None
+            if job is not None:
+                if job.get("status") in ("completed", "failed", "cancelled"):
+                    sync_turn_from_job({**job, "turn_id": turn["turn_id"], "owner": owner})
+                    changed += 1
+                continue
+            error = RUN_UNAVAILABLE_ERROR
+        else:
+            error = NOT_STARTED_ERROR
+        if not startup:
+            continue
+        try:
+            store.end_turn(turn["turn_id"], owner, status="failed", error=error)
+        except Exception:  # noqa: BLE001 - one bad row must not stop start-up
+            logger.exception("Could not settle interrupted Research turn %s", turn["turn_id"])
+            continue
+        changed += 1
+    if changed and startup:
+        notify_changed()
+    return changed
+
+
 def import_legacy_responses(owner: str, cache: Any, *, offset: int = 0, limit: int = 200) -> dict[str, Any]:
     """Materialize one bounded owner-scoped batch; preserve cache and provenance."""
     page = cache.get_legacy_response_summaries(owner, limit=limit, offset=offset)

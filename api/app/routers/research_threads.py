@@ -90,8 +90,14 @@ def create_thread(body: ThreadCreate, request: Request) -> dict[str, Any]:
 
 @router.get("/api/research/threads/{thread_id}")
 def get_thread(thread_id: str, request: Request) -> dict[str, Any]:
+    owner = request_user(request).username
     try:
-        return research_threads.thread_store().get_thread(thread_id, request_user(request).username)
+        thread = research_threads.thread_store().get_thread(thread_id, owner)
+        if any(turn["status"] in ("queued", "running") for turn in thread["turns"]):
+            # A run that ended without updating its turn must not keep the thread busy.
+            if research_threads.reconcile_active_turns(rag_jobs, thread_id=thread_id):
+                thread = research_threads.thread_store().get_thread(thread_id, owner)
+        return thread
     except ThreadNotFound as exc:
         raise _not_found() from exc
 

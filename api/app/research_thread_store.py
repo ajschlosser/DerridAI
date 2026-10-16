@@ -382,6 +382,19 @@ class ResearchThreadStore(PipelineDatabase):
             ).fetchone()
         return _turn_row(row) if row else None
 
+    def active_turns(self, thread_id: str | None = None) -> list[dict[str, Any]]:
+        """Queued/running turns of live threads, with their owner, for reconciliation."""
+        sql = """SELECT t.*, h.owner AS thread_owner FROM research_turns t
+                 JOIN research_threads h USING (thread_id)
+                 WHERE h.deleted_at IS NULL AND t.status IN ('queued','running')"""
+        args: tuple[Any, ...] = ()
+        if thread_id is not None:
+            sql += " AND t.thread_id=?"
+            args = (thread_id,)
+        with self.lock, self.connect() as conn:
+            rows = conn.execute(sql + " ORDER BY t.thread_id, t.ordinal", args).fetchall()
+        return [{**_turn_row(row), "owner": row["thread_owner"]} for row in rows]
+
     def save_context_selection(
         self, turn_id: str, owner: str, selection: dict[str, Any]
     ) -> dict[str, Any]:
