@@ -789,6 +789,7 @@ async function cancelJob(job: ResearchJob) {
   try {
     const updated = (await researchActions.cancelResearchJob(job.id)) as ResearchJob;
     if (activeJob.value?.id === job.id) activeJob.value = updated;
+    if (job.thread_id) ++threadRefreshKey.value;
     await refreshRuns();
   } catch (error) {
     toast(error instanceof Error ? error.message : String(error), { tone: "danger" });
@@ -1145,7 +1146,10 @@ onBeforeUnmount(() => {
         :initial-archived="route.query.thread_archived === 'true'"
         @filters="threadListFilters"
         @continuable="threadContinuable = $event"
+        :jobs="jobs"
+        :can-cancel="canManageRuns"
         @retry-turn="runResearch"
+        @cancel-turn="cancelJob"
         @follow-up="followUpFrom"
         @select="selectThread"
         @open="openThreadTurn"

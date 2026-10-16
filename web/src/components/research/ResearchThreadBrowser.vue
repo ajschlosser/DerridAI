@@ -24,7 +24,7 @@ import ResearchThreadManageDialog from "./ResearchThreadManageDialog.vue";
 import { useAuthStore } from "../../stores/auth";
 import { researchThreadsApi } from "../../api/researchThreads";
 import { useDataQuery } from "../../realtime/dataQuery";
-import type { ResearchResultEvidence } from "../../types/research";
+import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
 import ResearchTurnComparison from "./ResearchTurnComparison.vue";
@@ -46,6 +46,9 @@ const props = defineProps<{
   initialSearch?: string;
   initialOffset?: number;
   initialArchived?: boolean;
+  /** Live job snapshots, so running turns can show their stage. */
+  jobs?: ResearchJob[];
+  canCancel?: boolean;
 }>();
 const emit = defineEmits<{
   continuable: [value: boolean];
@@ -55,6 +58,7 @@ const emit = defineEmits<{
   new: [];
   removed: [error?: string];
   retryTurn: [turn: ResearchTurn];
+  cancelTurn: [job: ResearchJob];
   followUp: [turn: ResearchTurn, evidence: ResearchResultEvidence | null];
   openRecord: [item: ResearchResultEvidence];
   openRelationships: [item: ResearchResultEvidence, mode: "trace" | "model"];
@@ -393,7 +397,10 @@ function retry() {
     :notice="notice"
     :retry-disabled="retryDisabled || Boolean(error)"
     :answer-text="answerText"
+    :jobs="jobs"
+    :can-cancel="canCancel"
     @retry-turn="retryTurn"
+    @cancel-turn="emit('cancelTurn', $event)"
     @follow-up="emit('followUp', $event, null)"
     @select="emit('select', $event)"
     @open="emit('open', $event)"

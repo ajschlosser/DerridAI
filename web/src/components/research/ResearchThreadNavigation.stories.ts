@@ -116,3 +116,33 @@ export const LongConversation: Story = {
 export const WideDesktop: Story = {
   parameters: { viewport: { defaultViewport: "responsive" } },
 };
+
+/** A running turn shows its job's reported stage and Cancel; a failed one its reason and Retry. */
+export const TurnStates: Story = {
+  args: {
+    canCancel: true,
+    jobs: [
+      {
+        id: "job-running",
+        status: "running",
+        stage: "retrieving",
+        stage_detail: "Retrieving passages (12 of 40)",
+      },
+    ],
+    thread: {
+      ...thread,
+      turns: [
+        thread.turns[1],
+        {
+          ...thread.turns[1],
+          turn_id: "turn-running",
+          ordinal: 3,
+          user_question: "How does the gift relate to the aporia of responsibility?",
+          status: "running",
+          job_id: "job-running",
+          error: null,
+        },
+      ],
+    },
+  },
+};
