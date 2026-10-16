@@ -24,7 +24,7 @@ const tf = (key: string, values?: Record<string, string | number>) =>
   values ? `${key}(${Object.values(values).join(",")})` : key;
 
 const data: ResearchThreadExport = {
-  format: "derridai-research-thread-export-v1",
+  format: "derridai-research-thread-export-v2",
   thread: {
     thread_id: "rt_1",
     title: "Différance",
@@ -78,13 +78,26 @@ const data: ResearchThreadExport = {
 };
 
 describe("researchThreadMarkdown", () => {
+  it("lists each reference by its MLA entry when the server provides one", () => {
+    const turn = {
+      ...data.turns[0],
+      references: [
+        { ...data.turns[0].references[0], mla_citation: "Derrida, Jacques. *Margins*." },
+      ],
+    };
+    const md = researchThreadMarkdown({ ...data, turns: [turn] }, tf);
+    expect(md).toContain("- E1: Derrida, Jacques. *Margins*. — `c/r1` r2");
+  });
+
   it("keeps run, attempt and Record identity and the run's own citations verbatim", () => {
     const md = researchThreadMarkdown(data, tf);
     expect(md).toContain("`run-1`");
     expect(md).toContain("research.export_attempt: 2");
     expect(md).toContain("- E1: Derrida, Jacques. Margins. — `c/r1` r2");
     expect(md).toContain("It is not a word (Derrida, Margins 3).");
-    expect(md).toContain("1. Derrida, Jacques. Margins.");
+    // MLA Works Cited entries are unnumbered paragraphs in the server's alphabetical order.
+    expect(md).toContain("## research.export_works_cited\n\nDerrida, Jacques. Margins.\n");
+    expect(md).not.toContain("1. Derrida, Jacques. Margins.");
   });
 
   it("marks a turn without an answer instead of inventing one", () => {

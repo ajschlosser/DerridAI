@@ -19,7 +19,7 @@
 import type { ResearchResultEvidence } from "../../types/research";
 
 export type ResearchAnswerBlock = {
-  kind: "heading" | "paragraph" | "ordered" | "unordered";
+  kind: "heading" | "paragraph" | "ordered" | "unordered" | "works_cited";
   text?: string;
   items?: string[];
 };
@@ -235,6 +235,8 @@ export function parseResearchAnswer(value: string, worksCitedLabel: string): Res
   if (!source) return [];
 
   const blocks: ResearchAnswerBlock[] = [];
+  const entries: string[] = [];
+  let inWorksCited = false;
   const citedHeading = /^(?:#{1,4}\s*)?(?:\*\*|__)?works\s+cited(?:\*\*|__)?\s*:?[ \t]*(.*)$/i;
 
   for (const raw of source.split(/\n{2,}/)) {
@@ -243,11 +245,23 @@ export function parseResearchAnswer(value: string, worksCitedLabel: string): Res
     const cited = block.match(citedHeading);
     if (cited) {
       blocks.push({ kind: "heading", text: worksCitedLabel });
-      if (cited[1]?.trim()) blocks.push(...parseBodyBlock(cited[1], worksCitedLabel));
+      if (cited[1]?.trim()) entries.push(cited[1]);
+      inWorksCited = true;
+      continue;
+    }
+    if (inWorksCited) {
+      entries.push(block);
       continue;
     }
     blocks.push(...parseBodyBlock(block, worksCitedLabel));
   }
+  // Everything after the heading is bibliography. Answers saved before MLA numbered
+  // their entries; the numbers carry no meaning in an MLA list and are dropped.
+  const items = entries
+    .flatMap((entry) => entry.split(/\n/))
+    .map((line) => line.trim().replace(/^\d+[.)]\s+/, ""))
+    .filter(Boolean);
+  if (items.length) blocks.push({ kind: "works_cited", items });
   return blocks;
 }
 
@@ -342,4 +356,59 @@ export function segmentResearchAnswer(
     if (marker) segment.text = marker.display;
   }
   return segments;
+}
+
+/**
+ * Number each bound source by its first citation in the answer's prose (not its
+ * Works Cited), so the reader sees short markers while the evidence ID stays the
+ * run's identity. Returns evidence index -> display number.
+ */
+export function citationNumbers(
+  blocks: ResearchAnswerBlock[],
+  evidence: ResearchResultEvidence[],
+): Map<number, number> {
+  const numbers = new Map<number, number>();
+  for (const block of blocks) {
+    if (block.kind === "works_cited") continue;
+    for (const text of block.items ?? [block.text || ""]) {
+      for (const segment of segmentResearchAnswer(text, evidence)) {
+        if (segment.evidenceIndex != null && !numbers.has(segment.evidenceIndex)) {
+          numbers.set(segment.evidenceIndex, numbers.size + 1);
+        }
+      }
+    }
+  }
+  return numbers;
+}
+
+/**
+ * Drop the parentheses and separators that wrapped a group made only of bound
+ * citations ("writing (A; B)." -> "writing[1][2]."), since numbered markers replace
+ * them. A parenthesis holding any other text is left as written.
+ */
+export function compactCitationGroups(segments: ResearchAnswerSegment[]): ResearchAnswerSegment[] {
+  const out = segments.map((segment) => ({ ...segment }));
+  const isCitation = (segment?: ResearchAnswerSegment) => segment?.evidenceIndex != null;
+  const plain = (segment?: ResearchAnswerSegment) =>
+    segment != null && !isCitation(segment) && !segment.bold && !segment.italic;
+  for (let start = 0; start < out.length; start += 1) {
+    if (!isCitation(out[start]) || !plain(out[start - 1]) || !/\(\s*$/.test(out[start - 1].text)) {
+      continue;
+    }
+    let end = start;
+    while (
+      isCitation(out[end + 2]) &&
+      plain(out[end + 1]) &&
+      /^\s*[;,]\s*$/.test(out[end + 1].text)
+    ) {
+      end += 2;
+    }
+    const after = out[end + 1];
+    if (!plain(after) || !/^\s*\)/.test(after.text)) continue;
+    out[start - 1].text = out[start - 1].text.replace(/\s*\(\s*$/, "");
+    after.text = after.text.replace(/^\s*\)/, "");
+    for (let index = start + 1; index < end; index += 2) out[index].text = "";
+    start = end;
+  }
+  return out.filter((segment) => segment.text !== "" || isCitation(segment));
 }

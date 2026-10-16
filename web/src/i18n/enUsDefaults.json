@@ -3966,6 +3966,8 @@
   "claims.status_rejected": "Rejected",
   "claims.status_unresolved": "Unresolved",
   "research.provenance_title": "Provenance of this passage",
+  "research.provenance_mla_entry": "MLA Works Cited entry",
+  "research.provenance_mla_in_text": "MLA in-text citation",
   "research.provenance_work": "Work",
   "research.provenance_edition": "Edition",
   "research.provenance_translator": "Translator",

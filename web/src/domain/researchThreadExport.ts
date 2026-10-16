@@ -58,7 +58,7 @@ export function researchThreadMarkdown(data: ResearchThreadExport, tf: Translate
       for (const ref of turn.references) {
         const revision = ref.record_revision == null ? "" : ` r${ref.record_revision}`;
         lines.push(
-          `- ${ref.evidence_id ?? "?"}: ${ref.full_citation || ref.inline_citation || ""} — \`${ref.collection}/${ref.record_id}\`${revision}`,
+          `- ${ref.evidence_id ?? "?"}: ${ref.mla_citation || ref.full_citation || ref.inline_citation || ""} — \`${ref.collection}/${ref.record_id}\`${revision}`,
         );
       }
       lines.push("");
@@ -66,8 +66,8 @@ export function researchThreadMarkdown(data: ResearchThreadExport, tf: Translate
   }
   if (data.works_cited.length) {
     lines.push(`## ${tf("research.export_works_cited")}`, "");
-    data.works_cited.forEach((citation, index) => lines.push(`${index + 1}. ${citation}`));
-    lines.push("");
+    // MLA 9: alphabetical (ordered by the server) and unnumbered, one entry per paragraph.
+    data.works_cited.forEach((citation) => lines.push(citation, ""));
   }
   return lines.join("\n");
 }

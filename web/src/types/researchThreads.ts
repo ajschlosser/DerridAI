@@ -69,6 +69,8 @@ export interface ResearchExportReference {
   record_revision: number | null;
   inline_citation: string | null;
   full_citation: string | null;
+  mla_citation?: string | null;
+  mla_in_text?: string | null;
   locator: Record<string, string | number>;
 }
 

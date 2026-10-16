@@ -92,6 +92,8 @@ class EvidenceItem(TypedDict, total=False):
     record: dict[str, Any]
     inline_citation: str
     full_citation: str
+    mla_citation: str
+    mla_in_text: str
     text_truncated: bool
     selection_role: str
     neighbor_of: str

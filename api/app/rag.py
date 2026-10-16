@@ -28,7 +28,12 @@ from typing import Any
 from .chroma_store import ChromaStore
 from .claim_memory import ClaimMemoryIndex
 from .config import settings
-from .corpus_citations import _citation_strings
+from .corpus_citations import (
+    _citation_strings,
+    mla_in_text,
+    mla_works_cited,
+    mla_works_cited_entry,
+)
 from .cross_encoder import predict_scores
 from .llm_transport import chat_complete, structured_chat_complete
 from .models import RAGPromptMetadataPolicy, RAGRunRequest
@@ -610,11 +615,43 @@ def _generation_contract_issues(
     return issues
 
 
-def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited: bool) -> str:
-    citation_map = {
-        item["evidence_id"]: item["inline_citation"]
-        for item in evidence
-    }
+def _annotate_mla(evidence: list[EvidenceItem], answer: str) -> None:
+    """Attach deterministic MLA 9 strings to each EvidenceRef for display and export.
+
+    A title joins the in-text citation when one author has several works among the
+    cited evidence (all evidence when nothing is cited), as MLA requires.
+    """
+    used = set(extract_evidence_ids(answer))
+    scope = [item for item in evidence if item["evidence_id"] in used] or evidence
+    works_by_author: dict[str, set[str]] = {}
+    for item in scope:
+        record = item["record"]
+        works_by_author.setdefault(source_author(record), set()).add(source_work_label(record))
+    for item in evidence:
+        record = item["record"]
+        item["mla_citation"] = mla_works_cited_entry(record)
+        item["mla_in_text"] = mla_in_text(
+            record, include_title=len(works_by_author.get(source_author(record), ())) > 1
+        )
+
+
+def _bind_sources(
+    answer: str,
+    evidence: list[EvidenceItem],
+    include_works_cited: bool,
+    *,
+    citation_map: dict[str, str] | None = None,
+) -> str:
+    """Replace evidence markers with parenthetical citations.
+
+    ``citation_map`` overrides the run's inline citations (for example with MLA
+    in-text forms, without their parentheses) for exports.
+    """
+    if citation_map is None:
+        citation_map = {
+            item["evidence_id"]: item["inline_citation"]
+            for item in evidence
+        }
 
     def replace_group(match: re.Match[str]) -> str:
         inside = match.group(1)
@@ -635,25 +672,12 @@ def _bind_sources(answer: str, evidence: list[EvidenceItem], include_works_cited
         bound = re.sub(pattern, replace_group, bound)
 
     if include_works_cited and used_ids:
-        seen: set[str] = set()
-        citations: list[str] = []
-        for item in evidence:
-            if used_ids and item["evidence_id"] not in used_ids:
-                continue
-            record = item["record"]
-            canonical = str(
-                record.get("canonical_work_id")
-                or item["full_citation"]
-            )
-            if canonical in seen:
-                continue
-            seen.add(canonical)
-            citations.append(item["full_citation"])
+        # MLA 9 from each cited Record's metadata: alphabetical, one entry per work.
+        citations = mla_works_cited([
+            item["record"] for item in evidence if item["evidence_id"] in used_ids
+        ])
         if citations:
-            bound += "\n\n**Works Cited**\n\n" + "\n".join(
-                f"{index}. {citation}"
-                for index, citation in enumerate(citations, start=1)
-            )
+            bound += "\n\n**Works Cited**\n\n" + "\n".join(citations)
     return bound
 
 
@@ -2735,6 +2759,7 @@ packet, and do not switch to prose unless the researcher requested prose.
         if request.bind_citations
         else _STRAY_MEMORY_TAG_PATTERN.sub("", raw_answer)
     )
+    _annotate_mla(evidence, raw_answer)
     stages.append({
         "name": "bind_sources",
         "seconds": time.perf_counter() - stage_start,
