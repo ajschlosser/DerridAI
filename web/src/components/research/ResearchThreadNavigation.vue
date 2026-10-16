@@ -19,6 +19,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
 import { computed, nextTick, ref, watch } from "vue";
+import type { ResearchJob } from "../../types/research";
+import { researchJobDetail } from "./researchI18n";
 import type {
   ResearchThreadDetail,
   ResearchThreadSummary,
@@ -42,6 +44,9 @@ const props = defineProps<{
   retryDisabled?: boolean;
   /** Text of an answer already loaded in this browser, or null when not loaded. */
   answerText?: (turn: ResearchTurn) => string | null;
+  /** Live job snapshots known to this browser; a turn without one shows only its status. */
+  jobs?: ResearchJob[];
+  canCancel?: boolean;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -51,6 +56,7 @@ const emit = defineEmits<{
   search: [value: string];
   retry: [];
   retryTurn: [turn: ResearchTurn];
+  cancelTurn: [job: ResearchJob];
   followUp: [turn: ResearchTurn];
   rename: [];
   archive: [];
@@ -93,6 +99,21 @@ function clearTurnSearch(event: KeyboardEvent) {
   if (!turnQuery.value) return;
   event.stopPropagation();
   turnQuery.value = "";
+}
+// A queued/running turn reports its job's own stage, never an invented one.
+function liveJob(turn: ResearchTurn) {
+  if (!["queued", "running"].includes(turn.status) || !turn.job_id) return null;
+  const job = props.jobs?.find((item) => item.id === turn.job_id);
+  return job && ["queued", "running", "cancelling"].includes(job.status) ? job : null;
+}
+function turnStatusLabel(turn: ResearchTurn) {
+  const job = liveJob(turn);
+  if (job?.status === "cancelling" || job?.cancel_requested)
+    return i18n.t("research.status_cancelling");
+  return i18n.t(`research.thread_status_${turn.status}`);
+}
+function jobStage(job: ResearchJob) {
+  return researchJobDetail(job, (key, fallback) => i18n.t(key, fallback), i18n.locale);
 }
 const conversationHeading = ref<HTMLElement | null>(null);
 const sidebar = ref<HTMLElement | null>(null);
@@ -347,15 +368,17 @@ function clearSearch(event: KeyboardEvent) {
           >
             <article class="research-thread-turn" :aria-labelledby="`heading-${turn.turn_id}`">
               <h3 :id="`heading-${turn.turn_id}`">{{ turn.user_question }}</h3>
-              <p v-if="turn.status !== 'completed'" class="research-thread-turn-status">
-                {{ i18n.t(`research.thread_status_${turn.status}`) }}
-              </p>
-              <slot name="answer" :turn="turn" />
-              <div v-if="['failed', 'cancelled'].includes(turn.status)">
-                <p>{{ i18n.t("research.thread_retry_help") }}</p>
+              <div v-if="turn.status !== 'completed'" class="research-thread-turn-state">
+                <p class="research-thread-turn-status">
+                  <b>{{ turnStatusLabel(turn) }}</b>
+                  <span v-if="liveJob(turn)">{{ jobStage(liveJob(turn)!) }}</span>
+                  <span v-else-if="turn.error" role="alert">{{ turn.error }}</span>
+                </p>
                 <button
+                  v-if="['failed', 'cancelled'].includes(turn.status)"
                   class="btn"
                   type="button"
+                  :aria-describedby="`retry-help-${turn.turn_id}`"
                   :disabled="
                     busy ||
                     loading ||
@@ -367,8 +390,26 @@ function clearSearch(event: KeyboardEvent) {
                 >
                   {{ i18n.t("research.thread_retry") }}
                 </button>
+                <button
+                  v-else-if="canCancel && liveJob(turn)"
+                  class="btn"
+                  type="button"
+                  :disabled="
+                    liveJob(turn)!.status === 'cancelling' || liveJob(turn)!.cancel_requested
+                  "
+                  @click="emit('cancelTurn', liveJob(turn)!)"
+                >
+                  {{ i18n.t("research.cancel_run") }}
+                </button>
+                <p
+                  v-if="['failed', 'cancelled'].includes(turn.status)"
+                  :id="`retry-help-${turn.turn_id}`"
+                  class="research-thread-turn-help"
+                >
+                  {{ i18n.t("research.thread_retry_help") }}
+                </p>
               </div>
-              <p v-if="turn.error" role="alert">{{ turn.error }}</p>
+              <slot name="answer" :turn="turn" />
               <div class="research-thread-turn-actions">
                 <!-- A completed turn's answer carries its own inspector toggle. -->
                 <button
@@ -604,11 +645,28 @@ function clearSearch(event: KeyboardEvent) {
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
-.research-thread-turn-status {
-  display: inline-block;
+/* Status, stage or failure reason, and the turn's one action share a row. */
+.research-thread-turn-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
   margin-block: 0 12px;
+}
+.research-thread-turn-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.research-thread-turn-help {
+  flex-basis: 100%;
+  margin: 0;
   font-size: 0.78rem;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
 }
 .research-thread-pages,
 .research-thread-archive-filter {

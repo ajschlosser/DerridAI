@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   runs: vi.fn(),
   pipelines: vi.fn(),
   job: vi.fn(),
+  cancel: vi.fn(),
   follow: vi.fn(() => vi.fn()),
   loadComposerDraft: vi.fn(),
   saveComposerDraft: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock("../../src/domain/researchActions", () => ({
   getResearchWorkspaceSnapshot: mocks.snapshot,
   refreshResearchJobs: mocks.runs,
   updateResearchConfig: mocks.update,
+  cancelResearchJob: mocks.cancel,
 }));
 vi.mock("../../src/domain/sharedAnnotations", () => ({ annotationsWorkspace: {} }));
 vi.mock("../../src/domain/sharedResearchJobs", () => ({ getResearchJob: mocks.job }));
@@ -128,8 +130,10 @@ const ThreadBrowser = defineComponent({
     "initialSearch",
     "initialOffset",
     "initialArchived",
+    "jobs",
+    "canCancel",
   ],
-  emits: ["retryTurn", "filters", "select", "followUp", "continuable"],
+  emits: ["retryTurn", "cancelTurn", "filters", "select", "followUp", "continuable"],
   template: '<div class="thread-browser"><slot name="workspace" /></div>',
 });
 const Result = defineComponent({
@@ -249,6 +253,22 @@ describe("Research progressive reads", () => {
       path: "/rag",
       query: { thread: "t", job: "retried" },
     });
+  });
+  it("cancels a thread turn's run and refreshes the thread", async () => {
+    reactive(mocks.route).query = { thread: "t" };
+    const live = { id: "job-t", status: "running", thread_id: "t", turn_id: "turn" };
+    mocks.runs.mockResolvedValue([live]);
+    mocks.cancel.mockResolvedValue({ ...live, status: "cancelling", cancel_requested: true });
+    const w = render();
+    await flushPromises();
+    const browser = w.findComponent(ThreadBrowser);
+    expect(browser.props("jobs")).toEqual([live]);
+    expect(browser.props("canCancel")).toBe(true);
+    const key = browser.props("refreshKey");
+    browser.vm.$emit("cancelTurn", live);
+    await flushPromises();
+    expect(mocks.cancel).toHaveBeenCalledWith("job-t");
+    expect(browser.props("refreshKey")).toBeGreaterThan(key);
   });
   it("discards a late retry submission after an account switch", async () => {
     reactive(mocks.route).query = { thread: "t" };

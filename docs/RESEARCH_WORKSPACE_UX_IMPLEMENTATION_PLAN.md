@@ -307,9 +307,13 @@ Screenshots of the production build against the e2e mock backend, with a realist
 
 - A restart marks interrupted jobs failed in the job ledger but left their turns `running`, so the thread refused every follow-up and retry. At start-up, before serving, `research_threads.reconcile_active_turns` gives each queued/running turn its job's outcome, and fails a turn whose job is missing or that never got one. Reading a thread settles its turns whose job has ended; a missing job is only conclusive at start-up, because a turn is bound before its job is registered. Tests: `tests/test_research_turn_reconciliation.py`.
 
+### Honest turn states (follow-up branch)
+
+- **Item 3:** a queued or running turn shows its job's reported stage (`researchJobDetail`, the same text the pipeline bar uses) and, for roles that can manage runs, **Cancel research run**; cancelling refreshes the thread. A turn whose job snapshot this browser does not have shows only its status, never an inferred stage. A failed or cancelled turn shows its reason (`role="alert"`) beside the status, with **Retry with current settings** on the same row and the retry help below it. Story: `Research/Thread Navigation` → `TurnStates`.
+
 ### Remaining work
 
-Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done. What is left comes from the layout mockup reviewed with #618 (not yet implemented):
+Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done. What is left comes from the layout mockup reviewed with #618; item 3 below is done (see above):
 
 1. **Two columns at most:** the thread list collapses to a toggle when a source is open, so the answer keeps its width; threads + reading, or reading + source, never all three.
 2. **Question box always visible:** the follow-up composer stays at the bottom of the reading column while the conversation scrolls.

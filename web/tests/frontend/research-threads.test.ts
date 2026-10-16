@@ -243,6 +243,53 @@ describe("Research thread shell", () => {
     await flushPromises();
     expect(retryButton().attributes("disabled")).toBeDefined();
   });
+  it("shows a running turn's reported stage with Cancel, and a failure's reason with Retry", async () => {
+    useI18nStore().dictionary["research.cancel_run"] = "Cancel run";
+    useI18nStore().dictionary["research.status_cancelling"] = "Cancelling";
+    const detail = thread("a");
+    detail.turns[0].status = "running";
+    api.get.mockResolvedValue(detail);
+    const job = {
+      id: "job-a",
+      status: "running",
+      stage: "retrieving",
+      stage_detail: "Retrieving passages",
+    };
+    const wrapper = browser("a", "");
+    await wrapper.setProps({ jobs: [job], canCancel: true });
+    await flushPromises();
+    const state = () => wrapper.find(".research-thread-turn-state");
+    expect(state().text()).toContain("Retrieving passages");
+    const cancel = () =>
+      state()
+        .findAll("button")
+        .find((item) => item.text() === "Cancel run");
+    await cancel()!.trigger("click");
+    expect(wrapper.emitted("cancelTurn")?.[0]).toEqual([job]);
+    // Without the permission, or without a live job snapshot, no Cancel is offered.
+    await wrapper.setProps({ canCancel: false });
+    expect(cancel()).toBeUndefined();
+    await wrapper.setProps({ canCancel: true, jobs: [] });
+    expect(cancel()).toBeUndefined();
+    expect(state().text()).not.toContain("Retrieving passages");
+    await wrapper.setProps({ jobs: [{ ...job, status: "cancelling", cancel_requested: true }] });
+    expect(state().text()).toContain("Cancelling");
+    expect(cancel()!.attributes("disabled")).toBeDefined();
+
+    api.get.mockResolvedValue({
+      ...detail,
+      turns: [{ ...detail.turns[0], status: "failed", error: "Provider timed out" }],
+    });
+    await wrapper.setProps({ refreshKey: 1 });
+    await flushPromises();
+    expect(state().text()).toContain("Provider timed out");
+    expect(state().find("[role=alert]").text()).toBe("Provider timed out");
+    expect(
+      state()
+        .findAll("button")
+        .map((item) => item.text()),
+    ).toEqual(["Retry turn"]);
+  });
   it("refreshes after a retry outcome and hides retry after the turn becomes active", async () => {
     const detail = thread("a");
     detail.turns[0].status = "cancelled";
