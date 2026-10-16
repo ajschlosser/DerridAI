@@ -25,10 +25,11 @@ text is never exported, so a Researcher export carries no corpus text.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 from .corpus_citations import mla_works_cited
 from .rag import _annotate_mla, _bind_sources, extract_evidence_ids
+from .record_types import EvidenceItem
 from .research_thread_store import ThreadNotFound
 
 EXPORT_FORMAT = "derridai-research-thread-export-v2"
@@ -81,12 +82,16 @@ def _turn_export(
     cited = set(extract_evidence_ids(raw_answer))
     answer = result.get("answer") or None
     if raw_answer and evidence and all(isinstance(item.get("record"), dict) for item in evidence):
+        # Cached JSON objects have the EvidenceItem shape but no static type.
+        # Keep the original dict list for reference serialization and share the
+        # same mutable items with the citation helpers (which annotate in place).
+        typed_evidence = cast(list[EvidenceItem], evidence)
         # Recomputed from recorded metadata so runs saved before MLA strings existed match.
-        _annotate_mla(evidence, raw_answer)
+        _annotate_mla(typed_evidence, raw_answer)
         # Rebind only when every cited source has an MLA form; otherwise keep the run's
         # own bound answer rather than mixing citation styles.
         if all(item["mla_in_text"] for item in evidence if item["evidence_id"] in cited):
-            answer = _bind_sources(raw_answer, evidence, False, citation_map={
+            answer = _bind_sources(raw_answer, typed_evidence, False, citation_map={
                 item["evidence_id"]: item["mla_in_text"][1:-1] for item in evidence
             }).strip() or answer
     out.update(
