@@ -19,6 +19,21 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { mockBackend } from "./support/mock-backend";
+import type { Page } from "@playwright/test";
+
+/** Switch theme and let colour transitions finish; axe otherwise samples
+ * intermediate colours that belong to neither theme. */
+async function setTheme(page: Page, theme: string) {
+  await page.evaluate(async (value) => {
+    document.documentElement.setAttribute("data-color-scheme", value);
+    await Promise.all(
+      document.documentElement
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity)
+        .map((animation) => animation.finished.catch(() => {})),
+    );
+  }, theme);
+}
 
 const APP = `http://127.0.0.1:${process.env.APP_PORT || "5199"}`;
 const summary = (id: string) => ({
@@ -335,10 +350,7 @@ test("active thread previews are labelled and accessible in both themes", async 
   await expect(navigation).toContainText("Drafting the answer");
   await expect(navigation).toContainText("citations are not yet bound");
   for (const theme of ["light", "dark"]) {
-    await page.evaluate(
-      (value) => document.documentElement.setAttribute("data-color-scheme", value),
-      theme,
-    );
+    await setTheme(page, theme);
     expect(
       (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
     ).toEqual([]);
@@ -440,10 +452,7 @@ test("each turn inspects its own evidence, including a recovered saved answer, w
   await expect(page.locator(".research-run-button")).toBeDisabled();
   await page.setViewportSize({ width: 390, height: 844 });
   for (const theme of ["light", "dark"]) {
-    await page.evaluate(
-      (value) => document.documentElement.setAttribute("data-color-scheme", value),
-      theme,
-    );
+    await setTheme(page, theme);
     expect(
       (await new AxeBuilder({ page }).include(".research-thread-navigation").analyze()).violations,
     ).toEqual([]);
@@ -588,10 +597,7 @@ test("Library imports legacy singletons and preserves thread search URL state", 
   await expect(page).toHaveURL(/thread_q=Levinas/);
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const theme of ["light", "dark"]) {
-    await page.evaluate(
-      (value) => document.documentElement.setAttribute("data-color-scheme", value),
-      theme,
-    );
+    await setTheme(page, theme);
     expect(
       (await new AxeBuilder({ page }).include(".research-thread-library").analyze()).violations,
     ).toEqual([]);

@@ -199,9 +199,11 @@ function clearSearch(event: KeyboardEvent) {
               <span class="research-thread-turn-count">{{
                 i18n.tf("research.thread_turn_count", { count: item.turn_count })
               }}</span>
-              <span v-if="showPreview && item.last_question" class="research-thread-preview">{{
-                item.last_question
-              }}</span>
+              <span
+                v-if="showPreview && item.last_question && item.last_question !== item.title"
+                class="research-thread-preview"
+                >{{ item.last_question }}</span
+              >
               <time :datetime="item.updated_at">{{
                 new Date(item.updated_at).toLocaleDateString(i18n.locale)
               }}</time>
@@ -244,87 +246,91 @@ function clearSearch(event: KeyboardEvent) {
       >
         <h2 ref="conversationHeading" tabindex="-1">{{ thread.title }}</h2>
         <p v-if="thread.archived_at">{{ i18n.t("research.thread_archived") }}</p>
-        <details
-          class="research-thread-management"
-          :open="manageExpanded"
-          @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open"
-        >
-          <summary>{{ i18n.t("research.thread_manage") }}</summary>
-          <div
-            class="research-thread-management-actions"
-            role="group"
-            :aria-label="i18n.t('research.thread_manage')"
+        <div class="research-thread-toolbar">
+          <details
+            class="research-thread-management"
+            :open="manageExpanded"
+            @toggle="manageExpanded = ($event.target as HTMLDetailsElement).open"
           >
-            <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
-              {{ i18n.t("research.thread_rename") }}
-            </button>
-            <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
-              {{
-                i18n.t(thread.archived_at ? "research.thread_unarchive" : "research.thread_archive")
-              }}
-            </button>
-            <button
-              class="btn"
-              type="button"
-              :disabled="busy"
-              :aria-pressed="thread.pinned_at ? 'true' : 'false'"
-              @click="emit('pin')"
+            <summary>{{ i18n.t("research.thread_manage") }}</summary>
+            <div
+              class="research-thread-management-actions"
+              role="group"
+              :aria-label="i18n.t('research.thread_manage')"
             >
-              {{ i18n.t("research.thread_pin") }}
-            </button>
-            <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
-              {{ i18n.t("research.thread_delete") }}
-            </button>
-          </div>
-          <div
-            class="research-thread-export-actions"
-            role="group"
-            :aria-label="i18n.t('research.thread_export')"
+              <button class="btn" type="button" :disabled="busy" @click="emit('rename')">
+                {{ i18n.t("research.thread_rename") }}
+              </button>
+              <button class="btn" type="button" :disabled="busy" @click="emit('archive')">
+                {{
+                  i18n.t(
+                    thread.archived_at ? "research.thread_unarchive" : "research.thread_archive",
+                  )
+                }}
+              </button>
+              <button
+                class="btn"
+                type="button"
+                :disabled="busy"
+                :aria-pressed="thread.pinned_at ? 'true' : 'false'"
+                @click="emit('pin')"
+              >
+                {{ i18n.t("research.thread_pin") }}
+              </button>
+              <button class="btn" type="button" :disabled="busy" @click="emit('remove')">
+                {{ i18n.t("research.thread_delete") }}
+              </button>
+            </div>
+            <div
+              class="research-thread-export-actions"
+              role="group"
+              :aria-label="i18n.t('research.thread_export')"
+            >
+              <button class="btn" type="button" :disabled="busy" @click="emit('export', 'md')">
+                {{ i18n.t("research.thread_export_markdown") }}
+              </button>
+              <button class="btn" type="button" :disabled="busy" @click="emit('export', 'json')">
+                {{ i18n.t("research.thread_export_json") }}
+              </button>
+            </div>
+          </details>
+          <button
+            v-if="completedTurns > 1 && $slots.compare && !compareOpen"
+            type="button"
+            class="btn research-thread-compare-toggle"
+            @click="compareOpen = true"
           >
-            <button class="btn" type="button" :disabled="busy" @click="emit('export', 'md')">
-              {{ i18n.t("research.thread_export_markdown") }}
-            </button>
-            <button class="btn" type="button" :disabled="busy" @click="emit('export', 'json')">
-              {{ i18n.t("research.thread_export_json") }}
-            </button>
+            {{ i18n.t("research.compare_turns") }}
+          </button>
+          <div v-if="thread.turns.length > 1" class="research-thread-turn-search">
+            <label>
+              {{ i18n.t("research.thread_search") }}
+              <input
+                v-model="turnQuery"
+                type="search"
+                maxlength="200"
+                @keydown.escape="clearTurnSearch"
+              />
+            </label>
+            <p v-if="turnSearch" role="status">
+              {{
+                i18n.tf("research.thread_search_count", {
+                  shown: turnSearch.matches.size,
+                  total: turnSearch.total,
+                })
+              }}
+              <template v-if="turnSearch.unsearched">
+                {{ i18n.tf("research.thread_search_unsearched", { count: turnSearch.unsearched }) }}
+              </template>
+            </p>
           </div>
-        </details>
-        <button
-          v-if="completedTurns > 1 && $slots.compare && !compareOpen"
-          type="button"
-          class="btn research-thread-compare-toggle"
-          @click="compareOpen = true"
-        >
-          {{ i18n.t("research.compare_turns") }}
-        </button>
+        </div>
         <slot
           v-if="compareOpen"
           name="compare"
           :turns="thread.turns"
           :close="() => (compareOpen = false)"
         />
-        <div v-if="thread.turns.length > 1" class="research-thread-turn-search">
-          <label>
-            {{ i18n.t("research.thread_search") }}
-            <input
-              v-model="turnQuery"
-              type="search"
-              maxlength="200"
-              @keydown.escape="clearTurnSearch"
-            />
-          </label>
-          <p v-if="turnSearch" role="status">
-            {{
-              i18n.tf("research.thread_search_count", {
-                shown: turnSearch.matches.size,
-                total: turnSearch.total,
-              })
-            }}
-            <template v-if="turnSearch.unsearched">
-              {{ i18n.tf("research.thread_search_unsearched", { count: turnSearch.unsearched }) }}
-            </template>
-          </p>
-        </div>
         <ol class="research-thread-turns">
           <li
             v-for="turn in thread.turns"
@@ -355,24 +361,26 @@ function clearSearch(event: KeyboardEvent) {
                 </button>
               </div>
               <p v-if="turn.error" role="alert">{{ turn.error }}</p>
-              <button
-                v-if="turn.job_id"
-                type="button"
-                class="btn"
-                :aria-current="selectedJobId === turn.job_id ? 'true' : undefined"
-                @click="emit('open', turn)"
-              >
-                {{ i18n.t("research.thread_open_run") }}
-              </button>
-              <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
-              <button
-                v-if="turn.status === 'completed' && !thread.archived_at && $slots.workspace"
-                type="button"
-                class="btn"
-                @click="emit('followUp', turn)"
-              >
-                {{ i18n.t("research.thread_follow_up") }}
-              </button>
+              <div class="research-thread-turn-actions">
+                <button
+                  v-if="turn.job_id"
+                  type="button"
+                  class="btn"
+                  :aria-current="selectedJobId === turn.job_id ? 'true' : undefined"
+                  @click="emit('open', turn)"
+                >
+                  {{ i18n.t("research.thread_open_run") }}
+                </button>
+                <p v-else>{{ i18n.t("research.thread_run_unavailable") }}</p>
+                <button
+                  v-if="turn.status === 'completed' && !thread.archived_at && $slots.workspace"
+                  type="button"
+                  class="btn"
+                  @click="emit('followUp', turn)"
+                >
+                  {{ i18n.t("research.thread_follow_up") }}
+                </button>
+              </div>
             </article>
           </li>
         </ol>
@@ -398,13 +406,51 @@ function clearSearch(event: KeyboardEvent) {
   min-width: 0;
 }
 .research-thread-turn-search {
-  display: grid;
-  gap: 6px;
-  margin-block: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-inline-start: auto;
 }
 .research-thread-turn-search label {
-  display: grid;
-  gap: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.research-thread-turn-search input {
+  width: min(260px, 100%);
+}
+.research-thread-turn-search p {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+/* Thread tools sit on one row under the title so the first answer is near
+   the top; an opened panel takes its own full row. */
+.research-thread-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-block: 4px 14px;
+  margin-block-end: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.research-thread-toolbar > .research-thread-management[open] {
+  order: 10;
+  flex-basis: 100%;
+}
+.research-thread-turn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.research-thread-turn-actions > p {
+  margin: 0;
 }
 .research-thread-index-title {
   grid-column: 1;
@@ -511,8 +557,7 @@ function clearSearch(event: KeyboardEvent) {
   overflow-wrap: anywhere;
 }
 .research-thread-management {
-  border-bottom: 1px solid var(--border);
-  padding-block: 8px 16px;
+  min-width: 0;
 }
 .research-thread-management summary {
   cursor: pointer;
@@ -569,11 +614,16 @@ function clearSearch(event: KeyboardEvent) {
 .research-thread-workspace-layout .research-thread-primary {
   min-height: min(72dvh, 760px);
 }
+/* The conversation flows with the page. A capped inner scroll box left about
+   270px of answer visible above the composer at common laptop sizes. */
 .research-thread-workspace-layout .research-thread-conversation {
-  max-height: min(52dvh, 590px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding-inline-end: 8px;
+}
+/* Each turn is a size container so its answer/inspector split follows the
+   turn's own width, not the viewport (the app sidebar and thread list take
+   a large share of it). */
+.research-thread-turns > li {
+  container: thread-turn / inline-size;
 }
 .research-thread-workspace {
   display: grid;

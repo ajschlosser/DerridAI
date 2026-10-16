@@ -5094,6 +5094,7 @@ FR_CA: dict[str, str] = {'loading.loading': "Chargement…",
  'research.ask_help': 'Posez une question savante. DerridAI repère, reclasse et synthétise les passages pertinents, '
                       'puis relie la réponse à des preuves vérifiables.',
  'research.ask_title': 'Que recherchez-vous?',
+ 'research.follow_up_title': 'Poser une question de suivi',
  'research.auto_grade': 'Évaluer automatiquement la réponse finale',
  'research.auto_grade_help': 'S’exécute comme dernière étape du pipeline en arrière-plan.',
  'research.bind_citations': 'Lier les balises de preuve aux citations',

@@ -101,6 +101,7 @@ function setSection(next: InspectorSection) {
         :panel-id="`${instanceId}-evidence`"
         :context-label="contextLabel"
         :result-evidence="result.evidence"
+        :answer="result.answer || ''"
         :active-index="activeEvidenceIndex"
         :researcher="researcher"
         @select="emit('selectEvidence', $event)"

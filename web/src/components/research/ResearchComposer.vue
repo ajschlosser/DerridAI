@@ -184,7 +184,9 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
     <header class="research-composer-heading">
       <div>
         <span v-if="!compact" class="section-label">{{ i18n.t("nav.rag") }}</span>
-        <h2 id="research-compose-title">{{ i18n.t("research.ask_title") }}</h2>
+        <h2 id="research-compose-title">
+          {{ i18n.t(compact ? "research.follow_up_title" : "research.ask_title") }}
+        </h2>
         <p v-if="!compact">{{ i18n.t("research.ask_help") }}</p>
       </div>
       <div class="research-heading-actions">
@@ -253,7 +255,7 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
             </div>
           </div>
         </div>
-        <span
+        <span v-if="!compact"
           >{{ prompt.length.toLocaleString(i18n.locale) }} {{ i18n.t("research.characters") }}</span
         >
       </div>
@@ -549,10 +551,13 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
   border-radius: 7px;
   font-size: 0.8125rem;
 }
+/* One wrapping line of "Label value" pairs: the follow-up composer states
+   its settings without a five-row table pushing the conversation away. */
 .research-composer-effective dl {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
   margin: 0;
   overflow-wrap: anywhere;
 }
@@ -560,7 +565,13 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
   color: var(--text-tertiary);
 }
 .research-composer-effective dd {
-  margin: 0;
+  margin: 0 12px 0 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.research-composer-effective dd.research-composer-context-scope {
+  flex-basis: 100%;
+  font-weight: 400;
 }
 .research-composer-settings-toggle {
   justify-self: start;
@@ -643,11 +654,19 @@ function updateDraftField(field: "prompt" | "instructions", event: Event) {
 .research-composer-followup summary {
   pointer-events: auto;
 }
+/* A follow-up continues a thread: a short heading and a two-line box keep
+   the conversation, not the form, in view. */
 .research-composer-followup .research-composer-heading {
   margin-bottom: var(--space-2, 8px);
 }
+.research-composer-followup .research-composer-heading h2 {
+  font-size: 1rem;
+}
 .research-composer-followup .research-question-input {
-  min-height: 76px;
+  min-height: 56px;
+}
+.research-composer-followup .research-question-tools:empty {
+  display: none;
 }
 @media (max-width: 600px) {
   .research-composer-followup {
