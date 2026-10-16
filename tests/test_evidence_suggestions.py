@@ -76,7 +76,24 @@ def test_citation_strings_without_year_do_not_emit_empty_year_gap():
         "page_start": 9,
         "page_end": 10,
     })
-    assert inline == "Proust, Du côté de chez Swann: 9-10"
+    assert inline == "Proust, Du côté de chez Swann 9-10"
+
+
+def test_inline_citations_use_mla_author_short_title_and_locator():
+    from app.rag import _citation_strings
+
+    inline, _full = _citation_strings({
+        "document_author": "Jacques Derrida",
+        "work": "Speech and Phenomena: And Other Essays on Husserl",
+        "year": 1973,
+        "page_start": 61,
+    })
+    # No year and no colon before the page; the subtitle is dropped.
+    assert inline == "Derrida, Speech and Phenomena 61"
+    assert _citation_strings({"work": "Of Grammatology", "page_start": 7, "page_end": 9})[0] == (
+        "Of Grammatology 7-9"
+    )
+    assert _citation_strings({"document_author": "Jacques Derrida"})[0] == "Derrida"
 
 
 class LocalProjection:
