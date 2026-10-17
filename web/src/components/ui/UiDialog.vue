@@ -29,6 +29,8 @@ const props = withDefaults(
     closeLabel?: string;
     size?: "medium" | "large" | "xlarge";
     dismissible?: boolean;
+    placement?: "center" | "side";
+    dockTarget?: HTMLElement | null;
   }>(),
   {
     open: true,
@@ -36,6 +38,8 @@ const props = withDefaults(
     closeLabel: "Close",
     size: "large",
     dismissible: true,
+    placement: "center",
+    dockTarget: null,
   },
 );
 const emit = defineEmits<{ close: [] }>();
@@ -69,12 +73,13 @@ function requestClose() {
 }
 function onKeydown(event: KeyboardEvent) {
   if (!props.open) return;
+  if (props.dockTarget && !panel.value?.contains(event.target as Node)) return;
   if (event.key === "Escape" && props.dismissible) {
     event.preventDefault();
     emit("close");
     return;
   }
-  if (event.key !== "Tab") return;
+  if (props.dockTarget || event.key !== "Tab") return;
   const nodes = focusable();
   if (!nodes.length) {
     event.preventDefault();
@@ -109,6 +114,16 @@ watch(
     } else priorActive?.focus?.({ preventScroll: true });
   },
 );
+watch(
+  () => props.dockTarget,
+  async () => {
+    const active = document.activeElement as HTMLElement | null;
+    const inside = !!active && !!panel.value?.contains(active);
+    await nextTick();
+    if (inside && active?.isConnected) active.focus({ preventScroll: true });
+    else if (props.open && !props.dockTarget) await focusDialog();
+  },
+);
 onUpdated(measureBody);
 onMounted(async () => {
   if (typeof ResizeObserver !== "undefined" && body.value) {
@@ -128,14 +143,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="props.open" class="ui-dialog-backdrop" @mousedown.self="requestClose">
+  <Teleport :to="props.dockTarget || 'body'">
+    <div
+      v-if="props.open"
+      class="ui-dialog-backdrop"
+      :data-placement="props.placement"
+      :data-docked="!!props.dockTarget"
+      @mousedown.self="requestClose"
+    >
       <section
         ref="panel"
         class="ui-dialog"
         :data-size="props.size"
-        role="dialog"
-        aria-modal="true"
+        :role="props.dockTarget ? 'region' : 'dialog'"
+        :aria-modal="props.dockTarget ? undefined : true"
         :aria-labelledby="titleId"
         :aria-describedby="props.description ? descriptionId : undefined"
       >
@@ -272,5 +293,30 @@ onBeforeUnmount(() => {
   .ui-dialog-backdrop {
     backdrop-filter: none;
   }
+}
+.ui-dialog-backdrop[data-placement="side"] {
+  place-items: stretch end;
+  padding: 0;
+}
+.ui-dialog-backdrop[data-placement="side"] .ui-dialog {
+  width: min(440px, 100vw);
+  max-height: 100dvh;
+  height: 100%;
+  border-radius: 0;
+}
+.ui-dialog-backdrop[data-docked="true"] {
+  position: sticky;
+  top: 12px;
+  z-index: auto;
+  padding: 0;
+  background: none;
+  backdrop-filter: none;
+}
+.ui-dialog-backdrop[data-docked="true"] .ui-dialog {
+  width: 100%;
+  max-height: calc(100dvh - 90px);
+  height: auto;
+  border-radius: var(--radius-card);
+  box-shadow: none;
 }
 </style>

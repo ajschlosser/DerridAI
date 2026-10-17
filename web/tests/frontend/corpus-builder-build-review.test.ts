@@ -67,6 +67,26 @@ const buildBase: any = {
   },
 };
 
+it("uses authoritative queue counts independently and preserves an explicit zero override", async () => {
+  const wrapper = mount(CorpusBuildPrimaryStatus, {
+    props: {
+      build: {
+        ...buildBase,
+        status: "running",
+        stage: "enriching",
+        review_queue_counts: { ready: 2, preparing: 3, issues: 5, metadata: 4, source: 3 },
+      },
+      running: true,
+      canResume: false,
+      hasRecordTopology: true,
+    },
+  });
+  expect(wrapper.get('[data-flow-state="ready"] dd').text()).toBe("2");
+  expect(wrapper.get('[data-flow-state="attention"] dd').text()).toBe("5");
+  await wrapper.setProps({ readyCount: 0 });
+  expect(wrapper.get('[data-flow-state="ready"] dd').text()).toBe("0");
+});
+
 describe("Corpus Builder build, review, and finish states", () => {
   it("reports progress, unresolved topology, LLM telemetry, and validation hazards accessibly", () => {
     const wrapper = mount(CorpusBuildTelemetry, {

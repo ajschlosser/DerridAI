@@ -24,25 +24,14 @@ import type { CorpusBuild } from "../api/pdfCorpus";
 const props = defineProps<{ build: CorpusBuild; disabled?: boolean }>();
 const emit = defineEmits<{ settle: []; cancel: [] }>();
 const i18n = useI18nStore();
-const total = computed(() =>
-  Number(
-    props.build.metadata_tasks_total ||
-      Math.max(
-        0,
-        Number(props.build.metadata_enrichment_total || props.build.record_count || 0) * 3,
-      ),
-  ),
-);
-const complete = computed(() => Number(props.build.metadata_tasks_completed || 0));
-const failed = computed(() => Number(props.build.metadata_tasks_failed || 0));
-const skipped = computed(() => Number(props.build.metadata_tasks_skipped || 0));
-const running = computed(() => Number(props.build.metadata_tasks_running || 0));
-const queued = computed(() =>
-  Number(
-    props.build.metadata_tasks_queued ||
-      Math.max(0, total.value - complete.value - failed.value - skipped.value - running.value),
-  ),
-);
+import { metadataTaskProgress } from "../domain/corpusBuildPresentation";
+const progress = computed(() => metadataTaskProgress(props.build));
+const total = computed(() => progress.value.total);
+const complete = computed(() => progress.value.complete ?? "—");
+const failed = computed(() => progress.value.failed ?? "—");
+const skipped = computed(() => progress.value.skipped ?? "—");
+const running = computed(() => progress.value.running ?? "—");
+const queued = computed(() => progress.value.queued ?? "—");
 const active = computed(() =>
   Array.isArray(props.build.metadata_active_tasks) ? props.build.metadata_active_tasks : [],
 );
@@ -78,7 +67,7 @@ const activeRecords = computed(() => {
   return [...grouped.values()];
 });
 const hiddenActiveRecordCount = computed(() => Math.max(0, activeRecords.value.length - 8));
-const settled = computed(() => complete.value + failed.value + skipped.value);
+const settled = computed(() => progress.value.settled ?? 0);
 const lastProgress = computed(() =>
   props.build.metadata_last_progress_at
     ? new Date(props.build.metadata_last_progress_at).toLocaleTimeString(i18n.locale, {
@@ -100,7 +89,14 @@ function formatDuration(ms: number): string {
 const elapsed = computed(() => formatDuration(elapsedSince(props.build.metadata_started_at)));
 const eta = computed(() => {
   const elapsedMs = elapsedSince(props.build.metadata_started_at);
-  if (!elapsedMs || settled.value <= 0 || settled.value >= total.value) return "";
+  if (
+    !progress.value.determinate ||
+    total.value === null ||
+    !elapsedMs ||
+    settled.value <= 0 ||
+    settled.value >= total.value
+  )
+    return "";
   const remaining = Math.max(0, total.value - settled.value);
   return formatDuration((elapsedMs / settled.value) * remaining);
 });
@@ -116,7 +112,7 @@ const stalled = computed(() => {
     .filter(Number.isFinite);
   const thresholdSeconds = Math.max(90, Math.min(600, Math.max(...metadataDeadlines, 240) + 30));
   const ms = Date.now() - new Date(props.build.metadata_last_progress_at).getTime();
-  return Number.isFinite(ms) && ms > thresholdSeconds * 1000 && running.value > 0;
+  return Number.isFinite(ms) && ms > thresholdSeconds * 1000 && (progress.value.running ?? 0) > 0;
 });
 function taskLabel(task: string) {
   return i18n.t(`pdf_corpus.metadata_task.${task}`, task);
@@ -144,39 +140,49 @@ function taskLabel(task: string) {
           </h2>
         </div>
         <strong class="status-count"
-          >{{ settled }} / {{ total }}
+          >{{
+            progress.determinate
+              ? i18n.tf("pdf_corpus.metadata_settled_count", { settled, total: total ?? 0 })
+              : i18n.t(
+                  progress.inconsistent
+                    ? "pdf_corpus.metadata_counts_updating"
+                    : "pdf_corpus.metadata_counts_unavailable",
+                )
+          }}
           <small>{{ i18n.t("pdf_corpus.metadata_tasks_unit") }}</small></strong
         >
       </div>
       <p>
         {{
-          i18n.tf("pdf_corpus.metadata_live_summary", {
+          i18n.tf("pdf_corpus.metadata_task_outcomes", {
             complete,
             running,
             queued,
-            failed: failed + skipped,
+            failed,
+            skipped,
           })
         }}
       </p>
-      <p class="status-secondary">
-        {{ i18n.t("pdf_corpus.elapsed") }}: {{ elapsed
-        }}<template v-if="eta"> · {{ i18n.t("pdf_corpus.eta") }}: ~{{ eta }}</template> ·
-        {{ i18n.t("pdf_corpus.last_progress") }}: {{ lastProgress }} ·
-        {{ i18n.t("pdf_corpus.concurrency") }}: {{ concurrencyLabel }}
-      </p>
-      <p class="saved-indicator">
-        ✓ {{ i18n.t("pdf_corpus.resume_safe") }} · {{ i18n.t("pdf_corpus.saved_checkpoint") }}
-        {{ lastProgress }}
-      </p>
+      <details>
+        <summary>{{ i18n.t("pdf_corpus.metadata_activity_details") }}</summary>
+        <p class="status-secondary">
+          {{ i18n.t("pdf_corpus.elapsed") }}: {{ elapsed
+          }}<template v-if="eta"> · {{ i18n.t("pdf_corpus.eta") }}: ~{{ eta }}</template> ·
+          {{ i18n.t("pdf_corpus.last_progress") }}: {{ lastProgress }} ·
+          {{ i18n.t("pdf_corpus.concurrency") }}: {{ concurrencyLabel }}
+        </p>
+      </details>
       <div
         class="progress-track"
         :aria-label="i18n.t('pdf_corpus.metadata_task_progress')"
-        :aria-valuenow="settled"
-        :aria-valuemin="0"
-        :aria-valuemax="Math.max(1, total)"
+        :aria-valuenow="progress.determinate ? settled : undefined"
+        :aria-valuemin="progress.determinate ? 0 : undefined"
+        :aria-valuemax="progress.determinate ? (total ?? undefined) : undefined"
         role="progressbar"
       >
-        <span :style="{ width: `${total ? Math.min(100, (settled / total) * 100) : 0}%` }"></span>
+        <span
+          :style="{ width: `${progress.fraction === null ? 0 : progress.fraction * 100}%` }"
+        ></span>
       </div>
     </div>
 
@@ -278,16 +284,7 @@ function taskLabel(task: string) {
 .status-secondary {
   color: var(--muted);
 }
-.saved-indicator {
-  width: max-content;
-  max-width: 100%;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: var(--tone-ok-bg);
-  color: var(--accent-fg) !important;
-  font-size: 0.8125rem !important;
-  font-weight: 750;
-}
+
 .progress-track {
   height: 8px;
   overflow: hidden;

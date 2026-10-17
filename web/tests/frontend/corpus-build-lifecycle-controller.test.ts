@@ -92,6 +92,7 @@ function setup(
   requestedBuildId = "",
   documentMetadata: Record<string, unknown> = {},
   topologyPolicy: Record<string, unknown> = {},
+  isSetupDraft = false,
 ) {
   const builds = ref<any[]>([]);
   const buildsTotal = ref(0);
@@ -138,6 +139,7 @@ function setup(
     selectedRecordId,
     canRetryMetadata,
     metadataIssueCount,
+    isSetupDraft: () => isSetupDraft,
     requestedBuildId: () => requestedBuildId,
     runGuidancePayload: () => ({ speaker: "Derrida" }),
     documentMetadataPayload: () => documentMetadata,
@@ -182,6 +184,66 @@ describe("Corpus Builder lifecycle controller", () => {
     vi.useRealTimers();
   });
 
+  it("retains loaded history after failure and appends deduplicated pages", async () => {
+    const state = setup();
+    state.builds.value = [build("build-1")];
+    state.currentBuild.value = build("build-1");
+    state.selectedBuildId.value = "build-1";
+    corpusBuilderApi.listBuilds.mockRejectedValueOnce(new Error("offline"));
+    await state.controller.refreshBuilds();
+    expect(state.builds.value).toHaveLength(1);
+    expect(state.controller.buildsError.value).toBe("pdf_corpus.history_failed");
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({
+      items: [build("build-1"), build("build-2")],
+      total: 3,
+    });
+    await state.controller.refreshBuilds(true);
+    expect(corpusBuilderApi.listBuilds).toHaveBeenLastCalledWith(1, 100);
+    expect(state.builds.value.map((row) => row.build_id)).toEqual(["build-1", "build-2"]);
+    expect(state.controller.buildsError.value).toBe("");
+    expect(state.selectedBuildId.value).toBe("build-1");
+  });
+  it("does not reopen a build while configuring a new one", async () => {
+    const state = setup("", {}, {}, true);
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({ items: [build("build-1")], total: 1 });
+    await state.controller.refreshBuilds();
+    expect(state.selectedBuildId.value).toBe("");
+    expect(state.currentBuild.value).toBeNull();
+    expect(state.builds.value).toHaveLength(1);
+  });
+  it("ignores a superseded history response", async () => {
+    const state = setup();
+    let resolve!: (value: any) => void;
+    corpusBuilderApi.listBuilds.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const first = state.controller.refreshBuilds();
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({ items: [build("new")], total: 1 });
+    await state.controller.refreshBuilds();
+    resolve({ items: [build("old")], total: 1 });
+    await first;
+    expect(state.builds.value[0].build_id).toBe("new");
+  });
+  it("pages by server rows rather than a deep-linked build inserted into the rail", async () => {
+    const state = setup();
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({
+      items: [build("one"), build("two")],
+      total: 5,
+    });
+    await state.controller.refreshBuilds();
+    state.controller.syncBuildInRail(build("outside-page"));
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({ items: [build("three")], total: 5 });
+    await state.controller.refreshBuilds(true);
+    expect(corpusBuilderApi.listBuilds).toHaveBeenLastCalledWith(2, 100);
+    expect(state.builds.value.map((row) => row.build_id)).toEqual([
+      "outside-page",
+      "one",
+      "two",
+      "three",
+    ]);
+  });
   it.each([
     ["failed", "failed"],
     ["interrupted", "failed"],
