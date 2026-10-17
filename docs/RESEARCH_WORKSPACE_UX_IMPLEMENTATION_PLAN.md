@@ -330,6 +330,9 @@ Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done
 1. **Two columns at most:** the thread list collapses to a toggle when a source is open, so the answer keeps its width; threads + reading, or reading + source, never all three.
 2. **Question box always visible:** the follow-up composer stays at the bottom of the reading column while the conversation scrolls.
 3. **Honest turn states:** a running turn shows the job's reported stage and a Cancel control; a failed turn shows its reason and Retry on one row.
-4. **Evidence warnings (needs design):** flag narrow evidence (most citations on one passage) and a question naming an author or work none of the cited Records matches. Flag only; never rewrite the answer.
+4. **Evidence warnings (rules decided 2026-10-16, not yet implemented):** flag only; never rewrite, regenerate or block the answer.
+   - **Narrow evidence:** count each cited evidence ID once per marker (`[[E0, E3]]` counts E0 and E3), resolved to Records. Flag when there are at least 3 citations and one Record holds more than half of them, or when the answer cites only one distinct Record.
+   - **Named author or work not matched:** detect names in the question and instructions only with the existing deterministic corpus matcher (`_mentioned_work_groups` / `_explicitly_named_works` / `_mentioned_scope_authors` in `rag.py`). A named work is matched when a cited Record belongs to it. A named author is matched when a cited Record has that author as source author, speaker, quoted speaker or position holder, reviewed or not. A name the corpus does not know is not detected, and the User Guide says so; no heuristic title detection.
+   - **When:** computed by the backend when the answer is generated and stored with the run under a versioned contract, so it is reproducible and exported. Earlier saved answers show no flag and make no "checked" claim; nothing is recomputed on read.
 5. ~~Thread list: a continuously scrolling list grouped by date.~~ Done (see above).
 6. Manual review is still needed: screen reader, keyboard-only, 200–400% zoom and reduced motion.
