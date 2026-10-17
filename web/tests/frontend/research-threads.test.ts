@@ -359,6 +359,61 @@ describe("Research thread shell", () => {
     expect(first.find(".research-evidence-inspector").text()).toContain("Passage /api/jobs/job-a");
     expect(first.find(".research-evidence-inspector").text()).not.toContain("job-b");
   });
+  it("folds the thread list to its toggle while a turn inspector is open", async () => {
+    const wrapper = browser("a", "");
+    await flushPromises();
+    const nav = () => wrapper.find(".research-thread-navigation");
+    const toggle = () => wrapper.find(".research-thread-list-toggle");
+    expect(nav().classes()).not.toContain("is-list-collapsed");
+    await wrapper.find(".thread-answer-inspect-toggle").trigger("click");
+    expect(nav().classes()).toContain("is-list-collapsed");
+    await toggle().trigger("click");
+    expect(toggle().attributes("aria-expanded")).toBe("true");
+    expect(wrapper.find("#research-thread-sidebar").classes()).toContain("is-expanded");
+    // Closing the inspector restores the list; reopening starts folded again.
+    await wrapper.find(".research-turn-inspector-header button").trigger("click");
+    expect(nav().classes()).not.toContain("is-list-collapsed");
+    await wrapper.find(".thread-answer-inspect-toggle").trigger("click");
+    expect(nav().classes()).toContain("is-list-collapsed");
+    expect(toggle().attributes("aria-expanded")).toBe("false");
+  });
+  it("exposes the sticky composer's height to the open thread's conversation", async () => {
+    let resize: ResizeObserverCallback = () => undefined;
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback;
+        }
+        observe = observe;
+        disconnect() {}
+      },
+    );
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: { threads: [summary("a")], thread: null, selectedThreadId: "", offset: 0 },
+      slots: { workspace: `<form class="composer">Ask</form>` },
+    });
+    mounted.push(wrapper);
+    await flushPromises();
+    const nav = wrapper.find(".research-thread-navigation");
+    expect(nav.classes()).not.toContain("has-thread");
+    expect(observe).toHaveBeenCalledWith(wrapper.find(".research-thread-workspace").element);
+    resize(
+      [
+        {
+          borderBoxSize: [{ blockSize: 180.4, inlineSize: 600 }],
+        } as unknown as ResizeObserverEntry,
+      ],
+      {} as ResizeObserver,
+    );
+    await wrapper.setProps({ thread: thread("a"), selectedThreadId: "a" });
+    expect(nav.classes()).toContain("has-thread");
+    expect(
+      (nav.element as HTMLElement).style.getPropertyValue("--research-workspace-block-size"),
+    ).toBe("181px");
+    vi.unstubAllGlobals();
+  });
   it("closes the inspector when a retry replaces the inspected attempt", async () => {
     const detail = thread("a");
     api.get.mockResolvedValue(detail);

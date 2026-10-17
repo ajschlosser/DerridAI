@@ -399,6 +399,7 @@ function retry() {
     :answer-text="answerText"
     :jobs="jobs"
     :can-cancel="canCancel"
+    :collapse-list="Boolean(inspectedTurnId)"
     @retry-turn="retryTurn"
     @cancel-turn="emit('cancelTurn', $event)"
     @follow-up="emit('followUp', $event, null)"

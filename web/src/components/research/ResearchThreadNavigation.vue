@@ -18,7 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 <script setup lang="ts">
 import { useI18nStore } from "../../stores/i18n";
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import type { ResearchJob } from "../../types/research";
 import { researchJobDetail } from "./researchI18n";
 import type {
@@ -47,6 +47,9 @@ const props = defineProps<{
   /** Live job snapshots known to this browser; a turn without one shows only its status. */
   jobs?: ResearchJob[];
   canCancel?: boolean;
+  /** A turn's evidence inspector is open: the list folds to a toggle so the
+   * page shows two columns at most (threads + reading, or reading + source). */
+  collapseList?: boolean;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -67,6 +70,32 @@ const emit = defineEmits<{
 }>();
 const i18n = useI18nStore();
 const listExpanded = ref(false);
+watch(
+  () => props.collapseList,
+  () => {
+    listExpanded.value = false;
+  },
+);
+// The follow-up composer stays in view at the bottom of the reading column.
+// Its height is exposed so focus moved into the conversation is not hidden
+// behind it (WCAG 2.4.11).
+const workspace = ref<HTMLElement | null>(null);
+const workspaceBlockSize = ref(0);
+let workspaceObserver: ResizeObserver | null = null;
+watch(
+  workspace,
+  (element) => {
+    workspaceObserver?.disconnect();
+    workspaceObserver = null;
+    if (!element || typeof ResizeObserver !== "function") return;
+    workspaceObserver = new ResizeObserver(([entry]) => {
+      workspaceBlockSize.value = Math.ceil(entry?.borderBoxSize?.[0]?.blockSize ?? 0);
+    });
+    workspaceObserver.observe(element);
+  },
+  { flush: "post" },
+);
+onBeforeUnmount(() => workspaceObserver?.disconnect());
 // In-thread search reads only questions and answers already loaded; it never
 // fetches further answers or audit payloads.
 const turnQuery = ref("");
@@ -144,7 +173,16 @@ function clearSearch(event: KeyboardEvent) {
 <template>
   <section
     class="research-thread-navigation"
-    :class="{ 'research-thread-workspace-layout': Boolean($slots.workspace) }"
+    :class="{
+      'research-thread-workspace-layout': Boolean($slots.workspace),
+      'is-list-collapsed': collapseList,
+      'has-thread': Boolean(thread),
+    }"
+    :style="
+      workspaceBlockSize
+        ? { '--research-workspace-block-size': `${workspaceBlockSize}px` }
+        : undefined
+    "
     aria-labelledby="research-threads-title"
   >
     <h2 class="research-thread-index-title" id="research-threads-title">
@@ -435,7 +473,7 @@ function clearSearch(event: KeyboardEvent) {
           </li>
         </ol>
       </section>
-      <div v-if="$slots.workspace" class="research-thread-workspace">
+      <div v-if="$slots.workspace" ref="workspace" class="research-thread-workspace">
         <slot name="workspace" />
       </div>
     </div>
@@ -711,6 +749,61 @@ function clearSearch(event: KeyboardEvent) {
   overflow: visible;
   pointer-events: auto;
   box-shadow: none;
+}
+/* With a thread open, the composer (and any run status beneath it) sticks to
+   the bottom of the reading column while the conversation scrolls. Short or
+   heavily zoomed viewports keep it in flow so it never covers most of the
+   answer. */
+@media (min-height: 560px) {
+  .research-thread-workspace-layout.has-thread {
+    --research-sticky-workspace: var(--research-workspace-block-size, 0px);
+  }
+  .research-thread-workspace-layout.has-thread .research-thread-workspace {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    max-height: min(40dvh, 380px);
+    overflow-y: auto;
+    padding-block: 8px max(8px, env(safe-area-inset-bottom));
+    background: var(--surface-card);
+    border-top: 1px solid var(--border);
+  }
+  .research-thread-workspace-layout.has-thread
+    .research-thread-conversation
+    :is(a, button, input, select, textarea, summary, [tabindex]) {
+    scroll-margin-bottom: calc(var(--research-sticky-workspace) + 12px);
+  }
+}
+/* An open inspector folds the thread list to its toggle, as on narrow
+   screens, so the answer and its evidence keep the width. */
+.research-thread-navigation.is-list-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.is-list-collapsed .research-thread-index-title {
+  display: none;
+}
+.is-list-collapsed .research-thread-list-toggle {
+  display: block;
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+}
+.is-list-collapsed .research-thread-sidebar {
+  display: none;
+  grid-column: 1;
+  grid-row: 2;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+}
+.is-list-collapsed .research-thread-sidebar.is-expanded {
+  display: grid;
+}
+.is-list-collapsed .research-thread-primary {
+  grid-column: 1;
+  grid-row: 3;
+  border-inline-start: 0;
+  padding-inline: 0;
 }
 @media (max-width: 900px) {
   .research-thread-navigation {

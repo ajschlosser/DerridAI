@@ -96,6 +96,12 @@ test("thread navigation restores URL state and guards follow-ups, with keyboard 
   await expect(navigation.locator(".thread-answer-inspector")).toBeVisible();
   await expect(navigation.locator(".thread-answer-text")).toContainText("Answer A");
   await expect(page.locator("#research-selected-run")).toHaveCount(0);
+  // An open inspector folds the list to its toggle (two columns at most).
+  await expect(navigation.locator(".research-thread-sidebar")).toBeHidden();
+  const listToggle = navigation.getByRole("button", { name: "Research threads", exact: true });
+  await listToggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(listToggle).toHaveAttribute("aria-expanded", "true");
   const next = navigation.getByRole("button", { name: "Inquiry b" });
   await next.focus();
   await page.keyboard.press("Enter");
@@ -374,7 +380,8 @@ test("each turn inspects its own evidence, including a recovered saved answer, w
   };
   const result = (label: string) => ({
     prompt: `Question ${label}`,
-    answer: `Answer ${label} [[E0]].`,
+    // Long enough that the conversation scrolls past the window.
+    answer: `Answer ${label} [[E0]]. ${"The trace is never simply present. ".repeat(80)}`,
     evidence: [0, 1].map((index) => ({
       evidence_id: `E${index}`,
       collection: "corpus",
@@ -423,6 +430,17 @@ test("each turn inspects its own evidence, including a recovered saved answer, w
   await expect(first.locator(".research-turn-inspector")).toBeVisible();
   await expect(second.locator(".research-turn-inspector")).toHaveCount(0);
   await expect(first.locator(".research-answer-prose")).toHaveCount(1);
+  // Two columns at most: the thread list folds to its toggle, and the
+  // evidence sits beside the answer.
+  await expect(page.locator("#research-thread-sidebar")).toBeHidden();
+  await expect(page.locator(".research-thread-list-toggle")).toBeVisible();
+  const answerBox = (await first.locator(".thread-answer-text").boundingBox())!;
+  const inspectorBox = (await first.locator(".thread-answer-inspector").boundingBox())!;
+  expect(inspectorBox.x).toBeGreaterThan(answerBox.x + answerBox.width - 1);
+  // The follow-up composer stays in view while the conversation scrolls.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(900);
+  await expect(page.locator("#researchQuestion")).toBeInViewport();
 
   const firstEvidence = first.locator(".research-evidence-index button").nth(1);
   await firstEvidence.focus();
@@ -671,6 +689,7 @@ test("switching threads drops the open inspector; archived and missing-artifact 
   await turnA.getByRole("button", { name: "Inspect this answer and its evidence" }).click();
   await expect(turnA.locator(".research-evidence-inspector")).toContainText("Exact passage a");
 
+  await navigation.getByRole("button", { name: "Research threads", exact: true }).click();
   await navigation.getByLabel("Include archived threads").check();
   await expect(page).toHaveURL(/thread_archived=true/);
   await navigation.getByRole("button", { name: /Inquiry c/ }).click();

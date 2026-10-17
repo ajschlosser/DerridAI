@@ -276,7 +276,8 @@ watch(
     align-self: start;
     position: sticky;
     top: 12px;
-    max-height: calc(100dvh - 24px);
+    /* Leaves room for the thread's sticky follow-up composer, when present. */
+    max-height: calc(100dvh - 24px - var(--research-sticky-workspace, 0px));
     overflow-y: auto;
     overscroll-behavior: contain;
   }
