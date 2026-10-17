@@ -377,6 +377,8 @@ describe("PdfCorpusBuilder characterization", () => {
 
     expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
     expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(exposed.editingText).toBe(false);
+    expect(exposed.advancedMetadataDirty).toBe(false);
     expect(localStorage.getItem("derridai.pdf-corpus.text-draft.build-1.record-1")).toBe(
       "An unfinished corrected passage",
     );

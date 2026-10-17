@@ -2505,6 +2505,12 @@ async function resetBuildSetup(clearSource = false) {
   // Save synchronously before changing either identity: post-flush watchers
   // cannot reliably access the old build/record once Setup clears selection.
   if (!preserveReviewDraftBeforeSetup()) return;
+  // Drafts now belong to the previous record's account-scoped recovery keys,
+  // not to Setup. Clear transient edit locks so history remains navigable.
+  editingText.value = false;
+  advancedMetadataDirty.value = false;
+  textDraft.value = "";
+  metadataDraft.value = "";
   ++buildSelectionRequest;
   newSetupDraft.value = true;
   stopPolling();
