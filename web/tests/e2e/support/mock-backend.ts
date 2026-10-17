@@ -211,7 +211,7 @@ export const CORPUS_RECORDS = Array.from({ length: 60 }, (_, i) => {
     discourse_role: "analysis",
   };
 });
-const CORPUS_BUILD = {
+export const CORPUS_BUILD = {
   build_id: CORPUS_BUILD_ID,
   asset_id: "asset-1",
   source_filename: "derrida-on-cosmopolitanism.pdf",

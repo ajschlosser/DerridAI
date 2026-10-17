@@ -1,3 +1,4 @@
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import CorpusMetadataResolutionPanel from "../../src/components/CorpusMetadataResolutionPanel.vue";
@@ -41,5 +42,6 @@ describe("Corpus Builder metadata resolution",()=>{
     const wrapper=mountPanel(record({stance:"affirm",metadata_field_status:{stance:{status:"invalid",method:"llm",confidence:.9}}}));
     expect(wrapper.get('.metadata-grid[role="list"]').exists()).toBe(true);
     expect(wrapper.get(".review-status").attributes("data-state")).toBe("attention");
+    expect(wrapper.get(".review-status").text()).toContain("1 fields need review for this record");
   });
 });

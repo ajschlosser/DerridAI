@@ -1,3 +1,4 @@
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { describe, expect, it } from 'vitest';
 import { ref } from 'vue';
 import type { CorpusBuild, CorpusRecord } from '../../src/api/pdfCorpus';
@@ -47,6 +48,9 @@ describe('corpus lifecycle composable', () => {
     const current = ref<CorpusBuild|null>(build({status: 'awaiting_manifest_review'}));
     const view = useCorpusBuildLifecycle(current, ref(3), ref<ReviewQueue>('all'));
     expect(view.hasRecordTopology.value).toBe(false);
+    expect(view.showBuildConfiguration.value).toBe(false);
+    current.value = build({status:'failed',record_count:0});
+    expect(view.showBuildConfiguration.value).toBe(false);
     current.value = build({status: 'interrupted', resumable: true, review_queue_counts: {pending: 1, ready: 0, issues: 1}});
     expect(view.canResume.value).toBe(true);
     expect(view.pendingCount.value).toBe(1);
