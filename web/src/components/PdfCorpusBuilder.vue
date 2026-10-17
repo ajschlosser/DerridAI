@@ -2468,8 +2468,9 @@ async function saveManifest(changes: Record<string, unknown>) {
 }
 
 async function resetBuildSetup(clearSource = false) {
-  if (busy.value || editingText.value || metadataEditorDirty.value || advancedMetadataDirty.value)
-    return;
+  if (busy.value) return;
+  // Post-flush draft watchers need the current build/Record identity before it is cleared.
+  await nextTick();
   await recordSaveQueue.waitForAll();
   ++buildSelectionRequest;
   newSetupDraft.value = true;

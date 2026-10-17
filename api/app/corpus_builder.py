@@ -765,6 +765,18 @@ def corpus_root() -> Path:
     return root
 
 
+def _atomic_replace(source: str | Path, target: str | Path) -> None:
+    """Retry only Windows sharing/access conflicts; preserve the original on exhaustion."""
+    for attempt in range(5):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in {5, 32} or attempt == 4:
+                raise
+            time.sleep(0.005 * (2 ** attempt))
+
+
 def _json_write(path: Path, payload: Any) -> None:
     """Write JSON atomically without a shared temporary filename.
 
@@ -780,7 +792,7 @@ def _json_write(path: Path, payload: Any) -> None:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp, path)
+        _atomic_replace(tmp, path)
     finally:
         try:
             tmp.unlink(missing_ok=True)
@@ -1054,7 +1066,7 @@ class PdfCorpusRepository:
                             (staged / "blocks", self.asset_blocks_path(asset_id)),
                             (staged / "meta", meta_path),
                         ):
-                            os.replace(source, target)
+                            _atomic_replace(source, target)
                             published.append(target)
                     except BaseException:
                         for target in reversed(published):
@@ -1337,7 +1349,7 @@ class PdfCorpusRepository:
             with tmp.open("w", encoding="utf-8") as handle:
                 for block in blocks:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
-            os.replace(tmp, self.asset_blocks_path(asset_id))
+            _atomic_replace(tmp, self.asset_blocks_path(asset_id))
             asset["page_label_revision"] = int(asset.get("page_label_revision") or 0) + 1
             asset["page_labels_updated_at"] = iso_now()
             _json_write(self.asset_meta_path(asset_id), asset)
@@ -1402,7 +1414,7 @@ class PdfCorpusRepository:
             with tmp.open("w", encoding="utf-8") as handle:
                 for block in blocks:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
-            os.replace(tmp, self.asset_blocks_path(asset_id))
+            _atomic_replace(tmp, self.asset_blocks_path(asset_id))
             _json_write(self.asset_meta_path(asset_id), asset)
         self._invalidate_asset_metadata_exemplars(asset_id)
         return asset
@@ -1726,7 +1738,7 @@ class PdfCorpusRepository:
             with tmp.open("w", encoding="utf-8") as handle:
                 for block in blocks:
                     handle.write(json.dumps(block, ensure_ascii=False) + "\n")
-            os.replace(tmp, self.asset_blocks_path(asset_id))
+            _atomic_replace(tmp, self.asset_blocks_path(asset_id))
             asset["pages"] = pages
             asset["unit_policy"] = unit_policy
             asset["document_layout"] = clean_plan
@@ -1832,7 +1844,7 @@ class PdfCorpusRepository:
                         handle.write(json.dumps(unit, ensure_ascii=False) + "\n")
                     handle.flush()
                     os.fsync(handle.fileno())
-                os.replace(tmp, path)
+                _atomic_replace(tmp, path)
             finally:
                 try:
                     tmp.unlink(missing_ok=True)
@@ -2193,7 +2205,7 @@ class PdfCorpusRepository:
                         handle.write(payload + "\n")
                     handle.flush()
                     os.fsync(handle.fileno())
-                os.replace(tmp, path)
+                _atomic_replace(tmp, path)
             finally:
                 try:
                     tmp.unlink(missing_ok=True)
@@ -2526,7 +2538,7 @@ class PdfCorpusRepository:
                         handle.write(payload + "\n")
                     handle.flush()
                     os.fsync(handle.fileno())
-                os.replace(tmp, path)
+                _atomic_replace(tmp, path)
             finally:
                 try:
                     tmp.unlink(missing_ok=True)
@@ -5996,7 +6008,7 @@ is not permitted to see are filtered exactly as they are in the interactive revi
                     ),
                 )
                 archive.writestr("README.txt", readme)
-            os.replace(temporary, path)
+            _atomic_replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
 
@@ -6285,7 +6297,7 @@ is not permitted to see are filtered exactly as they are in the interactive revi
                 f"{result.archive_sha512}  {path.name}\n",
                 encoding="ascii",
             )
-            os.replace(temporary_integrity, integrity_path)
+            _atomic_replace(temporary_integrity, integrity_path)
         finally:
             temporary_integrity.unlink(missing_ok=True)
         publication = {

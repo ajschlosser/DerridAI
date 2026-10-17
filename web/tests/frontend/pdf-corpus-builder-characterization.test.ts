@@ -352,6 +352,39 @@ describe("PdfCorpusBuilder characterization", () => {
     wrapper.unmount();
   });
 
+  it.each(["New build from this source", "Choose another source"])(
+    "preserves pending text and advanced metadata drafts when opening %s",
+    async (label) => {
+      mockExistingBuild();
+      const wrapper = await mountBuilder("?workspace=review&build=build-1", false, false, true);
+      const exposed = wrapper.vm as unknown as {
+        editingText: boolean;
+        textDraft: string;
+        metadataDraft: string;
+        advancedMetadataDirty: boolean;
+      };
+      exposed.editingText = true;
+      exposed.textDraft = "An unsaved review draft";
+      exposed.advancedMetadataDirty = true;
+      exposed.metadataDraft = '{"speaker":"A pending correction"}';
+      const action = wrapper
+        .findAllComponents({ name: "UiButton" })
+        .find((button) => button.props("label") === label)!;
+      // Open setup in the same tick as the edits, before post-flush storage watchers run.
+      action.vm.$emit("click");
+      await flushPromises();
+      expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+      expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+      expect(localStorage.getItem("derridai.pdf-corpus.text-draft.build-1.record-1")).toBe(
+        "An unsaved review draft",
+      );
+      expect(localStorage.getItem("derridai.pdf-corpus.metadata-draft.build-1.record-1")).toBe(
+        '{"speaker":"A pending correction"}',
+      );
+      wrapper.unmount();
+    },
+  );
+
   it("clears the selected source when choosing another source", async () => {
     mockExistingBuild();
     const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);

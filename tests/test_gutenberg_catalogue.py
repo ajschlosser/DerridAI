@@ -63,6 +63,36 @@ def test_bulk_archive_member_parser_matches_current_gutenberg_layout():
     assert _archive_etext_id("cache/epub/1342/pg999.txt") is None
 
 
+def test_staging_connections_are_closed_before_install(tmp_path: Path, monkeypatch):
+    archive = tmp_path / "archive.zip"
+    _make_archive(archive)
+    service = GutenbergOfflineService(tmp_path / "state.sqlite", archive, start_worker=False)
+    connections = []
+    connect = sqlite3.connect
+
+    class TrackedConnection(sqlite3.Connection):
+        closed = False
+
+        def close(self):
+            super().close()
+            self.closed = True
+
+    def track(path, *args, **kwargs):
+        if Path(path) == service.staging_library_db_path:
+            connection = connect(path, *args, factory=TrackedConnection, **kwargs)
+            connections.append(connection)
+            return connection
+        return connect(path, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", track)
+    try:
+        assert service.extract_catalogue() == 1
+        assert connections and all(connection.closed for connection in connections)
+    finally:
+        for connection in connections:
+            connection.close()
+
+
 def test_streamed_archive_extraction_installs_text_in_database_and_zip_is_disposable(tmp_path: Path, monkeypatch):
     archive_path = tmp_path / "txt-files.tar.zip"
     _make_archive(archive_path)

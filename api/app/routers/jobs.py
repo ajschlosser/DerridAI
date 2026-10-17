@@ -141,7 +141,7 @@ def start_research_run(
             )
 
             preview = preview_research_filter(ResearchFilterPreviewRequest(
-                collection=body.source_collection, locales=body.locales,
+                collection=body.source_collection, locales=list(body.locales),
                 metadata_filter=body.filter_plan.metadata_filter,
                 document_filter=body.filter_plan.document_filter,
                 source=body.filter_plan.source,

@@ -392,6 +392,54 @@ def test_settle_metadata_unresolved_is_explicit_build_state(tmp_path):
     assert settled['metadata_settle_requested_at']
 
 
+def test_atomic_json_write_retries_windows_sharing_conflicts(tmp_path, monkeypatch):
+    from app import corpus_builder as cb
+
+    path = tmp_path / "record.json"
+    path.write_text('{"old":true}', encoding="utf-8")
+    replace = cb.os.replace
+    attempts = []
+
+    def transient(source, target):
+        attempts.append(target)
+        if len(attempts) < 3:
+            error = PermissionError("Shared reader")
+            error.winerror = 32
+            raise error
+        replace(source, target)
+
+    monkeypatch.setattr(cb.os, "replace", transient)
+    monkeypatch.setattr(cb.time, "sleep", lambda _seconds: None)
+    cb._json_write(path, {"new": True})
+    assert len(attempts) == 3
+    assert json.loads(path.read_text(encoding="utf-8")) == {"new": True}
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_atomic_json_write_preserves_previous_file_when_conflict_persists(tmp_path, monkeypatch):
+    import pytest
+    from app import corpus_builder as cb
+
+    path = tmp_path / "record.json"
+    previous = '{"old":true}'
+    path.write_text(previous, encoding="utf-8")
+    attempts = []
+
+    def denied(source, target):
+        attempts.append(target)
+        error = PermissionError("Still shared")
+        error.winerror = 5
+        raise error
+
+    monkeypatch.setattr(cb.os, "replace", denied)
+    monkeypatch.setattr(cb.time, "sleep", lambda _seconds: None)
+    with pytest.raises(PermissionError, match="Still shared"):
+        cb._json_write(path, {"new": True})
+    assert len(attempts) == 5
+    assert path.read_text(encoding="utf-8") == previous
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
 def test_record_store_concurrent_writes_remain_valid_jsonl(tmp_path):
     """Two threads saving different large record sets never produce a mixed or torn file.
 
