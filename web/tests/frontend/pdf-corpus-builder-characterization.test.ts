@@ -385,6 +385,43 @@ describe("PdfCorpusBuilder characterization", () => {
     },
   );
 
+  it("preserves unsaved text and advanced metadata drafts when starting a new build", async () => {
+    mockExistingBuild();
+    const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true, true);
+    const exposed = wrapper.vm as unknown as {
+      editingText: boolean;
+      textDraft: string;
+      advancedMetadataDirty: boolean;
+      metadataDraft: string;
+      selectedRecordId: string;
+    };
+    expect(exposed.selectedRecordId).toBe("record-1");
+    exposed.editingText = true;
+    exposed.textDraft = "An unfinished corrected passage";
+    exposed.advancedMetadataDirty = true;
+    exposed.metadataDraft = '{ "speaker": "Unconfirmed editor" }';
+
+    const button = wrapper
+      .findAllComponents({ name: "UiButton" })
+      .find((item) => item.props("label") === "New build from this source");
+    expect(button).toBeTruthy();
+    button!.vm.$emit("click");
+    await flushPromises();
+
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(exposed.editingText).toBe(false);
+    expect(exposed.advancedMetadataDirty).toBe(false);
+    expect(localStorage.getItem("derridai.pdf-corpus.text-draft.build-1.record-1")).toBe(
+      "An unfinished corrected passage",
+    );
+    expect(localStorage.getItem("derridai.pdf-corpus.metadata-draft.build-1.record-1")).toBe(
+      '{ "speaker": "Unconfirmed editor" }',
+    );
+    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
+    wrapper.unmount();
+  });
+
   it("clears the selected source when choosing another source", async () => {
     mockExistingBuild();
     const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);

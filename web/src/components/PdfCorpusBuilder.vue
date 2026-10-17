@@ -2467,11 +2467,50 @@ async function saveManifest(changes: Record<string, unknown>) {
   }
 }
 
+/**
+ * A review draft is local and recoverable; leaving the record for Setup must not
+ * silently drop edits or convert them into authoritative review decisions.
+ * Inline field-editor changes are different: their control-local state has not
+ * been serialized into a recoverable draft, so require an explicit save first.
+ */
+function preserveReviewDraftBeforeSetup(): boolean {
+  if (!selectedBuildId.value || !selectedRecordId.value) return true;
+  try {
+    if (editingText.value) {
+      localStorage.setItem(
+        textDraftKey(selectedBuildId.value, selectedRecordId.value),
+        textDraft.value,
+      );
+    }
+    if (advancedMetadataDirty.value) {
+      localStorage.setItem(
+        metadataDraftKey(selectedBuildId.value, selectedRecordId.value),
+        metadataDraft.value,
+      );
+    }
+    return true;
+  } catch {
+    setMessage(i18n.t("pdf_corpus.review_draft_persistence_failed"), "error");
+    return false;
+  }
+}
+
 async function resetBuildSetup(clearSource = false) {
   if (busy.value) return;
-  // Post-flush draft watchers need the current build/Record identity before it is cleared.
-  await nextTick();
+  if (metadataEditorDirty.value) {
+    setMessage(i18n.t("pdf_corpus.save_field_before_setup"), "error");
+    return;
+  }
   await recordSaveQueue.waitForAll();
+  // Save synchronously before changing either identity: post-flush watchers
+  // cannot reliably access the old build/record once Setup clears selection.
+  if (!preserveReviewDraftBeforeSetup()) return;
+  // Drafts now belong to the previous record's account-scoped recovery keys,
+  // not to Setup. Clear transient edit locks so history remains navigable.
+  editingText.value = false;
+  advancedMetadataDirty.value = false;
+  textDraft.value = "";
+  metadataDraft.value = "";
   ++buildSelectionRequest;
   newSetupDraft.value = true;
   stopPolling();
