@@ -2,8 +2,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mockBackend } from "./support/mock-backend";
 
-// Characterization baseline for the views that the legacy runtime still renders as HTML strings.
-// Vue-native workspaces (Records, Search, Vector Stores, Works, and so on) are not listed here.
+// Characterization baseline for views still rendered by the legacy HTML-string runtime.
+// Home and Annotations are Vue-native workspaces now: test their public behavior instead
+// of comparing their DOM against obsolete pre-migration HTML snapshots.
 // The runtime decomposition must not change what these views put on the page, so each one is
 // captured as normalized markup and compared with a committed snapshot. If a refactoring step
 // changes a snapshot, that step has changed the UI and must be fixed, not the snapshot.
@@ -111,10 +112,6 @@ async function rawMarkup(page: Page): Promise<string> {
 }
 
 const views: Array<{ name: string; nav: string; load: boolean }> = [
-  { name: "home-empty", nav: "Home", load: false },
-  { name: "home-loaded", nav: "Home", load: true },
-  { name: "annotations-empty", nav: "Annotations", load: false },
-  { name: "annotations-loaded", nav: "Annotations", load: true },
   { name: "research-empty", nav: "Research", load: false },
 ];
 
@@ -124,6 +121,27 @@ test.describe("legacy runtime DOM baseline", () => {
     test(view.name, async ({ page }) => {
       await open(page, view.nav, view.load);
       expect(await markup(page)).toMatchSnapshot(`${view.name}.html`);
+    });
+  }
+});
+
+// Preserve coverage of the migrated pages without treating intentional Vue markup as
+// legacy-runtime output. These checks run for both clean and imported local workspaces.
+test.describe("Vue-native pages formerly covered by legacy snapshots", () => {
+  test.beforeEach(({}, info) =>
+    test.skip(info.project.name !== "chromium-desktop", "Runs once."),
+  );
+  for (const load of [false, true]) {
+    test(`Home renders after ${load ? "importing records" : "starting empty"}`, async ({ page }) => {
+      await open(page, "Home", load);
+      await expect(page.locator("main.dashboard-page.vue-native-page")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Welcome to DerridAI" })).toBeVisible();
+    });
+    test(`Annotations renders after ${load ? "importing records" : "starting empty"}`, async ({ page }) => {
+      await open(page, "Annotations", load);
+      await expect(page.locator("main.annotations-page")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Annotations", exact: true })).toBeVisible();
+      await expect(page.getByRole("tab", { name: "By work" })).toBeVisible();
     });
   }
 });

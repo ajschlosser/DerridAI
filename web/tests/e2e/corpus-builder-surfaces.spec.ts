@@ -35,19 +35,21 @@ test("build summary is an opaque-enough glass surface and WCAG 2.0 AA clean", as
   await expectWcag2AA(page,".build-readiness");
 });
 
-test("corpus builds popover is opaque, keyboard focusable, and WCAG 2.0 AA clean", async ({page}) => {
+test("corpus builds dialog is opaque, keyboard focusable, and WCAG 2.0 AA clean", async ({page}) => {
   await page.goto("/iframe.html?id=corpus-builder-workflow-build-history-menu--default&viewMode=story");
-  const summary=page.locator(".history-menu > summary");
-  await summary.focus();
-  await expect(summary).toBeFocused();
-  const outline=await summary.evaluate(el=>getComputedStyle(el).outlineStyle);
+  const launcher = page.getByRole("button", { name: /Corpus builds/i }).first();
+  await launcher.focus();
+  await expect(launcher).toBeFocused();
+  const outline = await launcher.evaluate(el => getComputedStyle(el).outlineStyle);
   expect(outline).not.toBe("none");
-  await summary.press("Enter");
-  const popover=page.locator(".history-popover");
-  await expect(popover).toBeVisible();
-  const background=await popover.evaluate(el=>getComputedStyle(el).backgroundColor);
+  await launcher.press("Enter");
+  // UiDialog teleports outside the Storybook story root; scan the actual dialog.
+  const dialog = page.getByRole("dialog", { name: "Corpus builds" });
+  await expect(dialog).toBeVisible();
+  const background = await dialog.evaluate(el => getComputedStyle(el).backgroundColor);
   expect(alphaFromCssColor(background)).toBeGreaterThanOrEqual(.9);
-  await expectWcag2AA(page,".history-menu");
+  await expect(dialog.getByRole("searchbox")).toBeVisible();
+  await expectWcag2AA(page, ".ui-dialog");
 });
 
 test("confident stance is visibly selected in the real Storybook component", async ({page}) => {
