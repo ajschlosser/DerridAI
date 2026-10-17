@@ -16,6 +16,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from itertools import count
+
 import pytest
 from app.research_thread_store import (
     ResearchThreadStore,
@@ -26,7 +29,14 @@ from app.research_thread_store import (
 
 
 @pytest.fixture()
-def store(tmp_path) -> ResearchThreadStore:
+def store(tmp_path, monkeypatch) -> ResearchThreadStore:
+    # Event-order contracts need distinct times even on hosts with a coarse clock.
+    origin = datetime(2026, 10, 17, tzinfo=UTC)
+    ticks = count()
+    monkeypatch.setattr(
+        "app.research_thread_store._iso_now",
+        lambda: (origin + timedelta(seconds=next(ticks))).isoformat(),
+    )
     return ResearchThreadStore(tmp_path / "system.sqlite3")
 
 
@@ -218,12 +228,7 @@ def test_list_orders_by_last_question_asked_not_run_progress_or_rename(store) ->
     assert listed[0]["last_asked_at"] > listed[1]["last_asked_at"]
 
 
-def test_thread_without_questions_sorts_by_its_creation_time(store, monkeypatch) -> None:
-    # The contract compares distinct event times, independent of host clock resolution.
-    stamps = iter([
-        "2026-10-17T10:00:00+00:00", "2026-10-17T10:00:01+00:00", "2026-10-17T10:00:02+00:00",
-    ])
-    monkeypatch.setattr("app.research_thread_store._iso_now", lambda: next(stamps))
+def test_thread_without_questions_sorts_by_its_creation_time(store) -> None:
     asked = _thread(store)
     store.append_turn(asked, "alice", "What is the trace?")
     empty = _thread(store)
