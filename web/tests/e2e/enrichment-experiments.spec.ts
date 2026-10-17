@@ -40,7 +40,12 @@ test.describe("the enrichment measurements panel", () => {
 
   test("loads on demand, scrolls its own tables, and has no accessibility violations", async ({ page }) => {
     await open(page);
-    const summary = page.getByText("How well is enrichment working?").first();
+    // Measurements live under the lazily mounted Activity tab, not in the review surface.
+    await page.getByRole("button", { name: "Build details", exact: true }).click();
+    const details = page.locator(".ui-dialog");
+    await expect(details).toBeVisible();
+    await expect(details.getByRole("tab", { name: "Activity" })).toHaveAttribute("aria-selected", "true");
+    const summary = details.getByText("How well is enrichment working?").first();
     await summary.scrollIntoViewIfNeeded();
     await summary.click();
     await expect(page.getByRole("region", { name: "How well is enrichment working?" })).toBeVisible();

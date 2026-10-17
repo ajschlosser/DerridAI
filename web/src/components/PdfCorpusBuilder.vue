@@ -1,11 +1,16 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { ApiError } from "../api/http";
 import { pdfCorpusApi, type CorpusBuild, type CorpusRecord, type PdfAsset, type SourceBlock, type DocumentLayoutPlan , type AutonomousPolicy} from "../api/pdfCorpus";
 import { systemApi, type ProviderProfile } from "../api/system";
 import { useI18nStore } from "../stores/i18n";
 import ProviderProfileSelect from "./ProviderProfileSelect.vue";
 import CorpusBuildProgress from "./CorpusBuildProgress.vue";
+import CorpusBuildWarnings from "./CorpusBuildWarnings.vue";
+import CorpusBuildDetailsPanel from "./CorpusBuildDetailsPanel.vue";
+import CorpusBuildOverview from "./CorpusBuildOverview.vue";
 import FieldEvidenceList from "./FieldEvidenceList.vue";
 import DocumentStructureConfigurator from "./DocumentStructureConfigurator.vue";
 import SourceTranscriptionDialog from "./SourceTranscriptionDialog.vue";
@@ -57,6 +62,7 @@ import { useSplitter } from "../composables/useSplitter";
 import AppIcon from "./AppIcon.vue";
 import CorpusActionMenu, { type CorpusActionMenuItem } from "./CorpusActionMenu.vue";
 import { recordState, recordIssueKinds } from "../domain/corpusReview";
+import { currentWarningRecordIds } from "../domain/corpusBuildPresentation";
 import { recurringShortLines } from "../domain/textCleanup";
 import * as runtime from "../runtime/runtime.js";
 
@@ -66,6 +72,7 @@ const router=useRouter();
 const assets=ref<PdfAsset[]>([]);
 const builds=ref<CorpusBuild[]>([]);
 const buildsTotal=ref(0);
+const buildsLoading=ref(false),buildsError=ref(""),newBuildSetup=ref(false),historyPanelOpen=ref(false),detailsPanelOpen=ref(false);
 const providerProfiles=ref<ProviderProfile[]>([]);
 const corpusProfiles=ref<Array<Record<string,unknown>>>([]);
 const serverProviderIds=ref<Set<string>>(new Set());
@@ -81,6 +88,8 @@ const pageSize=50;
 const selectedRecordId=ref("");
 const selectedRecord=ref<CorpusRecord|null>(null);
 const sourceBlocks=ref<SourceBlock[]>([]);
+const sourceBlocksLoading=ref(false),sourceBlocksError=ref("");
+let sourceBlocksScope="";
 const selectedEvidenceField=ref("");
 const selectedPdfPage=ref(1);
 const reviewQueue=ref<ReviewQueue>("all");
@@ -124,6 +133,7 @@ const reviewHydrated=ref(false);
 const hydratedTopologyCount=ref(0);
 const hydratedMetadataCount=ref(0);
 let recordRequestSerial=0;
+let blockRequestSerial=0,buildRequestSerial=0;
 const recordListEl=ref<HTMLElement|null>(null);
 const reviewPaneEl=ref<HTMLElement|null>(null);
 const reviewInspectorEl=ref<HTMLElement|null>(null);
@@ -175,6 +185,31 @@ const semanticIndexing=ref(true);
 const autoCleanText=ref(true);
 const metadataRerunFamily=ref<"all"|"discourse"|"quotation"|"indexing">("all");
 const { reviewQueueCounts, pendingCount, issueCount, readyCount, topologyIssueCount, buildRunning, reviewLocked, structuralReviewLocked, canResume, segmentationNeedsReview, retryingSegmentation, canRetryMetadata, metadataIssueCount, metadataFieldIssueCount, metadataRetryRunning, awaitingManifestReview, hasRecordTopology, showBuildConfiguration, finishPhase, showReviewWorkspace } = useCorpusBuildLifecycle(currentBuild, recordTotal, reviewQueue);
+const buildOverviewOpen=ref(false);
+const builderWorkspaceEl=ref<HTMLElement|null>(null),detailsDockEl=ref<HTMLElement|null>(null);
+const detailsDockAvailable=ref(false);
+const detailsDocked=computed(()=>detailsPanelOpen.value&&detailsDockAvailable.value);
+let detailsDockObserver:ResizeObserver|undefined;
+onMounted(()=>{
+  if(builderWorkspaceEl.value&&typeof ResizeObserver!=='undefined'){
+    detailsDockObserver=new ResizeObserver(entries=>{detailsDockAvailable.value=entries[0].contentRect.width>=1600});
+    detailsDockObserver.observe(builderWorkspaceEl.value);
+  }
+});
+const buildDetailsPanelEl=ref<InstanceType<typeof CorpusBuildDetailsPanel>|null>(null);
+const warningRecordLoading=ref(false),warningRecordError=ref("");
+let warningRecordRequestSerial=0;
+let committingWarningRecord=false;
+const showOverview=computed(()=>buildOverviewOpen.value&&showReviewWorkspace.value&&!finishPhase.value);
+watch(()=>currentBuild.value?.build_id,()=>{buildOverviewOpen.value=false;detailsPanelOpen.value=false;warningRecordError.value="";warningRecordLoading.value=false;warningRecordRequestSerial++});
+async function openOverviewQueue(queue:ReviewQueue){
+  if(reviewLocked.value||busy.value!==''||!hasRecordTopology.value)return;
+  buildOverviewOpen.value=false;
+  reviewQueue.value=queue;recordQuery.value='';
+  await nextTick();await refreshRecords(true);await nextTick();
+  recordListEl.value?.focus({preventScroll:true});
+  reviewFrameEl.value?.scrollIntoView({block:'start'});
+}
 let pollTimer:number|undefined;
 const DRAFT_KEY="derridai.pdf-corpus-builder.draft.v2";
 function restoreBuilderDraft(){
@@ -182,6 +217,9 @@ function restoreBuilderDraft(){
     const raw=localStorage.getItem(DRAFT_KEY);if(!raw)return;
     const draft=JSON.parse(raw) as Record<string,unknown>;
     if(typeof draft.selectedAssetId==="string")selectedAssetId.value=draft.selectedAssetId;
+    if(typeof draft.selectedProviderId==='string'&&providerProfiles.value.some(profile=>profile.id===draft.selectedProviderId))selectedProviderId.value=draft.selectedProviderId;
+    if(typeof draft.selectedReviewProviderId==='string'&&providerProfiles.value.some(profile=>profile.id===draft.selectedReviewProviderId))selectedReviewProviderId.value=draft.selectedReviewProviderId;
+    if(typeof draft.schemaId==='string'&&(!schemaChoices.value.length||schemaChoices.value.some(schema=>schema.id===draft.schemaId)))schemaId.value=draft.schemaId;
     if(typeof draft.manualProvider==="string"&&(draft.manualProvider==="ollama"||draft.manualProvider==="openai"))manualProvider.value=draft.manualProvider;
     if(typeof draft.manualModel==="string")manualModel.value=draft.manualModel;
     if(typeof draft.manualBaseUrl==="string")manualBaseUrl.value=draft.manualBaseUrl;
@@ -197,7 +235,8 @@ function restoreBuilderDraft(){
   }catch{/* ignore stale browser drafts */}
 }
 function persistBuilderDraft(){
-  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedAssetId:selectedAssetId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,stageTimeouts:stageTimeouts.value,recordSizing:recordSizing.value,maxConcurrentRequests:maxConcurrentRequests.value,enrichmentMode:enrichmentMode.value,semanticIndexing:semanticIndexing.value,autoCleanText:autoCleanText.value}))}catch{/* storage may be unavailable */}
+  if(currentBuild.value||selectedBuildId.value)return;
+  try{localStorage.setItem(DRAFT_KEY,JSON.stringify({selectedAssetId:selectedAssetId.value,selectedProviderId:selectedProviderId.value,selectedReviewProviderId:selectedReviewProviderId.value,schemaId:schemaId.value,manualProvider:manualProvider.value,manualModel:manualModel.value,manualBaseUrl:manualBaseUrl.value,useProfileDefaults:useProfileDefaults.value,generationOverrides:generationOverrides.value,stageLimits:stageLimits.value,stageTimeouts:stageTimeouts.value,recordSizing:recordSizing.value,maxConcurrentRequests:maxConcurrentRequests.value,enrichmentMode:enrichmentMode.value,semanticIndexing:semanticIndexing.value,autoCleanText:autoCleanText.value}))}catch{/* storage may be unavailable */}
 }
 function metadataDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.metadata-draft.${buildId}.${recordId}`}
 function textDraftKey(buildId:string,recordId:string){return `derridai.pdf-corpus.text-draft.${buildId}.${recordId}`}
@@ -320,7 +359,6 @@ const discourseRoles=computed(()=>Array.isArray(activeCorpusProfile.value?.disco
 const metadataKnownValues=computed<Record<string,string[]>>(()=>{const out:Record<string,Set<string>>={};for(const row of records.value){for(const [field,value] of Object.entries(row as Record<string,unknown>)){const values=Array.isArray(value)?value:[value];for(const item of values){if(typeof item!=='string'||!item.trim())continue;(out[field]??=new Set()).add(item.trim())}}}return Object.fromEntries(Object.entries(out).map(([field,values])=>[field,[...values].sort((a,b)=>a.localeCompare(b))]))});
 const selectedMetadataBlocked=computed(()=>Boolean((selectedRecord.value?.metadata_review_fields||[]).length||(selectedRecord.value?.metadata_incomplete_fields||[]).length));
 const selectedMetadataBlockingFields=computed(()=>Array.from(new Set([...(selectedRecord.value?.metadata_incomplete_fields||[]),...(selectedRecord.value?.metadata_review_fields||[])])));
-const selectedMetadataBlockingLabel=computed(()=>selectedMetadataBlockingFields.value.map(field=>i18n.t(`record.${field}`,field.replace(/_/g," "))).join(", "));
 const selectedProfileModel=computed(()=>String(selectedProfile.value?.model||""));
 const profileGeneration=computed<Record<string,unknown>>(()=>{
   if(!selectedProviderId.value)return {};
@@ -500,9 +538,21 @@ async function refreshProviders(){
 }
 async function refreshCorpusProfiles(){try{corpusProfiles.value=(await pdfCorpusApi.profiles()).items||[]}catch{corpusProfiles.value=[]}}
 async function refreshAssets(){const result=await pdfCorpusApi.listAssets();assets.value=result.items;if(!selectedAssetId.value&&assets.value[0])selectedAssetId.value=assets.value[0].asset_id}
-async function refreshBuilds(){const result=await pdfCorpusApi.listBuilds(0,100);builds.value=result.items;buildsTotal.value=result.total;const requested=String(route.query.build||"");if(requested&&builds.value.some(build=>build.build_id===requested))selectedBuildId.value=requested;else if(!selectedBuildId.value&&builds.value[0])selectedBuildId.value=builds.value[0].build_id}
+async function refreshBuilds(append=false){
+  if(buildsLoading.value)return;
+  buildsLoading.value=true;buildsError.value='';
+  try{
+    const result=await pdfCorpusApi.listBuilds(append?builds.value.length:0,100);
+    builds.value=append?Array.from(new Map([...builds.value,...result.items].map(build=>[build.build_id,build])).values()):result.items;
+    buildsTotal.value=result.total;
+    if(newBuildSetup.value)return;
+    const requested=String(route.query.build||'');
+    if(requested&&builds.value.some(build=>build.build_id===requested))selectedBuildId.value=requested;
+    else if(!selectedBuildId.value&&builds.value[0])selectedBuildId.value=builds.value[0].build_id;
+  }catch(exc){buildsError.value=exc instanceof Error?exc.message:String(exc)}finally{buildsLoading.value=false}
+}
 function syncBuildInRail(build:CorpusBuild){const index=builds.value.findIndex(item=>item.build_id===build.build_id);if(index>=0)builds.value.splice(index,1,{...builds.value[index],...build});else builds.value.unshift(build)}
-async function refreshBuild(){if(!selectedBuildId.value){currentBuild.value=null;return}try{currentBuild.value=await pdfCorpusApi.build(selectedBuildId.value);syncBuildInRail(currentBuild.value)}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error");return}if(currentBuild.value?.asset_id)selectedAssetId.value=currentBuild.value.asset_id;const request=currentBuild.value?.request||{};if(typeof request.provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.provider_profile_id))selectedProviderId.value=request.provider_profile_id;if(typeof request.review_provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.review_provider_profile_id))selectedReviewProviderId.value=request.review_provider_profile_id;const requestGeneration=request.generation;if(requestGeneration&&typeof requestGeneration==="object")generationOverrides.value={...(requestGeneration as Record<string,unknown>)};useProfileDefaults.value=request.use_profile_defaults!==false;if(request.stage_limits&&typeof request.stage_limits==="object")stageLimits.value={...stageLimits.value,...(request.stage_limits as Record<string,number>)};if(request.stage_timeouts&&typeof request.stage_timeouts==="object")stageTimeouts.value={...stageTimeouts.value,...(request.stage_timeouts as Record<string,number>)};if(request.record_sizing&&typeof request.record_sizing==="object")recordSizing.value={...recordSizing.value,...(request.record_sizing as RecordSizingPolicy)};if(request.max_concurrent_requests)maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(request.max_concurrent_requests)||1))}
+async function refreshBuild(){const requestId=++buildRequestSerial;if(!selectedBuildId.value){currentBuild.value=null;return}const requestedId=selectedBuildId.value;try{const result=await pdfCorpusApi.build(requestedId);if(requestId!==buildRequestSerial||selectedBuildId.value!==requestedId)return;currentBuild.value=result;syncBuildInRail(currentBuild.value)}catch(exc){if(requestId===buildRequestSerial&&selectedBuildId.value===requestedId)setMessage(exc instanceof Error?exc.message:String(exc),"error");return}if(currentBuild.value?.asset_id)selectedAssetId.value=currentBuild.value.asset_id;const request=currentBuild.value?.request||{};if(typeof request.provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.provider_profile_id))selectedProviderId.value=request.provider_profile_id;if(typeof request.review_provider_profile_id==="string"&&providerProfiles.value.some(profile=>profile.id===request.review_provider_profile_id))selectedReviewProviderId.value=request.review_provider_profile_id;const requestGeneration=request.generation;if(requestGeneration&&typeof requestGeneration==="object")generationOverrides.value={...(requestGeneration as Record<string,unknown>)};useProfileDefaults.value=request.use_profile_defaults!==false;if(request.stage_limits&&typeof request.stage_limits==="object")stageLimits.value={...stageLimits.value,...(request.stage_limits as Record<string,number>)};if(request.stage_timeouts&&typeof request.stage_timeouts==="object")stageTimeouts.value={...stageTimeouts.value,...(request.stage_timeouts as Record<string,number>)};if(request.record_sizing&&typeof request.record_sizing==="object")recordSizing.value={...recordSizing.value,...(request.record_sizing as RecordSizingPolicy)};if(request.max_concurrent_requests)maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(request.max_concurrent_requests)||1))}
 async function refreshRecords(reset=false, preferredId=""){
   if(reset)recordOffset.value=0;
   if(!selectedBuildId.value){records.value=[];recordTotal.value=0;selectedRecord.value=null;reviewHydrated.value=false;hydratedTopologyCount.value=0;return}
@@ -537,7 +587,30 @@ async function refreshRecords(reset=false, preferredId=""){
   }finally{if(requestId===recordRequestSerial)recordsLoading.value=false}
 }
 
-async function refreshBlocks(){if(!selectedAssetId.value||!selectedRecord.value?.source_block_ids?.length){sourceBlocks.value=[];return}const result=await pdfCorpusApi.blocks(selectedAssetId.value,0,Math.min(1000,selectedRecord.value.source_block_ids.length),selectedRecord.value.source_block_ids);sourceBlocks.value=result.items}
+function blockScope(){return JSON.stringify([selectedBuildId.value,selectedAssetId.value,selectedRecord.value?.record_id,selectedRecord.value?.source_block_ids||[]])}
+async function retrySourceBlocks(){
+  const restoreFocus=Boolean(document.activeElement?.closest('.source-read-error'));
+  const scope=blockScope();
+  await refreshBlocks();await nextTick();
+  if(restoreFocus&&!sourceBlocksError.value&&blockScope()===scope&&document.activeElement===document.body)reviewInspectorEl.value?.focus({preventScroll:true});
+}
+async function refreshBlocks(){
+  const requestId=++blockRequestSerial,scope=blockScope();
+  if(sourceBlocksScope!==scope){sourceBlocks.value=[];sourceBlocksScope=scope}
+  sourceBlocksError.value='';
+  const assetId=selectedAssetId.value,ids=[...(selectedRecord.value?.source_block_ids||[])];
+  if(!assetId||!ids.length){sourceBlocks.value=[];sourceBlocksLoading.value=false;return}
+  sourceBlocksLoading.value=true;
+  try{
+    const result=await pdfCorpusApi.blocks(assetId,0,Math.min(1000,ids.length),ids);
+    if(requestId===blockRequestSerial&&blockScope()===scope)sourceBlocks.value=result.items;
+  }catch(exc){
+    if(requestId===blockRequestSerial&&blockScope()===scope){
+      if(exc instanceof ApiError&&[401,403].includes(exc.status))sourceBlocks.value=[];
+      sourceBlocksError.value=i18n.tf('pdf_corpus.source_read_failed','Source blocks could not be loaded: {reason}',{reason:exc instanceof Error?exc.message:String(exc)});
+    }
+  }finally{if(requestId===blockRequestSerial)sourceBlocksLoading.value=false}
+}
 async function ensureReviewHydrated(preferredId=""){
   if(!selectedBuildId.value||!currentBuild.value||awaitingManifestReview.value)return;
   const expected=Number(currentBuild.value.record_count||currentBuild.value.metadata_total||0);
@@ -632,6 +705,33 @@ async function retryIncompleteMetadata(){
     setMessage(i18n.tf("pdf_corpus.metadata_retry_start_fields","Retrying {fields} unresolved field(s) across {records} record(s). Topology and completed metadata are preserved.",{fields,records:recordsCount}));
   }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
 }
+async function openWarningRecord(recordId:string){
+  if(!currentBuild.value||busy.value!==''||warningRecordLoading.value||reviewLocked.value||!hasRecordTopology.value)return;
+  const verified=()=>currentWarningRecordIds(currentBuild.value?.warnings||[],currentBuild.value?.metadata_issue_summary).includes(recordId);
+  if(!verified())return;
+  const buildId=selectedBuildId.value,originalId=selectedRecordId.value,requestId=++recordRequestSerial,navigationId=++warningRecordRequestSerial;
+  warningRecordLoading.value=true;warningRecordError.value='';
+  const current=()=>requestId===recordRequestSerial&&selectedBuildId.value===buildId&&selectedRecordId.value===originalId;
+  try{
+    const queue:ReviewQueue=finishPhase.value?'metadata':'all';
+    const result=await pdfCorpusApi.records(buildId,0,pageSize,queue,recordId);
+    if(!current())return;
+    const row=result.items.find(item=>item.record_id===recordId);
+    if(!row||!verified())throw new Error(i18n.t('pdf_corpus.warning_record_unavailable','This record could not be verified in the current build results. Refresh the build or use the review queue.'));
+    if(busy.value!==''||reviewLocked.value||!hasRecordTopology.value)return;
+    // The exact scoped read already supplied this list; do not let the filter watcher clear it.
+    committingWarningRecord=true;
+    records.value=result.items;recordTotal.value=result.total;recordOffset.value=0;reviewQueue.value=queue;recordQuery.value=recordId;
+    if(originalId!==recordId||(!editingText.value&&!metadataEditorDirty.value))selectRecord(row);
+    buildOverviewOpen.value=false;focusView.value=false;
+    buildDetailsPanelEl.value?.close();
+    await nextTick();committingWarningRecord=false;
+    if(selectedBuildId.value!==buildId||requestId!==recordRequestSerial||selectedRecordId.value!==recordId)return;
+    setReviewWorkspaceMode('metadata');
+    reviewFrameEl.value?.scrollIntoView({block:'start'});
+  }catch(exc){if(current())warningRecordError.value=exc instanceof Error?exc.message:String(exc)}
+  finally{if(requestId===recordRequestSerial)recordsLoading.value=false;if(navigationId===warningRecordRequestSerial){committingWarningRecord=false;warningRecordLoading.value=false}}
+}
 async function reviewMetadataRecord(recordId:string){
   reviewQueue.value="metadata";recordQuery.value=recordId;
   await nextTick();await refreshRecords(true,recordId);
@@ -651,7 +751,7 @@ async function confirmManifest(){if(!currentBuild.value)return;busy.value="manif
 function startPolling(){
   stopPolling();
   pollTimer=window.setInterval(async()=>{
-    if(!selectedBuildId.value)return;
+    if(!selectedBuildId.value){if(newBuildSetup.value){await refreshBuilds();if(activeBuildCount.value===0)stopPolling()}return;}
     await refreshBuild();
     // Deterministic records are persisted before metadata enrichment. Hydrate the
     // review workspace as soon as topology exists instead of waiting for a form
@@ -666,7 +766,7 @@ function startPolling(){
   },1400)
 }
 function stopPolling(){if(pollTimer!==undefined){clearInterval(pollTimer);pollTimer=undefined}}
-async function chooseBuild(build:CorpusBuild){selectedBuildId.value=build.build_id;selectedAssetId.value=build.asset_id;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;reviewQueue.value="all";await refreshBuild();await nextTick();await refreshRecords(true);if(buildRunning.value)startPolling()}
+async function chooseBuild(build:CorpusBuild){if(busy.value!==''||(selectedBuildId.value===build.build_id&&currentBuild.value))return;stopPolling();persistBuilderDraft();newBuildSetup.value=false;selectedBuildId.value=build.build_id;recordRequestSerial++;selectedAssetId.value=build.asset_id;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];blockRequestSerial++;sourceBlocksLoading.value=false;sourceBlocksError.value="";reviewHydrated.value=false;hydratedTopologyCount.value=0;hydratedMetadataCount.value=0;reviewQueue.value="all";await refreshBuild();if(selectedBuildId.value!==build.build_id)return;await nextTick();await refreshRecords(true);if(buildRunning.value)startPolling()}
 async function openPdfExplorer(){await router.replace({query:{...route.query,mode:"explorer"}})}
 async function advanceFrom(recordId:string){const index=records.value.findIndex(row=>row.record_id===recordId);const next=records.value[index+1]||records.value[index-1];if(next){selectRecord(next);return}if(recordOffset.value+pageSize<recordTotal.value){recordOffset.value+=pageSize;await refreshRecords();return}await refreshRecords()}
 async function setDisposition(disposition:"pending"|"accepted"|"rejected"){
@@ -892,15 +992,15 @@ async function applyBulkMetadata(payload:{changes:Record<string,unknown>;applyTo
     bulkMetadataOpen.value=false;await refreshBuild();await refreshRecords(false,selectedRecordId.value);setMessage(i18n.tf("pdf_corpus.bulk_metadata_applied","Updated metadata on {count} record(s).",{count:result.changed}));
   }catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}
 }
-function startNewBuildSetup(){stopPolling();selectedBuildId.value="";currentBuild.value=null;records.value=[];recordTotal.value=0;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];reviewHydrated.value=false;bulkMetadataOpen.value=false;void router.replace({query:{...route.query,build:undefined,record:undefined,queue:undefined}})}
+function startNewBuildSetup(){if(busy.value!=='')return;stopPolling();newBuildSetup.value=true;recordRequestSerial++;buildRequestSerial++;selectedBuildId.value="";currentBuild.value=null;records.value=[];recordTotal.value=0;selectedRecordId.value="";selectedRecord.value=null;sourceBlocks.value=[];blockRequestSerial++;sourceBlocksLoading.value=false;sourceBlocksError.value="";reviewHydrated.value=false;bulkMetadataOpen.value=false;restoreBuilderDraft();if(activeBuildCount.value>0)startPolling();void router.replace({query:{...route.query,build:undefined,record:undefined,queue:undefined}})}
 async function cancelBuild(){if(!currentBuild.value)return;await pdfCorpusApi.cancel(currentBuild.value.build_id);setMessage(i18n.t("pdf_corpus.cancel_requested","Cancellation requested. The segmented workspace remains editable, and you can start another build after cancellation settles."));startPolling()}
 async function settleMetadata(){if(!currentBuild.value)return;busy.value="settle";try{currentBuild.value=await pdfCorpusApi.settleMetadata(currentBuild.value.build_id);syncBuildInRail(currentBuild.value);setMessage(i18n.t("pdf_corpus.settle_requested_notice","Remaining automatic metadata tasks will settle as review exceptions after any active request reaches its deadline."));startPolling()}catch(exc){setMessage(exc instanceof Error?exc.message:String(exc),"error")}finally{busy.value=""}}
 async function previousPage(){if(recordOffset.value<=0)return;recordOffset.value=Math.max(0,recordOffset.value-pageSize);await refreshRecords()}
 async function nextPage(){if(recordOffset.value+pageSize>=recordTotal.value)return;recordOffset.value+=pageSize;await refreshRecords()}
 
-function reviewShortcut(event:KeyboardEvent){if(!selectedRecord.value||busy.value)return;const target=event.target as HTMLElement|null;if(target&&["INPUT","TEXTAREA","SELECT"].includes(target.tagName))return;if(event.key.toLowerCase()==="a"){event.preventDefault();void attemptAccept()}else if(event.key.toLowerCase()==="r"){event.preventDefault();void setDisposition("rejected")}else if(event.key.toLowerCase()==="z"){event.preventDefault();void undoReview()}else if(event.key.toLowerCase()==="j"||event.key==="ArrowDown"){event.preventDefault();void skipRecord()}else if(event.key.toLowerCase()==="f"){event.preventDefault();focusView.value=!focusView.value}}
+function reviewShortcut(event:KeyboardEvent){if(showOverview.value||historyPanelOpen.value||(detailsPanelOpen.value&&!detailsDocked.value)||!selectedRecord.value||busy.value)return;const target=event.target as HTMLElement|null;if(target?.closest('.build-details-dock'))return;if(target&&["INPUT","TEXTAREA","SELECT"].includes(target.tagName))return;if(event.key.toLowerCase()==="a"){event.preventDefault();void attemptAccept()}else if(event.key.toLowerCase()==="r"){event.preventDefault();void setDisposition("rejected")}else if(event.key.toLowerCase()==="z"){event.preventDefault();void undoReview()}else if(event.key.toLowerCase()==="j"||event.key==="ArrowDown"){event.preventDefault();void skipRecord()}else if(event.key.toLowerCase()==="f"){event.preventDefault();focusView.value=!focusView.value}}
 watch(selectedProviderId,(profileId)=>{if(!profileId)return;const payload=directProfilePayload(profileId);if(payload?.generation&&typeof payload.generation==="object")generationOverrides.value={...(payload.generation as Record<string,unknown>)};const profile=providerProfiles.value.find(item=>item.id===profileId);maxConcurrentRequests.value=Math.max(1,Math.min(16,Number(profile?.max_concurrent_requests||payload?.max_concurrent_requests||1)))});
-watch([reviewQueue,recordQuery],()=>{selectedRecordId.value="";selectedRecord.value=null;metadataEditorDirty.value=false;editingText.value=false;void refreshRecords(true)});
+watch([reviewQueue,recordQuery],()=>{if(committingWarningRecord)return;selectedRecordId.value="";selectedRecord.value=null;metadataEditorDirty.value=false;editingText.value=false;void refreshRecords(true)});
 watch(selectedEvidenceField,(field)=>{
   if(!field||!selectedRecord.value)return;
   const ids=selectedRecord.value.metadata_evidence?.[field]?.block_ids||[];
@@ -934,14 +1034,14 @@ watch([selectedBuildId,reviewQueue,selectedRecordId],()=>{
   const same=String(route.query.build||"")===String(query.build||"")&&String(route.query.queue||"")===String(query.queue||"")&&String(route.query.record||"")===String(query.record||"");
   if(!same)void router.replace({query});
 },{flush:"post"});
-watch([selectedProviderId,selectedReviewProviderId,selectedAssetId,manualProvider,manualModel,manualBaseUrl,useProfileDefaults,generationOverrides,stageLimits,stageTimeouts,recordSizing,maxConcurrentRequests],persistBuilderDraft,{deep:true});
+watch([selectedProviderId,selectedReviewProviderId,selectedAssetId,manualProvider,manualModel,manualBaseUrl,useProfileDefaults,generationOverrides,stageLimits,stageTimeouts,recordSizing,maxConcurrentRequests,schemaId,enrichmentMode,semanticIndexing,autoCleanText],persistBuilderDraft,{deep:true});
 watch([reviewQueue,recordQuery,selectedBuildId],()=>{selectedReviewIds.value=new Set()});
 // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 watch(metadataDraft,(value)=>{if(!selectedBuildId.value||!selectedRecordId.value)return;try{localStorage.setItem(metadataDraftKey(selectedBuildId.value,selectedRecordId.value),value)}catch{}},{flush:"post"});
 // eslint-disable-next-line no-empty -- SA-12: legacy best-effort fallback; audit user-visible failure handling separately.
 watch(textDraft,(value)=>{if(!editingText.value||!selectedBuildId.value||!selectedRecordId.value)return;try{localStorage.setItem(textDraftKey(selectedBuildId.value,selectedRecordId.value),value)}catch{}},{flush:"post"});
 onMounted(()=>{window.addEventListener("keydown",reviewShortcut);restoreBuilderDraft();void loadSchemaChoices();void refreshAll().then(()=>{if(buildRunning.value)startPolling()}).catch(exc=>setMessage(exc instanceof Error?exc.message:String(exc),"error"))});
-onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPolling()});
+onBeforeUnmount(()=>{detailsDockObserver?.disconnect();blockRequestSerial++;buildRequestSerial++;recordRequestSerial++;window.removeEventListener("keydown",reviewShortcut);stopPolling()});
 </script>
 
 <template>
@@ -949,11 +1049,15 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     <header class="builder-header">
       <div>
         <span class="eyebrow">{{i18n.t('pdf_corpus.eyebrow','Corpus Builder')}}</span>
-        <h1 id="pdf-corpus-builder-title">{{i18n.t('pdf_corpus.title','Build auditable records from source PDFs')}}</h1>
+        <h1 id="pdf-corpus-builder-title">{{showBuildConfiguration&&!currentBuild?i18n.t('pdf_corpus.new_build_title','New corpus build'):i18n.t('pdf_corpus.title','Build auditable records from source PDFs')}}</h1>
         <p>{{i18n.t('pdf_corpus.subtitle','Deterministic extraction and provenance come first. Targeted LLM enrichment is optional, measurable, and used only where it can add scholarly value.')}}</p>
       </div>
       <div class="header-actions">
-        <CorpusBuildHistoryMenu :builds="builds" :total="buildsTotal" :selected-build-id="selectedBuildId" @select="chooseBuild" @refresh="refreshBuilds" />
+        <div v-if="showReviewWorkspace&&!finishPhase" class="build-view-switch" role="group" :aria-label="i18n.t('pdf_corpus.build_view','Build view')">
+          <button type="button" class="btn" :aria-pressed="showOverview" @click="buildOverviewOpen=true">{{i18n.t('pdf_corpus.build_overview','Build overview')}}</button>
+          <button type="button" class="btn" :aria-pressed="!showOverview" @click="buildOverviewOpen=false">{{i18n.t('pdf_corpus.pipeline.review','Review records')}}</button>
+        </div>
+        <CorpusBuildHistoryMenu :builds="builds" :total="buildsTotal" :selected-build-id="selectedBuildId" :loading="buildsLoading" :error="buildsError" :disabled="busy!==''" @open-change="historyPanelOpen=$event" @select="chooseBuild" @refresh="refreshBuilds()" @load-more="refreshBuilds(true)" />
         <button v-if="currentBuild&&(buildRunning?canStartConcurrentBuild:['cancelled','failed','interrupted','ready','awaiting_review'].includes(String(currentBuild.status||'')))" type="button" class="btn" @click="startNewBuildSetup" :disabled="busy!==''">{{buildRunning?i18n.t('pdf_corpus.start_concurrent_build','Start another build'):i18n.t('pdf_corpus.start_new_build','Start new build')}}</button>
       </div>
     </header>
@@ -968,6 +1072,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
     <CorpusInitializationDialog v-if="currentBuild&&buildRunning&&!hasRecordTopology" :build="currentBuild" :disabled="busy!==''" @cancel="cancelBuild" />
 
     <section v-if="showBuildConfiguration" class="builder-setup" :aria-labelledby="'pdf-corpus-config-title'">
+      <p v-if="activeBuildCount>0" class="setup-background" role="status">{{i18n.tf('pdf_corpus.setup_background','{count} builds continue in the background. This setup creates a separate build.',{count:activeBuildCount})}}</p>
       <h2 id="pdf-corpus-config-title" class="sr-only">{{i18n.t('pdf_corpus.build_configuration','Build configuration')}}</h2>
 
       <section class="setup-section setup-source-section" aria-labelledby="pdf-corpus-source-title">
@@ -976,7 +1081,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
           <label for="pdf-corpus-source"><span>{{i18n.t('pdf_corpus.source_asset','Source asset')}}</span><select id="pdf-corpus-source" v-model="selectedAssetId" class="control"><option value="">{{i18n.t('pdf_corpus.choose_persisted_pdf','Choose a persisted PDF…')}}</option><option v-for="asset in assets" :key="asset.asset_id" :value="asset.asset_id">{{asset.filename}} · {{asset.page_count}} pp · {{asset.block_count}} {{i18n.t('pdf_corpus.blocks','blocks')}}</option></select></label>
           <div class="source-actions"><button type="button" class="btn" @click="useCurrentPdf" :disabled="busy!==''||buildRunning">{{i18n.t('pdf_corpus.use_current_pdf','Use current Explorer PDF')}}</button><button type="button" class="btn" @click="uploadInput?.click()" :disabled="busy!==''||buildRunning">{{busy==='upload'?i18n.t('pdf_corpus.extracting','Extracting…'):i18n.t('pdf_corpus.choose_pdf','Choose source PDF')}}</button><input ref="uploadInput" class="sr-only" type="file" accept="application/pdf,.pdf" :aria-label="i18n.t('pdf_corpus.choose_pdf','Choose source PDF')" @change="upload(($event.target as HTMLInputElement).files?.[0])"></div>
         </div>
-        <div v-if="selectedAsset" class="source-facts"><span>{{selectedAsset.page_count}} {{i18n.t('pdf_corpus.pages','pages')}}</span><span>{{selectedAsset.block_count}} {{i18n.t('pdf_corpus.blocks','blocks')}}</span><span>{{selectedAsset.ocr_pages}} {{i18n.t('pdf_corpus.ocr_pages','OCR page(s)')}}</span><span>SHA-256 {{selectedAsset.sha256.slice(0,16)}}…</span><span>{{formatDate(selectedAsset.created_at)}}</span></div>
+        <div v-if="selectedAsset" class="source-facts"><b>{{selectedAsset.filename}}</b><span>{{selectedAsset.page_count}} {{i18n.t('pdf_corpus.pages','pages')}}</span><span>{{selectedAsset.block_count}} {{i18n.t('pdf_corpus.blocks','blocks')}}</span><span>{{selectedAsset.ocr_pages}} {{i18n.t('pdf_corpus.ocr_pages','OCR page(s)')}}</span><details class="source-details"><summary>{{i18n.t('pdf_corpus.source_details','Source details')}}</summary><span>SHA-256 {{selectedAsset.sha256.slice(0,16)}}…</span><span>{{formatDate(selectedAsset.created_at)}}</span></details></div>
       </section>
 
       <section v-if="selectedAsset?.pages?.length" class="setup-phase" aria-labelledby="pdf-corpus-structure-phase-title">
@@ -1019,14 +1124,33 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
       <CorpusBuildReadiness :source-filename="selectedAsset?.filename||''" :page-count="selectedAsset?.page_count||0" :block-count="selectedAsset?.block_count||0" :structure-summary="selectedStructureSummary" :provider-label="selectedProviderLabel" :model-label="selectedProfileModel||manualModel" :enrichment-mode="enrichmentMode" :target-chars="recordSizing.preferred_record_chars" :tolerance-chars="recordSizing.record_length_tolerance" :context-safe="contextSafe" :active-build-count="activeBuildCount" :can-start="canStartConcurrentBuild" :busy="busy==='build'" :warnings="setupWarnings" @build="startBuild" />
     </section>
-    <details v-if="currentBuild && !showBuildConfiguration" class="active-build-settings">
-      <summary>{{i18n.t('pdf_corpus.build_settings_summary','Build settings')}}</summary>
-      <div><span>{{currentBuild.source_filename}}</span><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}: {{activeProviderProfileLabel}}</span><span>{{i18n.t('pdf_corpus.model','Model')}}: {{activeModelLabel}}</span><button type="button" class="btn small" @click="selectedBuildId='';currentBuild=null">{{i18n.t(activeBuildCount?'pdf_corpus.configure_another_build':'pdf_corpus.configure_new_build',activeBuildCount?'Configure another build':'Configure a new build')}}</button></div>
-    </details>
+    <CorpusBuildDetailsPanel ref="buildDetailsPanelEl" :dock-target="detailsDockAvailable?detailsDockEl:null" v-if="currentBuild && !showBuildConfiguration" :key="currentBuild.build_id" :build-id="currentBuild.build_id" :source-filename="currentBuild.source_filename" :warning-count="currentBuild.warnings?.length||0" @open-change="detailsPanelOpen=$event">
+      <template #activity>
+        <CorpusBuildLifecycleCard :build="currentBuild" />
+        <CorpusQualitySummary :build="currentBuild" />
+        <CorpusBuildTimeline :build="currentBuild" />
+            <CorpusBuildProgress :status="currentBuild.publication?'published':currentBuild.status" :stage="currentBuild.publication?'published':currentBuild.stage" :progress="currentBuild.progress||0" :record-count="currentBuild.record_count||0" :review-count="currentBuild.needs_review_count||0" :accepted-count="currentBuild.accepted_count||0" :error="currentBuild.error" :validation="currentBuild.validation||null" :llm-metrics="currentBuild.llm_metrics||null" :unresolved-count="currentBuild.boundary_review_count||currentBuild.segmentation_unresolved_regions?.length||0" :segmentation-telemetry="{candidateCount:currentBuild.boundary_candidate_count||0,deterministicSplits:currentBuild.boundary_deterministic_split_count||0,deterministicKeeps:currentBuild.boundary_deterministic_keep_count||0,llmAdjudications:currentBuild.boundary_llm_adjudication_count||0,llmBatchCalls:currentBuild.boundary_llm_batch_call_count||0,llmSplits:currentBuild.boundary_llm_split_count||0,llmKeeps:currentBuild.boundary_llm_keep_count||0,provisionalSplits:currentBuild.provisional_boundary_count||0,sizeOptimizedSplits:currentBuild.size_optimized_boundary_count||0,absoluteSafetySplits:currentBuild.absolute_safety_boundary_count||0,budgetSkipped:currentBuild.boundary_budget_skipped_count||0,classifierFailures:currentBuild.boundary_classifier_failure_count||0,reviewCount:currentBuild.boundary_review_count||0}" />
+          <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
+          <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
+          <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
+      </template>
+      <template #issues>
+        <p v-if="currentBuild.error" role="alert">{{currentBuild.error}}</p>
+        <p v-if="warningRecordError" class="warning-record-error" role="alert">{{warningRecordError}}</p>
+        <p v-if="warningRecordLoading" role="status">{{i18n.t('pdf_corpus.warning_record_loading','Loading the selected record…')}}</p>
+        <CorpusBuildWarnings :warnings="currentBuild.warnings||[]" :issue-summary="currentBuild.metadata_issue_summary" :disabled="busy!==''||warningRecordLoading||reviewLocked||!hasRecordTopology" @review="openWarningRecord" />
+        <p v-if="!currentBuild.warnings?.length&&!currentBuild.error">{{i18n.t('pdf_corpus.details_no_warnings','No build warning entries or build error reported.')}}</p>
+        <p>{{i18n.t('pdf_corpus.details_issues_help','Record review decisions are separate. Use the review queue to inspect unresolved metadata and source issues.')}}</p>
+      </template>
+      <template #settings><div class="active-build-settings">
+      <div><span>{{currentBuild.source_filename}}</span><span>{{i18n.t('pdf_corpus.provider_profile','Provider profile')}}: {{activeProviderProfileLabel}}</span><span>{{i18n.t('pdf_corpus.model','Model')}}: {{activeModelLabel}}</span><button type="button" class="btn small" @click="startNewBuildSetup" :disabled="busy!==''">{{i18n.t(activeBuildCount?'pdf_corpus.configure_another_build':'pdf_corpus.configure_new_build',activeBuildCount?'Configure another build':'Configure a new build')}}</button></div>
+          <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
+      </div></template>
+    </CorpusBuildDetailsPanel>
 
-    <div class="builder-workspace" :class="{'review-mode':showReviewWorkspace&&!finishPhase}">
+    <div ref="builderWorkspaceEl" class="builder-workspace" :class="{'review-mode':showReviewWorkspace&&!finishPhase,'details-docked':detailsDocked}">
       <aside v-if="!showReviewWorkspace||finishPhase" class="build-rail" :aria-label="i18n.t('pdf_corpus.builds','Corpus builds')">
-        <div class="rail-title"><div><b>{{i18n.t('pdf_corpus.builds','Corpus builds')}}</b><span>{{buildsTotal}} {{i18n.t('pdf_corpus.total','total')}}</span></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" @click="refreshBuilds">↻</button></div>
+        <div class="rail-title"><div><b>{{i18n.t('pdf_corpus.builds','Corpus builds')}}</b><span>{{buildsTotal}} {{i18n.t('pdf_corpus.total','total')}}</span></div><button type="button" class="icon-button" :title="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" :aria-label="i18n.t('pdf_corpus.refresh_builds','Refresh builds')" @click="refreshBuilds()">↻</button></div>
         <button v-for="build in builds" :key="build.build_id" type="button" class="build-row" :class="{active:build.build_id===selectedBuildId}" :aria-current="build.build_id===selectedBuildId?'true':undefined" @click="chooseBuild(build)">
           <span class="status-dot" :data-status="build.status" aria-hidden="true"></span>
           <span><b>{{build.source_filename}}</b><small>{{statusLabel(build)}} · {{Math.round((build.progress||0)*100)}}%</small><small>{{build.record_count||0}} {{i18n.t('pdf_corpus.records','records')}} · {{formatDate(build.created_at)}}</small></span>
@@ -1036,25 +1160,24 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
       <main class="build-main">
         <section v-if="currentBuild" class="build-summary" :aria-labelledby="'pdf-corpus-current-build'">
-          <div v-if="!showReviewWorkspace||finishPhase" class="summary-top">
+          <div v-if="!showReviewWorkspace||finishPhase||showOverview" class="summary-top">
             <div><span class="eyebrow">{{currentBuild.profile_id}}</span><h2 id="pdf-corpus-current-build">{{currentBuild.source_filename}}</h2><p>{{currentBuild.build_id}}</p></div>
             <div class="summary-actions">
-              <button v-if="buildRunning" type="button" class="btn" @click="cancelBuild">{{i18n.t('pdf_corpus.cancel','Cancel')}}</button>
+              <button v-if="buildRunning&&!(showOverview&&currentBuild.stage==='enriching')" type="button" class="btn" @click="cancelBuild">{{i18n.t('pdf_corpus.cancel','Cancel')}}</button>
               <button v-if="canResume" type="button" class="btn" @click="resumeBuild" :disabled="busy!==''">{{i18n.t('pdf_corpus.resume','Resume from checkpoint')}}</button>
               <a v-if="currentBuild.publication" class="btn primary" :href="pdfCorpusApi.publicationUrl(currentBuild.publication.publication_id)">{{i18n.t('pdf_corpus.download_jsonl','Download JSONL')}}</a>
             </div>
           </div>
+          <CorpusBuildOverview v-if="showOverview" :key="`overview-${currentBuild.build_id}`" :build="currentBuild" :locked="reviewLocked" :disabled="busy!==''" @review="openOverviewQueue" @settle="settleMetadata" @cancel="cancelBuild" />
+
           <CorpusBuildLifecycleCard v-if="!showReviewWorkspace||finishPhase" :build="currentBuild" />
           <CorpusQualitySummary v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
 
           <CorpusBuildStageNotice v-if="buildRunning && !hasRecordTopology" :stage="currentBuild.stage" />
           <CorpusFinishWorkspace v-if="!awaitingManifestReview && finishPhase" :build="currentBuild" :busy="busy!==''" @retry-metadata="retryIncompleteMetadata" @review-metadata="openMetadataIssueQueue" @review-rejected="openRejectedQueue" @review-records="openAllReviewQueue" @review-source="openSourceIssueQueue" @restore-rejected="restoreAllRejected" @start-new="startNewBuildSetup" @edit-document-metadata="documentMetadataOpen=true" @rerun-enrichment="llmActionProviderId=selectedProviderId||providerProfiles[0]?.id||'';metadataEnrichmentOpen=true" @publish="publish({download:false})" />
           <CorpusMetadataIssues v-if="!awaitingManifestReview && finishPhase && metadataFieldIssueCount>0 && !currentBuild.publication" :build="currentBuild" :busy="busy!==''||metadataRetryRunning" @retry="retryIncompleteMetadata" @review="reviewMetadataRecord" />
-          <CorpusBuildTimeline v-if="!awaitingManifestReview&&(!showReviewWorkspace||finishPhase)" :build="currentBuild" />
-          <details v-if="!showReviewWorkspace||finishPhase" class="technical-details">
-            <summary>{{i18n.t('pdf_corpus.technical_details','Technical build details')}}</summary>
-            <CorpusBuildProgress :status="currentBuild.publication?'published':currentBuild.status" :stage="currentBuild.publication?'published':currentBuild.stage" :progress="currentBuild.progress||0" :record-count="currentBuild.record_count||0" :review-count="currentBuild.needs_review_count||0" :accepted-count="currentBuild.accepted_count||0" :error="currentBuild.error" :warnings="currentBuild.warnings||[]" :validation="currentBuild.validation||null" :llm-metrics="currentBuild.llm_metrics||null" :unresolved-count="currentBuild.boundary_review_count||currentBuild.segmentation_unresolved_regions?.length||0" :segmentation-telemetry="{candidateCount:currentBuild.boundary_candidate_count||0,deterministicSplits:currentBuild.boundary_deterministic_split_count||0,deterministicKeeps:currentBuild.boundary_deterministic_keep_count||0,llmAdjudications:currentBuild.boundary_llm_adjudication_count||0,llmBatchCalls:currentBuild.boundary_llm_batch_call_count||0,llmSplits:currentBuild.boundary_llm_split_count||0,llmKeeps:currentBuild.boundary_llm_keep_count||0,provisionalSplits:currentBuild.provisional_boundary_count||0,sizeOptimizedSplits:currentBuild.size_optimized_boundary_count||0,absoluteSafetySplits:currentBuild.absolute_safety_boundary_count||0,budgetSkipped:currentBuild.boundary_budget_skipped_count||0,classifierFailures:currentBuild.boundary_classifier_failure_count||0,reviewCount:currentBuild.boundary_review_count||0}" />
-          </details>
+
+
           <section v-if="awaitingManifestReview" class="manifest-gate" aria-labelledby="manifest-review-title">
             <div><h3 id="manifest-review-title">{{i18n.t('pdf_corpus.manifest_review_required','Review document structure')}}</h3><p>{{i18n.t('pdf_corpus.manifest_review_required_help','Confirm the detected work-level metadata and printed-page mapping before DerridAI lets those values propagate into semantic segmentation and generated records.')}}</p></div>
             <button type="button" class="btn primary" @click="confirmManifest" :disabled="busy!==''||!contextSafe">{{i18n.t('pdf_corpus.confirm_manifest_continue','Confirm document & continue')}}</button>
@@ -1079,22 +1202,20 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
         </section>
 
         <template v-if="showReviewWorkspace">
-          <CorpusProviderSwitcher v-if="currentBuild&&providerProfiles.length" :profiles="providerProfiles" :active-profile-id="activeBuildProfileId" :active-model="activeModelLabel" :history="currentBuild.provider_profile_history||[]" :disabled="busy!==''||!buildRunning" @change="switchBuildProvider" />
-          <CorpusMetadataLiveStatus v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
+          <div v-show="!showOverview" class="review-content">
+          <CorpusMetadataLiveStatus :key="currentBuild?.build_id" v-if="buildRunning&&currentBuild?.stage==='enriching'" :build="currentBuild" :disabled="busy!==''" @settle="settleMetadata" @cancel="cancelBuild" />
           <CorpusEnrichmentPassStatus v-if="currentBuild" :build="currentBuild" :disabled="busy!==''" @stop="cancelBuild" @run-another="llmActionProviderId=selectedProviderId||providerProfiles[0]?.id||'';metadataEnrichmentOpen=true" />
           <CorpusHandsFreeReport v-if="currentBuild" :report="currentBuild.autonomous_report" @open-record="openHandsFreeException" />
-          <CorpusEnrichmentMetrics v-if="currentBuild" :build-id="currentBuild.build_id" />
-          <CorpusTextCleanupSummary v-if="currentBuild?.text_cleanup" :summary="currentBuild.text_cleanup" />
-          <CorpusLlmEffectivenessPanel v-if="currentBuild?.llm_contribution" :contribution="llmContribution" :family-effectiveness="currentBuild?.llm_family_effectiveness||{}" :confidence-calibration="currentBuild?.llm_confidence_calibration||{}" :model-effectiveness="currentBuild?.llm_model_effectiveness||{}" :editorial-examples-used="Number(currentBuild?.llm_metrics?.editorial_examples_used||0)" @inspect-editorial-memory="openEditorialMemory" />
 
-          <CorpusReviewSessionBar v-if="currentBuild" :source-filename="currentBuild.source_filename" :model="currentBuild.model" :build-id="currentBuild.build_id" :accepted="Number(currentBuild.accepted_count||0)" :reviewable="readyCount" :remaining="pendingCount" :issues="issueCount" :focus-disabled="!selectedRecord" @focus="openFocusView" />
+
+          <CorpusReviewSessionBar compact v-if="currentBuild" :source-filename="currentBuild.source_filename" :model="currentBuild.model" :build-id="currentBuild.build_id" :accepted="Number(currentBuild.accepted_count||0)" :reviewable="readyCount" :remaining="pendingCount" :issues="issueCount" :focus-disabled="!selectedRecord" @focus="openFocusView" />
 
           <div ref="reviewFrameEl" class="review-frame">
           <section class="review-toolbar" :aria-label="i18n.t('pdf_corpus.review_controls','Record review controls')">
             <CorpusReviewQueueTabs v-if="currentBuild" v-model="reviewQueue" :total="currentBuild.record_count||0" :ready="readyCount" :issues="issueCount" :metadata="Number(reviewQueueCounts.metadata??metadataIssueCount)" :topology="topologyIssueCount" :source-problems="Number(reviewQueueCounts.source??currentBuild.source_problem_count??0)" :accepted="Number(reviewQueueCounts.accepted??currentBuild.accepted_count??0)" :rejected="Number(reviewQueueCounts.rejected??currentBuild.rejected_count??0)" :disabled="busy!==''" />
             <label class="sr-only" for="pdf-corpus-record-search">{{i18n.t('pdf_corpus.search_records','Search generated records')}}</label><input id="pdf-corpus-record-search" v-model="recordQuery" class="control" :placeholder="i18n.t('pdf_corpus.search_records','Search generated records')">
             <div class="workspace-switcher" role="group" :aria-label="i18n.t('pdf_corpus.review_workspace','Review workspace')"><button type="button" class="btn small" :aria-pressed="reviewWorkspaceMode==='record'" @click="setReviewWorkspaceMode('record')">{{i18n.t('pdf_corpus.workspace.record','Record')}}</button><button type="button" class="btn small" :aria-pressed="reviewWorkspaceMode==='metadata'" :aria-label="i18n.t('pdf_corpus.workspace.metadata','Metadata workspace')" :disabled="!selectedRecord" @click="setReviewWorkspaceMode('metadata')">{{i18n.t('pdf_corpus.workspace.metadata_short','Metadata')}}</button><button type="button" class="btn small" :aria-pressed="reviewWorkspaceMode==='source'" :aria-label="i18n.t('pdf_corpus.workspace.source','Source workspace')" :disabled="!selectedRecord" @click="setReviewWorkspaceMode('source')">{{i18n.t('pdf_corpus.workspace.source_short','Source')}}</button></div>
-            <div class="review-bulk"><button type="button" class="btn small primary" @click="acceptCleanRecords" :disabled="busy!==''||readyCount===0">{{i18n.tf('pdf_corpus.accept_clean','Accept clean ({count})',{count:readyCount})}}</button><CorpusActionMenu :label="i18n.t('pdf_corpus.bulk_actions','Bulk actions')" :items="bulkActionItems" :disabled="busy!==''" placement="bottom" @select="runBulkAction"/></div>
+            <div class="review-bulk"><button type="button" class="btn small" @click="acceptCleanRecords" :disabled="busy!==''||readyCount===0">{{i18n.tf('pdf_corpus.accept_clean','Accept clean ({count})',{count:readyCount})}}</button><CorpusActionMenu :label="i18n.t('pdf_corpus.bulk_actions','Bulk actions')" :items="bulkActionItems" :disabled="busy!==''" placement="bottom" @select="runBulkAction"/></div>
             <p v-if="bulkActionFeedback" class="review-action-feedback" role="status" aria-live="polite">{{bulkActionFeedback}}</p>
             <CorpusBulkMetadataEditor v-if="bulkMetadataOpen" :schema="currentBuild?.schema" :records="records" :region-types="regionTypes" :discourse-roles="discourseRoles" :selected-count="selectedReviewCount" :total-count="Number(currentBuild?.record_count||recordTotal)" :disabled="busy!==''||reviewLocked" @apply="applyBulkMetadata" @close="bulkMetadataOpen=false" />
             <div class="pager"><button type="button" class="btn small" @click="previousPage" :disabled="recordOffset===0">{{i18n.t('ui.previous','Previous')}}</button><span>{{pageNumber}} / {{pageCount}}</span><button type="button" class="btn small" @click="nextPage" :disabled="recordOffset+pageSize>=recordTotal">{{i18n.t('ui.next','Next')}}</button></div>
@@ -1122,7 +1243,10 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
                 <aside v-else-if="selectedRecord.review_reason&&selectedRecord.review_reason.toLowerCase()!=='pending human review.'" class="review-reason" role="note"><b>{{recordIssueKinds(selectedRecord).length?recordIssueKinds(selectedRecord).map(kind=>i18n.t(`pdf_corpus.record_state.${kind}`,kind)).join(' · '):i18n.t('pdf_corpus.why_review','Why review')}}</b><span>{{selectedRecord.review_reason}}</span></aside>
                 <section class="record-text-review" aria-labelledby="reviewed-record-text-title"><header><div><b id="reviewed-record-text-title">{{i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')}}</b><span v-if="selectedRecord.text_review_status==='human_corrected'" class="human-corrected">{{i18n.t('pdf_corpus.human_corrected','Human corrected')}}</span><span v-else-if="selectedRecord.text_review_status==='human_reviewed'" class="human-corrected">{{i18n.t('pdf_corpus.human_reviewed','Human reviewed')}}</span></div><div class="record-text-head-actions"><button v-if="editingText" type="button" class="btn small" @click="textCleanupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.clean_text','Clean text')}}</button><button v-if="editingText" type="button" class="btn small" @click="llmTouchupOpen=true" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.llm_touchup','LLM touch-up')}}</button><button v-if="!editingText&&selectedRecord.text_review_status!=='human_corrected'&&selectedRecord.text_review_status!=='human_reviewed'" type="button" class="btn small" @click="markTextReviewed" :disabled="busy!==''||reviewLocked">{{i18n.t('pdf_corpus.mark_text_reviewed','Mark reviewed')}}</button><button type="button" class="btn small" @click="editingText?cancelTextEdit():beginTextEdit()" :disabled="busy!==''||reviewLocked">{{editingText?i18n.t('ui.cancel','Cancel'):i18n.t('pdf_corpus.edit_text','Edit text')}}</button></div></header><textarea v-if="editingText" v-model="textDraft" class="record-text-editor" :aria-label="i18n.t('pdf_corpus.reviewed_record_text','Reviewed record text')"></textarea><div v-else class="record-primary-text">{{selectedRecord.text}}</div><div v-if="editingText&&selectedRecord.source_quality_issues?.length" class="text-review-actions"><label v-if="selectedRecord.source_quality_issues?.length" class="resolve-source-check"><input v-model="resolveSourceOnTextSave" type="checkbox"><span>{{i18n.t('pdf_corpus.resolve_source_with_correction','Mark this record-level source issue resolved by the reviewed correction')}}</span></label></div></section>
                 <footer class="record-decision-dock">
-                  <p v-if="selectedMetadataBlocked" id="record-metadata-blocker" class="metadata-accept-blocker" role="status"><b>{{i18n.t('pdf_corpus.metadata_decision_required','Metadata decision required')}}</b> {{i18n.tf('pdf_corpus.resolve_metadata_before_accept_fields','Confirm {fields} before accepting this record.',{fields:selectedMetadataBlockingLabel})}}</p>
+                  <div v-if="selectedMetadataBlocked" id="record-metadata-blocker" class="metadata-accept-blocker">
+                    <p role="status">{{i18n.tf('pdf_corpus.record_required_before_accept','{count} required fields before acceptance',{count:selectedMetadataBlockingFields.length})}}</p>
+                    <button type="button" class="btn small" @click="setReviewWorkspaceMode('metadata')">{{i18n.t('pdf_corpus.review_required_fields','Review required fields')}}</button>
+                  </div>
                   <div v-if="editingText" class="decision-bar text-edit-bar" role="group" :aria-label="i18n.t('pdf_corpus.edit_text','Edit text')">
                     <span class="text-save-hint">{{i18n.t('pdf_corpus.text_save_hint','Saving confirms that you reviewed this record text.')}}</span>
                     <div class="decision-actions">
@@ -1144,7 +1268,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             </article>
 
             <div v-if="reviewWorkspaceMode==='record'" class="review-splitter" data-splitter="inspector" role="separator" tabindex="0" aria-orientation="vertical" :aria-label="i18n.t('pdf_corpus.resize_inspector','Resize review details')" v-bind="inspectorSplitter.aria()" @pointerdown="inspectorSplitter.onPointerDown" @keydown="inspectorSplitter.onKeydown" @dblclick="inspectorSplitter.reset"></div>
-            <aside ref="reviewInspectorEl" class="review-inspector" :aria-label="i18n.t('pdf_corpus.review_details','Review details')">
+            <aside ref="reviewInspectorEl" class="review-inspector" tabindex="-1" :aria-label="i18n.t('pdf_corpus.review_details','Review details')">
+              <div v-if="selectedRecord&&sourceBlocksError" class="builder-message error source-read-error" role="alert"><span>{{sourceBlocksError}}</span><button type="button" class="btn small" :disabled="sourceBlocksLoading" @click="retrySourceBlocks">{{i18n.t('pdf_corpus.retry_source_blocks','Retry source blocks')}}</button></div>
+              <p v-if="sourceBlocksLoading&&(reviewWorkspaceMode==='source'||reviewInspectorTab==='source')" role="status" class="inspector-help">{{i18n.t('pdf_corpus.source_blocks_loading','Loading source blocks…')}}</p>
               <div v-if="reviewWorkspaceMode!=='record'" class="detail-workspace-head"><div><span class="eyebrow">{{i18n.t('pdf_corpus.review_workspace','Review workspace')}}</span><h3>{{reviewWorkspaceMode==='metadata'?i18n.t('pdf_corpus.workspace.metadata','Metadata workspace'):i18n.t('pdf_corpus.workspace.source','Source workspace')}}</h3><p>{{reviewWorkspaceMode==='metadata'?i18n.t('pdf_corpus.workspace.metadata_help','Resolve attribution, discourse, and indexing metadata with evidence and provenance visible.'):i18n.t('pdf_corpus.workspace.source_help','Inspect the source page, immutable extraction, boundary decisions, and transcription tools at full working width.')}}</p></div><button type="button" class="btn small" @click="setReviewWorkspaceMode('record')">{{i18n.t('pdf_corpus.workspace.back_record','Back to record')}}</button></div>
               <div v-show="reviewWorkspaceMode==='record'" class="review-inspector-tabs" role="tablist" :aria-label="i18n.t('pdf_corpus.review_detail_views','Review detail views')">
                 <button id="review-tab-metadata" data-review-tab="metadata" type="button" role="tab" aria-controls="review-panel-metadata" :aria-selected="reviewInspectorTab==='metadata'" :tabindex="reviewInspectorTab==='metadata'?0:-1" @keydown="reviewInspectorKeydown" @click="reviewInspectorTab='metadata'">{{i18n.t('pdf_corpus.metadata_tab','Metadata')}}<span v-if="selectedMetadataBlockingFields.length">{{selectedMetadataBlockingFields.length}}</span></button>
@@ -1170,10 +1296,12 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
             </aside>
           </section>
           </div>
+          </div>
         </template>
 
         <section v-else class="builder-empty"><h2>{{i18n.t('pdf_corpus.no_selected_build','No corpus build selected')}}</h2><p>{{i18n.t('pdf_corpus.no_selected_build_help','Persist a PDF source and start a semantic corpus build, or choose a historical build from the rail.')}}</p></section>
       </main>
+      <div v-show="detailsDocked" ref="detailsDockEl" class="build-details-dock"></div>
     </div>
 
     <DocumentManifestDialog v-if="documentMetadataOpen&&currentBuild?.manifest" @reanalyze="reanalyzeDocument" :manifest="currentBuild.manifest||{}" :disabled="busy!==''" :affected-records="Number(currentBuild.record_count||0)" @save="saveManifest" @close="documentMetadataOpen=false" />
@@ -1197,7 +1325,23 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 </template>
 
 <style scoped>
-.corpus-builder{padding:20px 22px 32px;display:grid;gap:14px}.builder-header{display:flex;justify-content:space-between;gap:24px;align-items:flex-end}.builder-header h1{font-size:1.625rem;margin:3px 0 6px}.builder-header p{margin:0;max-width:850px;color:var(--muted);line-height:1.5}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}.header-actions,.summary-actions,.inspector-actions,.pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.status-region:focus{outline:none}.builder-message{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);font-size:.8125rem}.builder-message.error,.build-warning{border-color:var(--tone-danger-border);background:var(--tone-danger-bg);color:var(--tone-danger-fg)}.builder-setup{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(420px,1.35fr);gap:12px;align-items:start;border:1px solid var(--line);background:var(--card);border-radius:14px;padding:14px}.setup-card{min-width:0;height:100%;display:grid;align-content:start;gap:8px;padding:13px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--card),var(--card))}.setup-source,.provider-area{display:grid;gap:8px}.setup-card-heading{display:grid;gap:3px}.setup-card-heading b{font-size:.8125rem}.setup-card-heading small{font-size:.8125rem!important;line-height:1.45}.builder-setup label{font-size:.8125rem;font-weight:700;color:var(--muted)}.builder-setup small{font-size:.8125rem;color:var(--muted)}.execution-config,.advanced-config,.build-launch-row{grid-column:1/-1}.advanced-config{grid-column:1/-1}.advanced-config summary{cursor:pointer;font-size:.8125rem;font-weight:700}.escalation-field{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(220px,1fr);gap:12px;align-items:center;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.escalation-field>span{display:grid;gap:2px}.escalation-field b{font-size:.8125rem}.escalation-field small{font-size:.8125rem;line-height:1.4;color:var(--muted)}.advanced-grid{display:grid;grid-template-columns:max-content 1fr max-content 1fr;gap:8px 10px;margin-top:8px;align-items:center}.build-launch-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(280px,1.2fr) auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:var(--soft)}.launch-copy{display:grid;gap:2px;min-width:0}.launch-copy b{font-size:.8125rem}.launch-copy span{font-size:.8125rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.build-button{min-height:38px;padding-inline:17px}.context-blocker{padding:8px 10px;border-radius:8px;background:var(--tone-danger-bg);color:var(--tone-danger-fg);font-size:.8125rem}.builder-workspace{display:grid;grid-template-columns:250px minmax(0,1fr);min-height:720px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}.build-rail{border-inline-end:1px solid var(--line);background:var(--soft);padding:10px;overflow:auto}.rail-title,.pane-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.rail-title{padding:6px 4px 10px}.rail-title>div{display:grid}.rail-title b,.pane-head b{font-size:.8125rem}.rail-title span,.pane-head span{font-size:.8125rem;color:var(--muted)}.icon-button{border:0;background:transparent;cursor:pointer;font-size:1.125rem}.build-row{width:100%;border:1px solid transparent;background:transparent;border-radius:10px;padding:9px;display:grid;grid-template-columns:10px 1fr;gap:9px;text-align:start;cursor:pointer}.build-row:hover,.build-row.active{background:var(--card);border-color:var(--line)}.build-row span:last-child{display:grid;gap:2px;min-width:0}.build-row b{font-size:.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.build-row small{font-size:.8125rem;color:var(--muted)}.status-dot{width:8px;height:8px;border-radius:50%;background:#777;margin-top:3px}
+.builder-workspace.details-docked{grid-template-columns:250px minmax(0,1fr) 440px;overflow:clip}
+.builder-workspace.review-mode.details-docked{grid-template-columns:minmax(0,1fr) 440px}
+.build-details-dock{min-width:0;border-inline-start:1px solid var(--line);background:var(--panel)}
+@container review-workspace (max-width:1400px){
+  .details-docked .review-frame .review-grid.record-first-review{grid-template-columns:var(--rw-queue,16rem) .5rem minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+  .details-docked .review-frame .review-grid.queue-collapsed{grid-template-columns:minmax(0,1fr)}
+  .details-docked .review-frame .review-grid .review-splitter[data-splitter="inspector"]{display:none}
+  .details-docked .review-frame .review-grid:not(.detail-mode) .review-inspector{display:none}
+  .details-docked .review-frame .review-grid.detail-mode .review-inspector{grid-column:3;grid-row:1;border-top:0}
+  .details-docked .review-frame .review-grid.detail-mode.queue-collapsed .review-inspector{grid-column:1}
+}
+
+.source-read-error{flex-wrap:wrap}.source-read-error>span{min-width:0;overflow-wrap:anywhere;flex:1 1 12rem}.source-read-error .btn{white-space:normal}
+.review-inspector:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+.setup-background{grid-column:1/-1;margin:0;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--soft);font-size:.875rem}.source-details{min-width:0}.source-details>summary{cursor:pointer}.source-details span{display:block;overflow-wrap:anywhere}
+.review-content{display:contents}.build-view-switch{display:flex;flex-wrap:wrap;gap:4px;max-width:100%}.build-view-switch [aria-pressed="true"]{background:var(--soft);box-shadow:inset 0 -2px 0 var(--accent)}
+.corpus-builder{padding:20px 22px 32px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}.builder-header{display:flex;flex-wrap:wrap;min-width:0;justify-content:space-between;gap:24px;align-items:flex-end}.builder-header h1{font-size:1.625rem;margin:3px 0 6px}.builder-header p{margin:0;max-width:850px;color:var(--muted);line-height:1.5}.eyebrow{font-size:.8125rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:700}.header-actions,.summary-actions,.inspector-actions,.pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.status-region:focus{outline:none}.builder-message{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft);font-size:.8125rem}.builder-message.error,.build-warning{border-color:var(--tone-danger-border);background:var(--tone-danger-bg);color:var(--tone-danger-fg)}.builder-setup{display:grid;grid-template-columns:minmax(280px,.9fr) minmax(420px,1.35fr);gap:12px;align-items:start;border:1px solid var(--line);background:var(--card);border-radius:14px;padding:14px}.setup-card{min-width:0;height:100%;display:grid;align-content:start;gap:8px;padding:13px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,var(--card),var(--card))}.setup-source,.provider-area{display:grid;gap:8px}.setup-card-heading{display:grid;gap:3px}.setup-card-heading b{font-size:.8125rem}.setup-card-heading small{font-size:.8125rem!important;line-height:1.45}.builder-setup label{font-size:.8125rem;font-weight:700;color:var(--muted)}.builder-setup small{font-size:.8125rem;color:var(--muted)}.execution-config,.advanced-config,.build-launch-row{grid-column:1/-1}.advanced-config{grid-column:1/-1}.advanced-config summary{cursor:pointer;font-size:.8125rem;font-weight:700}.escalation-field{display:grid;grid-template-columns:minmax(150px,.7fr) minmax(220px,1fr);gap:12px;align-items:center;padding:10px 11px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.escalation-field>span{display:grid;gap:2px}.escalation-field b{font-size:.8125rem}.escalation-field small{font-size:.8125rem;line-height:1.4;color:var(--muted)}.advanced-grid{display:grid;grid-template-columns:max-content 1fr max-content 1fr;gap:8px 10px;margin-top:8px;align-items:center}.build-launch-row{display:grid;grid-template-columns:minmax(180px,1fr) minmax(280px,1.2fr) auto;gap:12px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:var(--soft)}.launch-copy{display:grid;gap:2px;min-width:0}.launch-copy b{font-size:.8125rem}.launch-copy span{font-size:.8125rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.build-button{min-height:38px;padding-inline:17px}.context-blocker{padding:8px 10px;border-radius:8px;background:var(--tone-danger-bg);color:var(--tone-danger-fg);font-size:.8125rem}.builder-workspace{min-width:0;display:grid;grid-template-columns:250px minmax(0,1fr);min-height:720px;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}.build-rail{border-inline-end:1px solid var(--line);background:var(--soft);padding:10px;overflow:auto}.rail-title,.pane-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.rail-title{padding:6px 4px 10px}.rail-title>div{display:grid}.rail-title b,.pane-head b{font-size:.8125rem}.rail-title span,.pane-head span{font-size:.8125rem;color:var(--muted)}.icon-button{border:0;background:transparent;cursor:pointer;font-size:1.125rem}.build-row{width:100%;border:1px solid transparent;background:transparent;border-radius:10px;padding:9px;display:grid;grid-template-columns:10px 1fr;gap:9px;text-align:start;cursor:pointer}.build-row:hover,.build-row.active{background:var(--card);border-color:var(--line)}.build-row span:last-child{display:grid;gap:2px;min-width:0}.build-row b{font-size:.8125rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.build-row small{font-size:.8125rem;color:var(--muted)}.status-dot{width:8px;height:8px;border-radius:50%;background:#777;margin-top:3px}
 .status-dot[data-status="ready"],.status-dot[data-status="published"]{background:#287a4c}
 .status-dot[data-status="running"],.status-dot[data-status="queued"]{background:#8e6815}.status-dot[data-status="failed"],.status-dot[data-status="interrupted"]{background:#a13f3f}
 .build-main{min-width:0;display:grid;align-content:start}.build-summary{padding:15px 16px;border-bottom:1px solid var(--line);display:grid;gap:10px}.summary-top{display:flex;justify-content:space-between;gap:18px}.summary-top h2{margin:2px 0;font-size:1.125rem}.summary-top p{margin:0;font-size:.8125rem;color:var(--muted)}.build-status-line,.provenance-strip,.validation-strip{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:.8125rem;color:var(--muted)}.pill{border:1px solid var(--line);border-radius:999px;padding:3px 7px;text-transform:uppercase;font-weight:800;letter-spacing:.04em}.progress-track{height:7px;border-radius:999px;background:var(--soft);overflow:hidden}.progress-track span{display:block;height:100%;background:var(--accent);transition:width .25s}.provenance-strip code{font-size:.8125rem}.manifest-details{border:1px solid var(--line);border-radius:9px;padding:8px 10px}.manifest-details>summary{cursor:pointer;font-size:.8125rem;font-weight:800}.build-warning{display:grid;gap:3px;padding:9px;border:1px solid;border-radius:8px;font-size:.8125rem}.warnings{font-size:.8125rem}.warnings summary{cursor:pointer;font-weight:700}.validation-strip{padding:7px 9px;border-radius:8px;background:var(--tone-ok-bg)}.validation-strip.invalid{background:var(--tone-warn-bg);color:var(--tone-warn-fg)}.provider-model-summary{margin:6px 0 0;font-size:.8125rem;color:var(--muted)}.provider-model-summary code{font-size:.8125rem;color:var(--text)}.review-handoff{display:flex;justify-content:space-between;gap:18px;align-items:center;padding:11px 13px;border-bottom:1px solid var(--line);background:var(--soft)}.review-handoff>div{display:grid;gap:2px}.review-handoff b{font-size:.8125rem}.review-handoff span{font-size:.8125rem;color:var(--muted);line-height:1.4}.review-handoff>strong{white-space:nowrap;font-size:.8125rem}.review-handoff[data-state="published"]{background:var(--tone-ok-bg)}.review-toolbar{display:grid;grid-template-columns:auto minmax(180px,1fr) auto auto auto;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);font-size:.8125rem}.check{display:flex;gap:6px;align-items:center}.bulk-metadata-workspace{grid-column:1/-1;margin:0 10px 10px}.review-bulk{display:flex;gap:6px;flex-wrap:wrap}.danger{border-color:var(--tone-danger-border)!important;color:var(--tone-danger-fg)!important}.review-grid{display:grid;grid-template-columns:minmax(360px,1.2fr) minmax(240px,.65fr) minmax(300px,.85fr);min-height:650px}.source-pane,.records-pane,.inspector-pane{min-width:0;overflow:auto;max-height:76vh}.source-pane,.records-pane{border-inline-end:1px solid var(--line)}.pane-head{position:sticky;top:0;z-index:3;background:var(--card);padding:9px 11px;border-bottom:1px solid var(--line)}.source-page-nav{display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);font-size:.8125rem;color:var(--muted)}.source-blocks{display:grid;gap:8px;padding:10px}.source-block{border:1px solid var(--line);border-radius:9px;padding:9px;position:relative}.source-block.evidence-block{box-shadow:inset 3px 0 0 var(--accent)}[dir="rtl"] .source-block.evidence-block{box-shadow:inset -3px 0 0 var(--accent)}.source-block header{display:flex;justify-content:space-between;gap:8px;font-size:.8125rem;color:var(--muted)}.source-block p{white-space:pre-wrap;font:13px/1.52 Georgia,serif;margin:7px 0}.split-button{display:block;width:100%;border:0;border-top:1px dashed var(--line);background:transparent;color:var(--muted);font-size:.8125rem;padding:5px;cursor:pointer}.evidence-toggle{display:block;width:100%;margin:5px 0;border:1px solid var(--line);border-radius:7px;background:var(--soft);color:var(--text);font-size:.8125rem;padding:6px;text-align:start;cursor:pointer}.evidence-toggle[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}.record-row{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:10px;display:grid;grid-template-columns:10px 1fr;gap:8px;text-align:start;cursor:pointer}.record-row:hover,.record-row.active{background:var(--soft)}.record-row span:last-child{display:grid;gap:3px}.record-row b{font-size:.8125rem}.record-row small{font-size:.8125rem;color:var(--muted)}.inspector-pane details{border-bottom:1px solid var(--line);padding:10px 12px}.inspector-pane summary{font-size:.8125rem;font-weight:800;cursor:pointer}.inspector-actions{padding:9px 11px;border-bottom:1px solid var(--line)}.record-text{white-space:pre-wrap;font:13px/1.55 Georgia,serif;margin-top:9px}.metadata-json{width:100%;min-height:230px;resize:vertical;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--bg);color:var(--text);margin:7px 0}.help{font-size:.8125rem;color:var(--muted);line-height:1.45}.evidence-list{display:grid;gap:8px;margin-top:8px}.evidence-list button{display:grid;gap:2px;padding:7px;background:var(--soft);border:1px solid transparent;border-radius:7px;text-align:start;color:inherit;cursor:pointer}.evidence-list button.active{border-color:var(--accent)}.evidence-list b{font-size:.8125rem}.evidence-list span,.evidence-list small{font-size:.8125rem;color:var(--muted)}.rail-empty,.inspector-empty,.builder-empty{padding:26px 14px;color:var(--muted);font-size:.8125rem}.builder-empty{min-height:420px;display:grid;place-content:center;text-align:center}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.btn:focus-visible,.control:focus-visible,.build-row:focus-visible,.record-row:focus-visible,.icon-button:focus-visible,.split-button:focus-visible,.evidence-toggle:focus-visible,.evidence-list button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -1205,14 +1349,13 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 @media(max-width:1250px){.review-grid{grid-template-columns:1fr .72fr}.inspector-pane{grid-column:1/-1;border-top:1px solid var(--line);max-height:none}.source-pane,.records-pane{max-height:65vh}}
 @media(max-width:900px){.manifest-gate,.segmentation-blocked{grid-template-columns:1fr}.builder-header{align-items:flex-start;flex-direction:column}.builder-setup{grid-template-columns:1fr}.build-launch-row{grid-template-columns:1fr}.escalation-field{grid-template-columns:1fr}.advanced-grid{grid-template-columns:1fr}.advanced-config{grid-column:auto}.builder-workspace{grid-template-columns:1fr}.build-rail{border-inline-end:0;border-bottom:1px solid var(--line);max-height:220px}.review-toolbar{grid-template-columns:1fr 1fr}.review-grid{grid-template-columns:1fr}.source-pane,.records-pane{border-inline-end:0;border-bottom:1px solid var(--line);max-height:none}}
 
-.active-build-settings{margin:10px 0;border:1px solid var(--line);border-radius:10px;background:var(--card)}.active-build-settings>summary{padding:10px 12px;cursor:pointer;font-size:.8125rem;font-weight:800}.active-build-settings>div{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--line);font-size:.8125rem;color:var(--muted)}
-.technical-details{border:1px solid var(--line);border-radius:10px;background:var(--card);overflow:hidden}.technical-details>summary{padding:9px 11px;cursor:pointer;font-size:.8125rem;font-weight:800}.technical-details>div,.technical-details>section{border-top:1px solid var(--line)}
+.active-build-settings{margin:10px 0;border:1px solid var(--line);border-radius:10px;background:var(--card)}.active-build-settings>div{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--line);font-size:.8125rem;color:var(--muted)}
 .review-toolbar{grid-template-columns:minmax(0,1fr) minmax(220px,.7fr) auto auto}.record-first-review{grid-template-columns:minmax(220px,.52fr) minmax(500px,1.45fr) minmax(360px,.9fr)}.record-first-review>.records-pane{border-inline-end:1px solid var(--line)}.record-first-review>.source-pane{border-inline-start:1px solid var(--line);border-inline-end:0}.record-review-pane{min-width:0;max-height:76vh;overflow:auto;background:var(--card)}.record-review-head{position:sticky;top:0;z-index:4;background:var(--card);display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--line)}.record-review-head h3{margin:2px 0;font-size:0.9375rem}.record-review-head p{margin:0;font-size:.8125rem;color:var(--muted)}.record-primary-text{max-width:80ch;margin:0 auto;padding:28px 32px;white-space:pre-wrap;font:17px/1.72 Georgia,serif}.review-reason{display:grid;gap:3px;margin:12px 16px 0;padding:10px 12px;border-radius:9px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem}.metadata-accept-blocker{margin:0;padding:9px 12px;border:1px solid var(--tone-warn-edge);border-radius:8px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem}.decision-bar{position:sticky;bottom:0;z-index:4;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;border-top:1px solid var(--line);background:color-mix(in srgb,var(--card) 96%,transparent);backdrop-filter:blur(6px)}.decision-actions,.data-actions{display:flex;gap:7px;flex-wrap:wrap}.record-data{border-top:1px solid var(--line);padding:10px 14px}.record-data>summary,.source-text-details>summary{cursor:pointer;font-size:.8125rem;font-weight:800}.source-text-details{border-top:1px solid var(--line);padding:8px}.source-pane,.records-pane{max-height:76vh;overflow:auto}.source-pane .pdf-evidence-viewer{max-width:100%}
 @media(max-width:1400px){.record-first-review{grid-template-columns:minmax(210px,.5fr) minmax(460px,1.35fr) minmax(320px,.8fr)}.record-primary-text{font-size:1rem;padding:24px}}
 @media(max-width:1100px){.review-toolbar{grid-template-columns:1fr 1fr}.record-first-review{grid-template-columns:minmax(210px,.5fr) minmax(0,1.5fr)}.record-first-review>.source-pane{grid-column:1/-1;border-inline-start:0;border-top:1px solid var(--line);max-height:none}.record-review-pane,.records-pane{max-height:68vh}}
 @media(max-width:760px){.review-toolbar{grid-template-columns:1fr}.record-first-review{grid-template-columns:1fr}.record-first-review>.records-pane{max-height:260px;border-inline-end:0;border-bottom:1px solid var(--line)}.record-review-pane{max-height:none}.metadata-accept-blocker{margin:0;padding:9px 12px;border:1px solid var(--tone-warn-edge);border-radius:8px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem}.decision-bar{position:static;align-items:stretch;flex-direction:column}.record-primary-text{font-size:1rem;padding:20px 18px}}
 .review-stage-summary{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,.9fr);gap:14px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.review-stage-summary>div{display:grid;gap:3px}.review-stage-summary b{font-size:.8125rem}.review-stage-summary>span{font-size:.8125rem;line-height:1.45;color:var(--muted)}
-.record-first-review{grid-template-columns:minmax(205px,.48fr) minmax(520px,1.5fr) minmax(360px,.95fr)}.record-first-review>.records-pane{border-inline-end:1px solid var(--line)}.record-review-pane,.review-inspector,.records-pane{min-width:0;max-height:76vh;overflow:auto}.review-inspector{border-inline-start:1px solid var(--line);background:var(--soft)}.review-inspector-tabs{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);background:var(--card);border-bottom:1px solid var(--line)}.review-inspector-tabs button{min-height:42px;border:0;border-inline-end:1px solid var(--line);background:transparent;color:var(--muted);font-size:.8125rem;font-weight:800;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px}.review-inspector-tabs button[aria-selected="true"]{background:var(--soft);color:var(--text);box-shadow:inset 0 -3px 0 var(--accent)}.review-inspector-tabs button span{min-width:18px;border-radius:999px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);padding:1px 5px;font-size:.8125rem}.review-inspector-panel{min-width:0}.review-inspector-panel>.resolution-panel{border-top:0;background:transparent}.review-inspector-panel .record-data{border-top:1px solid var(--line);padding:10px 12px;background:var(--card)}.inspector-help{margin:0;padding:12px 14px 0;font-size:.8125rem;line-height:1.45;color:var(--muted)}.compact-source-blocks{padding-top:6px}.source-review-panel{background:var(--card);min-height:100%}.source-inspector-head{position:static;z-index:auto}.metadata-row-warning{color:var(--tone-warn-fg)!important;font-weight:800}.metadata-accept-blocker{display:block}.metadata-accept-blocker b{margin-inline-end:4px}.record-primary-text{max-width:76ch}.decision-bar{min-height:56px}.review-toolbar{grid-template-columns:minmax(0,1fr) minmax(210px,.7fr) auto auto}.review-bulk .btn{min-height:34px}
+.record-first-review{grid-template-columns:minmax(205px,.48fr) minmax(520px,1.5fr) minmax(360px,.95fr)}.record-first-review>.records-pane{border-inline-end:1px solid var(--line)}.record-review-pane,.review-inspector,.records-pane{min-width:0;max-height:76vh;overflow:auto}.review-inspector{border-inline-start:1px solid var(--line);background:var(--soft)}.review-inspector-tabs{position:sticky;top:0;z-index:6;display:grid;grid-template-columns:repeat(3,1fr);background:var(--card);border-bottom:1px solid var(--line)}.review-inspector-tabs button{min-height:42px;border:0;border-inline-end:1px solid var(--line);background:transparent;color:var(--muted);font-size:.8125rem;font-weight:800;cursor:pointer;display:flex;justify-content:center;align-items:center;gap:6px}.review-inspector-tabs button[aria-selected="true"]{background:var(--soft);color:var(--text);box-shadow:inset 0 -3px 0 var(--accent)}.review-inspector-tabs button span{min-width:18px;border-radius:999px;background:var(--tone-warn-bg);color:var(--tone-warn-fg);padding:1px 5px;font-size:.8125rem}.review-inspector-panel{min-width:0}.review-inspector-panel>.resolution-panel{border-top:0;background:transparent}.review-inspector-panel .record-data{border-top:1px solid var(--line);padding:10px 12px;background:var(--card)}.inspector-help{margin:0;padding:12px 14px 0;font-size:.8125rem;line-height:1.45;color:var(--muted)}.compact-source-blocks{padding-top:6px}.source-review-panel{background:var(--card);min-height:100%}.source-inspector-head{position:static;z-index:auto}.metadata-row-warning{color:var(--tone-warn-fg)!important;font-weight:800}.metadata-accept-blocker{display:block}.record-primary-text{max-width:76ch}.decision-bar{min-height:56px}.review-toolbar{grid-template-columns:minmax(0,1fr) minmax(210px,.7fr) auto auto}.review-bulk .btn{min-height:34px}
 @media(max-width:1300px){.record-first-review{grid-template-columns:minmax(200px,.48fr) minmax(460px,1.4fr) minmax(330px,.9fr)}}
 @media(max-width:1050px){.record-first-review{grid-template-columns:minmax(200px,.48fr) minmax(0,1.5fr)}.review-inspector{grid-column:1/-1;border-inline-start:0;border-top:1px solid var(--line);max-height:60vh}.review-stage-summary{grid-template-columns:1fr}.review-toolbar{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.record-first-review{grid-template-columns:1fr}.review-inspector{max-height:none}.review-toolbar{grid-template-columns:1fr}.review-stage-summary{grid-template-columns:1fr}.review-inspector-tabs{top:0}}
@@ -1239,7 +1382,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 
 /* Accessible type floor for dense Corpus Builder controls. Keep status/meta text readable at zoom and in both locales. */
 .corpus-builder small,.corpus-builder label,.corpus-builder summary,.corpus-builder code{font-size:.8125rem!important;line-height:1.4}
-.corpus-builder :where(.eyebrow,.builder-setup label,.builder-setup small,.setup-card-heading small,.advanced-config summary,.escalation-field b,.escalation-field small,.launch-copy b,.launch-copy span,.context-blocker,.rail-title b,.rail-title span,.pane-head b,.pane-head span,.build-row b,.build-row small,.summary-top p,.build-status-line,.provenance-strip,.validation-strip,.provider-model-summary,.review-handoff b,.review-handoff span,.review-handoff>strong,.review-toolbar,.source-page-nav,.source-block header,.split-button,.evidence-toggle,.record-row b,.record-row small,.inspector-pane summary,.help,.active-build-settings>summary,.active-build-settings>div,.technical-details>summary,.record-review-head p,.review-stage-summary b,.review-stage-summary>span,.review-inspector-tabs button,.review-inspector-tabs button span,.inspector-help,.review-readonly-banner span,.pager,.record-row-status,.source-inspector-head){font-size:.8125rem!important;line-height:1.4}
+.corpus-builder :where(.eyebrow,.builder-setup label,.builder-setup small,.setup-card-heading small,.advanced-config summary,.escalation-field b,.escalation-field small,.launch-copy b,.launch-copy span,.context-blocker,.rail-title b,.rail-title span,.pane-head b,.pane-head span,.build-row b,.build-row small,.summary-top p,.build-status-line,.provenance-strip,.validation-strip,.provider-model-summary,.review-handoff b,.review-handoff span,.review-handoff>strong,.review-toolbar,.source-page-nav,.source-block header,.split-button,.evidence-toggle,.record-row b,.record-row small,.inspector-pane summary,.help,.active-build-settings>div,.record-review-head p,.review-stage-summary b,.review-stage-summary>span,.review-inspector-tabs button,.review-inspector-tabs button span,.inspector-help,.review-readonly-banner span,.pager,.record-row-status,.source-inspector-head){font-size:.8125rem!important;line-height:1.4}
 .source-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}.source-head-actions .btn{min-height:36px;font-size:.8125rem}
 @media(max-width:760px){.source-head-actions{justify-content:flex-start}.source-inspector-head{align-items:flex-start;flex-direction:column}}
 
@@ -1267,7 +1410,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 @media(max-width:1050px){.workspace-switcher{grid-column:1/-1}.record-first-review.detail-mode{grid-template-columns:1fr}.record-first-review.detail-mode .records-pane{max-height:260px}.detail-mode .review-inspector-tabs{top:0}.detail-workspace-head{position:static}}
 /* Review workspace: one frame that fills the screen under the top bar, one scroll per pane. */
 .builder-workspace.review-mode{overflow:clip}
-.review-frame{display:flex;flex-direction:column;min-width:0;scroll-margin-top:var(--ref-topbar,60px)}
+.review-frame{display:flex;flex-direction:column;min-width:0;scroll-margin-top:var(--ref-topbar,60px);container:review-workspace/inline-size}
 .review-frame .review-toolbar{position:static;flex:0 0 auto;border-radius:12px 12px 0 0;border-bottom:0}
 .review-frame .review-grid.record-first-review{position:relative;overflow:hidden;flex:1 1 auto;min-height:0;grid-template-rows:minmax(0,1fr);grid-template-columns:var(--rw-queue,18rem) .5rem minmax(0,1fr) .5rem var(--rw-inspector,25rem);border:1px solid var(--line);border-radius:0 0 12px 12px}
 .review-frame .review-grid.queue-collapsed{grid-template-columns:minmax(0,1fr) .5rem var(--rw-inspector,25rem)}
@@ -1289,25 +1432,36 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 :global(body.splitter-dragging){cursor:col-resize;user-select:none}
 /* Wide and medium screens: the frame fills the screen under the top bar. */
 @media (min-width:800px) and (min-height:34rem){.review-frame{position:sticky;top:var(--ref-topbar,60px);height:calc(100dvh - var(--ref-topbar,60px) - .75rem);min-height:30rem}}
-/* Medium (a laptop): the queue and the record side by side, the inspector as a full-width pane below. */
-@media (min-width:800px) and (max-width:1279.98px) and (min-height:34rem){
-  .review-frame .review-grid.record-first-review{grid-template-columns:var(--rw-queue,16rem) .5rem minmax(0,1fr);grid-template-rows:minmax(0,1.9fr) minmax(0,1fr)}
+/* Use available workspace width: the application sidebar also consumes horizontal room.
+   At compact desktop sizes, Metadata/Source opens the inspector in its own workspace. */
+@container review-workspace (max-width:1100px){
+  .review-frame .review-grid.record-first-review{grid-template-columns:var(--rw-queue,16rem) .5rem minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
   .review-frame .review-grid.queue-collapsed{grid-template-columns:minmax(0,1fr)}
   .review-frame .review-grid .review-splitter[data-splitter="inspector"]{display:none}
-  .review-frame .review-inspector{grid-column:1/-1;border-inline-start:0;border-top:1px solid var(--line)}
-  .review-frame .review-grid.detail-mode{grid-template-columns:var(--rw-queue,16rem) .5rem minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
-  .review-frame .review-grid.detail-mode .records-pane{grid-row:1}
+  .review-frame .review-grid:not(.detail-mode) .review-inspector{display:none}
   .review-frame .review-grid.detail-mode .review-inspector{grid-column:3;grid-row:1;border-top:0}
-  .review-frame .review-grid.detail-mode.queue-collapsed{grid-template-columns:minmax(0,1fr)}
   .review-frame .review-grid.detail-mode.queue-collapsed .review-inspector{grid-column:1}
 }
 /* Phones and very short windows: an ordinary page, panes at their natural height. */
 @media (max-width:799.98px),(max-height:33.99rem){
+  .review-frame{position:static;height:auto;min-height:0}
   .review-splitter{display:none}
-  .review-frame .review-grid.record-first-review,.review-frame .review-grid.queue-collapsed,.review-frame .review-grid.detail-mode,.review-frame .review-grid.detail-mode.queue-collapsed{overflow:visible;grid-template-rows:auto;grid-template-columns:minmax(0,1fr)}
-  .review-frame .records-pane{max-height:18rem;height:auto}
+  .review-frame .review-grid.record-first-review,.review-frame .review-grid.queue-collapsed,.review-frame .review-grid.detail-mode,.review-frame .review-grid.detail-mode.queue-collapsed{overflow:visible;height:auto;min-height:0;flex:none;grid-template-rows:auto;grid-template-columns:minmax(0,1fr)}
+  .review-frame .records-pane{max-height:12rem;height:auto}
   .review-frame .record-review-pane,.review-frame .review-inspector{height:auto;overflow:visible}
+  .review-frame .review-grid.detail-mode .review-inspector{grid-column:1;grid-row:auto}
+  .review-frame .review-inspector{min-width:0;grid-template-columns:minmax(0,1fr)}
+  .review-inspector>*{min-width:0;max-width:100%}
+  .review-inspector :deep(.metadata-head){flex-wrap:wrap}
+  .review-inspector :deep(.review-status){max-width:100%;white-space:normal}
+  .review-inspector :deep(.control){min-width:0;max-width:100%}
+  .review-inspector :deep(button){max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .review-inspector .metadata-json{max-width:100%;box-sizing:border-box}
+  .review-inspector .rerun-family,.detail-workspace-head{flex-wrap:wrap;min-width:0;max-width:100%}
+
 }
+/* Keep this workspace clear of the collapsed navigation rail in the narrow page layout. */
+@media(min-width:651px) and (max-width:900px){:global(.app-shell-modern .corpus-builder){margin-inline-start:var(--ref-sidebar,64px)}}
 /* Below the wide layout the toolbar wraps instead of overflowing. */
 @media (max-width:1279.98px){
   .review-frame .review-toolbar{display:flex;flex-wrap:wrap;align-items:center}
@@ -1321,7 +1475,7 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 /* The decision dock: one row, always in reach, primary action last. */
 .review-frame .record-review-pane{display:flex;flex-direction:column;container:record/inline-size}
 .record-decision-dock{position:sticky;bottom:0;z-index:5;margin-block-start:auto;border-top:1px solid var(--line);background:var(--card)}
-.record-decision-dock .metadata-accept-blocker{margin:0;padding:.5rem .875rem;border-bottom:1px solid var(--line);background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem;line-height:1.45}
+.record-decision-dock .metadata-accept-blocker{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0;padding:.5rem .875rem;border-bottom:1px solid var(--line);background:var(--tone-warn-bg);color:var(--tone-warn-fg);font-size:.8125rem;line-height:1.45}.metadata-accept-blocker p{flex:1 1 14rem;margin:0}.metadata-accept-blocker .btn{flex:none;white-space:normal}
 .record-decision-dock .text-edit-bar .text-save-hint{flex:1 1 14rem;font-size:.8125rem;color:var(--muted)}
 .record-decision-dock .decision-bar{position:static;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem .75rem;min-height:0;padding:.625rem .875rem;border-top:0;background:transparent;backdrop-filter:none}
 .decision-history,.decision-actions{display:flex;align-items:center;gap:.5rem}
@@ -1386,9 +1540,9 @@ onBeforeUnmount(()=>{window.removeEventListener("keydown",reviewShortcut);stopPo
 .review-frame .record-review-head .eyebrow{display:none}
 .review-frame .record-review-head h3{margin:0;font-size:1rem}
 .review-frame .record-review-head p{margin:2px 0 0}
-.review-frame .record-text-review>header{flex-wrap:nowrap;padding:6px 10px}
+.review-frame .record-text-review>header{flex-wrap:wrap;padding:6px 10px}
 .review-frame .record-text-review>header b{white-space:nowrap}
-.review-frame .record-text-head-actions{display:flex;flex-wrap:nowrap;gap:6px;flex:none}
+.review-frame .record-text-head-actions{display:flex;flex-wrap:wrap;gap:6px;flex:0 1 auto}
 .review-frame .record-text-head-actions .btn{white-space:nowrap}
 .review-frame .record-decision-dock .metadata-accept-blocker{padding:.375rem .875rem}
 @media (max-height:860px){

@@ -1,3 +1,4 @@
+// Copyright 2026 Aaron John Schlosser, PhD.
 import { computed, type Ref } from "vue";
 import type { CorpusBuild } from "../api/pdfCorpus";
 import type { ReviewQueue } from "../types/corpus";
@@ -24,7 +25,7 @@ export function useCorpusBuildLifecycle(
   const metadataRetryRunning=computed(()=>Boolean(buildRunning.value&&currentBuild.value?.stage==="metadata_retry"));
   const awaitingManifestReview=computed(()=>currentBuild.value?.status==="awaiting_manifest_review");
   const hasRecordTopology=computed(()=>Boolean(currentBuild.value && !awaitingManifestReview.value && (Boolean(currentBuild.value.publication)||Number(currentBuild.value.record_count||0)>0||recordTotal.value>0)));
-  const showBuildConfiguration=computed(()=>!currentBuild.value || (!buildRunning.value && !hasRecordTopology.value));
+  const showBuildConfiguration=computed(()=>!currentBuild.value);
   const reviewComplete=computed(()=>Boolean(currentBuild.value&&Number(currentBuild.value.record_count||0)>0&&reviewRemaining.value===0));
   const finishPhase=computed(()=>Boolean(currentBuild.value&&(reviewComplete.value||currentBuild.value.publication)));
   const showReviewWorkspace=computed(()=>Boolean(hasRecordTopology.value&&(!finishPhase.value||reviewQueue.value==="metadata"||reviewQueue.value==="rejected")));

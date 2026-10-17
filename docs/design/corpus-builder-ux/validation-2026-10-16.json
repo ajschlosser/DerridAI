@@ -1,0 +1,70 @@
+{
+  "copyright": "Copyright 2026 Aaron John Schlosser, PhD.",
+  "date": "2026-10-16",
+  "head": "399e250f24932c59c663bc4e955aaf89e2349020",
+  "uncommitted_changes": true,
+  "builds": {
+    "production_with_vue_tsc": "passed",
+    "storybook": "passed"
+  },
+  "frontend_unit": {
+    "first_full_run": {
+      "files": 75,
+      "tests": 453,
+      "status": "passed"
+    },
+    "repeat_full_run": {
+      "files": 75,
+      "assertions_passed": 453,
+      "unhandled_errors": 1,
+      "status": "failed",
+      "error": "Element is not defined after OperationsPanel test environment teardown"
+    },
+    "isolated_operations_panel": {
+      "tests": 21,
+      "status": "passed"
+    },
+    "operations_panel_product_and_test_files_modified": false
+  },
+  "browser": {
+    "config": "web/playwright.corpus-offline.config.ts",
+    "project": "chromium-desktop",
+    "mock_api": true,
+    "cases_passed": 23,
+    "theme_sweeps": [
+      {
+        "theme": "light",
+        "stories": 161,
+        "violations": 0
+      },
+      {
+        "theme": "dark",
+        "stories": 161,
+        "violations": 0
+      }
+    ],
+    "fixed_failure": "Build Overview definition-list group contained a direct button; moved action into dd"
+  },
+  "python_direct_checks": {
+    "pytest_available": false,
+    "checks_passed": [
+      "dictionary and placeholder parity",
+      "literal frontend translation keys",
+      "canonical locale dictionaries",
+      "12px minimum frontend font size"
+    ]
+  },
+  "not_validated": [
+    "live backend/provider integration",
+    "backend pytest suite",
+    "actual browser zoom",
+    "Docker builds",
+    "CI",
+    "app-wide Storybook beyond Corpus Builder"
+  ],
+  "environment": {
+    "local_api_port_8000": "connection refused",
+    "local_frontend_port_8181": "connection refused",
+    "docker_linux_engine": "unavailable"
+  }
+}

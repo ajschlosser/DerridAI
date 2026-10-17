@@ -1,3 +1,4 @@
+// Copyright 2026 Aaron John Schlosser, PhD.
 import type {Meta,StoryObj} from '@storybook/vue3-vite';
 import CorpusBuildHistoryMenu from './CorpusBuildHistoryMenu.vue';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SA-16: intentionally sparse Storybook fixture exercises partial/loading data without fabricating unrelated fields.
@@ -6,3 +7,8 @@ const meta={title:'Corpus Builder/Workflow/Build History Menu',component:CorpusB
 export default meta;
 type Story=StoryObj<typeof meta>;
 export const Default:Story={};
+
+export const PartialResults:Story={args:{total:12}};
+export const FailedRefresh:Story={args:{error:"Build history is temporarily unavailable."}};
+export const Loading:Story={args:{loading:true}};
+export const ActionPending:Story={args:{disabled:true}};

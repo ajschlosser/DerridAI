@@ -1,3 +1,4 @@
+<!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, onUpdated, ref, useId, watch } from "vue";
 import UiButton from "./UiButton.vue";
@@ -8,13 +9,17 @@ const props = withDefaults(defineProps<{
   description?: string;
   closeLabel?: string;
   size?: "medium" | "large" | "xlarge";
+  placement?: "center" | "side";
   dismissible?: boolean;
+  dockTarget?: HTMLElement | null;
 }>(), {
   open: true,
   description: "",
   closeLabel: "Close",
   size: "large",
+  placement: "center",
   dismissible: true,
+  dockTarget: null,
 });
 const emit = defineEmits<{ close: [] }>();
 const panel = ref<HTMLElement | null>(null);
@@ -42,13 +47,13 @@ function focusable(): HTMLElement[] {
 }
 function requestClose() { if (props.dismissible) emit("close"); }
 function onKeydown(event: KeyboardEvent) {
-  if (!props.open) return;
+  if (!props.open || (props.dockTarget && !panel.value?.contains(event.target as Node))) return;
   if (event.key === "Escape" && props.dismissible) {
     event.preventDefault();
     emit("close");
     return;
   }
-  if (event.key !== "Tab") return;
+  if (props.dockTarget || event.key !== "Tab") return;
   const nodes = focusable();
   if (!nodes.length) { event.preventDefault(); heading.value?.focus(); return; }
   const first = nodes[0], last = nodes[nodes.length - 1];
@@ -63,6 +68,15 @@ async function focusDialog() {
 watch(() => props.open, async value => {
   if (value) { priorActive = document.activeElement as HTMLElement | null; await focusDialog(); }
   else priorActive?.focus?.({ preventScroll: true });
+});
+// Moving the same Teleport preserves the slot instances and local drafts.
+watch(() => props.dockTarget, async target => {
+  const active=document.activeElement as HTMLElement|null;
+  const retain=active&&panel.value?.contains(active)?active:null;
+  await nextTick();
+  if(retain&&panel.value?.contains(retain))retain.focus({preventScroll:true});
+  else if(!target&&props.open)await focusDialog();
+  measureBody();
 });
 onUpdated(measureBody);
 onMounted(async () => {
@@ -83,14 +97,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div v-if="props.open" class="ui-dialog-backdrop" @mousedown.self="requestClose">
+  <Teleport :to="props.dockTarget || 'body'">
+    <div v-if="props.open" class="ui-dialog-backdrop" :data-placement="props.dockTarget ? 'dock' : placement" @mousedown.self="requestClose">
       <section
         ref="panel"
         class="ui-dialog"
         :data-size="props.size"
-        role="dialog"
-        aria-modal="true"
+        :role="props.dockTarget ? 'region' : 'dialog'"
+        :aria-modal="props.dockTarget ? undefined : true"
          :aria-labelledby="titleId"
         :aria-describedby="props.description ? descriptionId : undefined"
       >
@@ -117,6 +131,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.ui-dialog-backdrop[data-placement="dock"]{position:sticky;inset:auto;top:var(--ref-topbar,60px);z-index:auto;display:grid;place-items:stretch;padding:0;height:calc(100dvh - var(--ref-topbar,60px));background:var(--panel);backdrop-filter:none}
+.ui-dialog-backdrop[data-placement="dock"] .ui-dialog{width:100%;height:100%;max-height:none;border:0;border-radius:0;box-shadow:none}
+
+.ui-dialog-backdrop[data-placement="side"]{padding:0;place-items:stretch end}.ui-dialog-backdrop[data-placement="side"] .ui-dialog{width:min(440px,100vw);height:100dvh;max-height:100dvh;border-radius:0;border-block:0;border-inline-end:0}
 .ui-dialog-backdrop{position:fixed;inset:0;z-index:12000;display:grid;place-items:center;padding:24px;background:rgba(12,18,15,.72);backdrop-filter:blur(2px)}
 .ui-dialog{width:min(760px,calc(100vw - 32px));max-height:min(92vh,960px);display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden;border:1px solid var(--line-strong);border-radius:var(--radius-lg,16px);background:var(--panel);color:var(--text);box-shadow:0 28px 90px rgba(8,16,12,.35)}
 .ui-dialog[data-size="large"]{width:min(980px,calc(100vw - 32px))}.ui-dialog[data-size="xlarge"]{width:min(1180px,calc(100vw - 32px))}
