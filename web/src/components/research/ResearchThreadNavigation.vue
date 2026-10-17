@@ -32,8 +32,9 @@ const props = defineProps<{
   thread?: ResearchThreadDetail | null;
   selectedThreadId: string;
   selectedJobId?: string;
-  offset: number;
   hasMore?: boolean;
+  /** A further page of threads is loading. */
+  loadingMore?: boolean;
   search?: string;
   showPreview?: boolean;
   loading?: boolean;
@@ -55,7 +56,7 @@ const emit = defineEmits<{
   select: [id: string];
   open: [turn: ResearchTurn];
   new: [];
-  page: [offset: number];
+  more: [];
   search: [value: string];
   retry: [];
   retryTurn: [turn: ResearchTurn];
@@ -160,6 +161,52 @@ watch(
   },
 );
 const manageExpanded = ref(false);
+// Threads arrive pinned first, then by when a question was last asked. Group
+// consecutive rows by that date, keeping the server's order.
+function threadGroupLabel(item: ResearchThreadSummary, today: Date) {
+  if (item.pinned_at) return i18n.t("research.thread_group_pinned");
+  const date = new Date(item.last_asked_at ?? item.updated_at);
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const days = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+  if (days <= 0) return i18n.t("research.thread_group_today");
+  if (days === 1) return i18n.t("research.thread_group_yesterday");
+  if (days < 7) return i18n.t("research.thread_group_week");
+  if (days < 30) return i18n.t("research.thread_group_month");
+  return date.toLocaleDateString(i18n.locale, { month: "long", year: "numeric" });
+}
+const threadGroups = computed(() => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const groups: { label: string; threads: ResearchThreadSummary[] }[] = [];
+  for (const item of props.threads) {
+    const label = threadGroupLabel(item, today);
+    const last = groups[groups.length - 1];
+    if (last?.label === label) last.threads.push(item);
+    else groups.push({ label, threads: [item] });
+  }
+  return groups;
+});
+// The list keeps loading as its end scrolls into view; the button stays as
+// the keyboard and no-observer path.
+const threadIndex = ref<HTMLElement | null>(null);
+const moreButton = ref<HTMLButtonElement | null>(null);
+let moreObserver: IntersectionObserver | null = null;
+function observeMore() {
+  moreObserver?.disconnect();
+  moreObserver = null;
+  if (!moreButton.value || typeof IntersectionObserver !== "function") return;
+  moreObserver = new IntersectionObserver(
+    ([entry]) => {
+      if (entry?.isIntersecting && props.hasMore && !props.loadingMore && !props.loading)
+        emit("more");
+    },
+    { root: threadIndex.value, rootMargin: "0px 0px 160px 0px" },
+  );
+  moreObserver.observe(moreButton.value);
+}
+// Re-observe after each load so a list still short of its box asks again.
+watch([moreButton, () => props.loadingMore], observeMore, { flush: "post" });
+onBeforeUnmount(() => moreObserver?.disconnect());
 // Escape clears an active search first; an empty field lets Escape reach outer handlers.
 function clearSearch(event: KeyboardEvent) {
   const input = event.target as HTMLInputElement;
@@ -232,51 +279,75 @@ function clearSearch(event: KeyboardEvent) {
           {{ i18n.t("ui.retry") }}
         </button>
       </div>
-      <nav class="research-thread-index" :aria-label="i18n.t('research.threads_title')">
-        <ul>
-          <li v-for="item in threads" :key="item.thread_id">
-            <button
-              type="button"
-              class="btn"
-              :aria-current="selectedThreadId === item.thread_id ? 'true' : undefined"
-              @click="
-                emit('select', item.thread_id);
-                listExpanded = false;
-              "
-            >
-              <span class="research-thread-title">{{ item.title }}</span>
-              <span v-if="item.pinned_at" class="research-thread-pinned">{{
-                i18n.t("research.thread_pinned")
-              }}</span>
-              <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
-              <span
-                v-else-if="item.last_status && item.last_status !== 'completed'"
-                :class="['research-thread-state', `is-${item.last_status}`]"
+      <nav
+        ref="threadIndex"
+        class="research-thread-index"
+        :aria-label="i18n.t('research.threads_title')"
+      >
+        <section
+          v-for="(group, index) in threadGroups"
+          :key="`${index}:${group.label}`"
+          class="research-thread-group"
+          :aria-labelledby="`research-thread-group-${index}`"
+        >
+          <h3 :id="`research-thread-group-${index}`" class="research-thread-group-title">
+            {{ group.label }}
+          </h3>
+          <ul>
+            <li v-for="item in group.threads" :key="item.thread_id">
+              <button
+                type="button"
+                class="btn"
+                :aria-current="selectedThreadId === item.thread_id ? 'true' : undefined"
+                @click="
+                  emit('select', item.thread_id);
+                  listExpanded = false;
+                "
               >
-                {{ i18n.t(`research.thread_status_${item.last_status}`) }}
-              </span>
-              <span
-                v-if="showPreview && item.last_question && item.last_question !== item.title"
-                class="research-thread-preview"
-                >{{ item.last_question }}</span
-              >
-              <span class="research-thread-meta"
-                ><span class="research-thread-turn-count">{{
-                  i18n.tf(
-                    item.turn_count === 1
-                      ? "research.thread_turn_count_one"
-                      : "research.thread_turn_count_other",
-                    { count: item.turn_count },
-                  )
+                <span class="research-thread-title">{{ item.title }}</span>
+                <span v-if="item.pinned_at" class="research-thread-pinned">{{
+                  i18n.t("research.thread_pinned")
                 }}</span>
-                <span aria-hidden="true">·</span>
-                <time :datetime="item.last_asked_at ?? item.updated_at">{{
-                  new Date(item.last_asked_at ?? item.updated_at).toLocaleDateString(i18n.locale)
-                }}</time></span
-              >
-            </button>
-          </li>
-        </ul>
+                <span v-if="item.archived_at">{{ i18n.t("research.thread_archived") }}</span>
+                <span
+                  v-else-if="item.last_status && item.last_status !== 'completed'"
+                  :class="['research-thread-state', `is-${item.last_status}`]"
+                >
+                  {{ i18n.t(`research.thread_status_${item.last_status}`) }}
+                </span>
+                <span
+                  v-if="showPreview && item.last_question && item.last_question !== item.title"
+                  class="research-thread-preview"
+                  >{{ item.last_question }}</span
+                >
+                <span class="research-thread-meta"
+                  ><span class="research-thread-turn-count">{{
+                    i18n.tf(
+                      item.turn_count === 1
+                        ? "research.thread_turn_count_one"
+                        : "research.thread_turn_count_other",
+                      { count: item.turn_count },
+                    )
+                  }}</span>
+                  <span aria-hidden="true">·</span>
+                  <time :datetime="item.last_asked_at ?? item.updated_at">{{
+                    new Date(item.last_asked_at ?? item.updated_at).toLocaleDateString(i18n.locale)
+                  }}</time></span
+                >
+              </button>
+            </li>
+          </ul>
+        </section>
+        <button
+          v-if="hasMore"
+          ref="moreButton"
+          type="button"
+          class="btn research-thread-more"
+          :disabled="loading || loadingMore"
+          @click="emit('more')"
+        >
+          {{ i18n.t("research.threads_more") }}
+        </button>
       </nav>
       <p v-if="!loading && !error && !threads.length" role="status">
         {{
@@ -285,24 +356,6 @@ function clearSearch(event: KeyboardEvent) {
             : i18n.t("research.threads_empty")
         }}
       </p>
-      <div v-if="offset > 0 || hasMore" class="research-thread-pages">
-        <button
-          type="button"
-          class="btn"
-          :disabled="loading || offset === 0"
-          @click="emit('page', Math.max(0, offset - 50))"
-        >
-          {{ i18n.t("research.threads_previous") }}
-        </button>
-        <button
-          type="button"
-          class="btn"
-          :disabled="loading || !hasMore"
-          @click="emit('page', offset + 50)"
-        >
-          {{ i18n.t("research.threads_next") }}
-        </button>
-      </div>
     </div>
     <div class="research-thread-primary">
       <section
@@ -566,6 +619,26 @@ function clearSearch(event: KeyboardEvent) {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.research-thread-index {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+.research-thread-group {
+  display: grid;
+  gap: 6px;
+}
+.research-thread-group-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding-block: 2px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 650;
+}
 .research-thread-index ul {
   list-style: none;
   display: grid;
@@ -818,8 +891,6 @@ function clearSearch(event: KeyboardEvent) {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
-    position: relative;
-    z-index: 42;
   }
   .research-thread-sidebar {
     display: none;
@@ -832,8 +903,6 @@ function clearSearch(event: KeyboardEvent) {
   }
   .research-thread-sidebar.is-expanded {
     display: grid;
-    position: relative;
-    z-index: 41;
     background: var(--surface-card);
   }
   .research-thread-primary {

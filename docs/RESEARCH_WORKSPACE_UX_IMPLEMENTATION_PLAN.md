@@ -317,6 +317,12 @@ Screenshots of the production build against the e2e mock backend, with a realist
 - **Item 2:** with a thread open, the workspace under the conversation (the follow-up composer and any run status) is `position: sticky; bottom: 0`, capped at `min(40dvh, 380px)` with its own scroll, on viewports at least 560px tall; shorter or heavily zoomed viewports keep it in flow. Its measured height is exposed as `--research-sticky-workspace`: focusable elements in the conversation get a matching `scroll-margin-bottom` (focus not obscured, WCAG 2.4.11), and the sticky inspector's `max-height` leaves room for it.
 - Tests: `research-threads.test.ts` (list folds and restores; height variable); `research-threads.spec.ts` (sidebar hidden and evidence beside the answer while inspecting; composer in view at the top of a long thread; existing list interactions open the toggle first).
 
+### Continuous, date-grouped thread list (follow-up branch)
+
+- **Item 5:** Previous/Next paging is replaced by one growing list (`useDataInfiniteQuery`, offset pages of 50; realtime invalidation refetches every loaded page). It loads the next page when its end scrolls into view; **Show more threads** (`research.threads_more`) remains as the keyboard and no-`IntersectionObserver` path. Rows are grouped, in server order, under **Pinned**, **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then by month (`research.thread_group_*`), each a labelled region with a sticky heading. A thread that shifts pages between loads is shown once. `thread_offset` in the URL now means how far the list has loaded: a restored link loads every page up to it instead of skipping earlier threads.
+- **Phone header overlap:** the **Research threads** toggle and expanded list no longer carry `z-index: 42`/`41`; they are in normal flow and drew over the sticky app header when the page scrolled.
+- Tests: `research-threads.test.ts` (date groups; more control; restored offset loads every page; next page appended once without duplicates). Story: `Research/Thread Navigation` → `DateGroups`.
+
 ### Remaining work
 
 Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done. What is left comes from the layout mockup reviewed with #618; items 1–3 below are done (see above):
@@ -325,5 +331,5 @@ Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done
 2. **Question box always visible:** the follow-up composer stays at the bottom of the reading column while the conversation scrolls.
 3. **Honest turn states:** a running turn shows the job's reported stage and a Cancel control; a failed turn shows its reason and Retry on one row.
 4. **Evidence warnings (needs design):** flag narrow evidence (most citations on one passage) and a question naming an author or work none of the cited Records matches. Flag only; never rewrite the answer.
-5. Thread list: a continuously scrolling list grouped by date was not attempted.
+5. ~~Thread list: a continuously scrolling list grouped by date.~~ Done (see above).
 6. Manual review is still needed: screen reader, keyboard-only, 200–400% zoom and reduced motion.

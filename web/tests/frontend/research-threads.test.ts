@@ -42,7 +42,7 @@ const api = vi.hoisted(() => ({
 }));
 const downloads = vi.hoisted(() => ({ blob: vi.fn() }));
 vi.mock("../../src/domain/sharedRecordScopes", () => ({ downloadBlob: downloads.blob }));
-vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api }));
+vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api, THREAD_PAGE_SIZE: 50 }));
 const thread = (id: string): ResearchThreadDetail => ({
   thread_id: id,
   owner: "owner",
@@ -391,7 +391,7 @@ describe("Research thread shell", () => {
       },
     );
     const wrapper = mount(ResearchThreadNavigation, {
-      props: { threads: [summary("a")], thread: null, selectedThreadId: "", offset: 0 },
+      props: { threads: [summary("a")], thread: null, selectedThreadId: "" },
       slots: { workspace: `<form class="composer">Ask</form>` },
     });
     mounted.push(wrapper);
@@ -659,7 +659,6 @@ describe("Research thread shell", () => {
         threads: Array.from({ length: 50 }, (_, index) => summary(String(index))),
         thread: detail,
         selectedThreadId: "a",
-        offset: 0,
         hasMore: true,
       },
     });
@@ -675,19 +674,70 @@ describe("Research thread shell", () => {
     const statuses = wrapper.findAll(".research-thread-turn-status");
     expect(statuses).toHaveLength(1);
     expect(statuses[0].element.closest("article")?.textContent).toContain("Second question");
-    expect(wrapper.get(".research-thread-pages button").attributes("disabled")).toBeDefined();
-    await wrapper.findAll(".research-thread-pages button")[1].trigger("click");
-    expect(wrapper.emitted("page")).toEqual([[50]]);
-    // An exactly full last page does not offer an empty next page.
-    await wrapper.setProps({ offset: 50, hasMore: false });
-    expect(
-      wrapper.findAll(".research-thread-pages button")[1].attributes("disabled"),
-    ).toBeDefined();
+    // The list grows in place: one control asks for the next page.
+    await wrapper.get(".research-thread-more").trigger("click");
+    expect(wrapper.emitted("more")).toHaveLength(1);
+    await wrapper.setProps({ loadingMore: true });
+    expect(wrapper.get(".research-thread-more").attributes("disabled")).toBeDefined();
     await wrapper.get(".research-thread-sidebar > button").trigger("click");
     expect(wrapper.emitted("new")).toHaveLength(1);
-    // A single page shows no paging controls.
-    await wrapper.setProps({ offset: 0, hasMore: false });
-    expect(wrapper.find(".research-thread-pages").exists()).toBe(false);
+    // An exactly full last page does not offer an empty next page.
+    await wrapper.setProps({ loadingMore: false, hasMore: false });
+    expect(wrapper.find(".research-thread-more").exists()).toBe(false);
+  });
+  it("groups threads by when a question was last asked, pinned first, in server order", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 16, 12));
+    const at = (days: number) => new Date(2026, 9, 16 - days, 9).toISOString();
+    const row = (id: string, days: number, pinned = false) => ({
+      ...summary(id),
+      last_asked_at: at(days),
+      pinned_at: pinned ? at(40) : null,
+    });
+    const wrapper = mount(ResearchThreadNavigation, {
+      props: {
+        threads: [
+          row("p", 90, true),
+          row("t", 0),
+          row("y", 1),
+          row("w", 3),
+          row("m", 20),
+          row("o", 45),
+          row("o2", 50),
+        ],
+        thread: null,
+        selectedThreadId: "",
+      },
+    });
+    mounted.push(wrapper);
+    const groups = wrapper.findAll(".research-thread-group").map((group) => ({
+      label: group.get("h3").text(),
+      ids: group.findAll(".research-thread-title").map((title) => title.text()),
+    }));
+    expect(groups).toEqual([
+      { label: "Pinned", ids: ["p"] },
+      { label: "Today", ids: ["t"] },
+      { label: "Yesterday", ids: ["y"] },
+      { label: "Previous 7 days", ids: ["w"] },
+      { label: "Previous 30 days", ids: ["m"] },
+      {
+        label: new Date(2026, 8, 1).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        }),
+        ids: ["o"],
+      },
+      {
+        label: new Date(2026, 7, 27).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        }),
+        ids: ["o2"],
+      },
+    ]);
+    // Each group is a labelled region of the thread index.
+    const first = wrapper.get(".research-thread-group");
+    expect(first.attributes("aria-labelledby")).toBe(first.get("h3").attributes("id"));
   });
   it("focuses the newly loaded thread heading only when focus is unclaimed", async () => {
     const wrapper = mount(ResearchThreadNavigation, {
@@ -696,7 +746,6 @@ describe("Research thread shell", () => {
         threads: [summary("a"), summary("b")],
         thread: thread("a"),
         selectedThreadId: "a",
-        offset: 0,
       },
     });
     mounted.push(wrapper);
@@ -724,7 +773,7 @@ describe("Research thread shell", () => {
       turn.turn_id === "a-1" ? "Hospitality is unconditional." : null,
     );
     const wrapper = mount(ResearchThreadNavigation, {
-      props: { threads: [], thread: detail, selectedThreadId: "a", offset: 0, answerText },
+      props: { threads: [], thread: detail, selectedThreadId: "a", answerText },
     });
     mounted.push(wrapper);
     const visible = () =>
@@ -744,7 +793,7 @@ describe("Research thread shell", () => {
   it("offers turn comparison only with two completed turns and resets on thread change", async () => {
     const detail = thread("a");
     const wrapper = mount(ResearchThreadNavigation, {
-      props: { threads: [], thread: detail, selectedThreadId: "a", offset: 0 },
+      props: { threads: [], thread: detail, selectedThreadId: "a" },
       slots: { compare: '<div class="compare-slot" />' },
     });
     mounted.push(wrapper);
@@ -936,7 +985,6 @@ describe("Responsive research navigation", () => {
         threads: [summary("a"), summary("b")],
         thread: thread("a"),
         selectedThreadId: "a",
-        offset: 0,
       },
     });
     mounted.push(wrapper);
@@ -952,7 +1000,7 @@ describe("Responsive research navigation", () => {
 
   it("keeps destructive actions inside the explicit management disclosure", async () => {
     const wrapper = mount(ResearchThreadNavigation, {
-      props: { threads: [], thread: thread("a"), selectedThreadId: "a", offset: 0 },
+      props: { threads: [], thread: thread("a"), selectedThreadId: "a" },
     });
     mounted.push(wrapper);
     expect(wrapper.get(".research-thread-management").element.tagName).toBe("DETAILS");
@@ -988,34 +1036,72 @@ describe("Research thread list search", () => {
     expect(wrapper.text()).toContain("a");
   });
 
-  it("restores page offsets when Back/Forward changes search and archive filters", async () => {
+  it("restores a deep offset by loading every page up to it", async () => {
     const wrapper = browser("", "");
     await flushPromises();
+    api.list.mockImplementation(async ({ offset = 0 }: { offset?: number }) => ({
+      threads: [summary(`${offset}`), summary(`${offset + 1}`)],
+      has_more: offset < 100,
+    }));
+    api.list.mockClear();
 
     await wrapper.setProps({ initialSearch: "Glas", initialOffset: 50, initialArchived: true });
     await flushPromises();
     const navigation = wrapper.getComponent(ResearchThreadNavigation);
     expect(navigation.props("search")).toBe("Glas");
-    expect(navigation.props("offset")).toBe(50);
     expect(navigation.props("includeArchived")).toBe(true);
-    expect(api.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: "Glas", offset: 50, includeArchived: true }),
-    );
+    // Earlier threads stay listed; a restored URL does not skip them.
+    expect(api.list.mock.calls.map(([options]) => options)).toEqual([
+      { search: "Glas", offset: 0, includeArchived: true },
+      { search: "Glas", offset: 50, includeArchived: true },
+    ]);
+    expect(navigation.props("threads").map((item) => item.thread_id)).toEqual([
+      "0",
+      "1",
+      "50",
+      "51",
+    ]);
+    expect(navigation.props("hasMore")).toBe(true);
 
     // This simulates a history restoration, not a new filter selection.
     await wrapper.setProps({ initialSearch: "Trace", initialOffset: 25, initialArchived: false });
     await flushPromises();
     expect(navigation.props("search")).toBe("Trace");
-    expect(navigation.props("offset")).toBe(25);
     expect(navigation.props("includeArchived")).toBe(false);
     expect(api.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: "Trace", offset: 25, includeArchived: false }),
+      expect.objectContaining({ search: "Trace", offset: 50, includeArchived: false }),
     );
 
-    // A local filter edit, unlike history restoration, resets the page.
+    // A local filter edit, unlike history restoration, resets the list.
     navigation.vm.$emit("includeArchived", true);
     await flushPromises();
-    expect(navigation.props("offset")).toBe(0);
+    expect(wrapper.emitted("filters")!.at(-1)![0]).toEqual({
+      search: "Trace",
+      offset: 0,
+      includeArchived: true,
+    });
+  });
+
+  it("appends the next page once, without repeating a thread that shifted pages", async () => {
+    api.list.mockImplementation(async ({ offset = 0 }: { offset?: number }) =>
+      offset === 0
+        ? { threads: [summary("a"), summary("b")], has_more: true }
+        : { threads: [summary("b"), summary("c")], has_more: false },
+    );
+    const wrapper = browser("", "");
+    await flushPromises();
+    const navigation = wrapper.getComponent(ResearchThreadNavigation);
+    navigation.vm.$emit("more");
+    navigation.vm.$emit("more");
+    await flushPromises();
+    expect(api.list).toHaveBeenCalledTimes(2);
+    expect(navigation.props("threads").map((item) => item.thread_id)).toEqual(["a", "b", "c"]);
+    expect(navigation.props("hasMore")).toBe(false);
+    expect(wrapper.emitted("filters")!.at(-1)![0]).toMatchObject({ offset: 50 });
+    // No further page: asking again does nothing.
+    navigation.vm.$emit("more");
+    await flushPromises();
+    expect(api.list).toHaveBeenCalledTimes(2);
   });
 
   it("discards a pending debounced search when the URL restores another query", async () => {
@@ -1029,9 +1115,12 @@ describe("Research thread list search", () => {
     await flushPromises();
     const navigation = wrapper.getComponent(ResearchThreadNavigation);
     expect(navigation.props("search")).toBe("Restored query");
-    expect(navigation.props("offset")).toBe(25);
+    expect(wrapper.emitted("filters")!.at(-1)![0]).toMatchObject({
+      search: "Restored query",
+      offset: 25,
+    });
     expect(api.list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: "Restored query", offset: 25 }),
+      expect.objectContaining({ search: "Restored query", offset: 0 }),
     );
   });
 });

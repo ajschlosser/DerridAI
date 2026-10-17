@@ -22,8 +22,8 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { useI18nStore } from "../../stores/i18n";
 import ResearchThreadManageDialog from "./ResearchThreadManageDialog.vue";
 import { useAuthStore } from "../../stores/auth";
-import { researchThreadsApi } from "../../api/researchThreads";
-import { useDataQuery } from "../../realtime/dataQuery";
+import { THREAD_PAGE_SIZE, researchThreadsApi } from "../../api/researchThreads";
+import { useDataInfiniteQuery, useDataQuery } from "../../realtime/dataQuery";
 import type { ResearchJob, ResearchResultEvidence } from "../../types/research";
 import ResearchThreadAnswer from "./ResearchThreadAnswer.vue";
 import ResearchThreadNavigation from "./ResearchThreadNavigation.vue";
@@ -141,19 +141,57 @@ function resetMutation() {
 onBeforeUnmount(resetMutation);
 const allowed = computed(() => Boolean(auth.user && auth.can("rag.run")));
 const scope = computed(() => [auth.user?.id, auth.user?.role, allowed.value]);
-const list = useDataQuery(
+// One growing list: `offset` is the start of the last page wanted, so a
+// restored URL loads every page up to it rather than skipping earlier threads.
+const list = useDataInfiniteQuery(
   "research_threads",
-  () =>
+  (pageOffset) =>
     researchThreadsApi.list({
-      offset: offset.value,
+      offset: pageOffset,
       includeArchived: includeArchived.value,
       ...(search.value ? { search: search.value } : {}),
     }),
   {
-    detail: () => [...scope.value, "list", offset.value, includeArchived.value, search.value],
+    pageSize: THREAD_PAGE_SIZE,
+    detail: () => [...scope.value, "list", includeArchived.value, search.value],
     enabled: allowed,
   },
 );
+// A thread created or reordered between page loads can shift into the next
+// page; show it once.
+const listedThreads = computed(() => {
+  const seen = new Set<string>();
+  return (list.data.value?.pages || [])
+    .flatMap((page) => page.threads)
+    .filter((item) => !seen.has(item.thread_id) && Boolean(seen.add(item.thread_id)));
+});
+const loadedOffset = computed(
+  () => Math.max(0, (list.data.value?.pages.length || 1) - 1) * THREAD_PAGE_SIZE,
+);
+watch(
+  () => [
+    offset.value,
+    loadedOffset.value,
+    list.hasNextPage.value,
+    list.isFetching.value,
+    Boolean(list.error.value),
+  ],
+  () => {
+    if (
+      list.data.value &&
+      loadedOffset.value < offset.value &&
+      list.hasNextPage.value &&
+      !list.isFetching.value &&
+      !list.error.value
+    )
+      void list.fetchNextPage();
+  },
+  { immediate: true },
+);
+function loadMoreThreads() {
+  if (!list.hasNextPage.value || list.isFetching.value) return;
+  offset.value = Math.max(offset.value, loadedOffset.value + THREAD_PAGE_SIZE);
+}
 const detail = useDataQuery("research_threads", () => researchThreadsApi.get(props.threadId), {
   detail: () => [...scope.value, "thread", props.threadId],
   enabled: () => allowed.value && Boolean(props.threadId),
@@ -381,12 +419,12 @@ function retry() {
 <template>
   <ResearchThreadNavigation
     v-if="allowed"
-    :threads="inaccessible(list.error.value) ? [] : list.data.value?.threads || []"
-    :has-more="!inaccessible(list.error.value) && Boolean(list.data.value?.has_more)"
+    :threads="inaccessible(list.error.value) ? [] : listedThreads"
+    :has-more="!inaccessible(list.error.value) && Boolean(list.hasNextPage.value)"
+    :loading-more="list.isFetchingNextPage.value"
     :thread="threadId && !inaccessible(detail.error.value) ? detail.data.value : null"
     :selected-thread-id="threadId"
     :selected-job-id="jobId"
-    :offset="offset"
     :search="search"
     :show-preview="library || Boolean($slots.workspace)"
     @search="updateSearch"
@@ -406,7 +444,7 @@ function retry() {
     @select="emit('select', $event)"
     @open="emit('open', $event)"
     @new="emit('new')"
-    @page="offset = $event"
+    @more="loadMoreThreads"
     @retry="retry"
     @include-archived="updateArchived"
     @rename="manage('rename')"
