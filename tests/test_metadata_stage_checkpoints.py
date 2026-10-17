@@ -401,6 +401,8 @@ def test_atomic_json_write_retries_windows_sharing_conflicts(tmp_path, monkeypat
     attempts = []
 
     def transient(source, target):
+        if target != path:
+            return replace(source, target)
         attempts.append(target)
         if len(attempts) < 3:
             error = PermissionError("Shared reader")
@@ -409,7 +411,6 @@ def test_atomic_json_write_retries_windows_sharing_conflicts(tmp_path, monkeypat
         replace(source, target)
 
     monkeypatch.setattr(cb.os, "replace", transient)
-    monkeypatch.setattr(cb.time, "sleep", lambda _seconds: None)
     cb._json_write(path, {"new": True})
     assert len(attempts) == 3
     assert json.loads(path.read_text(encoding="utf-8")) == {"new": True}
@@ -423,16 +424,18 @@ def test_atomic_json_write_preserves_previous_file_when_conflict_persists(tmp_pa
     path = tmp_path / "record.json"
     previous = '{"old":true}'
     path.write_text(previous, encoding="utf-8")
+    replace = cb.os.replace
     attempts = []
 
     def denied(source, target):
+        if target != path:
+            return replace(source, target)
         attempts.append(target)
         error = PermissionError("Still shared")
         error.winerror = 5
         raise error
 
     monkeypatch.setattr(cb.os, "replace", denied)
-    monkeypatch.setattr(cb.time, "sleep", lambda _seconds: None)
     with pytest.raises(PermissionError, match="Still shared"):
         cb._json_write(path, {"new": True})
     assert len(attempts) == 5
