@@ -311,9 +311,15 @@ Screenshots of the production build against the e2e mock backend, with a realist
 
 - **Item 3:** a queued or running turn shows its job's reported stage (`researchJobDetail`, the same text the pipeline bar uses) and, for roles that can manage runs, **Cancel research run**; cancelling refreshes the thread. A turn whose job snapshot this browser does not have shows only its status, never an inferred stage. A failed or cancelled turn shows its reason (`role="alert"`) beside the status, with **Retry with current settings** on the same row and the retry help below it. Story: `Research/Thread Navigation` → `TurnStates`.
 
+### Two columns and a visible composer (follow-up branch)
+
+- **Item 1:** an open turn inspector folds the thread list to its **Research threads** toggle (`ResearchThreadNavigation` `collapseList`, driven by the browser's inspected turn), so the page shows threads + reading or reading + source, never all three. At 1440×900 the evidence now sits beside the answer. Closing the inspector restores the list; the toggle starts closed each time.
+- **Item 2:** with a thread open, the workspace under the conversation (the follow-up composer and any run status) is `position: sticky; bottom: 0`, capped at `min(40dvh, 380px)` with its own scroll, on viewports at least 560px tall; shorter or heavily zoomed viewports keep it in flow. Its measured height is exposed as `--research-sticky-workspace`: focusable elements in the conversation get a matching `scroll-margin-bottom` (focus not obscured, WCAG 2.4.11), and the sticky inspector's `max-height` leaves room for it.
+- Tests: `research-threads.test.ts` (list folds and restores; height variable); `research-threads.spec.ts` (sidebar hidden and evidence beside the answer while inspecting; composer in view at the top of a long thread; existing list interactions open the toggle first).
+
 ### Remaining work
 
-Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done. What is left comes from the layout mockup reviewed with #618; item 3 below is done (see above):
+Items 2, 4 and 5 of the earlier list are done (see above); item 3 is partly done. What is left comes from the layout mockup reviewed with #618; items 1–3 below are done (see above):
 
 1. **Two columns at most:** the thread list collapses to a toggle when a source is open, so the answer keeps its width; threads + reading, or reading + source, never all three.
 2. **Question box always visible:** the follow-up composer stays at the bottom of the reading column while the conversation scrolls.
