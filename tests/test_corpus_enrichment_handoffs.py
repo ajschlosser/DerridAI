@@ -109,7 +109,12 @@ def test_cache_registry_does_not_wait_for_manager_writer(prepared):
 
 
 def test_loaded_model_cache_is_detached_and_rejects_late_response(prepared, monkeypatch):
+    from types import SimpleNamespace
+
     from app import corpus_build_lifecycle as lifecycle
+
+    # Both requests can start in the same host clock tick.
+    monkeypatch.setattr(lifecycle, "time", SimpleNamespace(monotonic=lambda: 100.0))
 
     _repo, _bid, manager = prepared
     started = threading.Event()

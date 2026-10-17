@@ -16,6 +16,9 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+from itertools import count
+
 import pytest
 from app.research_thread_store import (
     ResearchThreadStore,
@@ -26,7 +29,14 @@ from app.research_thread_store import (
 
 
 @pytest.fixture()
-def store(tmp_path) -> ResearchThreadStore:
+def store(tmp_path, monkeypatch) -> ResearchThreadStore:
+    # Event-order contracts need distinct times even on hosts with a coarse clock.
+    origin = datetime(2026, 10, 17, tzinfo=UTC)
+    ticks = count()
+    monkeypatch.setattr(
+        "app.research_thread_store._iso_now",
+        lambda: (origin + timedelta(seconds=next(ticks))).isoformat(),
+    )
     return ResearchThreadStore(tmp_path / "system.sqlite3")
 
 

@@ -92,3 +92,24 @@ summary:focus-visible {
   font-size: 0.8125rem !important;
   line-height: 1.45;
 }
+
+/* The details pane occupies layout space; it never overlays record actions. */
+.corpus-operational-layout,
+.corpus-operational-main {
+  min-width: 0;
+}
+.corpus-details-dock {
+  display: none;
+}
+@media (min-width: 1900px) {
+  .corpus-operational-layout.details-open {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 420px;
+    gap: var(--space-4);
+    align-items: start;
+  }
+  .corpus-details-dock:not([hidden]) {
+    display: block;
+    min-width: 0;
+  }
+}

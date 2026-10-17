@@ -33,8 +33,10 @@ const props = defineProps<{
   activeProfileId?: string;
   activeModel?: string;
   disabled?: boolean;
+  externalDetails?: boolean;
 }>();
 const emit = defineEmits<{
+  showDetails: [tab: "activity" | "issues"];
   switchProfile: [profileId: string, model: string];
   settle: [];
   cancel: [];
@@ -97,7 +99,12 @@ const label = computed(() => {
 <template>
   <div class="review-run-status">
     <span class="review-run-controls">
-      <UiButton size="small" :expanded="expanded" :label="label" @click="expanded = !expanded" />
+      <UiButton
+        size="small"
+        :expanded="expanded"
+        :label="label"
+        @click="externalDetails ? emit('showDetails', 'activity') : (expanded = !expanded)"
+      />
       <UiButton
         v-if="buildRunning"
         size="small"
@@ -121,7 +128,7 @@ const label = computed(() => {
       />
       <span v-if="active" class="sr-only" role="status">{{ label }}</span>
     </span>
-    <div v-if="attention" class="review-run-alerts">
+    <div v-if="attention && !externalDetails" class="review-run-alerts">
       <UiNoticeStack
         :items="errorNotices"
         :label="i18n.t('pdf_corpus.build_error')"
@@ -137,7 +144,7 @@ const label = computed(() => {
         @dismiss-all="(ids) => emit('acknowledgeWarnings', ids)"
       />
     </div>
-    <div v-if="expanded" class="review-run-detail">
+    <div v-if="expanded && !externalDetails" class="review-run-detail">
       <CorpusRunDiagnostics
         :build="build"
         :profiles="profiles"

@@ -725,7 +725,8 @@ class BuildLifecycleMixin:
         """Names Ollama has in memory right now (its /api/ps), cached for a few seconds. None if it cannot be asked."""
         now = time.monotonic()
         with self._cache_lock:
-            cached_at, cached_url, cached = self._loaded_models_cache
+            snapshot = self._loaded_models_cache
+            cached_at, cached_url, cached = snapshot
             if cached_url == base_url and now - cached_at < 3.0:
                 return set(cached)
         try:
@@ -734,7 +735,7 @@ class BuildLifecycleMixin:
         except Exception:  # noqa: BLE001 - the status line is a courtesy; never let it break a build read
             return None
         with self._cache_lock:
-            if now >= self._loaded_models_cache[0]:
+            if self._loaded_models_cache is snapshot:
                 self._loaded_models_cache = (now, base_url, set(names))
         return names
 

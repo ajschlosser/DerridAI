@@ -36,6 +36,7 @@ const props = defineProps<{
   activeProfileId?: string;
   activeModel?: string;
   disabled?: boolean;
+  section?: "activity" | "settings";
 }>();
 const emit = defineEmits<{
   switchProfile: [profileId: string, model: string];
@@ -51,25 +52,26 @@ const contribution = computed(() => props.build.llm_contribution || {});
 
 <template>
   <div class="run-diagnostics">
-    <CorpusMetadataLiveStatus
-      v-if="running && build.stage === 'enriching'"
-      :build="build"
-      :disabled="disabled"
-      @settle="emit('settle')"
-      @cancel="emit('cancel')"
-    />
-    <CorpusEnrichmentPassStatus
-      :build="build"
-      :disabled="disabled"
-      @stop="emit('cancel')"
-      @run-another="emit('runAnother')"
-    />
-    <CorpusHandsFreeReport
-      :report="build.autonomous_report"
-      @open-record="emit('openRecord', $event)"
-    />
-    <CorpusProviderSwitcher
-      v-if="profiles.length"
+    <template v-if="section !== 'settings'">
+      <CorpusMetadataLiveStatus
+        v-if="running && build.stage === 'enriching'"
+        :build="build"
+        :disabled="disabled"
+        @settle="emit('settle')"
+        @cancel="emit('cancel')"
+      />
+      <CorpusEnrichmentPassStatus
+        :build="build"
+        :disabled="disabled"
+        @stop="emit('cancel')"
+        @run-another="emit('runAnother')"
+      />
+      <CorpusHandsFreeReport
+        :report="build.autonomous_report"
+        @open-record="emit('openRecord', $event)"
+      /> </template
+    ><CorpusProviderSwitcher
+      v-if="profiles.length && section !== 'activity'"
       :profiles="profiles"
       :active-profile-id="activeProfileId || ''"
       :active-model="activeModel || ''"
@@ -77,17 +79,19 @@ const contribution = computed(() => props.build.llm_contribution || {});
       :disabled="disabled || !running"
       @change="(profileId, model) => emit('switchProfile', profileId, model)"
     />
-    <CorpusEnrichmentMetrics :build-id="build.build_id" />
-    <CorpusTextCleanupSummary v-if="build.text_cleanup" :summary="build.text_cleanup" />
-    <CorpusLlmEffectivenessPanel
-      v-if="build.llm_contribution"
-      :contribution="contribution"
-      :family-effectiveness="build.llm_family_effectiveness || {}"
-      :confidence-calibration="build.llm_confidence_calibration || {}"
-      :model-effectiveness="build.llm_model_effectiveness || {}"
-      :editorial-examples-used="Number(build.llm_metrics?.editorial_examples_used || 0)"
-      @inspect-editorial-memory="emit('inspectEditorialMemory')"
-    />
+    <template v-if="section !== 'settings'"
+      ><CorpusEnrichmentMetrics :build-id="build.build_id" />
+      <CorpusTextCleanupSummary v-if="build.text_cleanup" :summary="build.text_cleanup" />
+      <CorpusLlmEffectivenessPanel
+        v-if="build.llm_contribution"
+        :contribution="contribution"
+        :family-effectiveness="build.llm_family_effectiveness || {}"
+        :confidence-calibration="build.llm_confidence_calibration || {}"
+        :model-effectiveness="build.llm_model_effectiveness || {}"
+        :editorial-examples-used="Number(build.llm_metrics?.editorial_examples_used || 0)"
+        @inspect-editorial-memory="emit('inspectEditorialMemory')"
+      />
+    </template>
   </div>
 </template>
 

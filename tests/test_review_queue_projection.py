@@ -218,7 +218,7 @@ def test_projection_refresh_rejects_external_write_and_recovers(corpus, monkeypa
     assert external.records_projection_dirty(bid)
     repo.refresh_records_projection(bid)
     assert not external.records_projection_dirty(bid)
-    published = [json.loads(line) for line in repo.build_records_path(bid).read_text().splitlines()]
+    published = [json.loads(line) for line in repo.build_records_path(bid).read_text(encoding="utf-8").splitlines()]
     assert published == external.load_records(bid)
 
 

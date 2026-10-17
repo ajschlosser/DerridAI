@@ -26,6 +26,7 @@ import sqlite3
 import tarfile
 import threading
 import zipfile
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -214,7 +215,7 @@ class GutenbergOfflineService:
     @staticmethod
     def _init_library_db(path: Path, *, staging: bool = False) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             if staging:
                 # A staging database is disposable until the final atomic rename.
                 db.execute("PRAGMA journal_mode=OFF")
@@ -240,7 +241,7 @@ class GutenbergOfflineService:
         if not target.is_file():
             return 0
         try:
-            with sqlite3.connect(target) as db:
+            with closing(sqlite3.connect(target)) as db, db:
                 return int(db.execute("SELECT COUNT(*) FROM gutenberg_texts").fetchone()[0])
         except sqlite3.Error:
             return 0
@@ -637,7 +638,7 @@ class GutenbergOfflineService:
                     raise ValueError("Gutenberg archive does not contain a tar payload.")
                 with outer.open(tar_name, "r") as tar_stream, tarfile.open(
                     fileobj=tar_stream, mode="r|*"
-                ) as archive, sqlite3.connect(self.staging_library_db_path) as library:
+                ) as archive, closing(sqlite3.connect(self.staging_library_db_path)) as library, library:
                     for info in archive:
                         etext_id = _archive_etext_id(info.name)
                         if etext_id is None or not info.isfile():
@@ -671,7 +672,7 @@ class GutenbergOfflineService:
                             self._changed()
             if count <= 0 or self._library_count(self.staging_library_db_path) != count:
                 raise ValueError("Gutenberg archive contained no installable plain-text books.")
-            with sqlite3.connect(self.staging_library_db_path) as library:
+            with closing(sqlite3.connect(self.staging_library_db_path)) as library, library:
                 library.execute(
                     "UPDATE gutenberg_meta SET status='ready',item_count=?,installed_at=? WHERE id=1",
                     (count, _now()),
@@ -1162,14 +1163,15 @@ class GutenbergOfflineService:
                     return self._restart_for_changed_archive(response)
 
                 received = 0
+                interrupted = False
                 with chunk_path.open("wb") as chunk_file:
                     for payload in response.iter_bytes(chunk_size=1024 * 1024):
                         if (
                             self._stop.is_set()
                             or self.status()["archive"]["status"] != "downloading"
                         ):
-                            chunk_path.unlink(missing_ok=True)
-                            return self.status()
+                            interrupted = True
+                            break
                         received += len(payload)
                         if received > expected:
                             raise ValueError(
@@ -1177,6 +1179,11 @@ class GutenbergOfflineService:
                             )
                         chunk_file.write(payload)
                     chunk_file.flush()
+
+                if interrupted:
+                    # Windows cannot remove the temporary chunk until its writer closes.
+                    chunk_path.unlink(missing_ok=True)
+                    return self.status()
 
                 if received != expected:
                     # A clean-looking early EOF can occur when a proxy closes the

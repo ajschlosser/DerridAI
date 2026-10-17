@@ -159,6 +159,8 @@ async function mountBuilder(
               CorpusBuilderWorkspaceHeader: {
                 template: '<header data-test="workspace-actions"><slot name="actions" /></header>',
               },
+              CorpusBuildDetailsPanel: false,
+              UiDialog: { template: '<div role="dialog"><slot /></div>' },
               CorpusSetupWorkspace: {
                 template: '<section data-test="setup-workspace"><slot name="source" /></section>',
               },
@@ -265,6 +267,73 @@ describe("PdfCorpusBuilder characterization", () => {
     pdfCorpusApi.build.mockResolvedValueOnce({ ...reviewBuild });
   }
 
+  async function warningWorkspace() {
+    const build = {
+      ...reviewBuild,
+      warnings: [
+        "record-2: work_profile metadata failed (structured_output_invalid); review required.",
+      ],
+      metadata_issue_summary: { issues: [{ record_id: "record-2", field: "stance" }] },
+    };
+    pdfCorpusApi.listBuilds.mockResolvedValue({ items: [build], total: 1 });
+    pdfCorpusApi.build.mockResolvedValue(build);
+    const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true, true);
+    const panel = wrapper.findComponent({ name: "CorpusBuildDetailsPanel" });
+    (panel.vm as unknown as { show: (tab: "issues") => void }).show("issues");
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("verifies an issue Record before replacing the selection and leaves it intact on read failure", async () => {
+    const wrapper = await warningWorkspace();
+    const exposed = wrapper.vm as unknown as { selectedRecord: typeof reviewRecord };
+    expect(exposed.selectedRecord.record_id).toBe("record-1");
+    corpusReviewReads.records.mockRejectedValueOnce(new Error("offline"));
+    wrapper.findComponent({ name: "CorpusBuildWarnings" }).vm.$emit("review", "record-2");
+    await flushPromises();
+    expect(corpusReviewReads.records).toHaveBeenLastCalledWith("build-1", ["record-2"]);
+    expect(exposed.selectedRecord.record_id).toBe("record-1");
+    expect(
+      wrapper
+        .findComponent({ name: "CorpusBuildDetailsPanel" })
+        .find('[role="tabpanel"]:not([hidden])')
+        .exists(),
+    ).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("rejects an unavailable or partial issue identity without falling back to the first Record", async () => {
+    const wrapper = await warningWorkspace();
+    const warnings = wrapper.findComponent({ name: "CorpusBuildWarnings" });
+    const before = corpusReviewReads.records.mock.calls.length;
+    warnings.vm.$emit("review", "record-20");
+    await flushPromises();
+    expect(corpusReviewReads.records.mock.calls).toHaveLength(before);
+    corpusReviewReads.records.mockResolvedValueOnce([reviewRecord]);
+    warnings.vm.$emit("review", "record-2");
+    await flushPromises();
+    expect(
+      (wrapper.vm as unknown as { selectedRecord: typeof reviewRecord }).selectedRecord.record_id,
+    ).toBe("record-1");
+    wrapper.unmount();
+  });
+
+  it("opens the verified current issue Record and closes details", async () => {
+    const wrapper = await warningWorkspace();
+    const record = { ...reviewRecord, record_id: "record-2", text: "Current issue text" };
+    corpusReviewReads.records.mockResolvedValueOnce([record]);
+    wrapper.findComponent({ name: "CorpusBuildWarnings" }).vm.$emit("review", "record-2");
+    await flushPromises();
+    expect(
+      (wrapper.vm as unknown as { selectedRecord: typeof reviewRecord }).selectedRecord.record_id,
+    ).toBe("record-2");
+    expect(
+      wrapper.findComponent({ name: "CorpusBuildDetailsPanel" }).find('[role="dialog"]').exists(),
+    ).toBe(false);
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("review");
+    wrapper.unmount();
+  });
+
   it("starts another build while retaining the selected source", async () => {
     mockExistingBuild();
     const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);
@@ -279,6 +348,76 @@ describe("PdfCorpusBuilder characterization", () => {
 
     expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
     expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
+    wrapper.unmount();
+  });
+
+  it.each(["New build from this source", "Choose another source"])(
+    "preserves pending text and advanced metadata drafts when opening %s",
+    async (label) => {
+      mockExistingBuild();
+      const wrapper = await mountBuilder("?workspace=review&build=build-1", false, false, true);
+      const exposed = wrapper.vm as unknown as {
+        editingText: boolean;
+        textDraft: string;
+        metadataDraft: string;
+        advancedMetadataDirty: boolean;
+      };
+      exposed.editingText = true;
+      exposed.textDraft = "An unsaved review draft";
+      exposed.advancedMetadataDirty = true;
+      exposed.metadataDraft = '{"speaker":"A pending correction"}';
+      const action = wrapper
+        .findAllComponents({ name: "UiButton" })
+        .find((button) => button.props("label") === label)!;
+      // Open setup in the same tick as the edits, before post-flush storage watchers run.
+      action.vm.$emit("click");
+      await flushPromises();
+      expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+      expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+      expect(localStorage.getItem("derridai.pdf-corpus.text-draft.build-1.record-1")).toBe(
+        "An unsaved review draft",
+      );
+      expect(localStorage.getItem("derridai.pdf-corpus.metadata-draft.build-1.record-1")).toBe(
+        '{"speaker":"A pending correction"}',
+      );
+      wrapper.unmount();
+    },
+  );
+
+  it("preserves unsaved text and advanced metadata drafts when starting a new build", async () => {
+    mockExistingBuild();
+    const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true, true);
+    const exposed = wrapper.vm as unknown as {
+      editingText: boolean;
+      textDraft: string;
+      advancedMetadataDirty: boolean;
+      metadataDraft: string;
+      selectedRecordId: string;
+    };
+    expect(exposed.selectedRecordId).toBe("record-1");
+    exposed.editingText = true;
+    exposed.textDraft = "An unfinished corrected passage";
+    exposed.advancedMetadataDirty = true;
+    exposed.metadataDraft = '{ "speaker": "Unconfirmed editor" }';
+
+    const button = wrapper
+      .findAllComponents({ name: "UiButton" })
+      .find((item) => item.props("label") === "New build from this source");
+    expect(button).toBeTruthy();
+    button!.vm.$emit("click");
+    await flushPromises();
+
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("setup");
+    expect(wrapper.router.currentRoute.value.query.build).toBeUndefined();
+    expect(exposed.editingText).toBe(false);
+    expect(exposed.advancedMetadataDirty).toBe(false);
+    expect(localStorage.getItem("derridai.pdf-corpus.text-draft.build-1.record-1")).toBe(
+      "An unfinished corrected passage",
+    );
+    expect(localStorage.getItem("derridai.pdf-corpus.metadata-draft.build-1.record-1")).toBe(
+      '{ "speaker": "Unconfirmed editor" }',
+    );
     expect(wrapper.findComponent({ name: "CorpusSourceIngest" }).props("assetId")).toBe("asset-1");
     wrapper.unmount();
   });

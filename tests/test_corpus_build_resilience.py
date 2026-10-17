@@ -710,6 +710,9 @@ def test_resume_rechecks_topology_before_exposing_text_review(monkeypatch, tmp_p
     blocks = _blocks(3)
     _install_asset(repo, blocks)
     build = _build(repo, blocks=3)
+    # Resuming an already constructed corpus has a durable manifest. Keep this
+    # topology test independent of provider availability and transport retries.
+    repo.save_checkpoint(build["build_id"], "manifest", {"title": "Reviewed title"})
     records = cb._construct_records(repo.get_asset(build["asset_id"]), blocks, [
         {"after_block_id": block["block_id"], "decision": "split"} for block in blocks[:-1]
     ])
