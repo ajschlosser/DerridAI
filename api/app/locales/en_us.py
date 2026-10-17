@@ -10744,4 +10744,7 @@ EN_US: dict[str, str] = {'loading.loading': "Loading…",
  'pdf_corpus.acknowledge_group': 'Acknowledge this group',
  'pdf_corpus.history_failed': 'Build history could not be refreshed. Loaded builds remain available.',
  'pdf_corpus.details_issue_count': 'Issues ({count})',
+  'pdf_corpus.review_draft_persistence_failed': "Could not save the review draft in this browser. Keep the record open and copy the changes before leaving.",
+  'pdf_corpus.save_field_before_setup': "Save or cancel the pending field edit before starting another build.",
+
 }

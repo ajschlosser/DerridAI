@@ -11057,4 +11057,7 @@ FR_CA: dict[str, str] = {'loading.loading': "Chargement…",
  'pdf_corpus.acknowledge_group': 'Accuser réception de ce groupe',
  'pdf_corpus.history_failed': 'L’historique des constructions n’a pas pu être actualisé. Les constructions chargées restent disponibles.',
  'pdf_corpus.details_issue_count': 'Problèmes ({count})',
+  'pdf_corpus.review_draft_persistence_failed': "Impossible d’enregistrer le brouillon de révision dans ce navigateur. Gardez la fiche ouverte et copiez les modifications avant de quitter.",
+  'pdf_corpus.save_field_before_setup': "Enregistrez ou annulez la modification du champ avant de commencer une autre construction.",
+
 }
