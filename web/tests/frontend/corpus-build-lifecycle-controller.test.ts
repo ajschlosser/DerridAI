@@ -226,6 +226,24 @@ describe("Corpus Builder lifecycle controller", () => {
     await first;
     expect(state.builds.value[0].build_id).toBe("new");
   });
+  it("pages by server rows rather than a deep-linked build inserted into the rail", async () => {
+    const state = setup();
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({
+      items: [build("one"), build("two")],
+      total: 5,
+    });
+    await state.controller.refreshBuilds();
+    state.controller.syncBuildInRail(build("outside-page"));
+    corpusBuilderApi.listBuilds.mockResolvedValueOnce({ items: [build("three")], total: 5 });
+    await state.controller.refreshBuilds(true);
+    expect(corpusBuilderApi.listBuilds).toHaveBeenLastCalledWith(2, 100);
+    expect(state.builds.value.map((row) => row.build_id)).toEqual([
+      "outside-page",
+      "one",
+      "two",
+      "three",
+    ]);
+  });
   it.each([
     ["failed", "failed"],
     ["interrupted", "failed"],

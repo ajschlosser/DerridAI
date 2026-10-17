@@ -161,16 +161,20 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
   const buildsLoading = ref(false);
   const buildsError = ref("");
   let historyRequest = 0;
+  let historyOffset: number | null = null;
   async function refreshBuilds(append = false) {
     if (append && buildsLoading.value) return;
     const request = ++historyRequest;
     const selectedAtStart = options.selectedBuildId.value;
-    const offset = append ? options.builds.value.length : 0;
+    // A deep-linked build can be inserted into the rail outside the loaded page.
+    // Page by server rows consumed, not by the deduplicated rail length.
+    const offset = append ? (historyOffset ?? options.builds.value.length) : 0;
     buildsLoading.value = true;
     buildsError.value = "";
     try {
       const result = await corpusBuilderApi.listBuilds(offset, 100);
       if (request !== historyRequest) return;
+      historyOffset = offset + result.items.length;
       const rows = append ? [...options.builds.value, ...result.items] : result.items;
       options.builds.value = [...new Map(rows.map((build) => [build.build_id, build])).values()];
       options.buildsTotal.value = result.total;

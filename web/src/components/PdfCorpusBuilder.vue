@@ -2976,21 +2976,36 @@ async function reviewWarning(recordId: string) {
   )
     return;
   const request = ++warningRequest;
+  const selectionVersion = reviewRecords.getSelectionVersion();
   try {
     const records = await corpusReviewReads.records(buildId, [recordId]);
-    if (request !== warningRequest || currentBuild.value?.build_id !== buildId) return;
+    if (
+      request !== warningRequest ||
+      currentBuild.value?.build_id !== buildId ||
+      reviewRecords.getSelectionVersion() !== selectionVersion
+    )
+      return;
     const record = records.find((item) => item.record_id === recordId);
     if (!record) throw new Error(i18n.t("pdf_corpus.warning_record_unavailable"));
     if (editingText.value || metadataEditorDirty.value || advancedMetadataDirty.value) return;
     await recordSaveQueue.waitForAll();
-    if (currentBuild.value?.build_id !== buildId) return;
+    if (
+      request !== warningRequest ||
+      currentBuild.value?.build_id !== buildId ||
+      reviewRecords.getSelectionVersion() !== selectionVersion
+    )
+      return;
     reviewRequested.value = true;
     await selectRecord(record);
     reviewInspectorTab.value = "metadata";
     detailsPanel.value?.close();
     switchWorkspace("review");
   } catch {
-    if (request === warningRequest && currentBuild.value?.build_id === buildId)
+    if (
+      request === warningRequest &&
+      currentBuild.value?.build_id === buildId &&
+      reviewRecords.getSelectionVersion() === selectionVersion
+    )
       setMessage(i18n.t("pdf_corpus.warning_record_unavailable"), "error");
   }
 }
