@@ -318,6 +318,22 @@ describe("PdfCorpusBuilder characterization", () => {
     wrapper.unmount();
   });
 
+  it("opens the verified current issue Record and closes details", async () => {
+    const wrapper = await warningWorkspace();
+    const record = { ...reviewRecord, record_id: "record-2", text: "Current issue text" };
+    corpusReviewReads.records.mockResolvedValueOnce([record]);
+    wrapper.findComponent({ name: "CorpusBuildWarnings" }).vm.$emit("review", "record-2");
+    await flushPromises();
+    expect(
+      (wrapper.vm as unknown as { selectedRecord: typeof reviewRecord }).selectedRecord.record_id,
+    ).toBe("record-2");
+    expect(
+      wrapper.findComponent({ name: "CorpusBuildDetailsPanel" }).find('[role="dialog"]').exists(),
+    ).toBe(false);
+    expect(wrapper.router.currentRoute.value.query.workspace).toBe("review");
+    wrapper.unmount();
+  });
+
   it("starts another build while retaining the selected source", async () => {
     mockExistingBuild();
     const wrapper = await mountBuilder("?workspace=build&build=build-1", false, false, true);

@@ -21,6 +21,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import { computed, ref } from "vue";
 import type { CorpusBuild } from "../../api/corpus";
 import { useI18nStore } from "../../stores/i18n";
+import { corpusRecordCounts } from "../../domain/corpusBuildPresentation";
 import {
   corpusPrimaryStatus,
   corpusStageLabel,
@@ -57,11 +58,18 @@ const percent = computed(() => Math.round((props.build.progress || 0) * 100));
 const rail = computed(() => corpusStageRail(props.build));
 const operation = computed(() => status.value.detail);
 const settled = computed(() => isAutomatedProcessingDone(props.build));
-const recordCount = computed(() => Number(props.build.record_count || 0));
-const readyCount = computed(() => Math.max(0, Number(props.readyCount || 0)));
+const recordCounts = computed(() => corpusRecordCounts(props.build));
+const recordCount = computed(() => recordCounts.value.total ?? 0);
+const readyCount = computed(() =>
+  Math.max(0, Number(props.readyCount ?? recordCounts.value.ready ?? 0)),
+);
 const enrichingCount = computed(() => Math.max(0, Number(props.enrichingCount || 0)));
-const preparingCount = computed(() => Math.max(0, Number(props.preparingCount || 0)));
-const attentionCount = computed(() => Math.max(0, Number(props.attentionCount || 0)));
+const preparingCount = computed(() =>
+  Math.max(0, Number(props.preparingCount ?? recordCounts.value.preparing ?? 0)),
+);
+const attentionCount = computed(() =>
+  Math.max(0, Number(props.attentionCount ?? recordCounts.value.issues ?? 0)),
+);
 const reviewAvailableWhileRunning = computed(
   () => props.running && props.hasRecordTopology && recordCount.value > 0,
 );
