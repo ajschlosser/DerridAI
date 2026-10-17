@@ -328,6 +328,18 @@ function defaults(url: URL, method: string, role: Role): unknown {
     };
   if (path === "/api/stores/derrida_primary/records")
     return { count: STORE_RECORDS.length, records: STORE_RECORDS };
+  if (path === "/api/stores/derrida_primary/works") {
+    // The Vue dashboard requests work statistics separately from the collection list.
+    // Derive the fixture from the same records so Home never needs fabricated counts.
+    const counts = new Map<string, number>();
+    for (const record of STORE_RECORDS) {
+      counts.set(record.work, (counts.get(record.work) ?? 0) + 1);
+    }
+    return {
+      works: [...counts.keys()],
+      stats: [...counts].map(([work, count]) => ({ work, count })),
+    };
+  }
   if (path === "/api/annotations") return { annotations: [] };
   if (path === "/api/response-cache/records")
     return { records: [], count: 0, total: 0, limit: 50, offset: 0, exists: true };
