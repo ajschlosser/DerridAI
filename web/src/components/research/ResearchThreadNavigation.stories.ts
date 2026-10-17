@@ -64,7 +64,6 @@ const meta: Meta<typeof ResearchThreadNavigation> = {
     thread,
     selectedThreadId: thread.thread_id,
     selectedJobId: "job-a",
-    offset: 0,
   },
 };
 export default meta;
@@ -111,6 +110,29 @@ export const LongConversation: Story = {
             : `Follow-up question ${index + 1}: explain the relevant distinction.`,
       })),
     },
+  },
+};
+// Rows grouped by when a question was last asked (relative to today), with
+// more threads still to load.
+const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+export const DateGroups: Story = {
+  args: {
+    hasMore: true,
+    threads: [
+      [0, true],
+      [0, false],
+      [1, false],
+      [4, false],
+      [18, false],
+      [45, false],
+      [80, false],
+    ].map(([days, pinned], index) => ({
+      ...summary,
+      thread_id: `thread-group-${index}`,
+      title: `Research inquiry ${index + 1}`,
+      last_asked_at: daysAgo(Number(days)),
+      pinned_at: pinned ? daysAgo(60) : null,
+    })),
   },
 };
 export const WideDesktop: Story = {

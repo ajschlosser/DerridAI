@@ -24,7 +24,7 @@ import { useAuthStore } from "../../src/stores/auth";
 import { useLegacyThreadImport } from "../../src/features/research/useLegacyThreadImport";
 
 const api = vi.hoisted(() => ({ importLegacy: vi.fn() }));
-vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api }));
+vi.mock("../../src/api/researchThreads", () => ({ researchThreadsApi: api, THREAD_PAGE_SIZE: 50 }));
 let wrapper: ReturnType<typeof mount>;
 let state: ReturnType<typeof useLegacyThreadImport>;
 beforeEach(() => {

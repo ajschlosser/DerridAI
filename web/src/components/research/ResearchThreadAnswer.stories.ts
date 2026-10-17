@@ -30,7 +30,6 @@ export const InlineAnswers: Story = {
     ...OrderedTurns.args,
     threads: OrderedTurns.args?.threads || [],
     selectedThreadId: OrderedTurns.args?.selectedThreadId || "",
-    offset: OrderedTurns.args?.offset || 0,
   },
   render: (args) => ({
     components: { ResearchThreadNavigation, ResearchResultPresentation },

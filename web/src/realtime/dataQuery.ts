@@ -21,7 +21,7 @@
 // polling runs here only while the socket is unavailable (docs/REALTIME.md), and nothing else
 // may poll.
 import { computed, type MaybeRefOrGetter, toValue } from "vue";
-import { QueryClient, useQuery, type UseQueryOptions } from "@tanstack/vue-query";
+import { QueryClient, useInfiniteQuery, useQuery, type UseQueryOptions } from "@tanstack/vue-query";
 import { realtime, realtimeFallback, FALLBACK_POLL_MS } from "./index";
 import { startDataBridge } from "./dataBridge";
 import { dataKey, type DataResource } from "./resourceKeys";
@@ -67,4 +67,25 @@ export function useDataQuery<T>(
     // Fallback only: a live socket replaces polling entirely.
     refetchInterval: computed(() => (realtimeFallback.value ? FALLBACK_POLL_MS : false)),
   } as UseQueryOptions<T>);
+}
+
+/** Offset-paged list read as one growing list. Realtime invalidation refetches every loaded page. */
+export function useDataInfiniteQuery<T extends { has_more?: boolean }>(
+  resource: DataResource,
+  fetcher: (offset: number) => Promise<T>,
+  options: {
+    pageSize: number;
+    detail?: MaybeRefOrGetter<unknown[]>;
+    enabled?: MaybeRefOrGetter<boolean>;
+  },
+) {
+  return useInfiniteQuery({
+    queryKey: computed(() => dataKey(resource, ...(toValue(options.detail) ?? []))),
+    queryFn: ({ pageParam }: { pageParam: number }) => fetcher(pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (last: T, pages: T[]) =>
+      last.has_more ? pages.length * options.pageSize : undefined,
+    enabled: computed(() => toValue(options.enabled) ?? true),
+    refetchInterval: computed(() => (realtimeFallback.value ? FALLBACK_POLL_MS : false)),
+  });
 }

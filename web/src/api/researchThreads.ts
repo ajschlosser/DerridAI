@@ -25,6 +25,7 @@ import type {
 } from "../types/researchThreads";
 
 const THREADS_PATH = "/api/research/threads";
+export const THREAD_PAGE_SIZE = 50;
 
 /** Thread authority is SQLite; answer/evidence bodies use the existing authorized run APIs. */
 export const researchThreadsApi = {
@@ -35,7 +36,7 @@ export const researchThreadsApi = {
     ),
   list: (options: { offset?: number; search?: string; includeArchived?: boolean } = {}) => {
     const query = new URLSearchParams({
-      limit: "50",
+      limit: String(THREAD_PAGE_SIZE),
       offset: String(options.offset ?? 0),
       search: options.search ?? "",
       include_archived: String(options.includeArchived ?? false),
