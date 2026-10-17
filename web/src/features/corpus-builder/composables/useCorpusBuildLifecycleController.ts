@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-import { nextTick, type ComputedRef, type Ref } from "vue";
+import { ref, nextTick, type ComputedRef, type Ref } from "vue";
 import {
   corpusBuilderApi,
   type AutonomousPolicy,
@@ -50,6 +50,7 @@ interface CorpusBuildLifecycleControllerOptions {
   selectedRecordId: Ref<string>;
   canRetryMetadata: ComputedRef<boolean>;
   metadataIssueCount: ComputedRef<number>;
+  isSetupDraft?: () => boolean;
   requestedBuildId: () => string;
   runGuidancePayload: () => Record<string, unknown>;
   /** Reviewer-supplied document fields that detection on source load missed. */
@@ -157,22 +158,49 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
     });
   }
 
-  async function refreshBuilds() {
-    const result = await corpusBuilderApi.listBuilds(0, 100);
-    options.builds.value = result.items;
-    options.buildsTotal.value = result.total;
-    const requested = options.requestedBuildId();
-    if (requested && options.builds.value.some((build) => build.build_id === requested)) {
-      options.selectedBuildId.value = requested;
-    } else if (
-      (!options.selectedBuildId.value ||
-        !options.builds.value.some((build) => build.build_id === options.selectedBuildId.value)) &&
-      options.builds.value[0]
-    ) {
-      options.selectedBuildId.value = options.builds.value[0].build_id;
-    } else if (!options.builds.value.length) {
-      options.selectedBuildId.value = "";
-      options.currentBuild.value = null;
+  const buildsLoading = ref(false);
+  const buildsError = ref("");
+  let historyRequest = 0;
+  async function refreshBuilds(append = false) {
+    if (append && buildsLoading.value) return;
+    const request = ++historyRequest;
+    const selectedAtStart = options.selectedBuildId.value;
+    const offset = append ? options.builds.value.length : 0;
+    buildsLoading.value = true;
+    buildsError.value = "";
+    try {
+      const result = await corpusBuilderApi.listBuilds(offset, 100);
+      if (request !== historyRequest) return;
+      const rows = append ? [...options.builds.value, ...result.items] : result.items;
+      options.builds.value = [...new Map(rows.map((build) => [build.build_id, build])).values()];
+      options.buildsTotal.value = result.total;
+      // History refresh must not reopen a build while the user configures a new one.
+      if (
+        append ||
+        options.isSetupDraft?.() ||
+        options.selectedBuildId.value !== selectedAtStart ||
+        options.currentBuild.value
+      )
+        return;
+      const requested = options.requestedBuildId();
+      if (requested && options.builds.value.some((build) => build.build_id === requested)) {
+        options.selectedBuildId.value = requested;
+      } else if (
+        (!options.selectedBuildId.value ||
+          !options.builds.value.some(
+            (build) => build.build_id === options.selectedBuildId.value,
+          )) &&
+        options.builds.value[0]
+      ) {
+        options.selectedBuildId.value = options.builds.value[0].build_id;
+      } else if (!options.builds.value.length) {
+        options.selectedBuildId.value = "";
+        options.currentBuild.value = null;
+      }
+    } catch {
+      if (request === historyRequest) buildsError.value = options.t("pdf_corpus.history_failed");
+    } finally {
+      if (request === historyRequest) buildsLoading.value = false;
     }
   }
 
@@ -475,6 +503,8 @@ export function useCorpusBuildLifecycleController(options: CorpusBuildLifecycleC
   }
 
   return {
+    buildsLoading,
+    buildsError,
     registerBuildOperation,
     syncBuildInRail,
     refreshBuilds,

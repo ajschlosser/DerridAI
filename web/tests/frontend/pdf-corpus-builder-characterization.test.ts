@@ -159,6 +159,8 @@ async function mountBuilder(
               CorpusBuilderWorkspaceHeader: {
                 template: '<header data-test="workspace-actions"><slot name="actions" /></header>',
               },
+              CorpusBuildDetailsPanel: false,
+              UiDialog: { template: '<div role="dialog"><slot /></div>' },
               CorpusSetupWorkspace: {
                 template: '<section data-test="setup-workspace"><slot name="source" /></section>',
               },
@@ -264,6 +266,57 @@ describe("PdfCorpusBuilder characterization", () => {
     });
     pdfCorpusApi.build.mockResolvedValueOnce({ ...reviewBuild });
   }
+
+  async function warningWorkspace() {
+    const build = {
+      ...reviewBuild,
+      warnings: [
+        "record-2: work_profile metadata failed (structured_output_invalid); review required.",
+      ],
+      metadata_issue_summary: { issues: [{ record_id: "record-2", field: "stance" }] },
+    };
+    pdfCorpusApi.listBuilds.mockResolvedValue({ items: [build], total: 1 });
+    pdfCorpusApi.build.mockResolvedValue(build);
+    const wrapper = await mountBuilder("?workspace=review&build=build-1", false, true, true);
+    const panel = wrapper.findComponent({ name: "CorpusBuildDetailsPanel" });
+    (panel.vm as unknown as { show: (tab: "issues") => void }).show("issues");
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("verifies an issue Record before replacing the selection and leaves it intact on read failure", async () => {
+    const wrapper = await warningWorkspace();
+    const exposed = wrapper.vm as unknown as { selectedRecord: typeof reviewRecord };
+    expect(exposed.selectedRecord.record_id).toBe("record-1");
+    corpusReviewReads.records.mockRejectedValueOnce(new Error("offline"));
+    wrapper.findComponent({ name: "CorpusBuildWarnings" }).vm.$emit("review", "record-2");
+    await flushPromises();
+    expect(corpusReviewReads.records).toHaveBeenLastCalledWith("build-1", ["record-2"]);
+    expect(exposed.selectedRecord.record_id).toBe("record-1");
+    expect(
+      wrapper
+        .findComponent({ name: "CorpusBuildDetailsPanel" })
+        .find('[role="tabpanel"]:not([hidden])')
+        .exists(),
+    ).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("rejects an unavailable or partial issue identity without falling back to the first Record", async () => {
+    const wrapper = await warningWorkspace();
+    const warnings = wrapper.findComponent({ name: "CorpusBuildWarnings" });
+    const before = corpusReviewReads.records.mock.calls.length;
+    warnings.vm.$emit("review", "record-20");
+    await flushPromises();
+    expect(corpusReviewReads.records.mock.calls).toHaveLength(before);
+    corpusReviewReads.records.mockResolvedValueOnce([reviewRecord]);
+    warnings.vm.$emit("review", "record-2");
+    await flushPromises();
+    expect(
+      (wrapper.vm as unknown as { selectedRecord: typeof reviewRecord }).selectedRecord.record_id,
+    ).toBe("record-1");
+    wrapper.unmount();
+  });
 
   it("starts another build while retaining the selected source", async () => {
     mockExistingBuild();

@@ -49,6 +49,7 @@ const props = defineProps<{
   segmentationNeedsReview: boolean;
   contextSafe: boolean;
   busy?: boolean;
+  externalDetails?: boolean;
   providerLabel?: string;
   modelLabel?: string;
   runGuidance?: GuidanceItem[];
@@ -102,6 +103,7 @@ const errorNotices = computed<Notice[]>(() =>
     />
     <UiNoticeStack :items="errorNotices" :label="i18n.t('pdf_corpus.build_error')" />
     <UiNoticeStack
+      v-if="!externalDetails"
       :items="warningNotices"
       :label="i18n.t('pdf_corpus.build_warnings_label')"
       mode="acknowledge"
@@ -183,6 +185,7 @@ const errorNotices = computed<Notice[]>(() =>
     </section>
 
     <CorpusBuildDiagnostics
+      v-if="!externalDetails"
       :build="build"
       :model-label="modelLabel"
       :run-guidance="runGuidance"

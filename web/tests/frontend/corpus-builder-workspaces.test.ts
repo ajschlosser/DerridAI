@@ -356,9 +356,9 @@ describe("build history menu", () => {
     ] as never[];
     const wrapper = mount(CorpusBuildHistoryMenu, {
       props: { builds, selectedBuildId: "b2", pendingBuildId: "b1", total: 2 },
+      global: { stubs: { Teleport: true } },
     });
-    const details = wrapper.get("details");
-    (details.element as HTMLDetailsElement).open = true;
+    await wrapper.get("button").trigger("click");
     const rows = wrapper.findAll(".history-row");
     expect(rows[1].attributes("aria-current")).toBe("true");
     expect(rows[0].attributes("aria-busy")).toBe("true");
@@ -368,7 +368,7 @@ describe("build history menu", () => {
     expect(rows[0].text()).toContain("3");
     expect(rows[0].get(".dot").attributes("data-tone")).toBe("warning");
     await rows[0].trigger("click");
-    expect((details.element as HTMLDetailsElement).open).toBe(false);
+    expect(wrapper.get("button").attributes("aria-expanded")).toBe("false");
     expect(wrapper.emitted("select")?.[0]?.[0]).toMatchObject({ build_id: "b1" });
   });
 });
