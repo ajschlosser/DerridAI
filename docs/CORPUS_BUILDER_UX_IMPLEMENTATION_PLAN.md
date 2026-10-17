@@ -1,7 +1,7 @@
 <!-- Copyright 2026 Aaron John Schlosser, PhD. -->
 # Corpus Builder UX implementation plan
 
-Started: 2026-10-15. Implementation and bounded integration audit completed: 2026-10-16. Status: implemented and locally validated with documented limits; draft PR publication authorized. No release performed.
+Started: 2026-10-15. Implementation and bounded integration audit completed: 2026-10-16. Status: implemented and locally validated with documented limits; draft PR #623 published. No release performed.
 Inspected baseline: `399e250f2`, version 0.62.19. Recheck HEAD and local changes before starting.
 
 ## Objective and approved direction
@@ -261,3 +261,5 @@ Done means: all three surfaces work with real current data; counts are truthful 
 - Verified that the original remote branch still points to the tested baseline. Current `master` at `668156c58` has substantially different Corpus Builder, API and shared dialog implementations. The original checkout also has six historical commits not in master's ancestry. Targeting the original published branch keeps those unrelated changes out of this PR's review diff and avoids overwriting current contracts with older files.
 - This is a draft review checkpoint, not a current-master-ready change. A separate port and validation on master remains required. Preserve all limitations above, especially the full-unit repeat's OperationsPanel teardown error and unavailable live-backend/Docker/backend-pytest/actual-zoom checks.
 - Unrelated `.metadata-routing-work/`, `.research-filters-work/`, and `.research-thread-work/` directories are excluded from staging. Commit with the repository owner's specified identity. No release version bump or tag is part of this PR.
+
+- Published draft PR: https://github.com/ajschlosser/DerridAI/pull/623. Implementation commit: `d68e63d43`. Head: `codex/corpus-builder-ux`; base: `codex/extract-vector-runtime-bridge` at `399e250f2`. The PR contains only this task's changes; the three unrelated work directories remain local and unstaged. CI was not checked, and no merge or release was performed.
